@@ -1,3 +1,18 @@
+/*
+ * electronAvalanche.cc
+ * 
+ * Garfield++ simulation of a single-electron avalanche.
+ *    Uses garfield analytical components for the field.
+ *    Reads simulation parameters from run_control.
+ *    Reads a run number from runno.
+ *    Saves avalanche data in a .root file as two trees:
+ *        metaDataTree
+ *        eventDataTree
+ * 
+ * Tanner Polischuk
+ * Last Updated: April 9, 2025
+ */
+
 //Garfield includes
 #include "Garfield/ComponentAnalyticField.hh"
 #include "Garfield/AvalancheMicroscopic.hh"
@@ -26,15 +41,16 @@ int main(int argc, char * argv[]) {
   
   //*************** SETUP ***************//
   //Timing variables
-  clock_t start, stop, lapField;
+  clock_t start, stop, lapField, runTime;
 
   TApplication app("app", &argc, argv);
 
   //***** Run numbering *****//
   //Read in run number from runno
   int runNo;
+  std::string runnoFile = "../runno";
   std::ifstream runInFile;
-  runInFile.open("../runno");
+  runInFile.open(runnoFile);
   if(runInFile.is_open()) {
     runInFile >> runNo;
     runInFile.close();
@@ -49,7 +65,7 @@ int main(int argc, char * argv[]) {
   }
 
   //Update runno file
-  std::ofstream runOutFile("runno");
+  std::ofstream runOutFile(runnoFile);
   if(runOutFile.is_open()){
     runOutFile << runNo+1;
     runOutFile.close();
@@ -70,20 +86,6 @@ int main(int argc, char * argv[]) {
     std::cerr << "Error creating or opening file '" << dataFilename << "'." << std::endl;
     return -1;
   }
-
-  //***** Data Tree *****/
-  //Create
-  TTree *eventDataTree = new TTree("eventDataTree", "Event Simulation Data");
-
-  //Data to be saved for each avalanche
-  double EField;
-  int totalElectrons;
-  int attatchedElectrons;
-
-  //Add Branches
-  eventDataTree->Branch("EField", &EField, "EField/D");
-  eventDataTree->Branch("totalElectrons", &totalElectrons, "totalElectrons/I");
-  eventDataTree->Branch("attatchedElectrons", &attatchedElectrons, "attatchedElectrons/I");
 
   //***** Simulation Parameters *****//
   //Read in simulation parameters from run_control
@@ -142,6 +144,41 @@ int main(int argc, char * argv[]) {
     return -1;
   }
 
+  int numEField;
+
+  // ***** Metadata tree ***** //
+  //Create
+  TTree *metaDataTree = new TTree("metadataTree", "Simulation Parameters");//TODO - change this to metaDataTree
+
+  //Add branches
+
+  //My Running parameters //TODO - These will not be necessary w/ James' geometry
+  metaDataTree->Branch("EField_min", &EField_min, "EField_min/D");
+  metaDataTree->Branch("EField_max", &EField_max, "EField_max/D");
+  metaDataTree->Branch("EField_step", &EField_step, "EField_step/D");
+  metaDataTree->Branch("numEField", &numEField, "numEField/I");
+
+  //Geometry Parameters
+  metaDataTree->Branch("standoff", &standoff, "standoff/D");
+  metaDataTree->Branch("pixelWidth", &pixelWidth, "pixelWidth/D");
+  metaDataTree->Branch("pitch", &pitch, "pitch/D");
+
+
+  //Simulation control parameters
+  metaDataTree->Branch("runNo", &runNo, "runNo/I");
+  metaDataTree->Branch("numEvent", &numEvent, "numEvent/I");
+  metaDataTree->Branch("avalLimit", &avalLimit, "avalLimit/I");
+
+  metaDataTree->Branch("runTime", &runTime, "runTime/D");
+
+  //Simulation component parameters
+  metaDataTree->Branch("ar_comp", &ar_comp, "ar_comp/D");
+  metaDataTree->Branch("co2_comp", &co2_comp, "co2_comp/D");
+  metaDataTree->Branch("rPenning", &rPenning, "rPenning/D");
+  metaDataTree->Branch("lambdaPenning", &lambdaPenning, "lambdaPenning/D");
+
+
+
   //*************** SIMULATION ***************//
   std::cout << "****************************************\n";
   std::cout << "Starting simulation: " << runNo << "\n";
@@ -159,7 +196,8 @@ int main(int argc, char * argv[]) {
   start = clock();
   lapField = clock();
 
-  int numEField = (EField_max - EField_min)/EField_step + 1;
+  numEField = (EField_max - EField_min)/EField_step + 1;
+  
   std::cout << "****************************************\n";
   std::cout << "Processing " << numEField << " electric fields...\n";
   std::cout << "****************************************\n";
@@ -167,6 +205,21 @@ int main(int argc, char * argv[]) {
   //***** E Field Loop *****//
   //Loop through E field strengths
   for(int inField = 0; inField < numEField; inField++){
+
+    //***** Data Tree *****/
+    //Create
+    TTree *eventDataTree = new TTree(Form("eventDataTree_EField_%d", inField), Form("Event Simulation Data for E-field %d", inField));
+
+
+    //Data to be saved for each avalanche
+    double EField;
+    int totalElectrons;
+    int attatchedElectrons;
+
+    //Add Branches
+    eventDataTree->Branch("Electric Field", &EField, "EField/D");
+    eventDataTree->Branch("Total Electrons", &totalElectrons, "totalElectrons/I");
+    eventDataTree->Branch("Attatched Electrons", &attatchedElectrons, "attatchedElectrons/I");
 
     //Calculate current field and necessary applied voltage
     EField = EField_min + inField*EField_step;
@@ -188,7 +241,7 @@ int main(int argc, char * argv[]) {
     avalancheE->EnableAvalancheSizeLimit(avalLimit);
 
     //Set the Initial parameters
-    double x0 = 0., y0 = 0.9*standoff/2.e4, z0 = 0.; //cm
+    double x0 = 0., y0 = 0.99*standoff/2.e4, z0 = 0.; //cm
     double t0 = 0.;//ns
     double e0 = 0.1;//eV
     double dx0 = 0., dy0 = 0., dz0 = 0.;//
@@ -241,6 +294,11 @@ int main(int argc, char * argv[]) {
 
     }//end avalanche event loop
 
+    //Write the data tree to file then delete
+    //eventDataTree->Print()
+    eventDataTree->Write();
+    delete eventDataTree; // Clean up the tree object
+
     //Print timing every ~10%
     if((inField % std::max(1, numEField/10) == 0) && (numEField > 0)){
 
@@ -260,50 +318,24 @@ int main(int argc, char * argv[]) {
 
   //Final timing
   stop = clock();
-  double runTime = (stop - start)/CLOCKS_PER_SEC;
+  runTime = (stop - start)/CLOCKS_PER_SEC;
   std::cout << "****************************************\n";
   std::cout << "Done processing E fields...(" << runTime << " s)\n";
   std::cout << "****************************************\n";
   std::cout << "Done simulation: " << runNo << "\n";
   std::cout << "****************************************\n";
 
-
-  // ***** Metadata tree ***** //
-  //Create
-  TTree *metaDataTree = new TTree("metadataTree", "Simulation Parameters");
-
-  //Add branches
-  metaDataTree->Branch("runNo", &runNo, "runNo/I");
-  metaDataTree->Branch("numEvent", &numEvent, "numEvent/I");
-  metaDataTree->Branch("avalLimit", &avalLimit, "avalLimit/I");
-
-  metaDataTree->Branch("EField_min", &EField_min, "EField_min/D");
-  metaDataTree->Branch("EField_max", &EField_max, "EField_max/D");
-  metaDataTree->Branch("EField_step", &EField_step, "EField_step/D");
-  metaDataTree->Branch("numEField", &numEField, "numEField/I");
-
-  metaDataTree->Branch("ar_comp", &ar_comp, "ar_comp/D");
-  metaDataTree->Branch("co2_comp", &co2_comp, "co2_comp/D");
-  metaDataTree->Branch("rPenning", &rPenning, "rPenning/D");
-  metaDataTree->Branch("lambdaPenning", &lambdaPenning, "lambdaPenning/D");
-
-  metaDataTree->Branch("standoff", &standoff, "standoff/D");
-  metaDataTree->Branch("pixelWidth", &pixelWidth, "pixelWidth/D");
-  metaDataTree->Branch("pitch", &pitch, "pitch/D");
-
-  metaDataTree->Branch("runTime", &runTime, "runTime/D");
-
-  //Fill metadata tree
+  // ***** Deal with mnetaData ***** //
   metaDataTree->Fill();
-
-
-  // ***** Print and save data ***** //
-  metaDataTree->Print();
+  //metaDataTree->Print();
   metaDataTree->Write();
-  eventDataTree->Print();
-  eventDataTree->Write();
+  delete metaDataTree;
+
+  //close the file
   dataFile->Close();
+  delete dataFile;
 
   return 0;
 
 }
+
