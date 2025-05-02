@@ -1,8 +1,10 @@
 
 # FIMS - Data Generation: FIMS_SIM
 ## Description:
-Garfield++ simulation of the avalanche process for a single electron within the FIMS geometry.
-Electron avalanches are calculated using AvalancheMicroscopic.
+Simulation of the avalanche process for a single electron within the FIMS geometry.
+Geometry is defined using Gmesh, and the field is determined using the finite-element methods in ELmer.
+Electron avalanches are calculated using the Garfield++ method AvalancheMicroscopic.
+The parameters of the geometry and simulation are contained in run_control.
 Data is ouput to the directory Data/ in root format.
 
 ## Contents:
