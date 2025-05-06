@@ -1,0 +1,21 @@
+## Geometry Parameters
+
+# Dimensions
+Standoff height (micron): 25.
+Pixel width (micron): 10.
+Pitch (micron): 55.
+
+
+## Simulation parameters
+
+# Avalanche controls
+Number of simulation events: 10000
+Electron avalanche limit: 500
+
+# Gas composition
+Ar gas composition: 80.
+CO2 gas composition: 20.
+
+# Penning parameters
+Penning transfer (r): 0.51
+Penning transfer (lambda): 0.
