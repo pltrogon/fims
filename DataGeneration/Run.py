@@ -24,7 +24,7 @@ def analyze(r0,tM,tA,tB,tC,P,L,V,runstart,I):
         m+=1
 
 #Finding the width of the field bundle by first cutting the data to the region below a single hole
-    E_field_cut = np.delete(E_field, np.where((E_field[:,0] <= -r0) | (E_field[:,0] >= r0) | (E_field[:,1] > 10)), axis=0)
+    E_field_cut = np.delete(E_field, np.where((E_field[:,0] <= -r0) | (E_field[:,0] >= r0) | (E_field[:,1] > 0)), axis=0)
     
 #Finding the width of the field bundle by identifying the end points of the first and last field line
     endp = np.array([])
@@ -47,7 +47,7 @@ def analyze(r0,tM,tA,tB,tC,P,L,V,runstart,I):
     
 #Checking the field transparency to determine if the simulation should continue
     if field_num/field_tot < .999:
-        with open('output_file/Radius_Redo.csv', 'a') as f:
+        with open('output_file/Min_Field_Data.csv', 'a') as f:
             print(f'{r0},{tB},{V/(tB/10)},{width}', file=f)
         print('Field line Transparency is too low. Ending Program')
         return True
@@ -80,7 +80,7 @@ def Set_Param(r0,tM,tA,tB,tC,P,L,small,med,med2,large,V):
 #-------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 #In this initial definition, variable is the parameter that the user wishes to iterate, mini is the initial value of that parameter, maxi is the final value, and steps is the number of tests that the user wishes to run.
-def iterate_variable(variable, mini, maxi, steps,RG,ST):
+def iterate_variable(variable, mini, maxi, steps):
     tstart = time.perf_counter()
     with open('output_file/Sim_Data.csv', 'w') as f:
         print()
@@ -259,13 +259,4 @@ def iterate_variable(variable, mini, maxi, steps,RG,ST):
 
 
 #This line runs the program and should be edited by the user to match their desired test conditions
-i=12
-maxrad=15
-maxstand=100
-while i<=maxrad:
-    n=100
-    while n<=maxstand:
-        iterate_variable('v',-7.2*n,-2*n,60,i,n)
-        n+=5
-        subprocess.run(['clear'])
-    i+=.5
+iterate_variable('v',-100,-400,400)
