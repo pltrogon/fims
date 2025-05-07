@@ -2,14 +2,16 @@
  * avalanche.cc
  * 
  * Garfield++ simulation of a single-electron avalanche.
- *    Requires an input electric field solved by elmer and geometry from gmesh.
+ *    Requires an input electric field solved by elmer and geometry from gmsh.
  *    Reads simulation parameters from run_control.
  *    Reads a run number from runno.
- *    Saves avalanche data in a .root file as two trees:
+ *    Saves avalanche data in a .root file as root trees:
  *        metaDataTree
- *        eventDataTree
+ *        avalancheDataTree
+ *        electronDataTree
+ *        ionDataTree
  * 
- * Tanner Polischuk
+ * Tanner Polischuk & James Harrison IV
  */
 
 //Garfield includes
@@ -52,41 +54,40 @@ int main(int argc, char * argv[]) {
   std::string runnoFile = "../runno";
   std::ifstream runInFile;
   runInFile.open(runnoFile);
-  if(runInFile.is_open()) {
-    runInFile >> runNo;
-    runInFile.close();
 
-    std::cout << "****************************************\n";
-    std::cout << "Building simulation: " << runNo << "\n";
-    std::cout << "****************************************\n";
+  if(!runInFile.is_open()){
+    std::cerr << "Error reading file ' << runnnoFile << "'. << std::endl;
+    return -1;
   }
-  else{
-      std::cerr << "Error reading file 'runno'." << std::endl;
-      return -1;
-  }
+
+  runInFile >> runNo;
+  runInFile.close();
+
+  std::cout << "****************************************\n";
+  std::cout << "Building simulation: " << runNo << "\n";
+  std::cout << "****************************************\n";
 
   //Update runno file
   std::ofstream runOutFile(runnoFile);
-  if(runOutFile.is_open()){
-    runOutFile << runNo+1;
-    runOutFile.close();
-  }
-  else{
-    std::cerr << "Error writing file 'runno'." << std::endl;
+  if(!runOutFile.is_open()){
+    std::cerr << "Error writing file ' << runnnoFile << "'. << std::endl;
     return -1;
   }
+  runOutFile << runNo+1;
+  runOutFile.close();
 
   //***** Data File *****//
   std::string dataFilename = "sim."+std::to_string(runNo)+".root";
   std::string dataPath = "../Data/"+dataFilename;
   TFile *dataFile = new TFile(dataPath.c_str(), "NEW");
 
-  if(dataFile->IsOpen()){
-      std::cout << "File '" << dataFilename << "' created and opened successfully.\n";
-  }else{
+  if(!dataFile->IsOpen()){
     std::cerr << "Error creating or opening file '" << dataFilename << "'." << std::endl;
     return -1;
-  }
+  }  
+  
+  std::cout << "File '" << dataFilename << "' created and opened successfully.\n";
+
 
   //***** Simulation Parameters *****//
   //Read in simulation parameters from run_control
@@ -98,78 +99,87 @@ int main(int argc, char * argv[]) {
 
   std::ifstream paramFile;
   paramFile.open("../run_control");
-  if(paramFile.is_open()){
 
-    std::cout << "****************************************\n";
-    std::cout << "Setting up simulation.\n";
-    std::cout << "****************************************\n";
-    
-    std::string curLine;
-    std::map<std::string, std::string> readParam;
-
-    //Read the file contents to a map
-    int numKeys = 0;//Number of user-defined simulation parameters to search for is 12.
-    while(std::getline(paramFile, curLine)){
-      size_t colonPos = curLine.find(":");
-      if (colonPos != std::string::npos){
-        std::string key = curLine.substr(0, colonPos);
-        std::string value = curLine.substr(colonPos + 1);
-        readParam[key] = value;
-        numKeys++;
-      }
-    }
-    paramFile.close();
-
-    //Parse the values from the map
-    if(numKeys == 12){
-      numEvent = std::stoi(readParam["Number of simulation events"]);
-      avalLimit = std::stoi(readParam["Electron avalanche limit"]);
-
-      ar_comp = std::stod(readParam["Ar gas composition"]);
-      co2_comp = std::stod(readParam["CO2 gas composition"]);
-      rPenning = std::stod(readParam["Penning transfer (r)"]);
-      lambdaPenning = std::stod(readParam["Penning transfer (lambda)"]);
-
-      standoff = std::stod(readParam["Standoff height (micron)"]);
-      driftHeight = std::stod(readParam["Drift height (micron)"]);
-
-      holeRadius = std::stod(readParam["Hole radius (micron)"]);
-      pixelWidth = std::stod(readParam["Pixel width (micron)"]);
-      pitch = std::stod(readParam["Pitch (micron)"]);
-    }
-    else{
-      std::cerr << "Error: Invalid simulation parameters in file 'run_control'." << std::endl;
-      return -1;
-    }
-  }
-  else{
+  if(!paramFile.is_open()){
     std::cerr << "Error: Could not open simulation parameter file 'run_control'." << std::endl;
     return -1;
   }
 
+  std::cout << "****************************************\n";
+  std::cout << "Setting up simulation.\n";
+  std::cout << "****************************************\n";
+  
+  std::string curLine;
+  std::map<std::string, std::string> readParam;
+
+  //Read the file contents to a map
+  int numKeys = 0;//Number of user-defined simulation parameters in run_control to search for is 13.
+  while(std::getline(paramFile, curLine)){
+    if(curLine.find('#') == 0){
+      continue;
+    }
+
+    size_t keyPos = curLine.find("=");
+    //This assumes that the form "key = value;" Note single whitespace on either side of '='.
+    if (keyPos != std::string::npos){
+      std::string key = curLine.substr(0, keyPos - 2);
+      std::string value = curLine.substr(keyPos + 2);
+      if(value.back() == ";"){
+        value.pop_back();
+      }
+
+      readParam[key] = value;
+      numKeys++;
+    }
+  }
+  paramFile.close();
+
+  //Parse the values from the map
+  if(numKeys != 13){
+      std::cerr << "Error: Invalid simulation parameters in file 'run_control'." << std::endl;
+    return -1;
+  }
+
+  numEvent = std::stoi(readParam["simulation_Events"]);
+  avalLimit = std::stoi(readParam["avalanche_Limit"]);
+
+  ar_comp = std::stod(readParam["ar_comp"]);
+  co2_comp = std::stod(readParam["co2_comp"]);
+  rPenning = std::stod(readParam["penning_r"]);
+  lambdaPenning = std::stod(readParam["penning_lambda"]);
+
+  standoff = std::stod(readParam["standoff_height"]);
+  driftHeight = std::stod(readParam["drift_height"]);
+  meshTickness = std::stod(readParam["thickness_mesh"]);
+  pixelTickness = std::stod(readParam["thickness_pixel"]);
+  holeRadius = std::stod(readParam["radius_hole"]);
+  pixelWidth = std::stod(readParam["pixel_width"]);
+  pitch = std::stod(readParam["pitch"]);
+
   // ***** Metadata tree ***** //
   //Create
-  TTree *metaDataTree = new TTree("metaDataTree", "Simulation Parameters");//TODO - change this to metaDataTree
+  TTree *metaDataTree = new TTree("metaDataTree", "Simulation Parameters");
 
   //Add branches
-
-  //My Running parameters
-
-  //Geometry Parameters
-  metaDataTree->Branch("standoff", &standoff, "standoff/D");
-  metaDataTree->Branch("pixelWidth", &pixelWidth, "pixelWidth/D");
-  metaDataTree->Branch("pitch", &pitch, "pitch/D");
-
   //Simulation control parameters
   metaDataTree->Branch("runNo", &runNo, "runNo/I");
   metaDataTree->Branch("numEvent", &numEvent, "numEvent/I");
   metaDataTree->Branch("avalLimit", &avalLimit, "avalLimit/I");
+
+  //Geometry Parameters
+  //FORMAT: metaDataTree->Branch("", &, "/D");
+  metaDataTree->Branch("standoff", &standoff, "standoff/D");
+  metaDataTree->Branch("pixelWidth", &pixelWidth, "pixelWidth/D");
+  metaDataTree->Branch("pitch", &pitch, "pitch/D");
 
   //Simulation component parameters
   metaDataTree->Branch("ar_comp", &ar_comp, "ar_comp/D");
   metaDataTree->Branch("co2_comp", &co2_comp, "co2_comp/D");
   metaDataTree->Branch("rPenning", &rPenning, "rPenning/D");
   metaDataTree->Branch("lambdaPenning", &lambdaPenning, "lambdaPenning/D");
+
+  //Other
+  metaDataTree->Branch("runTime", &runTime, "runtTime/D");
 
   //***** Avalanche Data Tree *****//
 
@@ -285,7 +295,7 @@ int main(int argc, char * argv[]) {
   Sensor* sensor = new Sensor();
   sensor->AddComponent(&FIMS_Field);
   sensor->SetArea(-pitch/2., -pitch/2., TODO_NEGATIVEZLIMIT, pitch/2., pitch/2., TODO_POSITIVEZLIMIT)
-  sensor->AddElectrode(FIMS_Field, "wtlel")
+  sensor->AddElectrode(&FIMS_Field, "wtlel")
 
   //Set up Microscopic Avalanching
   AvalancheMicroscopic* avalancheE = new AvalancheMicroscopic;
@@ -296,6 +306,61 @@ int main(int argc, char * argv[]) {
   AvalancheMC* driftIon = new AvalancheMC;
   driftIon->SetSensor(sensor);
   driftIon->SetDistanceSteps(1.e-5);
+
+  //***********************************************************************************************************************
+  //***********************************************************************************************************************
+  //***********************************************************************************************************************
+  //***********************************************************************************************************************
+  //***********************************************************************************************************************
+  //***********************************************************************************************************************
+  DriftLineRKF driftLines(&sensor);
+
+  //calculate field lines for visualization
+  std::vector<double> xStart;
+  std::vector<double> yStart;
+  std::vector<double> zStart;
+  int nLines = 23;
+  for (int i = 0; i < nLines; i++) {
+    xStart.push_back(-pitch/2. + (pitch*i/(nLines - 1)));
+    yStart.push_back(0.);
+    zStart.push_back(0.);//TODO -  top of drifft volume
+  }
+  
+  TCanvas * fieldLines = new TCanvas("geometryFieldLines", "Field Line Geometry");
+  
+  ViewFEMesh viewGeometry(&FIMS_Field);
+  viewGeometry.SetArea();
+  viewGeometry.SetCanvas(fieldLines);
+  viewGeometry.SetPlane(0, -1, 0, 0, 0, 0);
+  viewGeometry.SetFillMesh(true);
+
+
+
+
+  
+
+  //E field Lines
+  TCanvas* fieldLines = new TCanvas("fieldLines", "", 600, 600);
+  viewField.SetCanvas(fieldLines);
+  viewField.PlotFieldLines(xStart, yStart, zStart);
+  pixel1D->Draw();
+  gPad->Update();
+
+  //Weighting Field for pixel
+  TCanvas* weightingField = new TCanvas("weightingField", "", 600, 600);
+  viewField.SetCanvas(weightingField);
+  viewField.PlotContourWeightingField("pixel", "v");
+  pixel1D->Draw();
+  gPad->Update();
+
+
+
+  TCanvas * fieldLines = new TCanvas("geometryFieldLines", "Field Line Geometry");
+  const bool plotContours = false;
+
+
+  //Mesh
+  viewFEMesh = 
 
 
   // ***** Prepare Simulation ***** //
@@ -376,7 +441,7 @@ int main(int argc, char * argv[]) {
     //*** TODO ***/
     //Can insert any per-avalanche analysis/data here.
     // -- Induced signals
-    // --Histograms of energy loss/collison, ionization posiitions, time between collisions, 
+    // -- Histograms of energy loss/collison, ionization posiitions, time between collisions,
 
     //Fill tree with data from this avalanche
     avalancheDataTree->Fill();
