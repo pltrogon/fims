@@ -2,7 +2,7 @@
 python script that runs gmsh to create a finite element map, runs Elmer to create an electric field map using that geometry, and then imports the geometry and the fiedl map into garfield++ to generate field lines which are then stored on a .csv file. The .csv file is then used to calculate the field line transparency and the field bundle diameter. All data is then output to a Sim_Data.csv file
 ## Notes:
 The program assumes the following file structure: 
-  1. All relevent code and programs are stored in a single folder labeles "simulation"
+  1. All relevent code and programs are stored in a single folder labeled "simulation"
   2. The "simulation" folder has four primary sub folders:
        -"input_file"
        -"output_file"
