@@ -1,12 +1,19 @@
 //----- Geometry Parameters -----
 // Dimensions: micron
-standoff_height = 25.;
+
+// Pixel
 pixel_width = 10.;
-pitch = 55.;
-drift_height = 100.;
-thickness_mesh = 5.;
 thickness_pixel = 5.;
+pitch = 55.;
+
+//Mesh
+standoff_height = 25.;
+thickness_mesh = 5.;
 radius_hole = 20.;
+
+// Other
+cathode_height = 400.;
+thickness_sio2 = 5.;
 
 
 //----- Simulation parameters -----
