@@ -17,7 +17,12 @@ CO2 gas composition: 20.
 Penning transfer (r): 0.51
 Penning transfer (lambda): 0.
 
-# Geometry dimensions
-Standoff height (micron): 50.
-Pixel width (micron): 10.
-Pitch (micron): 55.
+# Geometry dimensions (all microns)
+Radius: 16.
+Standoff height: 50.
+Pitch: 55.
+Mesh thickness: 4.
+Pixel width: 10.
+SiO2 thickness: 5.
+Cathode height: 400.
+
