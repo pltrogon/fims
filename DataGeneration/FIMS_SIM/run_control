@@ -1,5 +1,5 @@
-#----- Geometry Parameters -----
-# Dimensions: micron
+//----- Geometry Parameters -----
+// Dimensions: micron
 standoff_height = 25.;
 pixel_width = 10.;
 pitch = 55.;
@@ -9,15 +9,15 @@ thickness_pixel = 5.;
 radius_hole = 20.;
 
 
-#----- Simulation parameters -----
-# Avalanche controls
+//----- Simulation parameters -----
+// Avalanche controls
 simulation_Events = 10000;
 avalanche_Limit = 500;
 
-# Gas composition
+// Gas composition
 ar_comp = 80.;
 co2_comp = 20.;
 
-# Penning parameters
+// Penning parameters
 penning_r = 0.51;
 penning_lambda = 0.;
