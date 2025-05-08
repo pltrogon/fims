@@ -1,0 +1,11 @@
+radius = 16.0;
+mesh_thickness = 4;
+cathode_height = 400;
+standoff_height = 100;
+SiO2_thickness = 5;
+pitch = 27.5;
+pixel_length = 10;
+small = 0.6;
+med = 2.9;
+med2 = 10;
+large = 60;

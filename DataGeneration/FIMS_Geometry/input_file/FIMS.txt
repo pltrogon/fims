@@ -1,1 +1,299 @@
+// Parameters in micrometers
+Include "params.txt";
 
+
+//Center axis
+Point(1) = {0, 0, mesh_thickness/2, small}; //top of mesh
+Point(2) = {0, 0, -mesh_thickness/2, small}; //bottom of mesh
+
+// ***************************************************************************************************************
+// Mesh Plate
+// ***************************************************************************************************************
+
+// Points for the top circular boundary
+Point(3) = {(radius), 0, mesh_thickness/2, small};
+Point(4) = {0, (radius), mesh_thickness/2, small};
+Point(5) = {-(radius), 0, mesh_thickness/2, small};
+Point(6) = {0, -(radius), mesh_thickness/2, small};
+
+//Points for the bottom circular boundary
+Point(7) = {(radius), 0, -mesh_thickness/2, small};
+Point(8) = {0, (radius), -mesh_thickness/2, small};
+Point(9) = {-(radius), 0, -mesh_thickness/2, small};
+Point(10) = {0, -(radius), -mesh_thickness/2, small};
+
+
+//Four corners of the top of the mesh
+Point(11) = {pitch,pitch, mesh_thickness/2, med2};
+Point(12) = {pitch,-pitch, mesh_thickness/2, med2};
+Point(13) = {-pitch,-pitch, mesh_thickness/2, med2};
+Point(14) = {-pitch,pitch, mesh_thickness/2, med2};
+
+//Four corners of the bottom of the mesh
+Point(15) = {pitch, pitch, -mesh_thickness/2, med2};
+Point(16) = {pitch, -pitch, -mesh_thickness/2, med2};
+Point(17) = {-pitch, -pitch, -mesh_thickness/2, med2};
+Point(18) = {-pitch, pitch, -mesh_thickness/2, med2};
+
+// Top Circular boundary
+Circle(1) = {3, 1, 4};
+Circle(2) = {4, 1, 5};
+Circle(3) = {5, 1, 6};
+Circle(4) = {6, 1, 3};
+
+//Bottom Circular boundary
+Circle(5) = {7, 2, 8};
+Circle(6) = {8, 2, 9};
+Circle(7) = {9, 2, 10};
+Circle(8) = {10, 2, 7};
+
+//Note: multiple lines are required to make a circle since gmsh cannot make curves equal to or larger than Pi
+
+//Lines connecting the four corners of the top of the mesh
+Line(9) = {11, 12};
+Line(10) = {12, 13};
+Line(11) = {13, 14};
+Line(12) = {14, 11};
+
+//Lines connecting the four corners of the bottom of the mesh
+Line(13) = {15, 16};
+Line(14) = {16, 17};
+Line(15) = {17, 18};
+Line(16) = {18, 15};
+
+//Lines connecting the top of the mesh to the bottom of the mesh
+Line(17) = {11, 15};
+Line(18) = {12, 16};
+Line(19) = {13, 17};
+Line(20) = {14, 18};
+
+Line(21) = {3, 7};
+Line(22) = {4, 8};
+Line(23) = {5, 9};
+Line(24) = {6, 10};
+
+//Curve loops for the top of the top of the mesh
+Curve Loop (1) = {1,2,3,4};
+Curve Loop (2) = {9,10,11,12};
+
+//Curve loops for the bottom of the mesh
+Curve Loop (3) = {5,6,7,8};
+Curve Loop (4) = {13,14,15,16};
+
+//Curve loops for between the plates
+Curve Loop (5) = {-9, 17, 13, -18};
+Curve Loop (6) = {-10, 18, 14, -19};
+Curve Loop (7) = {-11, 19, 15, -20};
+Curve Loop (8) = {-12, 20, 16, -17};
+
+Curve Loop (9) = {1, 22, -5, -21};
+Curve Loop (10) = {2, 23, -6, -22};
+Curve Loop (11) = {3, 24, -7, -23};
+Curve Loop (12) = {4, 21, -8, -24};
+
+//Curve loops for the outer edges of the mesh
+Curve Loop(13) = {9, 18, -13, -17};
+Curve Loop(14) = {10, 19, -14, -18};
+Curve Loop(15) = {11, 20, -15, -19};
+Curve Loop(16) = {12, 17, -16, -20};
+
+//Surfaces between the top and bottom of the mesh
+Surface(3) = {9};
+Surface(4) = {10};
+Surface(5) = {11};
+Surface(6) = {12};
+
+//Plane surface for the outer edges of the mesh
+Plane Surface(7) = {13};
+Plane Surface(8) = {14};
+Plane Surface(9) = {15};
+Plane Surface(10) = {16};
+
+//Surfaces for the hole in the mesh
+Plane Surface(1) = {4,3};
+Plane Surface(2) = {2,1};
+
+//Surface loop for the mesh
+Surface Loop(2) = {1, 7, 8, 9, 10, 2, 3, 4, 5, 6};
+
+//Volume for mesh
+Volume(2) = {2};
+
+// ***************************************************************************************************************
+// Top Boundary
+// ***************************************************************************************************************
+
+//Four corners of the top boundary
+Point(201) = {pitch, pitch, mesh_thickness/2+cathode_height, large};
+Point(202) = {pitch, -pitch, mesh_thickness/2+cathode_height, large};
+Point(203) = {-pitch, -pitch, mesh_thickness/2+cathode_height, large};
+Point(204) = {-pitch, pitch, mesh_thickness/2+cathode_height, large};
+
+//Lines connecting the corners of the top boundary
+Line(201) = {201, 202};
+Line(202) = {202, 203};
+Line(203) = {203, 204};
+Line(204) = {204, 201};
+
+//Lines connecting the top boundary to the mesh
+Line(205) = {11, 201};
+Line(206) = {12, 202};
+Line(207) = {13, 203};
+Line(208) = {14, 204};
+
+//Curve loops above the mesh
+Curve Loop(201) = {201, 202, 203, 204};
+Curve Loop (202) = {201,205,-9,-206};
+Curve Loop (203) = {202,206,-10,-207};
+Curve Loop (204) = {203,207,-11,-208};
+Curve Loop (205) = {204,208,-12,-205};
+
+//Surfaces above the mesh
+Plane Surface(201) = {201};
+Plane Surface(202) = {202};
+Plane Surface(203) = {203};
+Plane Surface(204) = {204};
+Plane Surface(205) = {205};
+
+// ***************************************************************************************************************
+// Readout Plane
+// ***************************************************************************************************************
+
+//Four corners of the top layer
+Point(101) = {pitch, pitch, -1*(standoff_height+mesh_thickness/2), med2};
+Point(102) = {pitch, -pitch, -1*(standoff_height+mesh_thickness/2), med2};
+Point(103) = {-pitch, -pitch, -1*(standoff_height+mesh_thickness/2), med2};
+Point(104) = {-pitch, pitch, -1*(standoff_height+mesh_thickness/2), med2};
+
+//Four corners of the chip
+Point(105) = {pixel_length/2, pixel_length/2, -(standoff_height+mesh_thickness/2+SiO2_thickness), med};
+Point(106) = {-pixel_length/2, pixel_length/2, -(standoff_height+mesh_thickness/2+SiO2_thickness), med};
+Point(107) = {-pixel_length/2, -pixel_length/2, -(standoff_height+mesh_thickness/2+SiO2_thickness), med};
+Point(108) = {pixel_length/2, -pixel_length/2, -(standoff_height+mesh_thickness/2+SiO2_thickness), med};
+
+//Four corners of the air gap above the chip
+Point(109) = {pixel_length/2, pixel_length/2, -(standoff_height+mesh_thickness/2), med};
+Point(110) = {-pixel_length/2, pixel_length/2, -(standoff_height+mesh_thickness/2), med};
+Point(111) = {-pixel_length/2, -pixel_length/2, -(standoff_height+mesh_thickness/2), med};
+Point(112) = {pixel_length/2, -pixel_length/2, -(standoff_height+mesh_thickness/2), med};
+
+//Four corners of the bottom layer
+Point(113) = {pitch, pitch, -(standoff_height+mesh_thickness/2+SiO2_thickness), large};
+Point(114) = {-pitch, pitch, -(standoff_height+mesh_thickness/2+SiO2_thickness), large};
+Point(115) = {-pitch, -pitch, -(standoff_height+mesh_thickness/2+SiO2_thickness), large};
+Point(116) = {pitch, -pitch, -(standoff_height+mesh_thickness/2+SiO2_thickness), large};
+
+//Lines connecting points below the bottom mesh**********************************************
+
+//Lines connecting the four corners of the plane
+Line(101) = {101, 102};
+Line(102) = {102, 103};
+Line(103) = {103, 104};
+Line(104) = {104, 101};
+
+//Lines connecting the bottom plane to the mesh
+Line(105) = {15, 101};
+Line(106) = {16, 102};
+Line(107) = {17, 103};
+Line(108) = {18, 104};
+
+//Lines connecting the points around the chip
+Line(109) = {105, 106};
+Line(110) = {106, 107};
+Line(111) = {107, 108};
+Line(112) = {108, 105};
+
+//Lines connecting the readout plane to the top layer of the readout plane
+Line(113) = {101, 113};
+Line(114) = {102, 116};
+Line(115) = {103, 115};
+Line(116) = {104, 114};
+
+//Lines connecting the outer points of the bottom of the readout plane
+Line(117) = {113, 114};
+Line(118) = {114, 115};
+Line(119) = {115, 116};
+Line(120) = {116, 113};
+
+//Lines connecting the chip to the top layer of the readout plane
+Line(121) = {109, 105};
+Line(122) = {112, 108};
+Line(123) = {111, 107};
+Line(124) = {110, 106};
+
+//Lines connecting the airgap above the chip
+Line(125) = {109, 110};
+Line(126) = {110, 111};
+Line(127) = {111, 112};
+Line(128) = {112, 109};
+
+//Curve loops below the mesh******************************************************
+
+//Curve loops for the top layer of the readout plane
+Curve loop (101) = {101, 102, 103, 104};
+Curve loop (102) = {125, 126, 127, 128};
+
+//Curve loops for the sides of the readout plane
+Curve Loop (103) = {101, -106, -13, 105};
+Curve Loop (104) = {102, -107, -14, 106};
+Curve Loop (105) = {103, -108, -15, 107};
+Curve Loop (106) = {104, -105, -16, 108};
+
+Curve Loop (107) = {101, 114, 120, -113};
+Curve Loop (108) = {102, 115, 119, -114};
+Curve Loop (109) = {103, 116, 118, -115};
+Curve Loop (110) = {104, 113, 117, -116};
+
+//Curve loops for the airgap inside the readout plane
+Curve Loop (111) = {125, 124, -109, -121};
+Curve Loop (112) = {126, 123, -110, -124};
+Curve Loop (113) = {127, 122, -111, -123};
+Curve Loop (114) = {128, 121, -112, -122};
+
+//Curve loops for the bottom of the readout plane
+Curve Loop (115) = {109,110,111,112};
+Curve Loop (116) = {117, 118, 119, 120};
+
+
+
+//Surfaces below the mesh*****************************************************
+
+
+Plane Surface(101) = {101, 102};
+
+//Side walls above the readout plane
+Plane Surface(103) = {103};
+Plane Surface(104) = {104};
+Plane Surface(105) = {105};
+Plane Surface(106) = {106};
+
+//Side walls inside the readout plane
+Plane Surface(107) = {107};
+Plane Surface(108) = {108};
+Plane Surface(109) = {109};
+Plane Surface(110) = {110};
+
+//Side walls of the airgap inside the readout plane
+Plane Surface(111) = {111};
+Plane Surface(112) = {112};
+Plane Surface(113) = {113};
+Plane Surface(114) = {114};
+
+//Bottom surface
+Plane Surface(115) = {115};
+Plane Surface(116) = {116, 115};
+
+//Surface loops for the gas (volume above the mesh, inside the hole of the mesh, below the mesh, and inside the airgap of the readout plane)
+Surface Loop(1) = {115, 111, 112, 113, 114, 101, 103, 104, 105, 106, 1, 3, 4, 5, 6, 2, 201, 202, 203, 204, 205};
+
+//Volume for the gas
+Volume(1) = {1};
+
+//Surface loop for the silicon
+Surface Loop(3) = {101, 107, 108, 109, 110, 116, 111, 112, 113, 114};
+
+//Volume for the silicon
+Volume(3) = {3};
+
+//+
+Coherence;
