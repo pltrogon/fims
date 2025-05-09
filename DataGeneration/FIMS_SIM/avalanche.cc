@@ -91,11 +91,14 @@ int main(int argc, char * argv[]) {
 
   //***** Simulation Parameters *****//
   //Read in simulation parameters from run_control
+
+  double  pixelWidth, pixelThickness, pitch;
+  double standoff, meshThickness, holeRadius,;
+  double cathode_height, sio2Thickness;
+  double cathode_voltage, mesh_voltage;
   int numEvent, avalLimit;
   double ar_comp, co2_comp;
   double rPenning, lambdaPenning;
-  double standoff, driftHeight;
-  double holeRadius, pixelWidth, pitch;
 
   std::ifstream paramFile;
   paramFile.open("../run_control");
@@ -113,14 +116,13 @@ int main(int argc, char * argv[]) {
   std::map<std::string, std::string> readParam;
 
   //Read the file contents to a map
-  int numKeys = 0;//Number of user-defined simulation parameters in run_control to search for is 13.
+  int numKeys = 0;
   while(std::getline(paramFile, curLine)){
-    if(curLine.find('#') == 0){
+    if(curLine.find('//') == 0){
       continue;
     }
 
     size_t keyPos = curLine.find("=");
-    //This assumes that the form "key = value;" Note single whitespace on either side of '='.
     if (keyPos != std::string::npos){
       std::string key = curLine.substr(0, keyPos - 2);
       std::string value = curLine.substr(keyPos + 2);
@@ -135,44 +137,63 @@ int main(int argc, char * argv[]) {
   paramFile.close();
 
   //Parse the values from the map
-  if(numKeys != 13){
+  if(numKeys != 16){//Number of user-defined simulation parameters in run_control to search for is 16.
       std::cerr << "Error: Invalid simulation parameters in file 'run_control'." << std::endl;
     return -1;
   }
 
+  //Geometry parameters
+  pixelWidth = std::stod(readParam["pixel_width"]);
+  pixelThickness = std::stod(readParam["thickness_pixel"]);
+  pitch = std::stod(readParam["pitch"]);
+
+  standoff = std::stod(readParam["standoff_height"]);
+  meshThickness = std::stod(readParam["thickness_mesh"]);
+  holeRadius = std::stod(readParam["radius_hole"]);
+
+  cathode_height = std::stod(readParam["cathode_height"]);
+  sio2Thickness = std::stod(readParam["thickness_sio2"]);
+
+  //Field parameters
+  cathode_voltage = std::stod(readParam["cathode_voltage"]);
+  mesh_voltage = std::stod(readParam["mesh_voltage"]);
+
+  //Simulation Parameters
   numEvent = std::stoi(readParam["simulation_Events"]);
   avalLimit = std::stoi(readParam["avalanche_Limit"]);
 
   ar_comp = std::stod(readParam["ar_comp"]);
   co2_comp = std::stod(readParam["co2_comp"]);
+
   rPenning = std::stod(readParam["penning_r"]);
   lambdaPenning = std::stod(readParam["penning_lambda"]);
 
-  standoff = std::stod(readParam["standoff_height"]);
-  driftHeight = std::stod(readParam["drift_height"]);
-  meshTickness = std::stod(readParam["thickness_mesh"]);
-  pixelTickness = std::stod(readParam["thickness_pixel"]);
-  holeRadius = std::stod(readParam["radius_hole"]);
-  pixelWidth = std::stod(readParam["pixel_width"]);
-  pitch = std::stod(readParam["pitch"]);
 
   // ***** Metadata tree ***** //
   //Create
   TTree *metaDataTree = new TTree("metaDataTree", "Simulation Parameters");
 
   //Add branches
-  //Simulation control parameters
+  //General
   metaDataTree->Branch("runNo", &runNo, "runNo/I");
-  metaDataTree->Branch("numEvent", &numEvent, "numEvent/I");
-  metaDataTree->Branch("avalLimit", &avalLimit, "avalLimit/I");
 
   //Geometry Parameters
-  //FORMAT: metaDataTree->Branch("", &, "/D");
-  metaDataTree->Branch("standoff", &standoff, "standoff/D");
   metaDataTree->Branch("pixelWidth", &pixelWidth, "pixelWidth/D");
+  metaDataTree->Branch("pixelThickness", &pixelThickness, "pixelThickness/D");
   metaDataTree->Branch("pitch", &pitch, "pitch/D");
+  metaDataTree->Branch("standoff", &standoff, "standoff/D");
+  metaDataTree->Branch("meshThickness", &meshThickness, "meshThickness/D");
+  metaDataTree->Branch("holeRadius", &holeRadius, "holeRadius/D");
+  metaDataTree->Branch("cathode_height", &cathode_height, "cathode_height/D");
+  metaDataTree->Branch("thicknes_sio2", &thickness_sio2, "thickness_sio2/D");
 
-  //Simulation component parameters
+  //Field Parameters
+  metaDataTree->Branch("cathode_voltage", &cathode_voltage, "cathode_voltage/D");
+  metaDataTree->Branch("mesh_voltage", &mesh_voltage, "mesh_voltage/D");
+
+  //Simulation parameters
+  metaDataTree->Branch("numEvent", &numEvent, "numEvent/I");
+  metaDataTree->Branch("avalLimit", &avalLimit, "avalLimit/I");
   metaDataTree->Branch("ar_comp", &ar_comp, "ar_comp/D");
   metaDataTree->Branch("co2_comp", &co2_comp, "co2_comp/D");
   metaDataTree->Branch("rPenning", &rPenning, "rPenning/D");
@@ -284,6 +305,11 @@ int main(int argc, char * argv[]) {
                             geometryPath+"/mesh.nodes", geometryPath+"/dielectrics.dat",
                             geometryPath+"/FIMS.result", "cm");
 
+  // Get region of elmer geometry
+  double xmin, ymin, zmin, xmax, ymax, zmax;
+  FIMS_Field.GetBoundingBox(xmin, ymin, zmin, xmax, ymax, zmax);
+
+  //Enable periodicity and set components
   FIMS_Field.EnablePeriodicityX();
   FIMS_Field.EnablePeriodicityY();
   FIMS_Field.SetGas(&gas);
@@ -294,7 +320,8 @@ int main(int argc, char * argv[]) {
   //Create a sensor
   Sensor* sensor = new Sensor();
   sensor->AddComponent(&FIMS_Field);
-  sensor->SetArea(-pitch/2., -pitch/2., TODO_NEGATIVEZLIMIT, pitch/2., pitch/2., TODO_POSITIVEZLIMIT)
+  double eps = 1e-6;// To shift coordinates to slightly inside the bounding box
+  sensor->SetArea(-pitch/2.+eps, -pitch/2.+eps, zmin+eps, pitch/2.-eps, pitch/2.-eps, zmax-eps);
   sensor->AddElectrode(&FIMS_Field, "wtlel")
 
   //Set up Microscopic Avalanching
@@ -307,60 +334,9 @@ int main(int argc, char * argv[]) {
   driftIon->SetSensor(sensor);
   driftIon->SetDistanceSteps(1.e-5);
 
-  //***********************************************************************************************************************
-  //***********************************************************************************************************************
-  //***********************************************************************************************************************
-  //***********************************************************************************************************************
-  //***********************************************************************************************************************
-  //***********************************************************************************************************************
-  DriftLineRKF driftLines(&sensor);
-
-  //calculate field lines for visualization
-  std::vector<double> xStart;
-  std::vector<double> yStart;
-  std::vector<double> zStart;
-  int nLines = 23;
-  for (int i = 0; i < nLines; i++) {
-    xStart.push_back(-pitch/2. + (pitch*i/(nLines - 1)));
-    yStart.push_back(0.);
-    zStart.push_back(0.);//TODO -  top of drifft volume
-  }
-  
-  TCanvas * fieldLines = new TCanvas("geometryFieldLines", "Field Line Geometry");
-  
-  ViewFEMesh viewGeometry(&FIMS_Field);
-  viewGeometry.SetArea();
-  viewGeometry.SetCanvas(fieldLines);
-  viewGeometry.SetPlane(0, -1, 0, 0, 0, 0);
-  viewGeometry.SetFillMesh(true);
 
 
 
-
-  
-
-  //E field Lines
-  TCanvas* fieldLines = new TCanvas("fieldLines", "", 600, 600);
-  viewField.SetCanvas(fieldLines);
-  viewField.PlotFieldLines(xStart, yStart, zStart);
-  pixel1D->Draw();
-  gPad->Update();
-
-  //Weighting Field for pixel
-  TCanvas* weightingField = new TCanvas("weightingField", "", 600, 600);
-  viewField.SetCanvas(weightingField);
-  viewField.PlotContourWeightingField("pixel", "v");
-  pixel1D->Draw();
-  gPad->Update();
-
-
-
-  TCanvas * fieldLines = new TCanvas("geometryFieldLines", "Field Line Geometry");
-  const bool plotContours = false;
-
-
-  //Mesh
-  viewFEMesh = 
 
 
   // ***** Prepare Simulation ***** //
