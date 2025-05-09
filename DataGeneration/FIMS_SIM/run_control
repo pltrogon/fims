@@ -19,6 +19,11 @@ radius_hole = 20.;
 cathode_height = 400.;
 thickness_sio2 = 5.;
 
+//----- Field Parameters -----
+// Dimensions: Volts
+cathode_voltage = 180.;
+mesh_voltage = 140.;
+
 
 //----- Simulation parameters -----
 // Avalanche controls
