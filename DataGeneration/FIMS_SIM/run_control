@@ -11,9 +11,9 @@ thickness_pixel = 5.;
 pitch = 55.;
 
 //Mesh
-standoff_height = 25.;
-thickness_mesh = 5.;
-radius_hole = 20.;
+standoff_height = 100.;
+thickness_mesh = 4.;
+radius_hole = 16.;
 
 // Other
 cathode_height = 400.;
@@ -21,9 +21,8 @@ thickness_sio2 = 5.;
 
 //----- Field Parameters -----
 // Dimensions: Volts
-cathode_voltage = 180.;
-mesh_voltage = 140.;
-
+mesh_voltage = -140.;
+cathode_voltage = mesh_voltage - cathode_height/10;
 
 //----- Simulation parameters -----
 // Avalanche controls
