@@ -1,6 +1,6 @@
 // Geometry and simulation control parameters for FIMS_SIM.
 // This assumes the form 'variable = value;'
-// Note the single whitespace on either side of '=' and the ';'
+// Note the ';' and single whitespace on either side of '='
 
 //----- Geometry Parameters -----
 // Dimensions: micron
