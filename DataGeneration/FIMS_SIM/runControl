@@ -1,6 +1,6 @@
 // Geometry and simulation control parameters for FIMS_SIM.
 // This assumes the form 'variable = value;'
-// Note the ';' and single whitespace on either side of '='
+// Note the ';' and single whitespace on either side of ' = '
 
 //----- Geometry Parameters -----
 // Dimensions: micron
@@ -11,7 +11,7 @@ pixelThickness = 5.;
 pitch = 55.;
 
 //Mesh
-meshHeight = 100.;
+meshStandoff = 100.;
 meshThickness = 4.;
 holeRadius = 16.;
 
@@ -23,11 +23,14 @@ thicknessSiO2 = 5.;
 // Dimensions: Volts
 meshVoltage = -140.;
 cathodeVoltage = -180.;
-//meshVoltage - cathodeHeight/10;
+//cathodeVoltage = meshVoltage - cathodeHeight/10 for 1kV/cm
+
+numFieldLine = 25;
+transparancyLimit = 0.999;
 
 //----- Simulation parameters -----
 // Avalanche controls
-simulationEvents = 10000;
+numAvalanche = 10000;
 avalancheLimit = 500;
 
 // Gas composition
