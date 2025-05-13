@@ -6,33 +6,34 @@
 // Dimensions: micron
 
 // Pixel
-pixel_width = 10.;
-thickness_pixel = 5.;
+pixelWidth = 10.;
+pixelThickness = 5.;
 pitch = 55.;
 
 //Mesh
-standoff_height = 100.;
-thickness_mesh = 4.;
-radius_hole = 16.;
+meshHeight = 100.;
+meshThickness = 4.;
+holeRadius = 16.;
 
 // Other
-cathode_height = 400.;
-thickness_sio2 = 5.;
+cathodeHeight = 400.;
+thicknessSiO2 = 5.;
 
 //----- Field Parameters -----
 // Dimensions: Volts
-mesh_voltage = -140.;
-cathode_voltage = mesh_voltage - cathode_height/10;
+meshVoltage = -140.;
+cathodeVoltage = -180.;
+//meshVoltage - cathodeHeight/10;
 
 //----- Simulation parameters -----
 // Avalanche controls
-simulation_Events = 10000;
-avalanche_Limit = 500;
+simulationEvents = 10000;
+avalancheLimit = 500;
 
 // Gas composition
-ar_comp = 80.;
-co2_comp = 20.;
+gasCompAr = 80.;
+gasCompCO2 = 20.;
 
 // Penning parameters
-penning_r = 0.51;
-penning_lambda = 0.;
+penningR = 0.51;
+penningLambda = 0.;
