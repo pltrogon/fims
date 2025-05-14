@@ -24,11 +24,14 @@
 #include "Garfield/ViewFEMesh.hh"
 #include "Garfield/ViewField.hh"
 #include "Garfield/DriftLineRKF.hh"
+#include "Garfield/Plotting.hh"
 
 //ROOT includes
 #include "TApplication.h"
 #include "TTree.h"
 #include "TFile.h"
+#include "TGraph.h"
+#include "TCanvas.h"
 
 //C includes
 #include <iostream>
@@ -152,7 +155,6 @@ int main(int argc, char * argv[]) {
     return -1;
   }
 
-  int debug = 0;
   //Geometry parameters
   pixelWidth = std::stod(readParam["pixelWidth"]);
   pixelThickness = std::stod(readParam["pixelThickness"]);
@@ -170,7 +172,7 @@ int main(int argc, char * argv[]) {
   meshVoltage = std::stod(readParam["meshVoltage"]);
 
   numFieldLine = std::stoi(readParam["numFieldLine"]);
-  transparencyLimit = std::stoi(readParam["transparencyLimit"]);
+  transparencyLimit = std::stod(readParam["transparencyLimit"]);
 
   //Simulation Parameters
   numAvalanche = std::stoi(readParam["numAvalanche"]);
@@ -316,7 +318,7 @@ int main(int argc, char * argv[]) {
 
   //*************** SIMULATION ***************//
   std::cout << "****************************************\n";
-  std::cout << "Starting simulation: " << runNo << "\n";
+  std::cout << "Creating simulation: " << runNo << "\n";
   std::cout << "****************************************\n";
 
   // Define the gas mixture
@@ -344,8 +346,8 @@ int main(int argc, char * argv[]) {
   fieldFIMS.GetBoundingBox(xmin, ymin, zmin, xmax, ymax, zmax);
 
   //Enable periodicity and set components
-  fieldFIMS.EnablePeriodicityX();
-  fieldFIMS.EnablePeriodicityY();
+  //fieldFIMS.EnablePeriodicityX();
+  //fieldFIMS.EnablePeriodicityY();
   fieldFIMS.SetGas(gasFIMS);
 
   // Import the weighting field for the readout electrode.
@@ -354,8 +356,9 @@ int main(int argc, char * argv[]) {
   //Create a sensor
   Sensor* sensorFIMS = new Sensor();
   sensorFIMS->AddComponent(&fieldFIMS);
-  double eps = 1e-6;// To shift coordinates to slightly inside the bounding box
-  sensorFIMS->SetArea(-pitch/2.+eps, -pitch/2.+eps, zmin+eps, pitch/2.-eps, pitch/2.-eps, zmax-eps);
+  //double eps = 1e-6;// To shift coordinates to slightly inside the bounding box
+  //sensorFIMS->SetArea(-pitch/2.+eps, -pitch/2.+eps, zmin+eps, pitch/2.-eps, pitch/2.-eps, zmax-eps);
+  sensorFIMS->SetArea(xmin, ymin, zmin, xmax, ymax, zmax);
   sensorFIMS->AddElectrode(&fieldFIMS, "wtlel");
 
   //Set up Microscopic Avalanching
@@ -369,40 +372,37 @@ int main(int argc, char * argv[]) {
   driftIon->SetDistanceSteps(1.e-5);
 
   // ***** Find field transparency ***** //
-
   std::cout << "****************************************\n";
   std::cout << "Determining field transparency.\n";
   std::cout << "****************************************\n";
 
   DriftLineRKF driftLines(sensorFIMS);
+  driftLines.SetMaximumStepSize(pitch/100.);
 
   //Create 2D linearly-spaced array at top of drift volume
   std::vector<double> xStart;
   std::vector<double> yStart;
   std::vector<double> zStart;
 
-  /*
+  double rangeScale = 0.99;
+  double xRange = (xmax - xmin)*rangeScale;
+  double yRange = (ymax - ymin)*rangeScale;
+  double zRange = (zmax - zmin)*rangeScale;
+
   for(int i = 0; i < numFieldLine; i++){
     for(int j = 0; j < numFieldLine; j++){
-      xStart.push_back(-pitch/2. + (pitch*i/(numFieldLine - 1)));
-      yStart.push_back(-pitch/2. + (pitch*j/(numFieldLine - 1)));
-      zStart.push_back(zmax-eps);// Shift to slightly inside of volume
+      xStart.push_back(-xRange/2. + i*xRange/(numFieldLine-1));
+      yStart.push_back(-yRange/2. + j*yRange/(numFieldLine-1));
+      zStart.push_back(zmax*rangeScale);
     }
   }
-  */
-
-  for(int i = 1; i < numFieldLine-1; i++){
-    xStart.push_back(-pitch/2. + (pitch*i/(numFieldLine - 1)));
-    yStart.push_back(0.);
-    zStart.push_back(zmax-eps);
-  }
-
 
   //Calculate field Lines
   std::vector<std::array<float, 3> > fieldLines;
+  std::vector<int> hitPixel;
   int totalFieldLines = xStart.size();
   int numAtPixel = 0;
-  std::cout << "Comuputing " << totalFieldLines << " field lines." << std::endl;
+  std::cout << "Computing " << totalFieldLines << " field lines." << std::endl;
   for(int inFieldLine = 0; inFieldLine < totalFieldLines; inFieldLine++){
     fieldLineID = inFieldLine;
 
@@ -420,15 +420,17 @@ int main(int argc, char * argv[]) {
     //Find if termination point is at pixel
     int lineEnd = fieldLines.size() - 1;
 
-    std::cout << "Line end: (" << fieldLines[lineEnd][0] << ", " << fieldLines[lineEnd][1] << ", " << fieldLines[lineEnd][2] << ")\n";
-
-    if(  (abs(fieldLines[lineEnd][0]) <= pitch/2.)
-      && (abs(fieldLines[lineEnd][1]) <= pitch/2.)
-      && (abs(fieldLines[lineEnd][2]) < meshStandoff)//TODO - meshStandoff is not a good criteria here
+    if(  (abs(fieldLines[lineEnd][0]) <= pixelWidth/2.)
+      && (abs(fieldLines[lineEnd][1]) <= pixelWidth/2.)
+      && (fieldLines[lineEnd][2] < meshStandoff)//TODO - meshStandoff is not a good criteria here
       ){ 
+        hitPixel.push_back(1);
         numAtPixel++;
       }
-  }
+      else{
+        hitPixel.push_back(0);
+      }
+  }//End field line loop
   
   //Determine transparency
   fieldTransparency = (1.*numAtPixel) / (1.*totalFieldLines);
@@ -436,15 +438,10 @@ int main(int argc, char * argv[]) {
     std::cerr << "Field transparency is " << fieldTransparency <<  ". (Run " << runNo << ")" << std::endl;
     return -1;
   }
-  std::cout << "numAtPixel = " << numAtPixel << "\n";
-  std::cout << "totalFieldLines = " << totalFieldLines << "\n";
-  std::cout << "Limit: " << transparencyLimit*100. << "\n";
-  std::cout << "Transparency: " << fieldTransparency*100. << "\n";
 
-
-  // ***** Prepare Simulation ***** //
+  // ***** Prepare Avalanche Electron ***** //
   //Set the Initial electron parameters
-  double x0 = 0., y0 = 0., z0 = meshStandoff*1.1; //cm
+  double x0 = 0., y0 = 0., z0 = 0.; //cm
   double t0 = 0.;//ns
   double e0 = 0.1;//eV (Garfield is weird when this is 0.)
   double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
@@ -454,8 +451,19 @@ int main(int argc, char * argv[]) {
   lapAvalanche = clock();
   std::cout << "Starting " << numAvalanche << " simulations.\n" << std::flush;
 
+
+  std::cout << "****************************************\n";
+  std::cout << "Starting simulation: " << runNo << "\n";
+  std::cout << "****************************************\n";
+
   //***** Avalanche Loop *****//
   for(int inAvalanche = 0; inAvalanche < numAvalanche; inAvalanche++){
+    //SKIP AVALANCHE FOR NOW
+    if(true){
+      std::cout << "DEBUGGING - NO AVALANCHE\n";
+      continue;
+    }
+    
     avalancheID = inAvalanche;
 
     //Reset avalanche data
