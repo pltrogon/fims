@@ -8,17 +8,23 @@ The parameters of the geometry and simulation are contained in run_control.
 Data is ouput to the directory Data/ in root format.
 
 ## Contents:
-1. avalanche.cc - Simulation code.
-2. CMakeLists.txt - CMake lists to build executable simulation.
-3. run_control - Various user-defined simulation parameters.
-4. runno - Contains the next simulation run number and is automatically updated.
-5. Data/ - Data output by the simulation is saved here as root files: sim.runno.root
+1. FIMS_SIM.py - Python script to generate 
+2. avalanche.cc - Simulation code.
+3. CMakeLists.txt - CMake lists to build executable simulation.
+4. runControl - Various user-defined simulation parameters.
+5. runNo - Contains the next simulation run number and is automatically updated.
+6. Geometry/ - Gmsh and Elmer output files are saved here.
+7. Data/ - Data output by the simulation is saved here as root files: sim.runno.root
 
 ## Use:
-1. To create executable:
+1. To utilize Gmsh to create FEM:
+   *
+2. To use Elmer to calculate electric field strengths:
+   *
+3. To create executable avalanche simulation:
    * In terminal execute: mkdir build; cd build; cmake ..; make;
-2. To run simulation.
-   * Set desired simulation parameters in run_control.
+4. To run avalanche simulation:
+   * Set desired simulation parameters in runControl.
    * In terminal execute: ./runAvalanche
 
 # Run.py
