@@ -537,7 +537,7 @@ int main(int argc, char * argv[]) {
 
 
     //Print timing every ~10%
-    if(inAvalanche % (numAvalanche/10) == 0){
+    if((inAvalanche+1) % (numAvalanche/10) == 0){
 
       double timeElapsed = (clock() - lapAvalanche) / CLOCKS_PER_SEC;
       lapAvalanche = clock();
