@@ -21,17 +21,12 @@
 #include "Garfield/MediumMagboltz.hh"
 #include "Garfield/AvalancheMC.hh"
 #include "Garfield/Sensor.hh"
-#include "Garfield/ViewFEMesh.hh"
-#include "Garfield/ViewField.hh"
 #include "Garfield/DriftLineRKF.hh"
-#include "Garfield/Plotting.hh"
 
 //ROOT includes
 #include "TApplication.h"
 #include "TTree.h"
 #include "TFile.h"
-#include "TGraph.h"
-#include "TCanvas.h"
 
 //C includes
 #include <iostream>
@@ -42,10 +37,15 @@
 #include <fstream>
 #include <iomanip>
 #include <map>
+#include <sstream>
 
 using namespace Garfield;
 
 int main(int argc, char * argv[]) {
+  const double MICRON = 1e-6;
+  const double CM = 1e-2;
+  const double MICRONTOCM = 1e-4;
+  bool DEBUG = false;
   
   //*************** SETUP ***************//
   //Timing variables
@@ -156,16 +156,16 @@ int main(int argc, char * argv[]) {
   }
 
   //Geometry parameters
-  pixelWidth = std::stod(readParam["pixelWidth"]);
-  pixelThickness = std::stod(readParam["pixelThickness"]);
-  pitch = std::stod(readParam["pitch"]);
+  pixelWidth = std::stod(readParam["pixelWidth"])*MICRONTOCM;
+  pixelThickness = std::stod(readParam["pixelThickness"])*MICRONTOCM;
+  pitch = std::stod(readParam["pitch"])*MICRONTOCM;
 
-  meshStandoff = std::stod(readParam["meshStandoff"]);
-  meshThickness = std::stod(readParam["meshThickness"]);
-  holeRadius = std::stod(readParam["holeRadius"]);
+  meshStandoff = std::stod(readParam["meshStandoff"])*MICRONTOCM;
+  meshThickness = std::stod(readParam["meshThickness"])*MICRONTOCM;
+  holeRadius = std::stod(readParam["holeRadius"])*MICRONTOCM;
 
-  cathodeHeight = std::stod(readParam["cathodeHeight"]);
-  thicknessSiO2 = std::stod(readParam["thicknessSiO2"]);
+  cathodeHeight = std::stod(readParam["cathodeHeight"])*MICRONTOCM;
+  thicknessSiO2 = std::stod(readParam["thicknessSiO2"])*MICRONTOCM;
 
   //Field parameters
   cathodeVoltage = std::stod(readParam["cathodeVoltage"]);
@@ -190,8 +190,8 @@ int main(int argc, char * argv[]) {
   TTree *metaDataTree = new TTree("metaDataTree", "Simulation Parameters");
 
   //Data to be saved
-  double driftField = (cathodeVoltage - meshVoltage)/cathodeHeight *(10.);// kV/cm
-  double amplificationField = meshVoltage/meshStandoff *(10.);// kV/cm
+  double driftField = (cathodeVoltage - meshVoltage)/cathodeHeight;
+  double amplificationField = meshVoltage/meshStandoff;
   double fieldTransparency;
 
   //Add branches
@@ -328,6 +328,7 @@ int main(int argc, char * argv[]) {
   gasFIMS->SetComposition("ar", gasCompAr, "co2", gasCompCO2);
   gasFIMS->SetTemperature(293.15); // Room temperature
   gasFIMS->SetPressure(760.);     // Atmospheric pressure
+  gasFIMS->SetMaxElectronEnergy(100);// TODO - check if this is okay and if we want to save it
   gasFIMS->Initialise(true);
   // Load the penning transfer and ion mobilities.
   gasFIMS->EnablePenningTransfer(penningR, penningLambda, "ar");
@@ -337,17 +338,17 @@ int main(int argc, char * argv[]) {
 
   // Import elmer-generated field map
   std::string geometryPath = "../Geometry/";
-  ComponentElmer fieldFIMS(geometryPath+"/mesh.header", geometryPath+"/mesh.elements",
-                            geometryPath+"/mesh.nodes", geometryPath+"/dielectrics.dat",
-                            geometryPath+"/FIMS.result", "cm");
+  ComponentElmer fieldFIMS(geometryPath+"mesh.header", geometryPath+"mesh.elements",
+                            geometryPath+"mesh.nodes", geometryPath+"dielectrics.dat",
+                            geometryPath+"FIMS.result", "mum");
 
   // Get region of elmer geometry
   double xmin, ymin, zmin, xmax, ymax, zmax;
   fieldFIMS.GetBoundingBox(xmin, ymin, zmin, xmax, ymax, zmax);
 
   //Enable periodicity and set components
-  //fieldFIMS.EnablePeriodicityX();
-  //fieldFIMS.EnablePeriodicityY();
+  fieldFIMS.EnablePeriodicityX();
+  fieldFIMS.EnablePeriodicityY();
   fieldFIMS.SetGas(gasFIMS);
 
   // Import the weighting field for the readout electrode.
@@ -356,8 +357,6 @@ int main(int argc, char * argv[]) {
   //Create a sensor
   Sensor* sensorFIMS = new Sensor();
   sensorFIMS->AddComponent(&fieldFIMS);
-  //double eps = 1e-6;// To shift coordinates to slightly inside the bounding box
-  //sensorFIMS->SetArea(-pitch/2.+eps, -pitch/2.+eps, zmin+eps, pitch/2.-eps, pitch/2.-eps, zmax-eps);
   sensorFIMS->SetArea(xmin, ymin, zmin, xmax, ymax, zmax);
   sensorFIMS->AddElectrode(&fieldFIMS, "wtlel");
 
@@ -369,7 +368,7 @@ int main(int argc, char * argv[]) {
   //Set up Ion drifting
   AvalancheMC* driftIon = new AvalancheMC;
   driftIon->SetSensor(sensorFIMS);
-  driftIon->SetDistanceSteps(1.e-5);
+  driftIon->SetDistanceSteps(MICRONTOCM/10.);
 
   // ***** Find field transparency ***** //
   std::cout << "****************************************\n";
@@ -377,7 +376,7 @@ int main(int argc, char * argv[]) {
   std::cout << "****************************************\n";
 
   DriftLineRKF driftLines(sensorFIMS);
-  driftLines.SetMaximumStepSize(pitch/100.);
+  driftLines.SetMaximumStepSize(MICRONTOCM);
 
   //Create 2D linearly-spaced array at top of drift volume
   std::vector<double> xStart;
@@ -422,7 +421,7 @@ int main(int argc, char * argv[]) {
 
     if(  (abs(fieldLines[lineEnd][0]) <= pixelWidth/2.)
       && (abs(fieldLines[lineEnd][1]) <= pixelWidth/2.)
-      && (fieldLines[lineEnd][2] < meshStandoff)//TODO - meshStandoff is not a good criteria here
+      && (fieldLines[lineEnd][2] < 0.)//TODO - not a good criteria
       ){ 
         hitPixel.push_back(1);
         numAtPixel++;
@@ -431,6 +430,11 @@ int main(int argc, char * argv[]) {
         hitPixel.push_back(0);
       }
   }//End field line loop
+
+  //Write the field line data tree to file and delete
+  //fieldLineDataTree->Print()
+  fieldLineDataTree->Write();
+  delete fieldLineDataTree;
   
   //Determine transparency
   fieldTransparency = (1.*numAtPixel) / (1.*totalFieldLines);
@@ -441,7 +445,7 @@ int main(int argc, char * argv[]) {
 
   // ***** Prepare Avalanche Electron ***** //
   //Set the Initial electron parameters
-  double x0 = 0., y0 = 0., z0 = 0.; //cm
+  double x0 = 0., y0 = 0., z0 = .01;//cm
   double t0 = 0.;//ns
   double e0 = 0.1;//eV (Garfield is weird when this is 0.)
   double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
@@ -449,17 +453,15 @@ int main(int argc, char * argv[]) {
   //Start timing the sim
   startSim = clock();
   lapAvalanche = clock();
-  std::cout << "Starting " << numAvalanche << " simulations.\n" << std::flush;
-
 
   std::cout << "****************************************\n";
   std::cout << "Starting simulation: " << runNo << "\n";
   std::cout << "****************************************\n";
 
+  std::cout << "Starting " << numAvalanche << " avalanches.\n" << std::flush;
   //***** Avalanche Loop *****//
   for(int inAvalanche = 0; inAvalanche < numAvalanche; inAvalanche++){
-    //SKIP AVALANCHE FOR NOW
-    if(true){
+    if(DEBUG){
       std::cout << "DEBUGGING - NO AVALANCHE\n";
       continue;
     }
@@ -471,12 +473,8 @@ int main(int argc, char * argv[]) {
     attatchedElectrons = 0;
     totalIons = 0;
     
-    std::cout << "----------------------\n";
-    std::cout << "Starting Avalanche\n";
     //Begin single-electron avalanche
     avalancheE->AvalancheElectron(x0, y0, z0, t0, e0, dx0, dy0, dz0);
-    std::cout << "Avalanche Complete\n";
-    std::cout << "----------------------\n";
 
     //Electron count - use endpoints to include attatched electrons
     int avalancheElectrons = avalancheE->GetNumberOfElectronEndpoints();
@@ -489,7 +487,7 @@ int main(int argc, char * argv[]) {
       hitLimit = false;
     }
 
-    //Loop through allelectrons in avalanche
+    //Loop through all electrons in avalanche
     for(int inElectron = 0; inElectron < avalancheElectrons; inElectron++){
       electronID = inElectron;
 
@@ -501,10 +499,10 @@ int main(int argc, char * argv[]) {
       //Drift positive ion from start of every electron track
       ionCharge = 1;
       driftIon->DriftIon(xi, yi, zi, ti);
-      driftIon->GetIonEndpoint(totalIons, xiIon, yiIon, ziIon, tiIon, xfIon, yfIon, zfIon, tfIon, statIon);
-      totalIons++;
+      driftIon->GetIonEndpoint(0, xiIon, yiIon, ziIon, tiIon, xfIon, yfIon, zfIon, tfIon, statIon);
       //Fill tree with data from this positive ion
       ionDataTree->Fill();
+      totalIons++;
 
       //Check for electron attatchment
       if(stat == -7){
@@ -513,10 +511,10 @@ int main(int argc, char * argv[]) {
         //Drift negative ion from end of electron tracks that attatch
         ionCharge = -1;
         driftIon->DriftNegativeIon(xf, yf, zf, tf);
-        driftIon->GetIonEndpoint(totalIons, xiIon, yiIon, ziIon, tiIon, xfIon, yfIon, zfIon, tfIon, statIon);
-        totalIons++;
+        driftIon->GetNegativeIonEndpoint(0, xiIon, yiIon, ziIon, tiIon, xfIon, yfIon, zfIon, tfIon, statIon);
         //Fill tree with data from this negative ion
         ionDataTree->Fill();
+        totalIons++;
       }
 
 
@@ -532,7 +530,7 @@ int main(int argc, char * argv[]) {
     //*** TODO ***/
     //Can insert any per-avalanche analysis/data here.
     // -- Induced signals
-    // -- Histograms of energy loss/collison, ionization posiitions, time between collisions,
+    // -- Histograms of energy loss/collison, time between collisions,
 
     //Fill tree with data from this avalanche
     avalancheDataTree->Fill();
@@ -547,8 +545,8 @@ int main(int argc, char * argv[]) {
       double progress = 100.*(inAvalanche+1.)/numAvalanche;
 
       std::stringstream progressStream;
-      progressStream << "Done ~ " << std::fixed << std::setprecision(1) << progress;
-      progressStream << "% (" << std::fixed << std::setprecision(2) << timeElapsed << ")\n";
+      progressStream << "Done ~" << std::fixed << std::setprecision(0) << progress;
+      progressStream << "% (~" << std::fixed << std::setprecision(0) << timeElapsed << " s)\n";
       std::cout << progressStream.str() << std::flush;
     }
 
@@ -568,11 +566,6 @@ int main(int argc, char * argv[]) {
   //metaDataTree->Print();
   metaDataTree->Write();
   delete metaDataTree;
-
-  //Write the field line data tree to file and delete
-  //fieldLineDataTree->Print()
-  fieldLineDataTree->Write();
-  delete fieldLineDataTree;
 
   //Write the electron data tree to file then delete
   //electronDataTree->Print()
