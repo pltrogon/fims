@@ -25,13 +25,13 @@ meshVoltage = -140.;
 cathodeVoltage = -180.;
 //cathodeVoltage = meshVoltage - cathodeHeight/10 for 1kV/cm
 
-numFieldLine = 25;
-transparancyLimit = 0.999;
+numFieldLine = 5;
+transparancyLimit = 0.8;
 
 //----- Simulation parameters -----
 // Avalanche controls
-numAvalanche = 10000;
-avalancheLimit = 500;
+numAvalanche = 100;
+avalancheLimit = 200;
 
 // Gas composition
 gasCompAr = 80.;
