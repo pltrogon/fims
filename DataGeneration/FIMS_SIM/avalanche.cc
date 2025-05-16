@@ -45,7 +45,7 @@ int main(int argc, char * argv[]) {
   const double MICRON = 1e-6;
   const double CM = 1e-2;
   const double MICRONTOCM = 1e-4;
-  bool DEBUG = false;
+  bool DEBUG = true;
   
   //*************** SETUP ***************//
   //Timing variables
@@ -241,6 +241,21 @@ int main(int argc, char * argv[]) {
   fieldLineDataTree->Branch("Field Line y", &fieldLineY, "fieldLineY/D");
   fieldLineDataTree->Branch("Field Line z", &fieldLineZ, "fieldLineZ/D");
 
+  //***** Mesh Field Line Data Tree *****//
+  //Create
+  TTree *meshFieldLineDataTree = new TTree("meshFieldLineDataTree", "Mesh Field Lines");
+
+  //Data to be saved.
+  int meshFieldLineLocation;
+  double meshLineX, meshLineY, meshLineZ;
+
+  //Add branches
+  meshFieldLineDataTree->Branch("Field Line ID", &fieldLineID, "fieldLineID/I");
+  meshFieldLineDataTree->Branch("Mesh Line Location", &meshFieldLineLocation, "meshFieldLineLocation/I");
+  meshFieldLineDataTree->Branch("Mesh Field Line x", &meshLineX, "meshLineX/D");
+  meshFieldLineDataTree->Branch("Mesh Field Line y", &meshLineY, "meshLineY/D");
+  meshFieldLineDataTree->Branch("Mesh Field Line z", &meshLineZ, "meshLineZ/D");
+
   //***** Avalanche Data Tree *****//
   //Create
   TTree *avalancheDataTree = new TTree("avalancheDataTree", "Avalanche Results");
@@ -256,7 +271,6 @@ int main(int argc, char * argv[]) {
   avalancheDataTree->Branch("Total Electrons", &totalElectrons, "totalElectrons/I");
   avalancheDataTree->Branch("Attatched Electrons", &attatchedElectrons, "attatchedElectrons/I");
   avalancheDataTree->Branch("Total Ions", &totalIons, "totalIons/I");
-
 
   //***** Electron Data Tree *****//
 
@@ -378,34 +392,42 @@ int main(int argc, char * argv[]) {
   DriftLineRKF driftLines(sensorFIMS);
   driftLines.SetMaximumStepSize(MICRONTOCM);
 
-  //Create 2D linearly-spaced array at top of drift volume
   std::vector<double> xStart;
   std::vector<double> yStart;
-  std::vector<double> zStart;
 
-  double rangeScale = 0.99;
+  double rangeScale = 0.99;//Scale to be slightly within volume
   double xRange = (xmax - xmin)*rangeScale;
   double yRange = (ymax - ymin)*rangeScale;
-  double zRange = (zmax - zmin)*rangeScale;
 
+  //Create 2D uniformly-spaced array
   for(int i = 0; i < numFieldLine; i++){
     for(int j = 0; j < numFieldLine; j++){
       xStart.push_back(-xRange/2. + i*xRange/(numFieldLine-1));
       yStart.push_back(-yRange/2. + j*yRange/(numFieldLine-1));
-      zStart.push_back(zmax*rangeScale);
     }
   }
 
+  /*
+  //Alternative option - Along Diagonal
+  for(int i = 0; i < numFieldLine; i++){
+    xStart.push_back(-xRange/2. + i*xRange/(numFieldLine-1));
+    yStart.push_back(-yRange/2. + i*yRange/(numFieldLine-1));
+  }
+  //TODO - Other option is to just do the corners?
+  */
+
   //Calculate field Lines
   std::vector<std::array<float, 3> > fieldLines;
-  std::vector<int> hitPixel;
   int totalFieldLines = xStart.size();
   int numAtPixel = 0;
+
   std::cout << "Computing " << totalFieldLines << " field lines." << std::endl;
   for(int inFieldLine = 0; inFieldLine < totalFieldLines; inFieldLine++){
+    
     fieldLineID = inFieldLine;
 
-    driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], zStart[inFieldLine], fieldLines);
+    //Calculate from top of volume
+    driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], zmax*rangeScale, fieldLines);
 
     //Get coordinates of every point along field line and fill the tree
     for(int inLine = 0; inLine < fieldLines.size(); inLine++){
@@ -418,30 +440,58 @@ int main(int argc, char * argv[]) {
 
     //Find if termination point is at pixel
     int lineEnd = fieldLines.size() - 1;
-
     if(  (abs(fieldLines[lineEnd][0]) <= pixelWidth/2.)
       && (abs(fieldLines[lineEnd][1]) <= pixelWidth/2.)
-      && (fieldLines[lineEnd][2] < 0.)//TODO - not a good criteria
-      ){ 
-        hitPixel.push_back(1);
+      && (fieldLines[lineEnd][2] < 0.)){ //TODO - not a good criteria
         numAtPixel++;
-      }
-      else{
-        hitPixel.push_back(0);
-      }
+    }
+
+    //Calculate lines from above mesh
+    meshFieldLineLocation = 1;
+    driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], 1.01*meshThickness/2., fieldLines);
+
+    //Get coordinates of every point along field line and fill the tree
+    for(int inLine = 0; inLine < fieldLines.size(); inLine++){
+      meshLineX = fieldLines[inLine][0];
+      meshLineY = fieldLines[inLine][1];
+      meshLineZ = fieldLines[inLine][2];
+
+      meshFieldLineDataTree->Fill();
+    }
+
+    //Calculate lines from below mesh
+    meshFieldLineLocation = -1;
+    driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], -1.01*meshThickness/2., fieldLines);
+
+    //Get coordinates of every point along field line and fill the tree
+    for(int inLine = 0; inLine < fieldLines.size(); inLine++){
+      meshLineX = fieldLines[inLine][0];
+      meshLineY = fieldLines[inLine][1];
+      meshLineZ = fieldLines[inLine][2];
+
+      meshFieldLineDataTree->Fill();
+    }
+
   }//End field line loop
 
-  //Write the field line data tree to file and delete
-  //fieldLineDataTree->Print()
-  fieldLineDataTree->Write();
-  delete fieldLineDataTree;
-  
   //Determine transparency
   fieldTransparency = (1.*numAtPixel) / (1.*totalFieldLines);
   if(fieldTransparency < transparencyLimit){
     std::cerr << "Field transparency is " << fieldTransparency <<  ". (Run " << runNo << ")" << std::endl;
     return -1;
   }
+
+  // *** Deal with field line trees *** //
+  
+  //Write the field line data tree to file and delete
+  //fieldLineDataTree->Print()
+  fieldLineDataTree->Write();
+  delete fieldLineDataTree;
+
+  //Write the mesh field line data tree to file and delete
+  //meshFieldLineDataTree->Print()
+  meshFieldLineDataTree->Write();
+  delete meshFieldLineDataTree;
 
   // ***** Prepare Avalanche Electron ***** //
   //Set the Initial electron parameters
