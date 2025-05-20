@@ -1,76 +1,21 @@
 import numpy as np
+import math
 import matplotlib.pyplot as plt
 import csv
 import subprocess
 import time
 
+#---------------------------------------------------------
+#**********************************************************************
+#---------------------------------------------------------
 
-#-------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-#This definition uses the parameters of the structure as inputs to analyze the output files
-def analyze(holeRadius, meshThickness, cathodeHeight, meshStandoff, thicknessSiO2, pitch, pixelWidth, meshVoltage, fieldTransLimit, runstart, currentStep):
-#importing the data from Garfield++ and storing it onto an array
-    driftlineData = np.loadtxt('output_file/driftline.csv', delimiter = ',')
-    electricField = driftlineData*10000
-
-#Finding the electric field transparency
-    eFieldNum = 0
-    totFieldLines = 0
-    numTransFieldLines = 0
-    for point in electricField[:, 1]:
-        if electricField[eFieldNum, 1] - electricField[eFieldNum-1, 1] > (cathodeHeight + meshStandoff)/4:
-            totFieldLines += 1
-        if electricField[eFieldNum, 1] - electricField[eFieldNum-1, 1] > (cathodeHeight + meshStandoff)-1:
-            numTransFieldLines += 1
-        eFieldNum += 1
-
-#Finding the width of the field bundle by first cutting the data to the region below a single hole
-    cutEField = np.delete(electricField, np.where((electricField[:, 0] <= -holeRadius) | (electricField[:, 0] >= holeRadius) | (electricField[:, 1] > 0)), axis = 0)
-    
-#Finding the width of the field bundle by identifying the end points of the first and last field line
-    endp = np.array([])
-    endpz = np.array([])
-    cutFieldNum = 0
-    numFieldPoints = 0
-    for point in cutEField[:, 0]:
-        numFieldPoints += 1
-        if cutEField[cutFieldNum, 1] - cutEField[cutFieldNum-1, 1] >= meshStandoff/2:
-            endp = np.append(endp, cutEField[cutFieldNum-int(numFieldPoints/2), 0])
-            endpz = np.append(endpz, cutEField[cutFieldNum-int(numFieldPoints/2), 1])
-            numFieldPoints = 0
-        cutFieldNum += 1
-    width = abs(endp[1]) + abs(endp[-1])
-    
-    runend = time.perf_counter()
-
-#writing the data to the output file
-    with open('output_file/simData.csv', 'a') as f:
-        print(f'{currentStep-1}, {holeRadius}, {meshThickness}, {cathodeHeight}, {meshStandoff}, {thicknessSiO2}, {pitch}, {pixelWidth}, {meshVoltage}, {numTransFieldLines/totFieldLines:0.3f}, {width:0.3f}, {runend-runstart:0.4f}', file = f)
-    
-#Checking the field transparency to determine if the simulation should stop
-    if numTransFieldLines/totFieldLines < fieldTransLimit:
-        with open('output_file/fieldTooSmall.csv', 'a') as f:
-            print(f'{holeRadius}, {meshStandoff}, {meshVoltage/(meshStandoff/10)}, {width}',  file = f)
-        print('Field line Transparency is too low. Ending Program')
-        return True
-    else:
-        return False            
-
-
-#-------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-#This command outputs the given parameters to the runControl.txt file and the FIMS.sif file
-def Set_Param(holeRadius, meshThickness, cathodeHeight, meshStandoff, thicknessSiO2, pitch, pixelWidth, meshVoltage, fieldTransLimit):
-    #with open("input_file/params.txt", 'w') as f:
-    #    print(f'holeRadius = {holeRadius};', file = f)
-    #    print(f'meshThickness = {meshThickness};', file = f)
-    #    print(f'cathodeHeight = {cathodeHeight};', file = f)
-    #    print(f'meshStandoff = {meshStandoff};', file = f)
-    #    print(f'thicknessSiO2 = {thicknessSiO2};', file = f)
-    #    print(f'pitch = {pitch};', file = f)
-    #    print(f'pixelWidth = {pixelWidth};', file = f)
-    
-    
+#This command outputs the given parameters to the runControl.txt
+#file and the FIMS.sif file
+def Set_Param(holeRadius, meshThickness, cathodeHeight, 
+              meshStandoff, thicknessSiO2, pitch, 
+              pixelWidth, meshVoltage, fieldTransLimit=.999, numFieldLine=100):
+ 
+ 
     with open('input_file/runControl.txt', 'r') as c:
         control = c.readlines()
     control[8] = f'pixelWidth = {pixelWidth};\n'
@@ -80,10 +25,10 @@ def Set_Param(holeRadius, meshThickness, cathodeHeight, meshStandoff, thicknessS
     control[15] = f'holeRadius = {holeRadius};\n'
     control[18] = f'cathodeHeight = {cathodeHeight};\n'
     control[19] = f'thicknessSiO2 = {thicknessSiO2};\n'
+    control[27] = f'numFieldLine = {numFieldLine};\n'
     control[28] = f'fieldTransLimit = {fieldTransLimit};\n'
     with open('input_file/runControl.txt', 'w') as c:
         c.writelines(control)
-    
     
     with open("input_file/FIMS.sif",'r') as f:
         FIMS = f.readlines()
@@ -93,130 +38,320 @@ def Set_Param(holeRadius, meshThickness, cathodeHeight, meshStandoff, thicknessS
         f.writelines(FIMS)
 
 
-#-------------------------------------------------------------------------------------------------------------------------------------------------------------
-#This definition runs all of the commands from the terminal such as gmsh and Elmer
+#---------------------------------------------------------
+#**********************************************************************
+#---------------------------------------------------------
+
+#---------------------------------------------------------
+#**********************************************************************
+#---------------------------------------------------------
+
+#This definition runs all of the commands from the terminal 
 def Terminal_Commands():
+
     subprocess.run(['Programs/gmsh', 'input_file/FIMS.txt', '-3'])
-    subprocess.run(['ElmerGrid', '14', '2', 'input_file/FIMS.msh', '-out', 'input_file', '-autoclean'])
+    subprocess.run(['ElmerGrid', '14', '2', 'input_file/FIMS.msh',
+                    '-out', 'input_file', '-autoclean'])
     subprocess.run(['ElmerSolver', 'input_file/FIMS.sif'])
     subprocess.run(['build/fieldlines'])
 
+#---------------------------------------------------------
+#**********************************************************************
+#---------------------------------------------------------
 
-#-------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+#---------------------------------------------------------
+#**********************************************************************
+#---------------------------------------------------------
+
+#This definition uses the parameters of the structure as inputs
+#analyze the output files
+def analyze(holeRadius, meshThickness, cathodeHeight, 
+            meshStandoff, thicknessSiO2, pitch, pixelWidth, 
+            meshVoltage, fieldTransLimit, numFieldLine, runstart, currentStep):
+            
+
+#importing the data from Garfield++ and storing it onto an array
+#Data multiplied by 10000 so that 1 micron is displayed simply as 1
+    driftlineData = np.loadtxt('output_file/driftline_Diag.csv',
+                               delimiter = ',')
+    electricField = driftlineData*10000
+
+#Finding the electric field transparency
+    eFieldNum = 0
+    totFieldLines = 0
+    numTransFieldLines = 0
+    
+    for point in electricField[:, 2]:
+        if electricField[eFieldNum, 2] - electricField[eFieldNum-1, 2] > cathodeHeight/1.2:      
+            totFieldLines += 1
+        if electricField[eFieldNum, 2] - electricField[eFieldNum-1, 2] > (cathodeHeight + meshStandoff):       
+            numTransFieldLines += 1
+        eFieldNum += 1
+    
+    transparency = numTransFieldLines/totFieldLines
+
+#Finding the width of the field bundle by first cutting the data
+#to the region below a single hole
+    cutEField = np.delete(electricField, np.where(electricField[:, 2] > 0), axis = 0)
+    
+#Finding the width of the field bundle by identifying the
+#end points of the first and last field line
+    endpx = np.array([])
+    endpy = np.array([])
+    endpz = np.array([])
+    cutFieldNum = 0
+    numFieldPoints = 1
+    
+    for point in cutEField[:, 2]:
+        if cutEField[cutFieldNum, 2] - cutEField[cutFieldNum-1, 2] >= meshStandoff/2:
+            endpx = np.append(endpx, cutEField[cutFieldNum
+                     - int(numFieldPoints/2), 0])
+            endpy = np.append(endpy, cutEField[cutFieldNum
+                     - int(numFieldPoints/2), 1])
+            endpz = np.append(endpz, cutEField[cutFieldNum
+                     - int(numFieldPoints/2), 2])
+            numFieldPoints = 1
+        cutFieldNum += 1
+        numFieldPoints += 1
+    
+    if not len(endpx):
+        print('No field Lines Detected')
+        width = 100
+    else:
+        width = (abs(math.sqrt(endpx[1]**2+endpy[1]**2))
+                 + abs(math.sqrt(endpx[-1]**2+endpy[-1]**2)))
+    
+    runend = time.perf_counter()
+
+#Calculating the confidence of the transparency
+    confidence = math.sqrt(transparency*(1-transparency)/numFieldLine)
+
+#writing the data to the output file
+    with open('output_file/simData.csv', 'a') as f:
+        print(f'{currentStep}, {holeRadius}, {meshThickness}, '
+              f'{cathodeHeight}, {meshStandoff}, {thicknessSiO2}, '
+              f'{pitch}, {pixelWidth}, {meshVoltage}, '
+              f'{transparency:0.3f}, {width:0.3f}, '
+              f'{runend-runstart:0.4f}, {confidence}', file = f)
+    
+#Checking the field transparency to determine if the simulation
+#should stop
+    if transparency < fieldTransLimit:
+        with open('output_file/fieldTooSmall.csv', 'a') as f:
+            print(f'{holeRadius}, {meshStandoff}, '
+                  f'{meshVoltage/(meshStandoff/10)}, {width}',
+                  f'{numFieldLine},{confidence}', file = f)      
+        print('Field line Transparency is too low. Ending Program')
+        return True
+        
+    else:
+        return False
 
 
-#In this initial definition, variable is the parameter that the user wishes to iterate, mini is the initial value of that parameter, maxi is the final value, and steps is the number of tests that the user wishes to run.
-def iterate_variable(variable, mini, maxi, steps):
+#---------------------------------------------------------
+#**********************************************************************
+#---------------------------------------------------------
+
+
+#---------------------------------------------------------
+#**********************************************************************
+#---------------------------------------------------------
+
+
+#iterate_variable is the command that takes a specified variable,
+#runs the simulation, and then adjusts the value before restarting.
+#Variable is the parameter that the user wishes to iterate, initial
+#is the starting value of that parameter, final is the final value
+#of that parameter, and steps is the number of tests that the user
+#wishes to run.
+def iterate_variable(variable='r', initial=20, final=19, steps=1):
     tstart = time.perf_counter()
     with open('output_file/simData.csv', 'w') as f:
         print()
 
-#list of default values to be used for each parameter. Each geometry value is in microns, and the voltage is in volts
-    holeRadius = 15.
-    meshStandoff = 100.
+#list of default values to be used for each parameter. Each
+#geometry value is in microns,and the voltage is in volts
+    holeRadius = 16.
+    meshStandoff = 100
     meshThickness = 4.
     thicknessSiO2 = 5.
     pitch = 27.5
     pixelWidth = 10.
     cathodeHeight = 400.
-    
-    
-    fieldRatio = 40
+    fieldRatio = 80
     meshVoltage = -fieldRatio*meshStandoff/10
-    fieldTransLimit = .999
-
-#This if tree determines which parameter is being iterated and then loops through each step of the iteration as determined by the "steps" term in the initial definition    
+    
     var = str(variable).lower()
     currentStep = 0
+    fieldTransLimit = .999
+    numFieldLine=200
 
+#This if tree determines which parameter is being iterated and then
+#loops through each step of the iteration as determined by the "steps"
+#term in the original definition    
     if var == 'r':
         while currentStep <= steps:
-            holeRadius = mini+currentStep*(maxi-mini)/steps
+            holeRadius = initial+currentStep*(final-initial)/steps
             runstart = time.perf_counter()
-            Set_Param(holeRadius, meshThickness, cathodeHeight, meshStandoff, thicknessSiO2, pitch, pixelWidth, meshVoltage, fieldTransLimit)
+            
+            Set_Param(holeRadius, meshThickness, cathodeHeight,
+                      meshStandoff, thicknessSiO2, pitch,
+                      pixelWidth, meshVoltage, fieldTransLimit, numFieldLine)     
             Terminal_Commands()
-            currentStep += 1
-            if analyze(holeRadius, meshThickness, cathodeHeight, meshStandoff, thicknessSiO2, pitch, pixelWidth, meshVoltage, fieldTransLimit, runstart, currentStep):
+            if analyze(holeRadius, meshThickness, cathodeHeight,
+                       meshStandoff, thicknessSiO2, pitch,
+                       pixelWidth, meshVoltage, fieldTransLimit,
+                       numFieldLine, runstart, currentStep):
                 break
-
+            
+            currentStep += 1
 
     elif var == 'm':
         while currentStep <= steps:
             runstart = time.perf_counter()
-            meshThickness = mini+currentStep*(maxi-mini)/steps
-            Set_Param(holeRadius, meshThickness, cathodeHeight, meshStandoff, thicknessSiO2, pitch, pixelWidth, meshVoltage, fieldTransLimit)
+            meshThickness = initial+currentStep*(final-initial)/steps
+            
+            Set_Param(holeRadius, meshThickness, cathodeHeight,
+                      meshStandoff, thicknessSiO2, pitch,
+                      pixelWidth, meshVoltage, fieldTransLimit, numFieldLine)
             Terminal_Commands()
+            if analyze(holeRadius, meshThickness, cathodeHeight,
+                       meshStandoff, thicknessSiO2, pitch,
+                       pixelWidth, meshVoltage, fieldTransLimit,
+                       numFieldLine, runstart, currentStep):
+                    break
+                
             currentStep += 1
-            if analyze(holeRadius, meshThickness, cathodeHeight, meshStandoff, thicknessSiO2, pitch, pixelWidth, meshVoltage, fieldTransLimit, runstart, currentStep):
-                break
- 
  
     elif var == 'c':
         while currentStep <= steps:
-            cathodeHeight = mini+currentStep*(maxi-mini)/steps
             runstart = time.perf_counter()
-            Set_Param(holeRadius, meshThickness, cathodeHeight, meshStandoff, thicknessSiO2, pitch, pixelWidth, meshVoltage, fieldTransLimit)
+            cathodeHeight = initial+currentStep*(final-initial)/steps
+            
+            Set_Param(holeRadius, meshThickness, cathodeHeight, 
+                      meshStandoff, thicknessSiO2, pitch, 
+                      pixelWidth, meshVoltage, fieldTransLimit, numFieldLine)
             Terminal_Commands()
-            currentStep += 1
-            if analyze(holeRadius, meshThickness, cathodeHeight, meshStandoff, thicknessSiO2, pitch, pixelWidth, meshVoltage, fieldTransLimit, runstart, currentStep):
+            if analyze(holeRadius, meshThickness, cathodeHeight,
+                       meshStandoff, thicknessSiO2, pitch,
+                       pixelWidth, meshVoltage, fieldTransLimit,
+                       numFieldLine, runstart, currentStep):       
                 break
-
+                
+            currentStep += 1
 
     elif var == 'st':
         while currentStep<=steps:
-            meshStandoff = mini+currentStep*(maxi-mini)/steps
-            meshVoltage = -meshStandoff*fieldRatio/10
             runstart = time.perf_counter()
-            Set_Param(holeRadius, meshThickness, cathodeHeight, meshStandoff, thicknessSiO2, pitch, pixelWidth, meshVoltage, fieldTransLimit)
+            meshStandoff = initial+currentStep*(final-initial)/steps
+            meshVoltage = -meshStandoff*fieldRatio/10
+            
+            Set_Param(holeRadius, meshThickness, cathodeHeight,
+                      meshStandoff, thicknessSiO2, pitch,
+                      pixelWidth, meshVoltage, fieldTransLimit, numFieldLine)
             Terminal_Commands()
-            currentStep += 1
-            if analyze(holeRadius, meshThickness, cathodeHeight, meshStandoff, thicknessSiO2, pitch, pixelWidth, meshVoltage, fieldTransLimit, runstart, currentStep):
+            if analyze(holeRadius, meshThickness, cathodeHeight,
+                       meshStandoff, thicknessSiO2, pitch,
+                       pixelWidth, meshVoltage, fieldTransLimit,
+                       numFieldLine, runstart, currentStep):
                 break
-
+                
+            currentStep += 1
 
     elif var == 'si':
         while currentStep <= steps:
-            thicknessSiO2 = mini+currentStep*(maxi-mini)/steps
             runstart = time.perf_counter()
-            Set_Param(holeRadius, meshThickness, cathodeHeight, meshStandoff, thicknessSiO2, pitch, pixelWidth, meshVoltage, fieldTransLimit)
+            thicknessSiO2 = initial+currentStep*(final-initial)/steps
+            
+            Set_Param(holeRadius, meshThickness, cathodeHeight,
+                      meshStandoff, thicknessSiO2, pitch,
+                      pixelWidth, meshVoltage, fieldTransLimit, numFieldLine)
             Terminal_Commands()
-            currentStep += 1
-            if analyze(holeRadius, meshThickness, cathodeHeight, meshStandoff, thicknessSiO2, pitch, pixelWidth, meshVoltage, fieldTransLimit, runstart, currentStep):
+            if analyze(holeRadius, meshThickness, cathodeHeight,
+                       meshStandoff, thicknessSiO2, pitch,
+                       pixelWidth, meshVoltage, fieldTransLimit,
+                       numFieldLine, runstart, currentStep):
                 break
+                
+            currentStep += 1
 
     elif var == 'p':
         while currentStep <= steps:
-            P = mini+currentStep*(maxi-mini)/steps
             runstart = time.perf_counter()
-            Set_Param(holeRadius, meshThickness, cathodeHeight, meshStandoff, thicknessSiO2, pitch, pixelWidth, meshVoltage, fieldTransLimit)
+            P = initial+currentStep*(final-initial)/steps
+            
+            Set_Param(holeRadius, meshThickness, cathodeHeight,
+                      meshStandoff, thicknessSiO2, pitch,
+                      pixelWidth, meshVoltage, fieldTransLimit, numFieldLine)
             Terminal_Commands()
-            currentStep += 1
-            if analyze(holeRadius, meshThickness, cathodeHeight, meshStandoff, thicknessSiO2, pitch, pixelWidth, meshVoltage, fieldTransLimit, runstart, currentStep):
+            if analyze(holeRadius, meshThickness, cathodeHeight,
+                       meshStandoff, thicknessSiO2, pitch,
+                       pixelWidth, meshVoltage, fieldTransLimit,
+                       numFieldLine, runstart, currentStep):
                 break
+                
+            currentStep += 1
+            
+    elif var == 'fl':
+        Set_Param(holeRadius, meshThickness, cathodeHeight,
+                    meshStandoff, thicknessSiO2, pitch,
+                    pixelWidth, meshVoltage, fieldTransLimit, numFieldLine)
+        subprocess.run(['Programs/gmsh', 'input_file/FIMS.txt', '-3'])
+        subprocess.run(['ElmerGrid', '14', '2', 'input_file/FIMS.msh',
+                    '-out', 'input_file', '-autoclean'])
+        while currentStep <= steps:
+            runstart = time.perf_counter()
+            numFieldLine = initial+currentStep*(final-initial)/steps
+            
+            Set_Param(holeRadius, meshThickness, cathodeHeight,
+                      meshStandoff, thicknessSiO2, pitch,
+                      pixelWidth, meshVoltage, fieldTransLimit, numFieldLine)
+            subprocess.run(['ElmerSolver', 'input_file/FIMS.sif'])
+            subprocess.run(['build/fieldlines'])
+            analyze(holeRadius, meshThickness, cathodeHeight,
+                       meshStandoff, thicknessSiO2, pitch,
+                       pixelWidth, meshVoltage, fieldTransLimit,
+                       numFieldLine, runstart, currentStep)
+                
+            currentStep += 1
 
 
     elif var == 'v':
-        Set_Param(holeRadius, meshThickness, cathodeHeight, meshStandoff, thicknessSiO2, pitch, pixelWidth, meshVoltage, fieldTransLimit)
+        Set_Param(holeRadius, meshThickness, cathodeHeight,
+                  meshStandoff, thicknessSiO2, pitch,
+                  pixelWidth, meshVoltage, fieldTransLimit, numFieldLine)
         subprocess.run(['Programs/gmsh', 'input_file/FIMS.txt', '-3'])
-        subprocess.run(['ElmerGrid', '14', '2', 'input_file/FIMS.msh', '-out', 'input_file', '-autoclean'])
+        subprocess.run(['ElmerGrid', '14', '2', 'input_file/FIMS.msh',
+                        '-out', 'input_file', '-autoclean'])
+        
         while currentStep <= steps:
-            meshVoltage = mini+currentStep*(maxi-mini)/steps
             runstart = time.perf_counter()
-            Set_Param(holeRadius, meshThickness, cathodeHeight, meshStandoff, thicknessSiO2, pitch, pixelWidth, meshVoltage, fieldTransLimit)    
+            meshVoltage = initial+currentStep*(final-initial)/steps
+            
+            Set_Param(holeRadius, meshThickness, cathodeHeight,
+                      meshStandoff, thicknessSiO2, pitch,
+                      pixelWidth, meshVoltage, fieldTransLimit, numFieldLine)
             subprocess.run(['ElmerSolver', 'input_file/FIMS.sif'])
             subprocess.run(['build/fieldlines'])
-            currentStep += 1
-            if analyze(holeRadius, meshThickness, cathodeHeight, meshStandoff, thicknessSiO2, pitch, pixelWidth, meshVoltage, fieldTransLimit, runstart, currentStep):
+            if analyze(holeRadius, meshThickness, cathodeHeight,
+                       meshStandoff, thicknessSiO2, pitch,
+                       pixelWidth, meshVoltage, fieldTransLimit,
+                       numFieldLine, runstart, currentStep):
                 break
-
-    else:
-        print('Please indicate which variable you wish to iterate (holeRadius "R", mesh thickness "M", Cathode Height "C", stand-off height "ST", pitch "P", or meshVoltage "V"')    
+                
+            currentStep += 1
+              
     tend = time.perf_counter()
     with open("output_file/simTime.txt",'a') as f:
-        print(f'Total sim time is: {tend - tstart:0.4f} seconds', file=f)
+        print(f'Total sim time is: {tend - tstart:0.4f} seconds',
+              file=f)
 
 
-#-------------------------------------------------------------------------------------------------------------------------------------------------------------
+#---------------------------------------------------------
+#**********************************************************************
+#---------------------------------------------------------
 
-#This line runs the program and should be edited by the user to match their desired test conditions
-iterate_variable('r', 12, 13, 1)
+#This line runs the program and should be edited by the user to match
+#their desired test conditions
+iterate_variable('r',27,10,24)
