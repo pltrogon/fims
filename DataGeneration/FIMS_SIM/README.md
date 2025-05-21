@@ -40,6 +40,7 @@ Avalanche data is ouput to the directory Data/ in root format.
 
 1. To create executable Garfield++ simulation:
    * Source the file 'setupGarfield.sh' by executing: source PATHTOFILE/setupGarfield.sh
+     * Example PATHTOFILE: 'garfield/install/share/Garfield'
    * In terminal execute: mkdir build; cd build; cmake ..; make;
 2. Edit the pathways for executable programs in Python functions. This includes:
    * Gmsh in runGmsh().
