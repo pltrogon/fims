@@ -1,45 +1,37 @@
-cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
-project(runAvalanche)
+cmake_minimum_required(VERSION 3.12)
+project(runAvalanche C CXX)
 
-# Specify the C++ compiler (if you're using a Homebrew compiler)
-find_program(CMAKE_CXX_COMPILER NAMES g++ clang++ PATHS /opt/homebrew/bin NO_DEFAULT_PATH)
-if(NOT CMAKE_CXX_COMPILER)
-  find_program(CMAKE_CXX_COMPILER NAMES g++ clang++) # Fallback to system paths
-endif()
-# You might also need to set the C compiler if you're using mixed languages
-find_program(CMAKE_C_COMPILER NAMES gcc clang PATHS /opt/homebrew/bin NO_DEFAULT_PATH)
-if(NOT CMAKE_C_COMPILER)
-  find_program(CMAKE_C_COMPILER NAMES gcc clang)
+# Ensure Homebrew paths are considered on macOS for common libraries
+if(APPLE)
+    list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew")
 endif()
 
-# Tell CMake to use the specified compilers
-set(CMAKE_C_COMPILER ${CMAKE_C_COMPILER} CACHE FILEPATH "C compiler" FORCE)
-set(CMAKE_CXX_COMPILER ${CMAKE_CXX_COMPILER} CACHE FILEPATH "C++ compiler" FORCE)
+# Find required packages
+find_package(GSL REQUIRED)
+find_package(Garfield REQUIRED)
+find_package(ROOT REQUIRED COMPONENTS Hist Tree MathCore)
 
-# Tell CMake where to look for Homebrew packages
-list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew")
-
-find_package(GSL REQUIRED) # Now it should look in /opt/homebrew
-
-if(NOT TARGET Garfield::Garfield)
-  find_package(Garfield REQUIRED)
-endif()
-
-find_package(ROOT REQUIRED COMPONENTS Hist Tree)
-
+# Add the executable
 add_executable(runAvalanche avalanche.cc)
 
-if(GSL_FOUND)
-  message(STATUS "Found GSL library: ${GSL_LIBRARY}")
-  message(STATUS "Found GSL include directory: ${GSL_INCLUDE_DIR}")
-  target_include_directories(runAvalanche PRIVATE ${GSL_INCLUDE_DIR})
-  target_link_libraries(runAvalanche
-      GSL::gsl # Use imported targets if available
-      GSL::gslcblas # Use imported targets if available
-      Garfield::Garfield
-      ROOT::Hist
-      ROOT::Tree)
-else()
-  message(FATAL_ERROR "GSL library not found.")
-endif()
+# Link libraries and include directories
+target_include_directories(runAvalanche PRIVATE
+    ${GSL_INCLUDE_DIR}
+    ${Garfield_INCLUDE_DIRS} # Assuming Garfield exports its include directories
+    ${ROOT_INCLUDE_DIRS} # Assuming ROOT exports its include directories
+)
 
+target_link_libraries(runAvalanche
+    GSL::gsl
+    GSL::gslcblas
+    Garfield::Garfield
+    ROOT::Hist
+    ROOT::Tree
+    ROOT::MathCore
+)
+
+# Optional: Display status messages for found libraries
+message(STATUS "Found GSL library: ${GSL_LIBRARY}")
+message(STATUS "Found GSL include directory: ${GSL_INCLUDE_DIR}")
+message(STATUS "Found Garfield library: ${Garfield_LIBRARY}") # Assuming Garfield exports its library variable
+message(STATUS "Found ROOT libraries: ${ROOT_LIBRARIES}")
