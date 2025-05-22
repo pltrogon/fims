@@ -1,6 +1,5 @@
 // Geometry and simulation control parameters for FIMS_SIM.
 // This assumes the form 'variable = value;'
-// Note the ';' and single whitespace on either side of ' = '
 
 //----- Geometry Parameters -----
 // Dimensions: micron
@@ -23,7 +22,6 @@ thicknessSiO2 = 5.;
 // Dimensions: Volts
 meshVoltage = -140.;
 cathodeVoltage = -180.;
-//cathodeVoltage = meshVoltage - cathodeHeight/10 for 1kV/cm
 
 numFieldLine = 5;
 transparancyLimit = 0.8;
