@@ -8,8 +8,8 @@ To run Run.py,
 4. Use the Elmer GUI to apply your relevant boundary conditions (see Elmer documantation for details on how to use Elmer: https://www.elmerfem.org/blog/documentation/)
 5. While still in the Elmer GUI, go to the "MODEL" drop down menu and select "setup"
 6. In the setup menu, change the second box of MeshDB to "input_file", change the results directory to "input_file", change the coordinate scaling to "1e-6", set the solver input file to "FIMS.sif", set the results file to "FIMS.ep", and in the free text box, type "Output file = "FIMS.result" "
-7. Once the FIMS.sif file has been created by Elmer, Run.py can be used
-8. Open the command terminal and go to the simulation directory by using "cd simulation"
+7. Once the FIMS.sif file has been created by Elmer, open the command terminal and go to the simulation directory by using "cd simulation"
+8. create the fieldlines.c executable by first building the "build" folder and then creating the executable via cmake: "mkdir build" followed by "cmake -B build && cmake --build build"
 9. Edit the input values at the bottom of Run.py to fit your desired parameters
 10. Run the python scrypt by typing "python3 Run.py" (check your python version if errors occur at this step)
 
