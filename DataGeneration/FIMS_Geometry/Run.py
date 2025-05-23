@@ -1,9 +1,26 @@
 import numpy as np
+import pandas as pd
 import math
 import matplotlib.pyplot as plt
 import csv
 import subprocess
 import time
+
+
+#---------------------------------------------------------
+#**********************************************************************
+#---------------------------------------------------------
+#This definition clears all the files used in Run.py
+def createFiles(fimsRunNum):
+    with open(f'output_file/simData{fimsRunNum}.csv', 'w') as f:
+        print('step, radius, meshTh, cathodeH, Stand, SiO2, ',
+              'pitch, pixelW, voltage, transparency, width, ',
+              'time, confidence', file = f)
+
+#---------------------------------------------------------
+#**********************************************************************
+#---------------------------------------------------------
+
 
 #---------------------------------------------------------
 #**********************************************************************
@@ -13,7 +30,8 @@ import time
 #file and the FIMS.sif file
 def Set_Param(holeRadius, meshThickness, cathodeHeight, 
               meshStandoff, thicknessSiO2, pitch, 
-              pixelWidth, meshVoltage, fieldTransLimit=.999, numFieldLine=100):
+              pixelWidth, meshVoltage, fieldTransLimit=.999, 
+              numFieldLine=100):
  
  
     with open('input_file/runControl.txt', 'r') as c:
@@ -68,12 +86,13 @@ def Terminal_Commands():
 #analyze the output files
 def analyze(holeRadius, meshThickness, cathodeHeight, 
             meshStandoff, thicknessSiO2, pitch, pixelWidth, 
-            meshVoltage, fieldTransLimit, numFieldLine, runstart, currentStep):
+            meshVoltage, fieldTransLimit, numFieldLine, runstart, 
+            currentStep, fimsRunNum):
             
 
 #importing the data from Garfield++ and storing it onto an array
 #Data multiplied by 10000 so that 1 micron is displayed simply as 1
-    driftlineData = np.loadtxt('output_file/driftline_Diag.csv',
+    driftlineData = np.loadtxt('output_file/driftlineDiag.csv',
                                delimiter = ',')
     electricField = driftlineData*10000
 
@@ -128,7 +147,7 @@ def analyze(holeRadius, meshThickness, cathodeHeight,
     confidence = math.sqrt(transparency*(1-transparency)/numFieldLine)
 
 #writing the data to the output file
-    with open('output_file/simData.csv', 'a') as f:
+    with open(f'output_file/simData{fimsRunNum}.csv', 'a') as f:
         print(f'{currentStep}, {holeRadius}, {meshThickness}, '
               f'{cathodeHeight}, {meshStandoff}, {thicknessSiO2}, '
               f'{pitch}, {pixelWidth}, {meshVoltage}, '
@@ -140,7 +159,7 @@ def analyze(holeRadius, meshThickness, cathodeHeight,
     if transparency < fieldTransLimit:
         with open('output_file/fieldTooSmall.csv', 'a') as f:
             print(f'{holeRadius}, {meshStandoff}, '
-                  f'{meshVoltage/(meshStandoff/10)}, {width}',
+                  f'{-meshVoltage/(meshStandoff/10)}, {width}',
                   f'{numFieldLine},{confidence}', file = f)      
         print('Field line Transparency is too low. Ending Program')
         return True
@@ -166,12 +185,13 @@ def analyze(holeRadius, meshThickness, cathodeHeight,
 #of that parameter, and steps is the number of tests that the user
 #wishes to run.
 def iterate_variable(variable='r', initial=20, final=19, steps=1):
+    
     tstart = time.perf_counter()
-    with open('output_file/simData.csv', 'w') as f:
-        print()
+    fimsRunNum= int(np.loadtxt('input_file/runNo.txt'))
+    createFiles(fimsRunNum)
 
 #list of default values to be used for each parameter. Each
-#geometry value is in microns,and the voltage is in volts
+#geometry value is in microns, and the voltage is in volts
     holeRadius = 16.
     meshStandoff = 100
     meshThickness = 4.
@@ -202,7 +222,7 @@ def iterate_variable(variable='r', initial=20, final=19, steps=1):
             if analyze(holeRadius, meshThickness, cathodeHeight,
                        meshStandoff, thicknessSiO2, pitch,
                        pixelWidth, meshVoltage, fieldTransLimit,
-                       numFieldLine, runstart, currentStep):
+                       numFieldLine, runstart, currentStep, fimsRunNum):
                 break
             
             currentStep += 1
@@ -219,7 +239,7 @@ def iterate_variable(variable='r', initial=20, final=19, steps=1):
             if analyze(holeRadius, meshThickness, cathodeHeight,
                        meshStandoff, thicknessSiO2, pitch,
                        pixelWidth, meshVoltage, fieldTransLimit,
-                       numFieldLine, runstart, currentStep):
+                       numFieldLine, runstart, currentStep, fimsRunNum):
                     break
                 
             currentStep += 1
@@ -236,7 +256,7 @@ def iterate_variable(variable='r', initial=20, final=19, steps=1):
             if analyze(holeRadius, meshThickness, cathodeHeight,
                        meshStandoff, thicknessSiO2, pitch,
                        pixelWidth, meshVoltage, fieldTransLimit,
-                       numFieldLine, runstart, currentStep):       
+                       numFieldLine, runstart, currentStep, fimsRunNum):       
                 break
                 
             currentStep += 1
@@ -254,7 +274,7 @@ def iterate_variable(variable='r', initial=20, final=19, steps=1):
             if analyze(holeRadius, meshThickness, cathodeHeight,
                        meshStandoff, thicknessSiO2, pitch,
                        pixelWidth, meshVoltage, fieldTransLimit,
-                       numFieldLine, runstart, currentStep):
+                       numFieldLine, runstart, currentStep, fimsRunNum):
                 break
                 
             currentStep += 1
@@ -271,7 +291,7 @@ def iterate_variable(variable='r', initial=20, final=19, steps=1):
             if analyze(holeRadius, meshThickness, cathodeHeight,
                        meshStandoff, thicknessSiO2, pitch,
                        pixelWidth, meshVoltage, fieldTransLimit,
-                       numFieldLine, runstart, currentStep):
+                       numFieldLine, runstart, currentStep, fimsRunNum):
                 break
                 
             currentStep += 1
@@ -288,7 +308,7 @@ def iterate_variable(variable='r', initial=20, final=19, steps=1):
             if analyze(holeRadius, meshThickness, cathodeHeight,
                        meshStandoff, thicknessSiO2, pitch,
                        pixelWidth, meshVoltage, fieldTransLimit,
-                       numFieldLine, runstart, currentStep):
+                       numFieldLine, runstart, currentStep, fimsRunNum):
                 break
                 
             currentStep += 1
@@ -312,7 +332,7 @@ def iterate_variable(variable='r', initial=20, final=19, steps=1):
             analyze(holeRadius, meshThickness, cathodeHeight,
                        meshStandoff, thicknessSiO2, pitch,
                        pixelWidth, meshVoltage, fieldTransLimit,
-                       numFieldLine, runstart, currentStep)
+                       numFieldLine, runstart, currentStep, fimsRunNum)
                 
             currentStep += 1
 
@@ -337,7 +357,7 @@ def iterate_variable(variable='r', initial=20, final=19, steps=1):
             if analyze(holeRadius, meshThickness, cathodeHeight,
                        meshStandoff, thicknessSiO2, pitch,
                        pixelWidth, meshVoltage, fieldTransLimit,
-                       numFieldLine, runstart, currentStep):
+                       numFieldLine, runstart, currentStep, fimsRunNum):
                 break
                 
             currentStep += 1
@@ -354,4 +374,4 @@ def iterate_variable(variable='r', initial=20, final=19, steps=1):
 
 #This line runs the program and should be edited by the user to match
 #their desired test conditions
-iterate_variable('r',27,10,24)
+iterate_variable('r',16,16,1)
