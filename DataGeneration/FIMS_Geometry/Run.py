@@ -88,25 +88,25 @@ def analyze(holeRadius, meshThickness, cathodeHeight,
             meshStandoff, thicknessSiO2, pitch, pixelWidth, 
             meshVoltage, fieldTransLimit, numFieldLine, runstart, 
             currentStep, fimsRunNum):
-            
+    cmToMicron = 10000            
 
 #importing the data from Garfield++ and storing it onto an array
 #Data multiplied by 10000 so that 1 micron is displayed simply as 1
     driftlineData = np.loadtxt('output_file/driftlineDiag.csv',
                                delimiter = ',')
-    electricField = driftlineData*10000
+    electricField = driftlineData*cmToMicron
 
 #Finding the electric field transparency
-    eFieldNum = 0
+    currentFieldLine = 0
     totFieldLines = 0
     numTransFieldLines = 0
     
     for point in electricField[:, 2]:
-        if electricField[eFieldNum, 2] - electricField[eFieldNum-1, 2] > cathodeHeight/1.2:      
+        if electricField[currentFieldLine, 2] - electricField[currentFieldLine-1, 2] > cathodeHeight/1.2:      
             totFieldLines += 1
-        if electricField[eFieldNum, 2] - electricField[eFieldNum-1, 2] > (cathodeHeight + meshStandoff):       
+        if electricField[currentFieldLine, 2] - electricField[currentFieldLine-1, 2] > (cathodeHeight + meshStandoff):       
             numTransFieldLines += 1
-        eFieldNum += 1
+        currentFieldLine += 1
     
     transparency = numTransFieldLines/totFieldLines
 
@@ -184,28 +184,33 @@ def analyze(holeRadius, meshThickness, cathodeHeight,
 #is the starting value of that parameter, final is the final value
 #of that parameter, and steps is the number of tests that the user
 #wishes to run.
-def iterate_variable(variable='r', initial=20, final=19, steps=1):
-    
-    tstart = time.perf_counter()
-    fimsRunNum= int(np.loadtxt('input_file/runNo.txt'))
-    createFiles(fimsRunNum)
+def iterate_variable(variable, initial, final, steps=10):
 
-#list of default values to be used for each parameter. Each
-#geometry value is in microns, and the voltage is in volts
-    holeRadius = 16.
-    meshStandoff = 100
-    meshThickness = 4.
-    thicknessSiO2 = 5.
-    pitch = 27.5
-    pixelWidth = 10.
-    cathodeHeight = 400.
-    fieldRatio = 80
-    meshVoltage = -fieldRatio*meshStandoff/10
-    
+#program initialization
     var = str(variable).lower()
     currentStep = 0
-    fieldTransLimit = .999
-    numFieldLine=200
+    fimsRunNum= int(np.loadtxt('input_file/runNo.txt'))
+    createFiles(fimsRunNum)
+    
+
+#importing values from runControl.txt
+    with open('input_file/runControl.txt', 'r') as c:
+        control = c.readlines()
+    remove = [item[:-2] for item in control]
+    
+    pixelWidth = float(remove[8].partition('=')[2])
+    pitch = float(remove[10].partition('=')[2])
+    meshStandoff = float(remove[13].partition('=')[2])
+    meshThickness = float(remove[14].partition('=')[2])
+    holeRadius = float(remove[15].partition('=')[2])
+    cathodeHeight = float(remove[18].partition('=')[2])
+    thicknessSiO2 = float(remove[19].partition('=')[2])
+    numFieldLine = float(remove[27].partition('=')[2])
+    fieldTransLimit = float(remove[28].partition('=')[2])
+    
+    fieldRatio = 80 #--------------This should be defined in runControl.txt
+    meshVoltage = -fieldRatio*meshStandoff/10
+    cathodeVoltage = meshVoltage - cathodeHeight/10
 
 #This if tree determines which parameter is being iterated and then
 #loops through each step of the iteration as determined by the "steps"
@@ -361,11 +366,6 @@ def iterate_variable(variable='r', initial=20, final=19, steps=1):
                 break
                 
             currentStep += 1
-              
-    tend = time.perf_counter()
-    with open("output_file/simTime.txt",'a') as f:
-        print(f'Total sim time is: {tend - tstart:0.4f} seconds',
-              file=f)
 
 
 #---------------------------------------------------------
