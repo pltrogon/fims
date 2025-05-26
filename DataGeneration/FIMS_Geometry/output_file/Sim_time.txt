@@ -1,3 +1,0 @@
-Total sim time is: 96.6648 seconds
-Total sim time is: 17258.8857 seconds
-Total sim time is: 293.5754 seconds
