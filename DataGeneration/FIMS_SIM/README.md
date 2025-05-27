@@ -19,6 +19,7 @@ Avalanche data is ouput to the directory Data/ in root format.
    * FIMS.sif - Execution control file for Elmer.
    * dielectrics.dat - Dielectric contents for the FIMS materials. (Required for Elmer)
 7. Data/ - Data output by the simulation is saved here as root files: sim.runno.root
+8. log/ - Text files of the terminal outputs for the various executables are saved here.
 
 ## Use:
 1. To utilize Gmsh to create finite element mesh:
@@ -38,11 +39,6 @@ Avalanche data is ouput to the directory Data/ in root format.
 
 ## Additional Requirements:
 
-1. To create executable Garfield++ simulation:
-   * Source the file 'setupGarfield.sh' by executing: source PATHTOFILE/setupGarfield.sh
-     * Example PATHTOFILE: 'garfield/install/share/Garfield'
-   * In terminal execute: mkdir build; cd build; cmake ..; make;
-2. Edit the pathways for executable programs in Python functions. This includes:
-   * Gmsh in runGmsh().
-   * Elmer in runElmer().
-   * Garfield++ in runGarfield().
+1. Edit the pathways for executable programs. This includes:
+   * GARFIELDPATH, PYTHONPATH, and GARFIELDSOURCE in runFIMS.ipynb
+   * The 'Include' statement at the beginning of Geometry/FIMS.txt
