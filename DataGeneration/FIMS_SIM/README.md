@@ -9,7 +9,7 @@ The relevant parameters of the geometry and simulation are contained in runContr
 Avalanche data is ouput to the directory Data/ in root format.
 
 ## Contents:
-1. runFIMS.ipynb - Python script with functions to run simulation and perform analysis.
+1. runFIMS.ipynb - Python script with functions to run simulation and perform basic analysis.
 2. avalanche.cc - Garfield++ simulation code.
 3. CMakeLists.txt - CMake lists to build executable simulation.
 4. runControl - Various user-defined geometry and simulation parameters.
@@ -35,10 +35,9 @@ Avalanche data is ouput to the directory Data/ in root format.
      * Set parameters in runControl directly.
      * Execute Python function runSimulation().
    * For iterating through a single variable:
-     * Execute Python function such as varyRadius().
+     * Execute Python function varyParam().
 
 ## Additional Requirements:
 
 1. Edit the pathways for executable programs. This includes:
-   * GARFIELDPATH, PYTHONPATH, and GARFIELDSOURCE in runFIMS.ipynb
-   * The 'Include' statement at the beginning of Geometry/FIMS.txt
+   * GARFIELDSOURCE in runFIMS.ipynb
