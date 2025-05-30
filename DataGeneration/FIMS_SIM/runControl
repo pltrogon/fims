@@ -5,23 +5,23 @@
 // Dimensions: micron
 
 // Pixel
-pixelWidth = 10.;
-pitch = 55.;
+pixelWidth = 10.0;
+pitch = 55.0;
 
 //Mesh
-meshStandoff = 100.;
-meshThickness = 4.;
-holeRadius = 16.;
+meshStandoff = 100.0;
+meshThickness = 1.0;
+holeRadius = 16.0;
 
 // Other
-cathodeHeight = 400.;
-thicknessSiO2 = 5.;
+cathodeHeight = 400.0;
+thicknessSiO2 = 5.0;
 
 //----- Field Parameters -----
-fieldRatio = 80.;
+fieldRatio = 40.0;
 
-numFieldLine = 11;
-transparencyLimit = .999;
+numFieldLine = 25;
+transparencyLimit = 0.1;
 
 //----- Simulation parameters -----
 // Avalanche controls
@@ -29,5 +29,5 @@ numAvalanche = 1000;
 avalancheLimit = 200;
 
 // Gas composition
-gasCompAr = 80.;
-gasCompCO2 = 20.;
+gasCompAr = 80.0;
+gasCompCO2 = 20.0;

@@ -8,9 +8,11 @@
  *    Saves avalanche data in a .root file as root trees:
  *        metaDataTree
  *        fieldLineDataTree
+ *        meshFieldLineDataTree
  *        avalancheDataTree
  *        electronDataTree
  *        ionDataTree
+ *        electronTrackDataTree
  * 
  * Tanner Polischuk & James Harrison IV
  */
@@ -22,6 +24,7 @@
 #include "Garfield/AvalancheMC.hh"
 #include "Garfield/Sensor.hh"
 #include "Garfield/DriftLineRKF.hh"
+#include "Garfield/ViewDrift.hh"
 
 //ROOT includes
 #include "TApplication.h"
@@ -42,6 +45,9 @@
 using namespace Garfield;
 
 int main(int argc, char * argv[]) {
+
+  std::srand(static_cast<unsigned int>(std::time(nullptr)));
+
   const double MICRON = 1e-6;
   const double CM = 1e-2;
   const double MICRONTOCM = 1e-4;
@@ -102,10 +108,10 @@ int main(int argc, char * argv[]) {
   //***** Simulation Parameters *****//
   //Read in simulation parameters from runControl
 
-  double  pixelWidth, pixelThickness, pitch;
+  double  pixelWidth, pitch;
   double meshStandoff, meshThickness, holeRadius;
   double cathodeHeight, thicknessSiO2;
-  double cathodeVoltage, meshVoltage;
+  double fieldRatio;
   int numFieldLine;
   double transparencyLimit;
   int numAvalanche, avalancheLimit;
@@ -150,14 +156,13 @@ int main(int argc, char * argv[]) {
   paramFile.close();
 
   //Parse the values from the map
-  if(numKeys != 18){//Number of user-defined simulation parameters in runControl to search for is 18.
+  if(numKeys != 14){//Number of user-defined simulation parameters in runControl to search for.
       std::cerr << "Error: Invalid simulation parameters in 'runControl'." << std::endl;
     return -1;
   }
 
   //Geometry parameters
   pixelWidth = std::stod(readParam["pixelWidth"])*MICRONTOCM;
-  pixelThickness = std::stod(readParam["pixelThickness"])*MICRONTOCM;
   pitch = std::stod(readParam["pitch"])*MICRONTOCM;
 
   meshStandoff = std::stod(readParam["meshStandoff"])*MICRONTOCM;
@@ -168,8 +173,7 @@ int main(int argc, char * argv[]) {
   thicknessSiO2 = std::stod(readParam["thicknessSiO2"])*MICRONTOCM;
 
   //Field parameters
-  cathodeVoltage = std::stod(readParam["cathodeVoltage"]);
-  meshVoltage = std::stod(readParam["meshVoltage"]);
+  fieldRatio = std::stod(readParam["fieldRatio"]);
 
   numFieldLine = std::stoi(readParam["numFieldLine"]);
   transparencyLimit = std::stod(readParam["transparencyLimit"]);
@@ -181,17 +185,12 @@ int main(int argc, char * argv[]) {
   gasCompAr = std::stod(readParam["gasCompAr"]);
   gasCompCO2 = std::stod(readParam["gasCompCO2"]);
 
-  penningR = std::stod(readParam["penningR"]);
-  penningLambda = std::stod(readParam["penningLambda"]);
-
 
   // ***** Metadata tree ***** //
   //Create
   TTree *metaDataTree = new TTree("metaDataTree", "Simulation Parameters");
 
   //Data to be saved
-  double driftField = (cathodeVoltage - meshVoltage)/cathodeHeight;
-  double amplificationField = meshVoltage/meshStandoff;
   double fieldTransparency;
 
   //Add branches
@@ -200,7 +199,6 @@ int main(int argc, char * argv[]) {
 
   //Geometry Parameters
   metaDataTree->Branch("Pixel Width", &pixelWidth, "pixelWidth/D");
-  metaDataTree->Branch("Pixel Thickness", &pixelThickness, "pixelThickness/D");
   metaDataTree->Branch("Pitch", &pitch, "pitch/D");
   metaDataTree->Branch("Mesh Standoff", &meshStandoff, "meshStandoff/D");
   metaDataTree->Branch("Mesh Thickness", &meshThickness, "meshThickness/D");
@@ -209,10 +207,7 @@ int main(int argc, char * argv[]) {
   metaDataTree->Branch("Thickness SiO2", &thicknessSiO2, "thicknessSiO2/D");
 
   //Field Parameters
-  metaDataTree->Branch("Cathode Voltage", &cathodeVoltage, "cathodeVoltage/D");
-  metaDataTree->Branch("Mesh Voltage", &meshVoltage, "meshVoltage/D");
-  metaDataTree->Branch("Drift Field", &driftField, "driftField/D");
-  metaDataTree->Branch("Amplification Field", &amplificationField, "amplificationField/D");
+  metaDataTree->Branch("Electric Field Ratio", &fieldRatio, "fieldRatio/D");
   metaDataTree->Branch("Number of Field Lines", &numFieldLine, "numFieldLine/I");
   metaDataTree->Branch("Field Transparency", &fieldTransparency, "fieldTransparency/D");
   metaDataTree->Branch("Field Transparency Limit", &transparencyLimit, "transparencyLimit/D");
@@ -222,8 +217,6 @@ int main(int argc, char * argv[]) {
   metaDataTree->Branch("Avalanche Limit", &avalancheLimit, "avalancheLimit/I");
   metaDataTree->Branch("Gas Comp: Ar", &gasCompAr, "gasCompAr/D");
   metaDataTree->Branch("Gas Comp: CO2", &gasCompCO2, "gasCompCO2/D");
-  metaDataTree->Branch("Penning: r", &penningR, "penningR/D");
-  metaDataTree->Branch("Penning: lambda", &penningLambda, "penningLambda/D");
   metaDataTree->Branch("Simulation Run Time", &runTime, "runTime/D");
 
 
@@ -241,6 +234,21 @@ int main(int argc, char * argv[]) {
   fieldLineDataTree->Branch("Field Line y", &fieldLineY, "fieldLineY/D");
   fieldLineDataTree->Branch("Field Line z", &fieldLineZ, "fieldLineZ/D");
 
+  //***** Mesh Field Line Data Tree *****//
+  //Create
+  TTree *meshFieldLineDataTree = new TTree("meshFieldLineDataTree", "Mesh Field Lines");
+
+  //Data to be saved.
+  int meshFieldLineLocation;
+  double meshLineX, meshLineY, meshLineZ;
+
+  //Add branches
+  meshFieldLineDataTree->Branch("Field Line ID", &fieldLineID, "fieldLineID/I");
+  meshFieldLineDataTree->Branch("Mesh Line Location", &meshFieldLineLocation, "meshFieldLineLocation/I");
+  meshFieldLineDataTree->Branch("Field Line x", &meshLineX, "meshLineX/D");
+  meshFieldLineDataTree->Branch("Field Line y", &meshLineY, "meshLineY/D");
+  meshFieldLineDataTree->Branch("Field Line z", &meshLineZ, "meshLineZ/D");
+
   //***** Avalanche Data Tree *****//
   //Create
   TTree *avalancheDataTree = new TTree("avalancheDataTree", "Avalanche Results");
@@ -248,15 +256,14 @@ int main(int argc, char * argv[]) {
   //Data to be saved for each avalanche
   int avalancheID;
   bool hitLimit;//T/F if avalanche limit was hit
-  int totalElectrons, attatchedElectrons, totalIons;
+  int totalElectrons, attachedElectrons, totalIons;
 
   //Add Branches
   avalancheDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
   avalancheDataTree->Branch("Reached Limit", &hitLimit, "hitLimit/B");
   avalancheDataTree->Branch("Total Electrons", &totalElectrons, "totalElectrons/I");
-  avalancheDataTree->Branch("Attatched Electrons", &attatchedElectrons, "attatchedElectrons/I");
+  avalancheDataTree->Branch("Attached Electrons", &attachedElectrons, "attachedElectrons/I");
   avalancheDataTree->Branch("Total Ions", &totalIons, "totalIons/I");
-
 
   //***** Electron Data Tree *****//
 
@@ -316,6 +323,22 @@ int main(int argc, char * argv[]) {
   ionDataTree->Branch("Exit Status", &statIon, "statIon/I");
 
 
+  //***** Electron Track Data Tree *****/
+  //Create
+  TTree *electronTrackDataTree = new TTree("electronTrackDataTree", "Electron Tracks");
+
+  // Data to be saved for each Electron track
+  float electronDriftx, electronDrifty, electronDriftz;
+
+  //Add Branches
+  electronTrackDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
+  electronTrackDataTree->Branch("Electron ID", &electronID, "electronID/I");
+
+  electronTrackDataTree->Branch("Drift x", &electronDriftx, "electronDriftx/F");
+  electronTrackDataTree->Branch("Drift y", &electronDrifty, "electronDrifty/F");
+  electronTrackDataTree->Branch("Drift z", &electronDriftz, "electronDriftz/F");
+
+
   //*************** SIMULATION ***************//
   std::cout << "****************************************\n";
   std::cout << "Creating simulation: " << runNo << "\n";
@@ -328,10 +351,10 @@ int main(int argc, char * argv[]) {
   gasFIMS->SetComposition("ar", gasCompAr, "co2", gasCompCO2);
   gasFIMS->SetTemperature(293.15); // Room temperature
   gasFIMS->SetPressure(760.);     // Atmospheric pressure
-  gasFIMS->SetMaxElectronEnergy(100);// TODO - check if this is okay and if we want to save it
+  gasFIMS->SetMaxElectronEnergy(100);
   gasFIMS->Initialise(true);
   // Load the penning transfer and ion mobilities.
-  gasFIMS->EnablePenningTransfer(penningR, penningLambda, "ar");
+  gasFIMS->EnablePenningTransfer(0.51, .0, "ar");
   const std::string path = std::getenv("GARFIELD_INSTALL");
   gasFIMS->LoadIonMobility(path + "/share/Garfield/Data/IonMobility_Ar+_Ar.txt");
   gasFIMS->LoadNegativeIonMobility(path + "/share/Garfield/Data/IonMobility_CO2+_CO2.txt");//TODO - Is this correct for negative ion
@@ -365,6 +388,10 @@ int main(int argc, char * argv[]) {
   avalancheE->SetSensor(sensorFIMS);
   avalancheE->EnableAvalancheSizeLimit(avalancheLimit);
 
+  ViewDrift viewElectronDrift;
+  viewElectronDrift.SetArea(xmin, ymin, zmin, xmax, ymax, zmax);
+  avalancheE->EnablePlotting(&viewElectronDrift, 100);
+
   //Set up Ion drifting
   AvalancheMC* driftIon = new AvalancheMC;
   driftIon->SetSensor(sensorFIMS);
@@ -378,34 +405,55 @@ int main(int argc, char * argv[]) {
   DriftLineRKF driftLines(sensorFIMS);
   driftLines.SetMaximumStepSize(MICRONTOCM);
 
-  //Create 2D linearly-spaced array at top of drift volume
   std::vector<double> xStart;
   std::vector<double> yStart;
-  std::vector<double> zStart;
 
   double rangeScale = 0.99;
   double xRange = (xmax - xmin)*rangeScale;
   double yRange = (ymax - ymin)*rangeScale;
-  double zRange = (zmax - zmin)*rangeScale;
 
+  /*
+  //Create 2D uniformly-spaced array - Note this makes numFieldLine**2 lines
   for(int i = 0; i < numFieldLine; i++){
     for(int j = 0; j < numFieldLine; j++){
       xStart.push_back(-xRange/2. + i*xRange/(numFieldLine-1));
       yStart.push_back(-yRange/2. + j*yRange/(numFieldLine-1));
-      zStart.push_back(zmax*rangeScale);
     }
   }
+  */
+
+  /*
+  //Lines radially from center to corner
+  for(int i = 0; i < numFieldLine; i++){
+    xStart.push_back(xRange/2.*i/(numFieldLine-1));
+    yStart.push_back(yRange/2.*i/(numFieldLine-1));
+  }
+  */
+
+
+  //Lines populated at corner - spread with uniform random numbers
+  double spreadScale = 0.99995; //Any smaller and goes out of bounds
+  for(int i = 0; i < numFieldLine; i++){
+    //Get random numbers between 0 and 1
+    double randX = 1.0*rand()/RAND_MAX;
+    double randY = 1.0*rand()/RAND_MAX;
+    xStart.push_back(xRange/2. + (randX - 0.5)*(1-spreadScale));
+    yStart.push_back(yRange/2. + (randY - 0.5)*(1-spreadScale));
+  }
+
 
   //Calculate field Lines
   std::vector<std::array<float, 3> > fieldLines;
-  std::vector<int> hitPixel;
   int totalFieldLines = xStart.size();
   int numAtPixel = 0;
+  
   std::cout << "Computing " << totalFieldLines << " field lines." << std::endl;
   for(int inFieldLine = 0; inFieldLine < totalFieldLines; inFieldLine++){
+    
     fieldLineID = inFieldLine;
 
-    driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], zStart[inFieldLine], fieldLines);
+    //Calculate from top of volume
+    driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], zmax*rangeScale, fieldLines);
 
     //Get coordinates of every point along field line and fill the tree
     for(int inLine = 0; inLine < fieldLines.size(); inLine++){
@@ -418,34 +466,62 @@ int main(int argc, char * argv[]) {
 
     //Find if termination point is at pixel
     int lineEnd = fieldLines.size() - 1;
-
     if(  (abs(fieldLines[lineEnd][0]) <= pixelWidth/2.)
       && (abs(fieldLines[lineEnd][1]) <= pixelWidth/2.)
-      && (fieldLines[lineEnd][2] < 0.)//TODO - not a good criteria
-      ){ 
-        hitPixel.push_back(1);
+      && (fieldLines[lineEnd][2] < 0.)){ //TODO - not a good criteria
         numAtPixel++;
-      }
-      else{
-        hitPixel.push_back(0);
-      }
+    }
+
+    //Calculate lines from above mesh
+    meshFieldLineLocation = 1;
+    driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], 1.01*meshThickness/2., fieldLines);
+
+    //Get coordinates of every point along field line and fill the tree
+    for(int inLine = 0; inLine < fieldLines.size(); inLine++){
+      meshLineX = fieldLines[inLine][0];
+      meshLineY = fieldLines[inLine][1];
+      meshLineZ = fieldLines[inLine][2];
+
+      meshFieldLineDataTree->Fill();
+    }
+
+    //Calculate lines from below mesh
+    meshFieldLineLocation = -1;
+    driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], -1.01*meshThickness/2., fieldLines);
+
+    //Get coordinates of every point along field line and fill the tree
+    for(int inLine = 0; inLine < fieldLines.size(); inLine++){
+      meshLineX = fieldLines[inLine][0];
+      meshLineY = fieldLines[inLine][1];
+      meshLineZ = fieldLines[inLine][2];
+
+      meshFieldLineDataTree->Fill();
+    }
+
   }//End field line loop
+  
+  //Determine transparency
+  fieldTransparency = (1.*numAtPixel) / (1.*totalFieldLines);
+  std::cout << "Field transparency is " << fieldTransparency <<  "." << std::endl;
+  if(fieldTransparency < transparencyLimit){
+    return 0;
+  }
+
+  // *** Deal with field line trees *** //
 
   //Write the field line data tree to file and delete
   //fieldLineDataTree->Print()
   fieldLineDataTree->Write();
   delete fieldLineDataTree;
-  
-  //Determine transparency
-  fieldTransparency = (1.*numAtPixel) / (1.*totalFieldLines);
-  if(fieldTransparency < transparencyLimit){
-    std::cerr << "Field transparency is " << fieldTransparency <<  ". (Run " << runNo << ")" << std::endl;
-    return -1;
-  }
+
+  //Write the mesh field line data tree to file and delete
+  //meshFieldLineDataTree->Print()
+  meshFieldLineDataTree->Write();
+  delete meshFieldLineDataTree;
 
   // ***** Prepare Avalanche Electron ***** //
   //Set the Initial electron parameters
-  double x0 = 0., y0 = 0., z0 = .01;//cm
+  double x0 = 0., y0 = 0., z0 = 2.*meshThickness;//cm
   double t0 = 0.;//ns
   double e0 = 0.1;//eV (Garfield is weird when this is 0.)
   double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
@@ -470,13 +546,13 @@ int main(int argc, char * argv[]) {
 
     //Reset avalanche data
     totalElectrons = 0;
-    attatchedElectrons = 0;
+    attachedElectrons = 0;
     totalIons = 0;
     
     //Begin single-electron avalanche
     avalancheE->AvalancheElectron(x0, y0, z0, t0, e0, dx0, dy0, dz0);
 
-    //Electron count - use endpoints to include attatched electrons
+    //Electron count - use endpoints to include attached electrons
     int avalancheElectrons = avalancheE->GetNumberOfElectronEndpoints();
 
     //Check if avalanche limit was reached - TODO Decide if this data is worth saving or not
@@ -506,7 +582,7 @@ int main(int argc, char * argv[]) {
 
       //Check for electron attatchment
       if(stat == -7){
-        attatchedElectrons++;
+        attachedElectrons++;
 
         //Drift negative ion from end of electron tracks that attatch
         ionCharge = -1;
@@ -515,6 +591,20 @@ int main(int argc, char * argv[]) {
         //Fill tree with data from this negative ion
         ionDataTree->Fill();
         totalIons++;
+      }
+
+      // Get electron drift line data
+      int numElectronDrift = viewElectronDrift.GetNumberOfDriftLines();
+      bool isElectron;
+      std::vector<std::array<float, 3> > electronDriftLines;
+      viewElectronDrift.GetDriftLine(inElectron, electronDriftLines, isElectron);
+      for(int inPoint = 0; inPoint < electronDriftLines.size(); inPoint++){
+        electronDriftx = electronDriftLines[inPoint][0];
+        electronDrifty = electronDriftLines[inPoint][1];
+        electronDriftz = electronDriftLines[inPoint][2];
+
+        //Fill tree with data from this point
+        electronTrackDataTree->Fill();
       }
 
 
@@ -550,6 +640,9 @@ int main(int argc, char * argv[]) {
       std::cout << progressStream.str() << std::flush;
     }
 
+    //clean up memory
+    viewElectronDrift.Clear();
+
   }//end avalanche loop
 
   //Final timing
@@ -581,6 +674,11 @@ int main(int argc, char * argv[]) {
   //avalancheDataTree->Print()
   avalancheDataTree->Write();
   delete avalancheDataTree;
+
+  //Write the electron track data tree to file then delete
+  //electronTrackDataTree->Print()
+  electronTrackDataTree->Write();
+  delete electronTrackDataTree;
 
   //close the output file
   dataFile->Close();

@@ -1,7 +1,6 @@
-//***************************************************************************************************************
-// Change this line to include the correct 'runControl' file
-Include "/Users/tannerp/Work/garfield/garfieldpp/electronAvalanche/fims/DataGeneration/FIMS_SIM/runControl";
-//***************************************************************************************************************
+
+//Get geometry dimensions found in 'runControl'
+Include "../runControl";
 
 // Parameters in micrometers
 
@@ -32,16 +31,16 @@ Point(10) = {0, -(holeRadius), -meshThickness/2, small};
 
 
 //Four corners of the top of the mesh
-Point(11) = {pitch,pitch, meshThickness/2, med2};
-Point(12) = {pitch,-pitch, meshThickness/2, med2};
-Point(13) = {-pitch,-pitch, meshThickness/2, med2};
-Point(14) = {-pitch,pitch, meshThickness/2, med2};
+Point(11) = {pitch/2., pitch/2., meshThickness/2, med2};
+Point(12) = {pitch/2., -pitch/2., meshThickness/2, med2};
+Point(13) = {-pitch/2., -pitch/2., meshThickness/2, med2};
+Point(14) = {-pitch/2., pitch/2., meshThickness/2, med2};
 
 //Four corners of the bottom of the mesh
-Point(15) = {pitch, pitch, -meshThickness/2, med2};
-Point(16) = {pitch, -pitch, -meshThickness/2, med2};
-Point(17) = {-pitch, -pitch, -meshThickness/2, med2};
-Point(18) = {-pitch, pitch, -meshThickness/2, med2};
+Point(15) = {pitch/2., pitch/2., -meshThickness/2, med2};
+Point(16) = {pitch/2., -pitch/2., -meshThickness/2, med2};
+Point(17) = {-pitch/2., -pitch/2., -meshThickness/2, med2};
+Point(18) = {-pitch/2., pitch/2., -meshThickness/2, med2};
 
 // Top Circular boundary
 Circle(1) = {3, 1, 4};
@@ -132,10 +131,10 @@ Volume(2) = {2};
 // ***************************************************************************************************************
 
 //Four corners of the top boundary
-Point(201) = {pitch, pitch, meshThickness/2+cathodeHeight, large};
-Point(202) = {pitch, -pitch, meshThickness/2+cathodeHeight, large};
-Point(203) = {-pitch, -pitch, meshThickness/2+cathodeHeight, large};
-Point(204) = {-pitch, pitch, meshThickness/2+cathodeHeight, large};
+Point(201) = {pitch/2., pitch/2., meshThickness/2+cathodeHeight, large};
+Point(202) = {pitch/2., -pitch/2., meshThickness/2+cathodeHeight, large};
+Point(203) = {-pitch/2., -pitch/2., meshThickness/2+cathodeHeight, large};
+Point(204) = {-pitch/2., pitch/2., meshThickness/2+cathodeHeight, large};
 
 //Lines connecting the corners of the top boundary
 Line(201) = {201, 202};
@@ -168,10 +167,10 @@ Plane Surface(205) = {205};
 // ***************************************************************************************************************
 
 //Four corners of the top layer
-Point(101) = {pitch, pitch, -1*(meshStandoff+meshThickness/2), med2};
-Point(102) = {pitch, -pitch, -1*(meshStandoff+meshThickness/2), med2};
-Point(103) = {-pitch, -pitch, -1*(meshStandoff+meshThickness/2), med2};
-Point(104) = {-pitch, pitch, -1*(meshStandoff+meshThickness/2), med2};
+Point(101) = {pitch/2., pitch/2., -1*(meshStandoff+meshThickness/2), med2};
+Point(102) = {pitch/2., -pitch/2., -1*(meshStandoff+meshThickness/2), med2};
+Point(103) = {-pitch/2., -pitch/2., -1*(meshStandoff+meshThickness/2), med2};
+Point(104) = {-pitch/2., pitch/2., -1*(meshStandoff+meshThickness/2), med2};
 
 //Four corners of the chip
 Point(105) = {pixelWidth/2, pixelWidth/2, -(meshStandoff+meshThickness/2+thicknessSiO2), med};
@@ -186,10 +185,10 @@ Point(111) = {-pixelWidth/2, -pixelWidth/2, -(meshStandoff+meshThickness/2), med
 Point(112) = {pixelWidth/2, -pixelWidth/2, -(meshStandoff+meshThickness/2), med};
 
 //Four corners of the bottom layer
-Point(113) = {pitch, pitch, -(meshStandoff+meshThickness/2+thicknessSiO2), large};
-Point(114) = {-pitch, pitch, -(meshStandoff+meshThickness/2+thicknessSiO2), large};
-Point(115) = {-pitch, -pitch, -(meshStandoff+meshThickness/2+thicknessSiO2), large};
-Point(116) = {pitch, -pitch, -(meshStandoff+meshThickness/2+thicknessSiO2), large};
+Point(113) = {pitch/2., pitch/2., -(meshStandoff+meshThickness/2+thicknessSiO2), large};
+Point(114) = {-pitch/2., pitch/2., -(meshStandoff+meshThickness/2+thicknessSiO2), large};
+Point(115) = {-pitch/2., -pitch/2., -(meshStandoff+meshThickness/2+thicknessSiO2), large};
+Point(116) = {pitch/2., -pitch/2., -(meshStandoff+meshThickness/2+thicknessSiO2), large};
 
 //Lines connecting points below the bottom mesh**********************************************
 

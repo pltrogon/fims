@@ -146,13 +146,13 @@ End
 Boundary Condition 7
   Target Boundaries(1) = 26 
   Name = "Cathode"
-	Potential = -823.8
+	Potential = -437.95
 End
 
 Boundary Condition 8
   Target Boundaries(1) = 1 
   Name = "Mesh"
-	Potential = -784.0
+	Potential = -398.0
 End
 
 Boundary Condition 9
