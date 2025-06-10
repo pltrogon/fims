@@ -38,6 +38,7 @@
 #include <iomanip>
 #include <map>
 #include <sstream>
+#include <sys/stat.h>
 
 using namespace Garfield;
 
@@ -54,6 +55,20 @@ int main(int argc, char * argv[]) {
   TApplication app("app", &argc, argv);
 
   //***** Run numbering *****//
+  //Read in simulation number from simNum
+  int simNum;
+  std::string simNumFile = "input_file/simNum.txt";
+  std::ifstream simInFile;
+  simInFile.open(simNumFile);
+
+  if(!simInFile.is_open()){
+    std::cerr << "Error reading file '" << simNumFile << "'." << std::endl;
+    return -1;
+  }
+
+  simInFile >> simNum;
+  simInFile.close();
+  
   //Read in run number from runNo
   int runNo;
   std::string runNoFile = "input_file/runNo.txt";
@@ -87,9 +102,10 @@ int main(int argc, char * argv[]) {
   //runOutFile.close();
 
   //***** Data File *****//
-  std::string dataFilename = "sim."+std::to_string(runNo)+".root";
-  std::string dataPath = "output_file/avalancheData"+dataFilename;
-  TFile *dataFile = new TFile(dataPath.c_str(), "NEW");
+  std::string dataPath = "output_file/simulationNumber"+std::to_string(simNum);
+  std::string dataFilename = dataPath+"/sim."+std::to_string(runNo)+".root";
+  mkdir(dataPath.c_str(), 0777);
+  TFile *dataFile = new TFile(dataFilename.c_str(), "NEW");
 
   if(!dataFile->IsOpen()){
     std::cerr << "Error creating or opening file '" << dataFilename << "'." << std::endl;
@@ -414,7 +430,9 @@ int main(int argc, char * argv[]) {
       fieldLineZ = fieldLines[inLine][2];
 
       fieldLineDataTree->Fill();
+      std::cout << "Field line creation" << 100*inLine/fieldLines.size() << "% complete\n";  
     }
+    std::cout << "Field lines created successfully";
 
     //Find if termination point is at pixel
     int lineEnd = fieldLines.size() - 1;
@@ -440,7 +458,6 @@ int main(int argc, char * argv[]) {
   fieldTransparency = (1.*numAtPixel) / (1.*totalFieldLines);
   if(fieldTransparency < fieldTransLimit){
     std::cerr << "Field transparency is " << fieldTransparency <<  ". (Run " << runNo << ")" << std::endl;
-    return -1;
   }
 
   // ***** Prepare Avalanche Electron ***** //
