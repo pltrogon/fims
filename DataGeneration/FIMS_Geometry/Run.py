@@ -70,10 +70,10 @@ def Terminal_Commands():
 #---------------------------------------------------------
 
 #This definition outputs all of the data to a single csv file for easy inspection
-def Output_Data(currentStep, width, confidence, simTime):
+def Output_Data(simNum, currentStep, width, confidence, simTime):
     cmToMicron = 10000
     
-    dataTree = ROOT.TFile.Open(f'output_file/avalancheDatasim.{currentStep}.root')
+    dataTree = ROOT.TFile.Open(f'output_file/simulationNumber{simNum}/sim.{currentStep}.root')
     simData = dataTree['metaDataTree']
     for thing in simData:
         meshStandoff = thing.meshStandoff*cmToMicron
@@ -102,12 +102,12 @@ def Output_Data(currentStep, width, confidence, simTime):
 #This definition uses the parameters of the structure as inputs
 #analyze the output files
 def analyze(holeRadius, meshStandoff, meshVoltage, fieldTransLimit,
-                numFieldLine, runstart, currentStep):
+                numFieldLine, runstart, simNum, currentStep):
     cmToMicron = 10000            
 
 #importing the data from Garfield++
 
-    dataTree = ROOT.TFile.Open(f'output_file/avalancheDatasim.{currentStep}.root')
+    dataTree = ROOT.TFile.Open(f'output_file/simulationNumber{simNum}/sim.{currentStep}.root')
     simData = dataTree['metaDataTree']
     for thing in simData:
         transparency = thing.fieldTransparency
@@ -156,7 +156,7 @@ def analyze(holeRadius, meshStandoff, meshVoltage, fieldTransLimit,
     simTime = runend - runstart
     
 #Outputting the data to a csv file    
-    Output_Data(currentStep, width, confidence, simTime)
+    Output_Data(simNum, currentStep, width, confidence, simTime)
 
 #Checking the field transparency to determine if the simulation
 #should stop
@@ -184,7 +184,7 @@ def analyze(holeRadius, meshStandoff, meshVoltage, fieldTransLimit,
 #is the starting value of that parameter, final is the final value
 #of that parameter, and steps is the number of tests that the user
 #wishes to run.
-def iterate_variable(variable, initial, final, steps=10):
+def iterate_variable(variable, initial, final, steps):
 
 #program initialization
 #Noting the simulation number
@@ -222,7 +222,7 @@ def iterate_variable(variable, initial, final, steps=10):
     fieldRatio = 80 #--------------This should be defined in runControl.txt
     meshVoltage = -fieldRatio*meshStandoff/10
     cathodeVoltage = meshVoltage - cathodeHeight/10
-
+    
 #This if tree determines which parameter is being iterated and then
 #loops through each step of the iteration as determined by the "steps"
 #term in the original definition    
@@ -235,7 +235,7 @@ def iterate_variable(variable, initial, final, steps=10):
                         simNum, currentStep)     
             Terminal_Commands()
             if analyze(holeRadius, meshStandoff, meshVoltage, fieldTransLimit,
-                            numFieldLine, runstart, currentStep):
+                            numFieldLine, runstart, simNum, currentStep):
                 break
             
             currentStep += 1
@@ -251,7 +251,7 @@ def iterate_variable(variable, initial, final, steps=10):
                         simNum, currentStep)
             Terminal_Commands()
             if analyze(holeRadius, meshStandoff, meshVoltage, fieldTransLimit,
-                        numFieldLine, runstart, currentStep):
+                        numFieldLine, runstart, simNum, currentStep):
                 break
                 
             currentStep += 1
@@ -274,7 +274,7 @@ def iterate_variable(variable, initial, final, steps=10):
             subprocess.run(['build/fieldlines'])
             subprocess.run(['build/avalanche'])
             analyze(holeRadius, meshStandoff, meshVoltage, fieldTransLimit,
-                       numFieldLine, runstart, currentStep)
+                       numFieldLine, runstart, simNum, currentStep)
                 
             currentStep += 1
 
@@ -297,7 +297,7 @@ def iterate_variable(variable, initial, final, steps=10):
             subprocess.run(['build/fieldlines'])
             subprocess.run(['build/avalanche'])
             if analyze(holeRadius, meshStandoff, meshVoltage, fieldTransLimit,
-                        numFieldLine, runstart, currentStep):
+                        numFieldLine, runstart, simNum, currentStep):
                 break
                 
             currentStep += 1
@@ -308,4 +308,4 @@ def iterate_variable(variable, initial, final, steps=10):
 
 #This line runs the program and should be edited by the user to match
 #their desired test conditions
-iterate_variable('st',120,90,3)
+iterate_variable('st', 20, 10, 4)
