@@ -82,6 +82,7 @@ int main(int argc, char * argv[]) {
 
     if(gitStatus == 0){
       gitVersion = gitOutput;
+      std::cout << gitVersion << std::endl;
     }
     else{
       std::cerr << "Error: 'getGitCommand' failed with status " << gitStatus << std::endl;
@@ -224,7 +225,7 @@ int main(int argc, char * argv[]) {
 
   //Add branches
   //General
-  metaDataTree->Branch("Git Version", &gitVersion);
+  //metaDataTree->Branch("Git Version", &gitVersion);
   metaDataTree->Branch("runNo", &runNo, "runNo/I");
 
   //Geometry Parameters
