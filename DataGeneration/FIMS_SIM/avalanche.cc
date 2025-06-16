@@ -41,6 +41,7 @@
 #include <iomanip>
 #include <map>
 #include <sstream>
+#include <cstdio>
 
 using namespace Garfield;
 
@@ -58,6 +59,34 @@ int main(int argc, char * argv[]) {
   clock_t startSim, stopSim, lapAvalanche, runTime;
 
   TApplication app("app", &argc, argv);
+
+  //***** Git Hash *****//
+  std::string gitVersion = "UNKNOWN VERSION";
+  const char * getGitCommand = "git describe --tags --always --dirty 2>/dev/null";
+
+  FILE * pipe = popen(getGitCommand, "r");
+  if(!pipe){
+    std::cerr << "Error: Could not open pipe to 'getGitCommand'." << std::endl;
+  }
+  else{ 
+    char gitBuffer[128];
+    std::string gitOutput = "";
+    while(fgets(gitBuffer, sizeof(gitBuffer), pipe) != NULL){
+      gitOutput += gitBuffer;
+    }
+    int gitStatus = pclose(pipe);
+
+    if(!gitOutput.empty() && gitOutput.back() == '\n'){
+      gitOutput.pop_back();
+    }
+
+    if(gitStatus == 0){
+      gitVersion = gitOutput;
+    }
+    else{
+      std::cerr << "Error: 'getGitCommand' failed with status " << gitStatus << std::endl;
+    }
+  }
 
   //***** Run numbering *****//
   //Read in run number from runNo
@@ -195,6 +224,7 @@ int main(int argc, char * argv[]) {
 
   //Add branches
   //General
+  metaDataTree->Branch("Git Version", &gitVersion);
   metaDataTree->Branch("runNo", &runNo, "runNo/I");
 
   //Geometry Parameters
