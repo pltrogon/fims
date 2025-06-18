@@ -30,6 +30,7 @@
 #include "TApplication.h"
 #include "TTree.h"
 #include "TFile.h"
+#include "TString.h"
 
 //C includes
 #include <iostream>
@@ -61,7 +62,8 @@ int main(int argc, char * argv[]) {
   TApplication app("app", &argc, argv);
 
   //***** Git Hash *****//
-  std::string gitVersion = "UNKNOWN VERSION";
+  TString gitVersion = "UNKNOWN VERSION";
+
   const char * getGitCommand = "git describe --tags --always --dirty 2>/dev/null";
 
   FILE * pipe = popen(getGitCommand, "r");
@@ -82,7 +84,6 @@ int main(int argc, char * argv[]) {
 
     if(gitStatus == 0){
       gitVersion = gitOutput;
-      std::cout << gitVersion << std::endl;
     }
     else{
       std::cerr << "Error: 'getGitCommand' failed with status " << gitStatus << std::endl;
@@ -225,7 +226,7 @@ int main(int argc, char * argv[]) {
 
   //Add branches
   //General
-  //metaDataTree->Branch("Git Version", &gitVersion);
+  metaDataTree->Branch("Git Version", &gitVersion);
   metaDataTree->Branch("runNo", &runNo, "runNo/I");
 
   //Geometry Parameters
@@ -570,7 +571,7 @@ int main(int argc, char * argv[]) {
   for(int inAvalanche = 0; inAvalanche < numAvalanche; inAvalanche++){
     if(DEBUG){
       std::cout << "DEBUGGING - NO AVALANCHE\n";
-      continue;
+      break;
     }
     
     avalancheID = inAvalanche;
