@@ -10,7 +10,7 @@ pitch = 55.0;
 
 //Mesh
 meshStandoff = 100.0;
-meshThickness = 1.0;
+meshThickness = 5.0;
 holeRadius = 16.0;
 
 // Other
@@ -18,7 +18,7 @@ cathodeHeight = 400.0;
 thicknessSiO2 = 5.0;
 
 //----- Field Parameters -----
-fieldRatio = 40.0;
+fieldRatio = 25.0;
 
 numFieldLine = 25;
 transparencyLimit = 0.1;
