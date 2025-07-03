@@ -383,10 +383,11 @@ int main(int argc, char * argv[]) {
   gasFIMS->SetComposition("ar", gasCompAr, "co2", gasCompCO2);
   gasFIMS->SetTemperature(293.15); // Room temperature
   gasFIMS->SetPressure(760.);     // Atmospheric pressure
-  gasFIMS->SetMaxElectronEnergy(100);
+  gasFIMS->SetMaxElectronEnergy(200);
   gasFIMS->Initialise(true);
   // Load the penning transfer and ion mobilities.
   gasFIMS->EnablePenningTransfer(0.51, .0, "ar");
+
   const std::string path = std::getenv("GARFIELD_INSTALL");
   gasFIMS->LoadIonMobility(path + "/share/Garfield/Data/IonMobility_Ar+_Ar.txt");
   gasFIMS->LoadNegativeIonMobility(path + "/share/Garfield/Data/IonMobility_CO2+_CO2.txt");//TODO - Is this correct for negative ion
@@ -454,15 +455,14 @@ int main(int argc, char * argv[]) {
   }
   */
 
-  /*
   //Lines radially from center to corner
   for(int i = 0; i < numFieldLine; i++){
     xStart.push_back(xRange/2.*i/(numFieldLine-1));
     yStart.push_back(yRange/2.*i/(numFieldLine-1));
   }
-  */
+  
 
-
+  /*
   //Lines populated at corner - spread with uniform random numbers
   double spreadScale = 0.99995; //Any smaller and goes out of bounds
   for(int i = 0; i < numFieldLine; i++){
@@ -472,7 +472,7 @@ int main(int argc, char * argv[]) {
     xStart.push_back(xRange/2. + (randX - 0.5)*(1-spreadScale));
     yStart.push_back(yRange/2. + (randY - 0.5)*(1-spreadScale));
   }
-
+  */
 
   //Calculate field Lines
   std::vector<std::array<float, 3> > fieldLines;
@@ -536,7 +536,7 @@ int main(int argc, char * argv[]) {
   fieldTransparency = (1.*numAtPixel) / (1.*totalFieldLines);
   std::cout << "Field transparency is " << fieldTransparency <<  "." << std::endl;
   if(fieldTransparency < transparencyLimit){
-    return 0;
+    //return 0; //TODO - Handle case where field transparency is too low
   }
 
   // *** Deal with field line trees *** //
@@ -553,7 +553,7 @@ int main(int argc, char * argv[]) {
 
   // ***** Prepare Avalanche Electron ***** //
   //Set the Initial electron parameters
-  double x0 = 0., y0 = 0., z0 = 2.*meshThickness;//cm
+  double x0 = 0., y0 = 0., z0 = .005;//cm TODO - This is just slightly above mesh, but better to parameterize with something
   double t0 = 0.;//ns
   double e0 = 0.1;//eV (Garfield is weird when this is 0.)
   double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
