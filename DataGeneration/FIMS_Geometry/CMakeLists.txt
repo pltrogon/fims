@@ -7,25 +7,9 @@ endif()
 
 find_package(ROOT REQUIRED COMPONENTS Hist Tree)
 
-
-
 # ---Build executable------------------------------------------------------------
 add_executable(fieldlines fieldlines.C)
 target_link_libraries(fieldlines Garfield::Garfield)
-
-add_executable(avalanche FIMS.cc)
-target_link_libraries(avalanche Garfield::Garfield 
-				GSL::gsl 
-		    		GSL::gslcblas
-				ROOT::Hist
-				ROOT::Tree)
-
-add_executable(Test test.C)
-target_link_libraries(Test Garfield::Garfield 
-				GSL::gsl 
-		    		GSL::gslcblas
-				ROOT::Hist
-				ROOT::Tree)
 
 # ---Copy all files locally to the build directory-------------------------------
 foreach(_file 	input_file/dielectrics.dat input_file/fims_hex.ep input_file/FIMS_Hex.msh input_file/FIMS_Hex.result input_file/mesh.boundary input_file/mesh.elements input_file/mesh.header input_file/mesh.nodes input_file/runNo.txt input_file/runControl.txt)
