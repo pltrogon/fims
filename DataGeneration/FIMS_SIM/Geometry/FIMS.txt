@@ -173,16 +173,16 @@ Point(103) = {-pitch/2., -pitch/2., -1*(meshStandoff+meshThickness/2), med2};
 Point(104) = {-pitch/2., pitch/2., -1*(meshStandoff+meshThickness/2), med2};
 
 //Four corners of the chip
-Point(105) = {pixelWidth/2, pixelWidth/2, -(meshStandoff+meshThickness/2+thicknessSiO2), med};
-Point(106) = {-pixelWidth/2, pixelWidth/2, -(meshStandoff+meshThickness/2+thicknessSiO2), med};
-Point(107) = {-pixelWidth/2, -pixelWidth/2, -(meshStandoff+meshThickness/2+thicknessSiO2), med};
-Point(108) = {pixelWidth/2, -pixelWidth/2, -(meshStandoff+meshThickness/2+thicknessSiO2), med};
+Point(105) = {padWidth/2, padWidth/2, -(meshStandoff+meshThickness/2+thicknessSiO2), med};
+Point(106) = {-padWidth/2, padWidth/2, -(meshStandoff+meshThickness/2+thicknessSiO2), med};
+Point(107) = {-padWidth/2, -padWidth/2, -(meshStandoff+meshThickness/2+thicknessSiO2), med};
+Point(108) = {padWidth/2, -padWidth/2, -(meshStandoff+meshThickness/2+thicknessSiO2), med};
 
 //Four corners of the air gap above the chip
-Point(109) = {pixelWidth/2, pixelWidth/2, -(meshStandoff+meshThickness/2), med};
-Point(110) = {-pixelWidth/2, pixelWidth/2, -(meshStandoff+meshThickness/2), med};
-Point(111) = {-pixelWidth/2, -pixelWidth/2, -(meshStandoff+meshThickness/2), med};
-Point(112) = {pixelWidth/2, -pixelWidth/2, -(meshStandoff+meshThickness/2), med};
+Point(109) = {padWidth/2, padWidth/2, -(meshStandoff+meshThickness/2), med};
+Point(110) = {-padWidth/2, padWidth/2, -(meshStandoff+meshThickness/2), med};
+Point(111) = {-padWidth/2, -padWidth/2, -(meshStandoff+meshThickness/2), med};
+Point(112) = {padWidth/2, -padWidth/2, -(meshStandoff+meshThickness/2), med};
 
 //Four corners of the bottom layer
 Point(113) = {pitch/2., pitch/2., -(meshStandoff+meshThickness/2+thicknessSiO2), large};

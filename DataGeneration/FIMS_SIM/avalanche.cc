@@ -139,7 +139,7 @@ int main(int argc, char * argv[]) {
   //***** Simulation Parameters *****//
   //Read in simulation parameters from runControl
 
-  double  pixelWidth, pitch;
+  double  padWidth, pitch;
   double meshStandoff, meshThickness, holeRadius;
   double cathodeHeight, thicknessSiO2;
   double fieldRatio;
@@ -193,7 +193,7 @@ int main(int argc, char * argv[]) {
   }
 
   //Geometry parameters
-  pixelWidth = std::stod(readParam["pixelWidth"])*MICRONTOCM;
+  padWidth = std::stod(readParam["padWidth"])*MICRONTOCM;
   pitch = std::stod(readParam["pitch"])*MICRONTOCM;
 
   meshStandoff = std::stod(readParam["meshStandoff"])*MICRONTOCM;
@@ -230,7 +230,7 @@ int main(int argc, char * argv[]) {
   metaDataTree->Branch("runNo", &runNo, "runNo/I");
 
   //Geometry Parameters
-  metaDataTree->Branch("Pixel Width", &pixelWidth, "pixelWidth/D");
+  metaDataTree->Branch("Pad Width", &padWidth, "padWidth/D");
   metaDataTree->Branch("Pitch", &pitch, "pitch/D");
   metaDataTree->Branch("Mesh Standoff", &meshStandoff, "meshStandoff/D");
   metaDataTree->Branch("Mesh Thickness", &meshThickness, "meshThickness/D");
@@ -476,7 +476,7 @@ int main(int argc, char * argv[]) {
   //Calculate field Lines
   std::vector<std::array<float, 3> > fieldLines;
   int totalFieldLines = xStart.size();
-  int numAtPixel = 0;
+  int numAtPad = 0;
   
   std::cout << "Computing " << totalFieldLines << " field lines." << std::endl;
   for(int inFieldLine = 0; inFieldLine < totalFieldLines; inFieldLine++){
@@ -495,12 +495,12 @@ int main(int argc, char * argv[]) {
       fieldLineDataTree->Fill();
     }
 
-    //Find if termination point is at pixel
+    //Find if termination point is at pad
     int lineEnd = fieldLines.size() - 1;
-    if(  (abs(fieldLines[lineEnd][0]) <= pixelWidth/2.)
-      && (abs(fieldLines[lineEnd][1]) <= pixelWidth/2.)
+    if(  (abs(fieldLines[lineEnd][0]) <= padWidth/2.)
+      && (abs(fieldLines[lineEnd][1]) <= padWidth/2.)
       && (fieldLines[lineEnd][2] < 0.)){ //TODO - not a good criteria
-        numAtPixel++;
+        numAtPad++;
     }
 
     //Calculate lines from above mesh
@@ -532,7 +532,7 @@ int main(int argc, char * argv[]) {
   }//End field line loop
   
   //Determine transparency
-  fieldTransparency = (1.*numAtPixel) / (1.*totalFieldLines);
+  fieldTransparency = (1.*numAtPad) / (1.*totalFieldLines);
   std::cout << "Field transparency is " << fieldTransparency <<  "." << std::endl;
 
   //Handle case where field transparency is too low
