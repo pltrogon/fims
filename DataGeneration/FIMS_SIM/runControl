@@ -4,8 +4,8 @@
 //----- Geometry Parameters -----
 // Dimensions: micron
 
-// Pixel
-pixelWidth = 10.0;
+// Pad
+padWidth = 10.0;
 pitch = 55.0;
 
 //Mesh
