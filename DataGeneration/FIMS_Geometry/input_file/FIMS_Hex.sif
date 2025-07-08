@@ -1,8 +1,8 @@
 Header
   CHECK KEYWORDS Warn
-  Mesh DB "." "input_file"
+  Mesh DB "." "."
   Include Path ""
-  Results Directory "input_file"
+  Results Directory ""
 End
 
 Simulation
@@ -50,10 +50,10 @@ End
 
 Solver 1
   Equation = Electrostatics
-  Variable = Potential
   Calculate Electric Field = True
   Procedure = "StatElecSolve" "StatElecSolver"
   Calculate Electric Flux = True
+  Variable = Potential
   Exec Solver = Always
   Stabilize = True
   Optimize Bandwidth = True
@@ -83,25 +83,25 @@ End
 
 Material 1
   Name = "Air (room temperature)"
-  Relative Permittivity = 1
-  Density = 1.205
   Heat expansion Coefficient = 3.43e-3
-  Viscosity = 1.983e-5
+  Relative Permittivity = 1
   Sound speed = 343.0
   Heat Conductivity = 0.0257
+  Viscosity = 1.983e-5
+  Density = 1.205
   Heat Capacity = 1005.0
 End
 
 Material 2
   Name = "Aluminium (generic)"
-  Heat expansion Coefficient = 23.1e-6
-  Relative Permittivity = 1e10
+  Sound speed = 5000.0
   Heat Conductivity = 237.0
-  Density = 2700.0
-  Poisson ratio = 0.35
   Youngs modulus = 70.0e9
   Heat Capacity = 897.0
-  Sound speed = 5000.0
+  Heat expansion Coefficient = 23.1e-6
+  Density = 2700.0
+  Relative Permittivity = 1e10
+  Poisson ratio = 0.35
 End
 
 Material 3
@@ -110,19 +110,19 @@ Material 3
 End
 
 Boundary Condition 1
-  Target Boundaries(1) = 30 
+  Target Boundaries(1) = 40 
   Name = "Cathode"
-  Potential = -520.0
+  Potential = -420
 End
 
 Boundary Condition 2
-  Target Boundaries(6) = 1 2 5 7 10 11 
+  Target Boundaries(6) = 1 2 3 4 5 14 
   Name = "Plate"
-  Potential = -500.0
+  Potential = -400
 End
 
 Boundary Condition 3
-  Target Boundaries(3) = 27 28 29 
+  Target Boundaries(5) = 16 17 18 19 20 
   Name = "Ground"
   Potential = 0
 End
