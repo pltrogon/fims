@@ -455,10 +455,10 @@ int main(int argc, char * argv[]) {
   }
   */
 
-  //Lines radially from center to corner
+  //Lines generated radially from the center to one of the corners
   for(int i = 0; i < numFieldLine; i++){
     xStart.push_back(xRange/2.*i/(numFieldLine-1));
-    yStart.push_back(yRange/2.*i/(numFieldLine-1));
+    yStart.push_back(0);
   }
   
   /*
@@ -479,6 +479,7 @@ int main(int argc, char * argv[]) {
   int numAtPad = 0;
   
   std::cout << "Computing " << totalFieldLines << " field lines." << std::endl;
+  int prevProg = 0;
   for(int inFieldLine = 0; inFieldLine < totalFieldLines; inFieldLine++){
     
     fieldLineID = inFieldLine;
@@ -528,8 +529,14 @@ int main(int argc, char * argv[]) {
 
       meshFieldLineDataTree->Fill();
     }
-
-  }//End field line loop
+    
+    //Printing a progress update every 10%
+    int driftprogress = (100*inFieldLine)/totalFieldLines;
+    if(driftprogress % 10 == 0 and driftprogress != prevProg){
+      std::cout << "Driftline Progress: " << driftprogress << "%" << "\n";
+      prevProg = driftprogress;
+      }
+    }//End field line loop
   
   //Determine transparency
   fieldTransparency = (1.*numAtPad) / (1.*totalFieldLines);
