@@ -16,14 +16,15 @@ import time
 #---------------------------------------------------------
 
 #This command updates the iterated variable in the runControl.txt
-#file and the FIMS_Hex.sif file and updates the run number in runNo.txt
-def updateParam(holeRadius, meshStandoff, cathodeHeight,
+#file and the FIMS.sif file and updates the run number in runNo.txt
+def updateParam(holeRadius, meshStandoff, pitch, cathodeHeight,
                 meshVoltage, cathodeVoltage, numFieldLine, simNum, currentStep):
 
 #---------------------------------
     with open('input_file/runControl.txt', 'r') as c:
         control = c.readlines()
     
+    control[10] = f'pitch = {pitch};\n'
     control[13] = f'meshStandoff = {meshStandoff};\n'
     control[15] = f'holeRadius = {holeRadius};\n'
     control[23] = f'meshVoltage = {meshVoltage};\n'
@@ -33,13 +34,13 @@ def updateParam(holeRadius, meshStandoff, cathodeHeight,
     with open('input_file/runControl.txt', 'w') as c:
         c.writelines(control)
 #---------------------------------
-    with open("input_file/FIMS_Hex.sif",'r') as f:
+    with open("input_file/FIMS.sif",'r') as f:
         FIMS = f.readlines()
     
     FIMS[114] = f'  Potential = {meshVoltage - (cathodeHeight/10)}\n'
     FIMS[120] = f'  Potential = {meshVoltage}\n'
     
-    with open('input_file/FIMS_Hex.sif', 'w') as f:
+    with open('input_file/FIMS.sif', 'w') as f:
         f.writelines(FIMS)
 #---------------------------------
     with open("input_file/runNo.txt",'w') as n:
@@ -58,10 +59,10 @@ def updateParam(holeRadius, meshStandoff, cathodeHeight,
 #This definition runs all of the terminal processes 
 def Terminal_Commands():
 
-    subprocess.run(['Programs/gmsh', 'input_file/FIMS_Hex.txt', '-3'])
-    subprocess.run(['ElmerGrid', '14', '2', 'input_file/FIMS_Hex.msh',
+    subprocess.run(['Programs/gmsh', 'input_file/FIMS.txt', '-3'])
+    subprocess.run(['ElmerGrid', '14', '2', 'input_file/FIMS.msh',
                     '-out', 'input_file', '-autoclean'])
-    subprocess.run(['ElmerSolver', 'input_file/FIMS_Hex.sif'])
+    subprocess.run(['ElmerSolver', 'input_file/FIMS.sif'])
     subprocess.run(['build/fieldlines'])
     #subprocess.run(['build/avalanche'])
 
@@ -77,6 +78,7 @@ def Output_Data(simNum, currentStep, meshVoltage, width, transparency, confidenc
         control = c.readlines()
     remove = [item[:-2] for item in control]
     
+    pitch = float(remove[10].partition('=')[2])
     meshStandoff = float(remove[13].partition('=')[2])
     holeRadius = float(remove[15].partition('=')[2])
     numFieldLine = float(remove[27].partition('=')[2])
@@ -85,7 +87,7 @@ def Output_Data(simNum, currentStep, meshVoltage, width, transparency, confidenc
     
 #writing the data to the output file
     with open(f'output_file/simData{simNum}.csv', 'a') as f:
-        print(f'{currentStep}, {holeRadius:0.2f}, {meshStandoff}, '
+        print(f'{currentStep}, {holeRadius:0.2f}, {meshStandoff}, {pitch}, '
               f'{meshVoltage}, {numFieldLine}, {transparency:0.3f}, {width:0.3f}, '
               f' {confidence}, {simTime:0.3f}', file = f)
     
@@ -100,7 +102,7 @@ def Output_Data(simNum, currentStep, meshVoltage, width, transparency, confidenc
 
 #This definition uses the parameters of the structure as inputs
 #analyze the output files
-def analyze(holeRadius, meshStandoff, cathodeHeight, meshVoltage, 
+def analyze(holeRadius, meshStandoff, pitch, cathodeHeight, meshVoltage, 
                 fieldTransLimit, numFieldLine, runstart, simNum, 
                 currentStep):
 
@@ -207,8 +209,9 @@ def iterate_variable(variable, initial, final, steps):
     
 #Creating the data csv    
     with open(f'output_file/simData{simNum}.csv', 'a') as sim:
-        print('step, radius, standoff, meshVoltage, numFieldLine, '
-                'transparency, width, confidence, time', file = sim)
+        print('step, radius, standoff, pitch, meshVoltage, '
+                'numFieldLine, transparency, width, confidence, '
+                'time', file = sim)
 
 #importing values from runControl.txt
     with open('input_file/runControl.txt', 'r') as c:
@@ -236,12 +239,13 @@ def iterate_variable(variable, initial, final, steps):
         while currentStep < steps:
             runstart = time.perf_counter()
             holeRadius = initial + currentStep*(final - initial)/(steps - 1)
-            updateParam(holeRadius, meshStandoff, cathodeHeight, 
+            updateParam(holeRadius, meshStandoff, pitch, cathodeHeight, 
                         meshVoltage, cathodeVoltage, numFieldLine,
                         simNum, currentStep)     
             Terminal_Commands()
-            if analyze(holeRadius, meshStandoff, cathodeHeight, meshVoltage, fieldTransLimit,
-                            numFieldLine, runstart, simNum, currentStep):
+            if analyze(holeRadius, meshStandoff, pitch, cathodeHeight,
+                        meshVoltage, fieldTransLimit,
+                        numFieldLine, runstart, simNum, currentStep):
                 break
             
             currentStep += 1
@@ -252,57 +256,73 @@ def iterate_variable(variable, initial, final, steps):
             meshStandoff = initial + currentStep*(final - initial)/(steps - 1)
             meshVoltage = -meshStandoff*fieldRatio/10
             
-            updateParam(holeRadius, meshStandoff, cathodeHeight, 
+            updateParam(holeRadius, meshStandoff, pitch, cathodeHeight, 
                         meshVoltage, cathodeVoltage, numFieldLine,
                         simNum, currentStep)
             Terminal_Commands()
-            if analyze(holeRadius, meshStandoff, cathodeHeight, meshVoltage, fieldTransLimit,
+            if analyze(holeRadius, meshStandoff, pitch, cathodeHeight,
+                        meshVoltage, fieldTransLimit,
                         numFieldLine, runstart, simNum, currentStep):
                 break
-                
             currentStep += 1
-
-    elif var == 'fl':
-        updateParam(holeRadius, meshStandoff, cathodeHeight, 
+            
+    elif var == 'p':
+        while currentStep < steps:
+            runstart = time.perf_counter()
+            pitch = initial + currentStep*(final - initial)/(steps - 1)
+                        
+            updateParam(holeRadius, meshStandoff, pitch, cathodeHeight, 
                         meshVoltage, cathodeVoltage, numFieldLine,
                         simNum, currentStep)
-        subprocess.run(['Programs/gmsh', 'input_file/FIMS_Hex.txt', '-3'])
-        subprocess.run(['ElmerGrid', '14', '2', 'input_file/FIMS_Hex.msh',
+            Terminal_Commands()
+            if analyze(holeRadius, meshStandoff, pitch, cathodeHeight,
+                        meshVoltage, fieldTransLimit,
+                        numFieldLine, runstart, simNum, currentStep):
+                break
+            currentStep += 1
+
+
+    elif var == 'fl':
+        updateParam(holeRadius, meshStandoff, pitch, cathodeHeight, 
+                        meshVoltage, cathodeVoltage, numFieldLine,
+                        simNum, currentStep)
+        subprocess.run(['Programs/gmsh', 'input_file/FIMS.txt', '-3'])
+        subprocess.run(['ElmerGrid', '14', '2', 'input_file/FIMS.msh',
                     '-out', 'input_file', '-autoclean'])
         while currentStep < steps:
             runstart = time.perf_counter()
             numFieldLine = initial + currentStep*(final - initial)/(steps - 1)
             
-            updateParam(holeRadius, meshStandoff, cathodeHeight, 
+            updateParam(holeRadius, meshStandoff, pitch, cathodeHeight, 
                         meshVoltage, cathodeVoltage, numFieldLine,
                         simNum, currentStep)
-            subprocess.run(['ElmerSolver', 'input_file/FIMS_Hex.sif'])
+            subprocess.run(['ElmerSolver', 'input_file/FIMS.sif'])
             subprocess.run(['build/fieldlines'])
             subprocess.run(['build/avalanche'])
-            analyze(holeRadius, meshStandoff, cathodeHeight, meshVoltage, fieldTransLimit,
+            analyze(holeRadius, meshStandoff, pitch, cathodeHeight, meshVoltage, fieldTransLimit,
                        numFieldLine, runstart, simNum, currentStep)
                 
             currentStep += 1
 
     elif var == 'v':
-        updateParam(holeRadius, meshStandoff, cathodeHeight, 
+        updateParam(holeRadius, meshStandoff, pitch, cathodeHeight, 
                         meshVoltage, cathodeVoltage, numFieldLine,
                         simNum, currentStep)
-        subprocess.run(['Programs/gmsh', 'input_file/FIMS_Hex.txt', '-3'])
-        subprocess.run(['ElmerGrid', '14', '2', 'input_file/FIMS_Hex.msh',
+        subprocess.run(['Programs/gmsh', 'input_file/FIMS.txt', '-3'])
+        subprocess.run(['ElmerGrid', '14', '2', 'input_file/FIMS.msh',
                         '-out', 'input_file', '-autoclean'])
         
         while currentStep < steps:
             runstart = time.perf_counter()
             meshVoltage = initial + currentStep*(final - initial)/(steps - 1)
             
-            updateParam(holeRadius, meshStandoff, cathodeHeight, 
+            updateParam(holeRadius, meshStandoff, pitch, cathodeHeight, 
                         meshVoltage, cathodeVoltage, numFieldLine,
                         simNum, currentStep)
-            subprocess.run(['ElmerSolver', 'input_file/FIMS_Hex.sif'])
+            subprocess.run(['ElmerSolver', 'input_file/FIMS.sif'])
             subprocess.run(['build/fieldlines'])
             subprocess.run(['build/avalanche'])
-            if analyze(holeRadius, meshStandoff, cathodeHeight, meshVoltage, fieldTransLimit,
+            if analyze(holeRadius, meshStandoff, pitch, cathodeHeight, meshVoltage, fieldTransLimit,
                         numFieldLine, runstart, simNum, currentStep):
                 break
                 
@@ -314,4 +334,6 @@ def iterate_variable(variable, initial, final, steps):
 
 #This line runs the program and should be edited by the user to match
 #their desired test conditions
-iterate_variable('r', 80, 90, 2)
+iterate_variable('p', 100, 200, 10)
+
+#r=20
