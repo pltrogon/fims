@@ -1,8 +1,8 @@
 Header
   CHECK KEYWORDS Warn
-  Mesh DB "." "input_file"
+  Mesh DB "." "."
   Include Path ""
-  Results Directory "input_file"
+  Results Directory "."
 End
 
 Simulation
@@ -36,7 +36,7 @@ End
 
 Body 2
   Target Bodies(1) = 2
-  Name = "Plate"
+  Name = "Grid"
   Equation = 1
   Material = 2
 End
@@ -117,12 +117,12 @@ End
 
 Boundary Condition 2
   Target Boundaries(6) = 1 2 3 4 5 14 
-  Name = "Plate"
+  Name = "Grid"
   Potential = -500.0
 End
 
 Boundary Condition 3
   Target Boundaries(5) = 16 17 18 19 20 
-  Name = "Ground"
+  Name = "Pad"
   Potential = 0
 End

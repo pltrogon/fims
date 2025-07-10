@@ -8,7 +8,7 @@
  *    Saves avalanche data in a .root file as root trees:
  *        metaDataTree
  *        fieldLineDataTree
- *        meshFieldLineDataTree
+ *        gridFieldLineDataTree
  *        avalancheDataTree
  *        electronDataTree
  *        ionDataTree
@@ -139,8 +139,8 @@ int main(int argc, char * argv[]) {
   //***** Simulation Parameters *****//
   //Read in simulation parameters from runControl
 
-  double  pixelWidth, pitch;
-  double meshStandoff, meshThickness, holeRadius;
+  double  padLength, pitch;
+  double gridStandoff, gridThickness, holeRadius;
   double cathodeHeight, thicknessSiO2;
   double fieldRatio;
   int numFieldLine;
@@ -193,11 +193,11 @@ int main(int argc, char * argv[]) {
   }
 
   //Geometry parameters
-  pixelWidth = std::stod(readParam["pixelWidth"])*MICRONTOCM;
+  padLength = std::stod(readParam["padLength"])*MICRONTOCM;
   pitch = std::stod(readParam["pitch"])*MICRONTOCM;
 
-  meshStandoff = std::stod(readParam["meshStandoff"])*MICRONTOCM;
-  meshThickness = std::stod(readParam["meshThickness"])*MICRONTOCM;
+  gridStandoff = std::stod(readParam["gridStandoff"])*MICRONTOCM;
+  gridThickness = std::stod(readParam["gridThickness"])*MICRONTOCM;
   holeRadius = std::stod(readParam["holeRadius"])*MICRONTOCM;
 
   cathodeHeight = std::stod(readParam["cathodeHeight"])*MICRONTOCM;
@@ -230,10 +230,10 @@ int main(int argc, char * argv[]) {
   metaDataTree->Branch("runNo", &runNo, "runNo/I");
 
   //Geometry Parameters
-  metaDataTree->Branch("Pixel Width", &pixelWidth, "pixelWidth/D");
+  metaDataTree->Branch("Pad Width", &padLength, "padLength/D");
   metaDataTree->Branch("Pitch", &pitch, "pitch/D");
-  metaDataTree->Branch("Mesh Standoff", &meshStandoff, "meshStandoff/D");
-  metaDataTree->Branch("Mesh Thickness", &meshThickness, "meshThickness/D");
+  metaDataTree->Branch("Grid Standoff", &gridStandoff, "gridStandoff/D");
+  metaDataTree->Branch("Grid Thickness", &gridThickness, "gridThickness/D");
   metaDataTree->Branch("Hole Radius", &holeRadius, "holeRadius/D");
   metaDataTree->Branch("Cathode Height", &cathodeHeight, "cathodeHeight/D");
   metaDataTree->Branch("Thickness SiO2", &thicknessSiO2, "thicknessSiO2/D");
@@ -266,20 +266,20 @@ int main(int argc, char * argv[]) {
   fieldLineDataTree->Branch("Field Line y", &fieldLineY, "fieldLineY/D");
   fieldLineDataTree->Branch("Field Line z", &fieldLineZ, "fieldLineZ/D");
 
-  //***** Mesh Field Line Data Tree *****//
+  //***** Grid Field Line Data Tree *****//
   //Create
-  TTree *meshFieldLineDataTree = new TTree("meshFieldLineDataTree", "Mesh Field Lines");
+  TTree *gridFieldLineDataTree = new TTree("gridFieldLineDataTree", "Grid Field Lines");
 
   //Data to be saved.
-  int meshFieldLineLocation;
-  double meshLineX, meshLineY, meshLineZ;
+  int gridFieldLineLocation;
+  double gridLineX, gridLineY, gridLineZ;
 
   //Add branches
-  meshFieldLineDataTree->Branch("Field Line ID", &fieldLineID, "fieldLineID/I");
-  meshFieldLineDataTree->Branch("Mesh Line Location", &meshFieldLineLocation, "meshFieldLineLocation/I");
-  meshFieldLineDataTree->Branch("Field Line x", &meshLineX, "meshLineX/D");
-  meshFieldLineDataTree->Branch("Field Line y", &meshLineY, "meshLineY/D");
-  meshFieldLineDataTree->Branch("Field Line z", &meshLineZ, "meshLineZ/D");
+  gridFieldLineDataTree->Branch("Field Line ID", &fieldLineID, "fieldLineID/I");
+  gridFieldLineDataTree->Branch("Grid Line Location", &gridFieldLineLocation, "gridFieldLineLocation/I");
+  gridFieldLineDataTree->Branch("Field Line x", &gridLineX, "gridLineX/D");
+  gridFieldLineDataTree->Branch("Field Line y", &gridLineY, "gridLineY/D");
+  gridFieldLineDataTree->Branch("Field Line z", &gridLineZ, "gridLineZ/D");
 
   //***** Avalanche Data Tree *****//
   //Create
@@ -477,7 +477,7 @@ int main(int argc, char * argv[]) {
   //Calculate field Lines
   std::vector<std::array<float, 3> > fieldLines;
   int totalFieldLines = xStart.size();
-  int numAtPixel = 0;
+  int numAtPad = 0;
   
   std::cout << "Computing " << totalFieldLines << " field lines." << std::endl;
   for(int inFieldLine = 0; inFieldLine < totalFieldLines; inFieldLine++){
@@ -496,44 +496,44 @@ int main(int argc, char * argv[]) {
       fieldLineDataTree->Fill();
     }
 
-    //Find if termination point is at pixel
+    //Find if termination point is at pad
     int lineEnd = fieldLines.size() - 1;
-    if(  (abs(fieldLines[lineEnd][0]) <= pixelWidth/2.)
-      && (abs(fieldLines[lineEnd][1]) <= pixelWidth/2.)
+    if(  (abs(fieldLines[lineEnd][0]) <= padLength/2.)
+      && (abs(fieldLines[lineEnd][1]) <= padLength/2.)
       && (fieldLines[lineEnd][2] < 0.)){ //TODO - not a good criteria
-        numAtPixel++;
+        numAtPad++;
     }
 
-    //Calculate lines from above mesh
-    meshFieldLineLocation = 1;
-    driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], 1.01*meshThickness/2., fieldLines);
+    //Calculate lines from above grid
+    gridFieldLineLocation = 1;
+    driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], 1.01*gridThickness/2., fieldLines);
 
     //Get coordinates of every point along field line and fill the tree
     for(int inLine = 0; inLine < fieldLines.size(); inLine++){
-      meshLineX = fieldLines[inLine][0];
-      meshLineY = fieldLines[inLine][1];
-      meshLineZ = fieldLines[inLine][2];
+      gridLineX = fieldLines[inLine][0];
+      gridLineY = fieldLines[inLine][1];
+      gridLineZ = fieldLines[inLine][2];
 
-      meshFieldLineDataTree->Fill();
+      gridFieldLineDataTree->Fill();
     }
 
-    //Calculate lines from below mesh
-    meshFieldLineLocation = -1;
-    driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], -1.01*meshThickness/2., fieldLines);
+    //Calculate lines from below grid
+    gridFieldLineLocation = -1;
+    driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], -1.01*gridThickness/2., fieldLines);
 
     //Get coordinates of every point along field line and fill the tree
     for(int inLine = 0; inLine < fieldLines.size(); inLine++){
-      meshLineX = fieldLines[inLine][0];
-      meshLineY = fieldLines[inLine][1];
-      meshLineZ = fieldLines[inLine][2];
+      gridLineX = fieldLines[inLine][0];
+      gridLineY = fieldLines[inLine][1];
+      gridLineZ = fieldLines[inLine][2];
 
-      meshFieldLineDataTree->Fill();
+      gridFieldLineDataTree->Fill();
     }
 
   }//End field line loop
   
   //Determine transparency
-  fieldTransparency = (1.*numAtPixel) / (1.*totalFieldLines);
+  fieldTransparency = (1.*numAtPad) / (1.*totalFieldLines);
   std::cout << "Field transparency is " << fieldTransparency <<  "." << std::endl;
   if(fieldTransparency < transparencyLimit){
     //return 0; //TODO - Handle case where field transparency is too low
@@ -546,14 +546,14 @@ int main(int argc, char * argv[]) {
   fieldLineDataTree->Write();
   delete fieldLineDataTree;
 
-  //Write the mesh field line data tree to file and delete
-  //meshFieldLineDataTree->Print()
-  meshFieldLineDataTree->Write();
-  delete meshFieldLineDataTree;
+  //Write the grid field line data tree to file and delete
+  //gridFieldLineDataTree->Print()
+  gridFieldLineDataTree->Write();
+  delete gridFieldLineDataTree;
 
   // ***** Prepare Avalanche Electron ***** //
   //Set the Initial electron parameters
-  double x0 = 0., y0 = 0., z0 = .005;//cm TODO - This is just slightly above mesh, but better to parameterize with something
+  double x0 = 0., y0 = 0., z0 = .005;//cm TODO - This is just slightly above grid, but better to parameterize with something
   double t0 = 0.;//ns
   double e0 = 0.1;//eV (Garfield is weird when this is 0.)
   double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
