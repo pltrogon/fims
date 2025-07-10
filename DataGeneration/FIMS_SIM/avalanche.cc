@@ -445,7 +445,7 @@ int main(int argc, char * argv[]) {
   double xRange = (xmax - xmin)*rangeScale;
   double yRange = (ymax - ymin)*rangeScale;
 
-  /*
+  
   //Create 2D uniformly-spaced array - Note this makes numFieldLine**2 lines
   for(int i = 0; i < numFieldLine; i++){
     for(int j = 0; j < numFieldLine; j++){
@@ -453,13 +453,23 @@ int main(int argc, char * argv[]) {
       yStart.push_back(-yRange/2. + j*yRange/(numFieldLine-1));
     }
   }
-  */
-
+  
+  /*
   //Lines radially from center to corner
   for(int i = 0; i < numFieldLine; i++){
     xStart.push_back(xRange/2.*i/(numFieldLine-1));
     yStart.push_back(yRange/2.*i/(numFieldLine-1));
   }
+  */
+
+  /*
+  //Lines from center to edge along y=0
+  for(int i = 0; i < numFieldLine; i++){
+    xStart.push_back(xmax*i/(numFieldLine-1));
+    yStart.push_back(0.);
+  }
+  */
+  
   
   /*
   //Lines populated at corner - spread with uniform random numbers
