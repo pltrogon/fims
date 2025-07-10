@@ -230,7 +230,7 @@ int main(int argc, char * argv[]) {
   metaDataTree->Branch("runNo", &runNo, "runNo/I");
 
   //Geometry Parameters
-  metaDataTree->Branch("Pad Width", &padLength, "padLength/D");
+  metaDataTree->Branch("Pad Length", &padLength, "padLength/D");
   metaDataTree->Branch("Pitch", &pitch, "pitch/D");
   metaDataTree->Branch("Grid Standoff", &gridStandoff, "gridStandoff/D");
   metaDataTree->Branch("Grid Thickness", &gridThickness, "gridThickness/D");
@@ -461,7 +461,6 @@ int main(int argc, char * argv[]) {
     yStart.push_back(yRange/2.*i/(numFieldLine-1));
   }
   
-
   /*
   //Lines populated at corner - spread with uniform random numbers
   double spreadScale = 0.99995; //Any smaller and goes out of bounds
@@ -535,8 +534,12 @@ int main(int argc, char * argv[]) {
   //Determine transparency
   fieldTransparency = (1.*numAtPad) / (1.*totalFieldLines);
   std::cout << "Field transparency is " << fieldTransparency <<  "." << std::endl;
+
+  //Handle case where field transparency is too low
   if(fieldTransparency < transparencyLimit){
-    //return 0; //TODO - Handle case where field transparency is too low
+    std::cout << "Field transparency lower than limit - Running mimimal avalanche case." << std::endl;
+    numAvalanche = 50;
+    avalancheLimit = 50;
   }
 
   // *** Deal with field line trees *** //
