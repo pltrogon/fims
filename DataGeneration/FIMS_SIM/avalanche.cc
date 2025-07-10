@@ -578,6 +578,7 @@ int main(int argc, char * argv[]) {
 
   std::cout << "Starting " << numAvalanche << " avalanches.\n" << std::flush;
   //***** Avalanche Loop *****//
+  int prevAval = 0;
   for(int inAvalanche = 0; inAvalanche < numAvalanche; inAvalanche++){
     if(DEBUG){
       std::cout << "DEBUGGING - NO AVALANCHE\n";
@@ -667,9 +668,10 @@ int main(int argc, char * argv[]) {
     //Fill tree with data from this avalanche
     avalancheDataTree->Fill();
 
-
     //Print timing every ~10%
-    if((inAvalanche+1) % (numAvalanche/10) == 0){
+    int avalProgress = (100*(inAvalanche+1))/numAvalanche;
+    if(avalProgress % 10 == 0 and avalProgress != prevAval){
+      prevAval = avalProgress;
 
       double timeElapsed = (clock() - lapAvalanche) / CLOCKS_PER_SEC;
       lapAvalanche = clock();
