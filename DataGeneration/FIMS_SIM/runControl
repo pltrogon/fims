@@ -5,12 +5,12 @@
 // Dimensions: micron
 
 // Pad
-padWidth = 10.0;
+padLength = 10.0;
 pitch = 55.0;
 
-//Mesh
-meshStandoff = 100.0;
-meshThickness = 0.5;
+//Grid
+gridStandoff = 100.0;
+gridThickness = 0.5;
 holeRadius = 16.0;
 
 // Other
