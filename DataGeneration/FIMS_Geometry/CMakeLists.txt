@@ -20,12 +20,12 @@ target_link_libraries(avalanche Garfield::Garfield
 				ROOT::Hist
 				ROOT::Tree)
 
-
 # ---Copy all files locally to the build directory-------------------------------
-foreach(_file 	input_file/dielectrics.dat input_file/fims.ep input_file/FIMS.msh
-		input_file/FIMS.result input_file/mesh.boundary input_file/mesh.elements
-		input_file/mesh.header input_file/mesh.nodes input_file/runNo.txt
-		input_file/runControl.txt)
+foreach(_file 	input_file/dielectrics.dat input_file/fims.ep 
+		input_file/FIMS.msh input_file/FIMS.result 
+  		input_file/mesh.boundary input_file/mesh.elements 
+    		input_file/mesh.header input_file/mesh.nodes 
+      		input_file/runNo.txt input_file/runControl.txt)
 		
   configure_file(${_file} ${CMAKE_CURRENT_BINARY_DIR}/${_file} COPYONLY)
 endforeach()
