@@ -455,10 +455,12 @@ int main(int argc, char * argv[]) {
   }
   */
 
-  //Lines generated radially from the center to one of the corners
+  //Lines generated radially from the center to edge of geometry
+  //    The x-direction is the long axis of the geometry. 
+  //    This extends past the vertex of the hex unit cell
   for(int i = 0; i < numFieldLine; i++){
     xStart.push_back(xRange/2.*i/(numFieldLine-1));
-    yStart.push_back(0);
+    yStart.push_back(0.);
   }
   
   /*
@@ -479,7 +481,7 @@ int main(int argc, char * argv[]) {
   int numAtPad = 0;
   
   std::cout << "Computing " << totalFieldLines << " field lines." << std::endl;
-  int prevProg = 0;
+  int prevDriftLine = 0;
   for(int inFieldLine = 0; inFieldLine < totalFieldLines; inFieldLine++){
     
     fieldLineID = inFieldLine;
@@ -530,13 +532,15 @@ int main(int argc, char * argv[]) {
       meshFieldLineDataTree->Fill();
     }
     
-    //Printing a progress update every 10%
-    int driftprogress = (100*inFieldLine)/totalFieldLines;
-    if(driftprogress % 10 == 0 and driftprogress != prevProg){
-      std::cout << "Driftline Progress: " << driftprogress << "%" << "\n";
-      prevProg = driftprogress;
-      }
-    }//End field line loop
+    //Print a progress update every 10%
+    int driftLineProgress = (100*(inFieldLine+1))/totalFieldLines;
+    if(   (driftLineProgress % 10 == 0)
+      &&  (driftLineProgress != prevDriftLine)){
+      std::cout << "Driftline Progress: " << driftLineProgress << " %" << std::endl;
+      prevDriftLine = driftLineProgress;
+    }
+
+  }//End field line loop
   
   //Determine transparency
   fieldTransparency = (1.*numAtPad) / (1.*totalFieldLines);
@@ -576,12 +580,12 @@ int main(int argc, char * argv[]) {
   std::cout << "Starting simulation: " << runNo << "\n";
   std::cout << "****************************************\n";
 
-  std::cout << "Starting " << numAvalanche << " avalanches.\n" << std::flush;
+  std::cout << "Starting " << numAvalanche << " avalanches." << std::endl;
   //***** Avalanche Loop *****//
-  int prevAval = 0;
+  int prevAvalanche = 0;
   for(int inAvalanche = 0; inAvalanche < numAvalanche; inAvalanche++){
     if(DEBUG){
-      std::cout << "DEBUGGING - NO AVALANCHE\n";
+      std::cout << "DEBUGGING - NO AVALANCHE" << std::endl;
       break;
     }
     
@@ -598,7 +602,7 @@ int main(int argc, char * argv[]) {
     //Electron count - use endpoints to include attached electrons
     int avalancheElectrons = avalancheE->GetNumberOfElectronEndpoints();
 
-    //Check if avalanche limit was reached - TODO Decide if this data is worth saving or not
+    //Check if avalanche limit was reached
     if(avalancheElectrons >= avalancheLimit){
       hitLimit = true;
     }
@@ -669,19 +673,18 @@ int main(int argc, char * argv[]) {
     avalancheDataTree->Fill();
 
     //Print timing every ~10%
-    int avalProgress = (100*(inAvalanche+1))/numAvalanche;
-    if(avalProgress % 10 == 0 and avalProgress != prevAval){
-      prevAval = avalProgress;
+    int avalancheProgress = (100*(inAvalanche+1))/numAvalanche;
+    if(  (avalancheProgress % 10 == 0)
+      && (avalancheProgress != prevAvalanche)){
 
       double timeElapsed = (clock() - lapAvalanche) / CLOCKS_PER_SEC;
       lapAvalanche = clock();
-
-      double progress = 100.*(inAvalanche+1.)/numAvalanche;
 
       std::stringstream progressStream;
       progressStream << "Done ~" << std::fixed << std::setprecision(0) << progress;
       progressStream << "% (~" << std::fixed << std::setprecision(0) << timeElapsed << " s)\n";
       std::cout << progressStream.str() << std::flush;
+      prevAvalanche = avalancheProgress;
     }
 
     //clean up memory
@@ -731,6 +734,7 @@ int main(int argc, char * argv[]) {
   std::cout << "****************************************\n";
   std::cout << "Done simulation: " << runNo << "\n";
   std::cout << "****************************************\n";
+  std::cout << std::endl;
 
   return 0;
 
