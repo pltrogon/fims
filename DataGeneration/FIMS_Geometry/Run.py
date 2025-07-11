@@ -17,13 +17,14 @@ import time
 
 #This command updates the iterated variable in the runControl.txt
 #file and the FIMS.sif file and updates the run number in runNo.txt
-def updateParam(holeRadius, meshStandoff, cathodeHeight,
+def updateParam(holeRadius, meshStandoff, pitch, cathodeHeight,
                 meshVoltage, cathodeVoltage, numFieldLine, simNum, currentStep):
 
 #---------------------------------
     with open('input_file/runControl.txt', 'r') as c:
         control = c.readlines()
     
+    control[10] = f'pitch = {pitch};\n'
     control[13] = f'meshStandoff = {meshStandoff};\n'
     control[15] = f'holeRadius = {holeRadius};\n'
     control[23] = f'meshVoltage = {meshVoltage};\n'
@@ -36,8 +37,8 @@ def updateParam(holeRadius, meshStandoff, cathodeHeight,
     with open("input_file/FIMS.sif",'r') as f:
         FIMS = f.readlines()
     
-    FIMS[149] = f'  Potential = {meshVoltage - (cathodeHeight/10)}\n'
-    FIMS[155] = f'  Potential = {meshVoltage}\n'
+    FIMS[114] = f'  Potential = {meshVoltage - (cathodeHeight/10)}\n'
+    FIMS[120] = f'  Potential = {meshVoltage}\n'
     
     with open('input_file/FIMS.sif', 'w') as f:
         f.writelines(FIMS)
@@ -63,30 +64,30 @@ def Terminal_Commands():
                     '-out', 'input_file', '-autoclean'])
     subprocess.run(['ElmerSolver', 'input_file/FIMS.sif'])
     subprocess.run(['build/fieldlines'])
-    subprocess.run(['build/avalanche'])
+    #subprocess.run(['build/avalanche'])
 
 #---------------------------------------------------------
 #**********************************************************************
 #---------------------------------------------------------
 
 #This definition outputs all of the data to a single csv file for easy inspection
-def Output_Data(simNum, currentStep, width, confidence, simTime):
+def Output_Data(simNum, currentStep, meshVoltage, width, transparency, confidence, simTime):
     cmToMicron = 10000
     
-    dataTree = ROOT.TFile.Open(f'output_file/simulationNumber{simNum}/sim.{currentStep}.root')
-    simData = dataTree['metaDataTree']
-    for thing in simData:
-        meshStandoff = thing.meshStandoff*cmToMicron
-        holeRadius = thing.holeRadius*cmToMicron
-        meshVoltage = thing.meshVoltage
-        numFieldLine = thing.numFieldLine
-        transparency = thing.fieldTransparency
+    with open('input_file/runControl.txt', 'r') as c:
+        control = c.readlines()
+    remove = [item[:-2] for item in control]
+    
+    pitch = float(remove[10].partition('=')[2])
+    meshStandoff = float(remove[13].partition('=')[2])
+    holeRadius = float(remove[15].partition('=')[2])
+    numFieldLine = float(remove[27].partition('=')[2])
     
     simNum = int(np.loadtxt('input_file/simNum.txt'))
     
 #writing the data to the output file
     with open(f'output_file/simData{simNum}.csv', 'a') as f:
-        print(f'{currentStep}, {holeRadius:0.2f}, {meshStandoff}, '
+        print(f'{currentStep}, {holeRadius:0.2f}, {meshStandoff}, {pitch}, '
               f'{meshVoltage}, {numFieldLine}, {transparency:0.3f}, {width:0.3f}, '
               f' {confidence}, {simTime:0.3f}', file = f)
     
@@ -95,26 +96,33 @@ def Output_Data(simNum, currentStep, width, confidence, simTime):
 #---------------------------------------------------------
 
 
-#---------------------------------------------------------
+#----------------------------------------------------------------------
 #**********************************************************************
 #---------------------------------------------------------
 
 #This definition uses the parameters of the structure as inputs
 #analyze the output files
-def analyze(holeRadius, meshStandoff, meshVoltage, fieldTransLimit,
-                numFieldLine, runstart, simNum, currentStep):
-    cmToMicron = 10000            
+def analyze(holeRadius, meshStandoff, pitch, cathodeHeight, meshVoltage, 
+                fieldTransLimit, numFieldLine, runstart, simNum, 
+                currentStep):
 
-#importing the data from Garfield++
-
-    dataTree = ROOT.TFile.Open(f'output_file/simulationNumber{simNum}/sim.{currentStep}.root')
-    simData = dataTree['metaDataTree']
-    for thing in simData:
-        transparency = thing.fieldTransparency
+    cmToMicron = 10000
     
-    driftlineData = np.loadtxt('output_file/driftlineDiag.csv',
-                               delimiter = ',')
-    electricField = driftlineData*cmToMicron
+    electricField = np.loadtxt('output_file/driftline.csv', 
+                                delimiter = ',')*cmToMicron
+#Finding the electric field transparency
+    currentFieldLine = 0
+    totFieldLines = 0
+    numTransFieldLines = 0
+    
+    for point in electricField[:, 2]:
+        if electricField[currentFieldLine, 2] - electricField[currentFieldLine-1, 2] > meshStandoff:      
+            totFieldLines += 1
+        if electricField[currentFieldLine, 2] - electricField[currentFieldLine-1, 2] > (cathodeHeight/2 + meshStandoff)*.9:       
+            numTransFieldLines += 1
+        currentFieldLine += 1
+    
+    transparency = numTransFieldLines/totFieldLines
 
 #Finding the width of the field bundle by first cutting the data
 #to the region below a single hole
@@ -149,14 +157,14 @@ def analyze(holeRadius, meshStandoff, meshVoltage, fieldTransLimit,
     
     
 #Calculating the confidence of the transparency
-    confidence = math.sqrt(transparency*(1-transparency)/(numFieldLine**2))
+    confidence = math.sqrt(transparency*(1-transparency)/(numFieldLine))
 
 #Calculating the simulation run time
     runend = time.perf_counter()
     simTime = runend - runstart
     
 #Outputting the data to a csv file    
-    Output_Data(simNum, currentStep, width, confidence, simTime)
+    Output_Data(simNum, currentStep, meshVoltage, width, transparency, confidence, simTime)
 
 #Checking the field transparency to determine if the simulation
 #should stop
@@ -201,15 +209,16 @@ def iterate_variable(variable, initial, final, steps):
     
 #Creating the data csv    
     with open(f'output_file/simData{simNum}.csv', 'a') as sim:
-        print('step, radius, standoff, meshVoltage, numFieldLine, '
-                'transparency, width, confidence, time', file = sim)
+        print('step, radius, standoff, pitch, meshVoltage, '
+                'numFieldLine, transparency, width, confidence, '
+                'time', file = sim)
 
 #importing values from runControl.txt
     with open('input_file/runControl.txt', 'r') as c:
         control = c.readlines()
     remove = [item[:-2] for item in control]
     
-    pixelWidth = float(remove[8].partition('=')[2])
+    padWidth = float(remove[8].partition('=')[2])
     pitch = float(remove[10].partition('=')[2])
     meshStandoff = float(remove[13].partition('=')[2])
     meshThickness = float(remove[14].partition('=')[2])
@@ -219,7 +228,7 @@ def iterate_variable(variable, initial, final, steps):
     numFieldLine = float(remove[27].partition('=')[2])
     fieldTransLimit = float(remove[28].partition('=')[2])
     
-    fieldRatio = 80 #--------------This should be defined in runControl.txt
+    fieldRatio = 50 #--------------This should be defined in runControl.txt
     meshVoltage = -fieldRatio*meshStandoff/10
     cathodeVoltage = meshVoltage - cathodeHeight/10
     
@@ -228,14 +237,15 @@ def iterate_variable(variable, initial, final, steps):
 #term in the original definition    
     if var == 'r':
         while currentStep < steps:
-            holeRadius = initial + currentStep*(final - initial)/(steps - 1)
             runstart = time.perf_counter()
-            updateParam(holeRadius, meshStandoff, cathodeHeight, 
+            holeRadius = initial + currentStep*(final - initial)/(steps - 1)
+            updateParam(holeRadius, meshStandoff, pitch, cathodeHeight, 
                         meshVoltage, cathodeVoltage, numFieldLine,
                         simNum, currentStep)     
             Terminal_Commands()
-            if analyze(holeRadius, meshStandoff, meshVoltage, fieldTransLimit,
-                            numFieldLine, runstart, simNum, currentStep):
+            if analyze(holeRadius, meshStandoff, pitch, cathodeHeight,
+                        meshVoltage, fieldTransLimit,
+                        numFieldLine, runstart, simNum, currentStep):
                 break
             
             currentStep += 1
@@ -246,18 +256,34 @@ def iterate_variable(variable, initial, final, steps):
             meshStandoff = initial + currentStep*(final - initial)/(steps - 1)
             meshVoltage = -meshStandoff*fieldRatio/10
             
-            updateParam(holeRadius, meshStandoff, cathodeHeight, 
+            updateParam(holeRadius, meshStandoff, pitch, cathodeHeight, 
                         meshVoltage, cathodeVoltage, numFieldLine,
                         simNum, currentStep)
             Terminal_Commands()
-            if analyze(holeRadius, meshStandoff, meshVoltage, fieldTransLimit,
+            if analyze(holeRadius, meshStandoff, pitch, cathodeHeight,
+                        meshVoltage, fieldTransLimit,
                         numFieldLine, runstart, simNum, currentStep):
                 break
-                
+            currentStep += 1
+            
+    elif var == 'p':
+        while currentStep < steps:
+            runstart = time.perf_counter()
+            pitch = initial + currentStep*(final - initial)/(steps - 1)
+                        
+            updateParam(holeRadius, meshStandoff, pitch, cathodeHeight, 
+                        meshVoltage, cathodeVoltage, numFieldLine,
+                        simNum, currentStep)
+            Terminal_Commands()
+            if analyze(holeRadius, meshStandoff, pitch, cathodeHeight,
+                        meshVoltage, fieldTransLimit,
+                        numFieldLine, runstart, simNum, currentStep):
+                break
             currentStep += 1
 
+
     elif var == 'fl':
-        updateParam(holeRadius, meshStandoff, cathodeHeight, 
+        updateParam(holeRadius, meshStandoff, pitch, cathodeHeight, 
                         meshVoltage, cathodeVoltage, numFieldLine,
                         simNum, currentStep)
         subprocess.run(['Programs/gmsh', 'input_file/FIMS.txt', '-3'])
@@ -267,19 +293,19 @@ def iterate_variable(variable, initial, final, steps):
             runstart = time.perf_counter()
             numFieldLine = initial + currentStep*(final - initial)/(steps - 1)
             
-            updateParam(holeRadius, meshStandoff, cathodeHeight, 
+            updateParam(holeRadius, meshStandoff, pitch, cathodeHeight, 
                         meshVoltage, cathodeVoltage, numFieldLine,
                         simNum, currentStep)
             subprocess.run(['ElmerSolver', 'input_file/FIMS.sif'])
             subprocess.run(['build/fieldlines'])
             subprocess.run(['build/avalanche'])
-            analyze(holeRadius, meshStandoff, meshVoltage, fieldTransLimit,
+            analyze(holeRadius, meshStandoff, pitch, cathodeHeight, meshVoltage, fieldTransLimit,
                        numFieldLine, runstart, simNum, currentStep)
                 
             currentStep += 1
 
     elif var == 'v':
-        updateParam(holeRadius, meshStandoff, cathodeHeight, 
+        updateParam(holeRadius, meshStandoff, pitch, cathodeHeight, 
                         meshVoltage, cathodeVoltage, numFieldLine,
                         simNum, currentStep)
         subprocess.run(['Programs/gmsh', 'input_file/FIMS.txt', '-3'])
@@ -290,13 +316,13 @@ def iterate_variable(variable, initial, final, steps):
             runstart = time.perf_counter()
             meshVoltage = initial + currentStep*(final - initial)/(steps - 1)
             
-            updateParam(holeRadius, meshStandoff, cathodeHeight, 
+            updateParam(holeRadius, meshStandoff, pitch, cathodeHeight, 
                         meshVoltage, cathodeVoltage, numFieldLine,
                         simNum, currentStep)
             subprocess.run(['ElmerSolver', 'input_file/FIMS.sif'])
             subprocess.run(['build/fieldlines'])
             subprocess.run(['build/avalanche'])
-            if analyze(holeRadius, meshStandoff, meshVoltage, fieldTransLimit,
+            if analyze(holeRadius, meshStandoff, pitch, cathodeHeight, meshVoltage, fieldTransLimit,
                         numFieldLine, runstart, simNum, currentStep):
                 break
                 
@@ -308,4 +334,6 @@ def iterate_variable(variable, initial, final, steps):
 
 #This line runs the program and should be edited by the user to match
 #their desired test conditions
-iterate_variable('st', 20, 10, 4)
+iterate_variable('p', 100, 200, 10)
+
+#r=20
