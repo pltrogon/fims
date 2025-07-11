@@ -681,7 +681,7 @@ int main(int argc, char * argv[]) {
       lapAvalanche = clock();
 
       std::stringstream progressStream;
-      progressStream << "Done ~" << std::fixed << std::setprecision(0) << progress;
+      progressStream << "Done ~" << std::fixed << std::setprecision(0) << avalancheProgress;
       progressStream << "% (~" << std::fixed << std::setprecision(0) << timeElapsed << " s)\n";
       std::cout << progressStream.str() << std::flush;
       prevAvalanche = avalancheProgress;
