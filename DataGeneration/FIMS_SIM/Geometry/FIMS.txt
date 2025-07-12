@@ -105,8 +105,8 @@ Line(36) = {37, 17};
 
 
 //Curve loops for the grid
-Curve Loop(1) = {1, 2, 3, 4, 5};
-Curve Loop(2) = {6, 7, 8, 9, 10, 11, 12};
+Curve Loop(1) = {1, 2, 3, 4};
+Curve Loop(2) = {5, 6, 7, 8, 9, 10, 11, 12};
 
 Curve Loop(3) = {1, -26, -13, 25};
 Curve Loop(4) = {2, -27, -14, 26};
