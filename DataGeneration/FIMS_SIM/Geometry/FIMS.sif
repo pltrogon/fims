@@ -1,8 +1,8 @@
 Header
   CHECK KEYWORDS Warn
-  Mesh DB "." "."
+  Mesh DB "elmerResults" "."
   Include Path ""
-  Results Directory "."
+  Results Directory "elmerResults"
 End
 
 Simulation
@@ -15,7 +15,7 @@ Simulation
   Coordinate Scaling = 1e-6
   Solver Input File = FIMS.sif
   Post File = FIMS.ep
-  Output file = "FIMS.result"
+  Output file = "elmerResults/FIMS.result"
 End
 
 Constants

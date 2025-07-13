@@ -394,9 +394,13 @@ int main(int argc, char * argv[]) {
 
   // Import elmer-generated field map
   std::string geometryPath = "../Geometry/";
-  ComponentElmer fieldFIMS(geometryPath+"mesh.header", geometryPath+"mesh.elements",
-                            geometryPath+"mesh.nodes", geometryPath+"dielectrics.dat",
-                            geometryPath+"FIMS.result", "mum");
+  std::string elmerResultsPath = geometryPath+"elmerResults/";
+  ComponentElmer fieldFIMS(elmerResultsPath+"mesh.header",
+                           elmerResultsPath+"mesh.elements",
+                           elmerResultsPath+"mesh.nodes", 
+                           geometryPath+"dielectrics.dat",
+                           elmerResultsPath+"FIMS.result", 
+                           "mum");
 
   // Get region of elmer geometry
   double xmin, ymin, zmin, xmax, ymax, zmax;
