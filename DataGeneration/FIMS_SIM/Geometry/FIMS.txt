@@ -1,9 +1,10 @@
 // Parameters in micrometers
 Include "../runControl";
+hlfpitch = pitch/2;
 
 //finite element sizes
 holeElm = holeRadius/10;
-gridElm = pitch/20;
+gridElm = hlfpitch/20;
 padElm = padLength*2;
 farElm = cathodeHeight;
 
@@ -19,21 +20,21 @@ Point(3) = {holeRadius, 0, gridThickness/2, gridElm};
 Point(4) = {0, -holeRadius, gridThickness/2, gridElm};
 Point(5) = {-holeRadius, 0, gridThickness/2, gridElm};
 
-Point(6) = {(3^.5)*pitch - holeRadius, pitch, gridThickness/2, gridElm};
-Point(7) = {(3^.5)*pitch, pitch, gridThickness/2, holeElm};
-Point(8) = {(3^.5)*pitch, pitch - holeRadius, gridThickness/2, gridElm};
+Point(6) = {(3^.5)*hlfpitch - holeRadius, hlfpitch, gridThickness/2, gridElm};
+Point(7) = {(3^.5)*hlfpitch, hlfpitch, gridThickness/2, holeElm};
+Point(8) = {(3^.5)*hlfpitch, hlfpitch - holeRadius, gridThickness/2, gridElm};
 
-Point(9) = {(3^.5)*pitch, holeRadius - pitch, gridThickness/2, gridElm};
-Point(10) = {(3^.5)*pitch, -pitch, gridThickness/2, holeElm};
-Point(11) = {(3^.5)*pitch - holeRadius, -pitch, gridThickness/2, gridElm};
+Point(9) = {(3^.5)*hlfpitch, holeRadius - hlfpitch, gridThickness/2, gridElm};
+Point(10) = {(3^.5)*hlfpitch, -hlfpitch, gridThickness/2, holeElm};
+Point(11) = {(3^.5)*hlfpitch - holeRadius, -hlfpitch, gridThickness/2, gridElm};
 
-Point(12) = {-(3^.5)*pitch + holeRadius, -pitch, gridThickness/2, gridElm};
-Point(13) = {-(3^.5)*pitch, -pitch, gridThickness/2, holeElm};
-Point(14) = {-(3^.5)*pitch, holeRadius - pitch, gridThickness/2, gridElm};
+Point(12) = {-(3^.5)*hlfpitch + holeRadius, -hlfpitch, gridThickness/2, gridElm};
+Point(13) = {-(3^.5)*hlfpitch, -hlfpitch, gridThickness/2, holeElm};
+Point(14) = {-(3^.5)*hlfpitch, holeRadius - hlfpitch, gridThickness/2, gridElm};
 
-Point(15) = {-(3^.5)*pitch, pitch - holeRadius, gridThickness/2, gridElm};
-Point(16) = {-(3^.5)*pitch, pitch, gridThickness/2, holeElm};
-Point(17) = {-(3^.5)*pitch + holeRadius, pitch, gridThickness/2, gridElm};
+Point(15) = {-(3^.5)*hlfpitch, hlfpitch - holeRadius, gridThickness/2, gridElm};
+Point(16) = {-(3^.5)*hlfpitch, hlfpitch, gridThickness/2, holeElm};
+Point(17) = {-(3^.5)*hlfpitch + holeRadius, hlfpitch, gridThickness/2, gridElm};
 
 // Top boundaries
 Circle(1) = {2, 1, 3};
@@ -57,21 +58,21 @@ Point(23) = {holeRadius, 0, -gridThickness/2, gridElm};
 Point(24) = {0, -holeRadius, -gridThickness/2, gridElm};
 Point(25) = {-holeRadius, 0, -gridThickness/2, gridElm};
 
-Point(26) = {(3^.5)*pitch - holeRadius, pitch, -gridThickness/2, gridElm};
-Point(27) = {(3^.5)*pitch, pitch, -gridThickness/2, holeElm};
-Point(28) = {(3^.5)*pitch, pitch - holeRadius, -gridThickness/2, gridElm};
+Point(26) = {(3^.5)*hlfpitch - holeRadius, hlfpitch, -gridThickness/2, gridElm};
+Point(27) = {(3^.5)*hlfpitch, hlfpitch, -gridThickness/2, holeElm};
+Point(28) = {(3^.5)*hlfpitch, hlfpitch - holeRadius, -gridThickness/2, gridElm};
 
-Point(29) = {(3^.5)*pitch, holeRadius - pitch, -gridThickness/2, gridElm};
-Point(30) = {(3^.5)*pitch, -pitch, -gridThickness/2, holeElm};
-Point(31) = {(3^.5)*pitch - holeRadius, -pitch, -gridThickness/2, gridElm};
+Point(29) = {(3^.5)*hlfpitch, holeRadius - hlfpitch, -gridThickness/2, gridElm};
+Point(30) = {(3^.5)*hlfpitch, -hlfpitch, -gridThickness/2, holeElm};
+Point(31) = {(3^.5)*hlfpitch - holeRadius, -hlfpitch, -gridThickness/2, gridElm};
 
-Point(32) = {-(3^.5)*pitch + holeRadius, -pitch, -gridThickness/2, gridElm};
-Point(33) = {-(3^.5)*pitch, -pitch, -gridThickness/2, holeElm};
-Point(34) = {-(3^.5)*pitch, holeRadius - pitch, -gridThickness/2, gridElm};
+Point(32) = {-(3^.5)*hlfpitch + holeRadius, -hlfpitch, -gridThickness/2, gridElm};
+Point(33) = {-(3^.5)*hlfpitch, -hlfpitch, -gridThickness/2, holeElm};
+Point(34) = {-(3^.5)*hlfpitch, holeRadius - hlfpitch, -gridThickness/2, gridElm};
 
-Point(35) = {-(3^.5)*pitch, pitch - holeRadius, -gridThickness/2, gridElm};
-Point(36) = {-(3^.5)*pitch, pitch, -gridThickness/2, holeElm};
-Point(37) = {-(3^.5)*pitch + holeRadius, pitch, -gridThickness/2, gridElm};
+Point(35) = {-(3^.5)*hlfpitch, hlfpitch - holeRadius, -gridThickness/2, gridElm};
+Point(36) = {-(3^.5)*hlfpitch, hlfpitch, -gridThickness/2, holeElm};
+Point(37) = {-(3^.5)*hlfpitch + holeRadius, hlfpitch, -gridThickness/2, gridElm};
 
 //Bottom boundaries
 Circle(13) = {22, 21, 23};
@@ -162,28 +163,28 @@ Point(104) = {-padLength/2, -padLength*(3^.5)/2, -gridThickness/2 - gridStandoff
 Point(106) = {-padLength/2, padLength*(3^.5)/2, -gridThickness/2 - gridStandoff, padElm};
 
 //Top right
-Point(107) = {(3^.5)*pitch - padLength, pitch, -gridThickness/2 - gridStandoff, padElm};
-Point(108) = {(3^.5)*pitch, pitch, -gridThickness/2 - gridStandoff, padElm};
-Point(109) = {(3^.5)*pitch, pitch - (3^.5)*padLength/2, -gridThickness/2 - gridStandoff, padElm};
-Point(110) = {(3^.5)*pitch - padLength/2, pitch - (3^.5)*padLength/2, -gridThickness/2 - gridStandoff, padElm};
+Point(107) = {(3^.5)*hlfpitch - padLength, hlfpitch, -gridThickness/2 - gridStandoff, padElm};
+Point(108) = {(3^.5)*hlfpitch, hlfpitch, -gridThickness/2 - gridStandoff, padElm};
+Point(109) = {(3^.5)*hlfpitch, hlfpitch - (3^.5)*padLength/2, -gridThickness/2 - gridStandoff, padElm};
+Point(110) = {(3^.5)*hlfpitch - padLength/2, hlfpitch - (3^.5)*padLength/2, -gridThickness/2 - gridStandoff, padElm};
 
 //Bottom right
-Point(111) = {(3^.5)*pitch, (3^.5)*padLength/2 - pitch, -gridThickness/2 - gridStandoff, padElm};
-Point(112) = {(3^.5)*pitch, -pitch, -gridThickness/2 - gridStandoff, padElm};
-Point(113) = {(3^.5)*pitch - padLength, -pitch, -gridThickness/2 - gridStandoff, padElm};
-Point(114) = {(3^.5)*pitch - padLength/2, (3^.5)*padLength/2 - pitch, -gridThickness/2 - gridStandoff, padElm};
+Point(111) = {(3^.5)*hlfpitch, (3^.5)*padLength/2 - hlfpitch, -gridThickness/2 - gridStandoff, padElm};
+Point(112) = {(3^.5)*hlfpitch, -hlfpitch, -gridThickness/2 - gridStandoff, padElm};
+Point(113) = {(3^.5)*hlfpitch - padLength, -hlfpitch, -gridThickness/2 - gridStandoff, padElm};
+Point(114) = {(3^.5)*hlfpitch - padLength/2, (3^.5)*padLength/2 - hlfpitch, -gridThickness/2 - gridStandoff, padElm};
 
 //Bottom left
-Point(115) = {-(3^.5)*pitch + padLength, -pitch, -gridThickness/2 - gridStandoff, padElm};
-Point(116) = {-(3^.5)*pitch, -pitch, -gridThickness/2 - gridStandoff, padElm};
-Point(117) = {-(3^.5)*pitch, (3^.5)*padLength/2 - pitch, -gridThickness/2 - gridStandoff, padElm};
-Point(118) = {-(3^.5)*pitch + padLength/2, (3^.5)*padLength/2 - pitch, -gridThickness/2 - gridStandoff, padElm};
+Point(115) = {-(3^.5)*hlfpitch + padLength, -hlfpitch, -gridThickness/2 - gridStandoff, padElm};
+Point(116) = {-(3^.5)*hlfpitch, -hlfpitch, -gridThickness/2 - gridStandoff, padElm};
+Point(117) = {-(3^.5)*hlfpitch, (3^.5)*padLength/2 - hlfpitch, -gridThickness/2 - gridStandoff, padElm};
+Point(118) = {-(3^.5)*hlfpitch + padLength/2, (3^.5)*padLength/2 - hlfpitch, -gridThickness/2 - gridStandoff, padElm};
 
 //Top left
-Point(119) = {-(3^.5)*pitch, pitch - (3^.5)*padLength/2, -gridThickness/2 - gridStandoff, padElm};
-Point(120) = {-(3^.5)*pitch, pitch, -gridThickness/2 - gridStandoff, padElm};
-Point(121) = {-(3^.5)*pitch + padLength, pitch, -gridThickness/2 - gridStandoff, padElm};
-Point(122) = {-(3^.5)*pitch + padLength/2, pitch - (3^.5)*padLength/2, -gridThickness/2 - gridStandoff, padElm};
+Point(119) = {-(3^.5)*hlfpitch, hlfpitch - (3^.5)*padLength/2, -gridThickness/2 - gridStandoff, padElm};
+Point(120) = {-(3^.5)*hlfpitch, hlfpitch, -gridThickness/2 - gridStandoff, padElm};
+Point(121) = {-(3^.5)*hlfpitch + padLength, hlfpitch, -gridThickness/2 - gridStandoff, padElm};
+Point(122) = {-(3^.5)*hlfpitch + padLength/2, hlfpitch - (3^.5)*padLength/2, -gridThickness/2 - gridStandoff, padElm};
 
 
 //Lines connecting the points along the base
@@ -230,24 +231,24 @@ Point(135) = {-padLength, 0, thicknessSiO2 -  gridThickness/2 - gridStandoff, pa
 Point(136) = {-padLength/2, padLength*(3^.5)/2, thicknessSiO2 -  gridThickness/2 - gridStandoff, padElm};
 
 //Top right
-Point(137) = {(3^.5)*pitch - padLength, pitch, thicknessSiO2 -  gridThickness/2 - gridStandoff, padElm};
-Point(138) = {(3^.5)*pitch - padLength/2, pitch - (3^.5)*padLength/2, thicknessSiO2 -  gridThickness/2 - gridStandoff, padElm};
-Point(139) = {(3^.5)*pitch, pitch - (3^.5)*padLength/2, thicknessSiO2 -  gridThickness/2 - gridStandoff, padElm};
+Point(137) = {(3^.5)*hlfpitch - padLength, hlfpitch, thicknessSiO2 -  gridThickness/2 - gridStandoff, padElm};
+Point(138) = {(3^.5)*hlfpitch - padLength/2, hlfpitch - (3^.5)*padLength/2, thicknessSiO2 -  gridThickness/2 - gridStandoff, padElm};
+Point(139) = {(3^.5)*hlfpitch, hlfpitch - (3^.5)*padLength/2, thicknessSiO2 -  gridThickness/2 - gridStandoff, padElm};
 
 //Bottom right
-Point(140) = {(3^.5)*pitch, (3^.5)*padLength/2 - pitch, thicknessSiO2 -  gridThickness/2 - gridStandoff, padElm};
-Point(141) = {(3^.5)*pitch - padLength/2, (3^.5)*padLength/2 - pitch, thicknessSiO2 -  gridThickness/2 - gridStandoff, padElm};
-Point(142) = {(3^.5)*pitch - padLength, -pitch, thicknessSiO2 -  gridThickness/2 - gridStandoff, padElm};
+Point(140) = {(3^.5)*hlfpitch, (3^.5)*padLength/2 - hlfpitch, thicknessSiO2 -  gridThickness/2 - gridStandoff, padElm};
+Point(141) = {(3^.5)*hlfpitch - padLength/2, (3^.5)*padLength/2 - hlfpitch, thicknessSiO2 -  gridThickness/2 - gridStandoff, padElm};
+Point(142) = {(3^.5)*hlfpitch - padLength, -hlfpitch, thicknessSiO2 -  gridThickness/2 - gridStandoff, padElm};
 
 //Bottom left
-Point(143) = {-(3^.5)*pitch + padLength, -pitch, thicknessSiO2 -  gridThickness/2 - gridStandoff, padElm};
-Point(144) = {-(3^.5)*pitch + padLength/2, (3^.5)*padLength/2 - pitch, thicknessSiO2 -  gridThickness/2 - gridStandoff, padElm};
-Point(145) = {-(3^.5)*pitch, (3^.5)*padLength/2 - pitch, thicknessSiO2 -  gridThickness/2 - gridStandoff, padElm};
+Point(143) = {-(3^.5)*hlfpitch + padLength, -hlfpitch, thicknessSiO2 -  gridThickness/2 - gridStandoff, padElm};
+Point(144) = {-(3^.5)*hlfpitch + padLength/2, (3^.5)*padLength/2 - hlfpitch, thicknessSiO2 -  gridThickness/2 - gridStandoff, padElm};
+Point(145) = {-(3^.5)*hlfpitch, (3^.5)*padLength/2 - hlfpitch, thicknessSiO2 -  gridThickness/2 - gridStandoff, padElm};
 
 //Top left
-Point(146) = {-(3^.5)*pitch, pitch - (3^.5)*padLength/2, thicknessSiO2 -  gridThickness/2 - gridStandoff, padElm};
-Point(147) = {-(3^.5)*pitch + padLength/2, pitch - (3^.5)*padLength/2, thicknessSiO2 -  gridThickness/2 - gridStandoff, padElm};
-Point(148) = {-(3^.5)*pitch + padLength, pitch, thicknessSiO2 -  gridThickness/2 - gridStandoff, padElm};
+Point(146) = {-(3^.5)*hlfpitch, hlfpitch - (3^.5)*padLength/2, thicknessSiO2 -  gridThickness/2 - gridStandoff, padElm};
+Point(147) = {-(3^.5)*hlfpitch + padLength/2, hlfpitch - (3^.5)*padLength/2, thicknessSiO2 -  gridThickness/2 - gridStandoff, padElm};
+Point(148) = {-(3^.5)*hlfpitch + padLength, hlfpitch, thicknessSiO2 -  gridThickness/2 - gridStandoff, padElm};
 
 
 
@@ -364,10 +365,10 @@ Volume(3) = {3};
 //**********************************************************************
 
 //Four corners of the cathode
-Point(201) = {(3^.5)*pitch, pitch, gridThickness/2 + cathodeHeight, farElm};
-Point(202) = {(3^.5)*pitch, -pitch, gridThickness/2 + cathodeHeight, farElm};
-Point(203) = {-(3^.5)*pitch, -pitch, gridThickness/2 + cathodeHeight, farElm};
-Point(204) = {-(3^.5)*pitch, pitch, gridThickness/2 + cathodeHeight, farElm};
+Point(201) = {(3^.5)*hlfpitch, hlfpitch, gridThickness/2 + cathodeHeight, farElm};
+Point(202) = {(3^.5)*hlfpitch, -hlfpitch, gridThickness/2 + cathodeHeight, farElm};
+Point(203) = {-(3^.5)*hlfpitch, -hlfpitch, gridThickness/2 + cathodeHeight, farElm};
+Point(204) = {-(3^.5)*hlfpitch, hlfpitch, gridThickness/2 + cathodeHeight, farElm};
 
 //Lines connecting the corners of the cathode
 Line(201) = {201, 202};
