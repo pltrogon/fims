@@ -512,8 +512,9 @@ int main(int argc, char * argv[]) {
     }
 
     //Calculate lines from above grid
+    double gridLineSeparation = 1.05;
     gridFieldLineLocation = 1;
-    driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], 1.01*gridThickness/2., fieldLines);
+    driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], gridLineSeparation*gridThickness/2., fieldLines);
 
     //Get coordinates of every point along field line and fill the tree
     for(int inLine = 0; inLine < fieldLines.size(); inLine++){
@@ -526,7 +527,7 @@ int main(int argc, char * argv[]) {
 
     //Calculate lines from below grid
     gridFieldLineLocation = -1;
-    driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], -1.01*gridThickness/2., fieldLines);
+    driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], -gridLineSeparation*gridThickness/2., fieldLines);
 
     //Get coordinates of every point along field line and fill the tree
     for(int inLine = 0; inLine < fieldLines.size(); inLine++){

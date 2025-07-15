@@ -308,6 +308,9 @@ Curve Loop(106) = {122, 123, 124, 125};
 Curve Loop(107) = {137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148};
 Curve Loop(108) = {131, 132, 133, 134, 135, 136};
 
+//TANNER - Plane surface for top of SiO2
+Plane Surface(301) = {107, 108};
+
 Curve Loop(109) = {148, -155, -126, 166};
 Curve Loop(110) = {137, -156, 110, 155};
 Curve Loop(111) = {138, -157, 109, 156};
@@ -399,6 +402,18 @@ Plane Surface(205) = {205, 7};
 //Volume for the gas
 Surface Loop(1) = {1, 2, 3, 4, 5, 7, 9, 11, 13, 14, 102, 103, 104, 105, 106, 107, 109, 110, 112, 113, 115, 116, 118, 119, 120, 121, 122, 123, 124, 125, 201, 202, 203, 204, 205};
 Volume(1) = {1};
+
+//TANNER - This is for physical groups and surfaces
+//Groups
+Physical Volume("Gas") = {1};
+Physical Volume("Grid") = {2};
+Physical Volume("ReadoutPlane") = {3};
+
+//Surfaces
+Physical Surface("Cathode") = {201};
+Physical Surface("GridTop") = {1}; // Example
+Physical Surface("SurfaceSiO2") = {301};
+Physical Surface("SurfacePad") = {102};
 
 //+
 Coherence;
