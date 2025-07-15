@@ -36,7 +36,7 @@ End
 
 Body 2
   Target Bodies(1) = 2
-  Name = "Grid"
+  Name = "Amplification Grid"
   Equation = 1
   Material = 2
 End
@@ -50,10 +50,10 @@ End
 
 Solver 1
   Equation = Electrostatics
+  Variable = Potential
   Calculate Electric Field = True
   Procedure = "StatElecSolve" "StatElecSolver"
-  Calculate Electric Flux = True
-  Variable = Potential
+
   Exec Solver = Always
   Stabilize = True
   Optimize Bandwidth = True
@@ -83,25 +83,25 @@ End
 
 Material 1
   Name = "Air (room temperature)"
-  Heat expansion Coefficient = 3.43e-3
-  Relative Permittivity = 1
-  Sound speed = 343.0
-  Heat Conductivity = 0.0257
   Viscosity = 1.983e-5
-  Density = 1.205
   Heat Capacity = 1005.0
+  Heat expansion Coefficient = 3.43e-3
+  Density = 1.205
+  Heat Conductivity = 0.0257
+  Sound speed = 343.0
+  Relative Permittivity = 1
 End
 
 Material 2
   Name = "Aluminium (generic)"
-  Sound speed = 5000.0
-  Heat Conductivity = 237.0
-  Youngs modulus = 70.0e9
-  Heat Capacity = 897.0
-  Heat expansion Coefficient = 23.1e-6
   Density = 2700.0
   Relative Permittivity = 1e10
+  Heat Capacity = 897.0
+  Heat Conductivity = 237.0
+  Sound speed = 5000.0
   Poisson ratio = 0.35
+  Youngs modulus = 70.0e9
+  Heat expansion Coefficient = 23.1e-6
 End
 
 Material 3
@@ -116,7 +116,7 @@ Boundary Condition 1
 End
 
 Boundary Condition 2
-  Target Boundaries(6) = 1 2 3 4 5 14 
+  Target Boundaries(10) = 1 2 3 4 5 7 9 11 13 14 
   Name = "Grid"
 	Potential = -498.75
 End
