@@ -2,9 +2,7 @@ Header
   CHECK KEYWORDS Warn
   Mesh DB "elmerResults" "."
   Include Path ""
-HEAD
   Results Directory "elmerResults"
-learning_git
 End
 
 Simulation
