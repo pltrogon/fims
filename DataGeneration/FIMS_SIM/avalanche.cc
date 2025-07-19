@@ -449,7 +449,7 @@ int main(int argc, char * argv[]) {
   double xRange = (xmax - xmin)*rangeScale;
   double yRange = (ymax - ymin)*rangeScale;
 
-  
+  /*
   //Create 2D uniformly-spaced array - Note this makes numFieldLine**2 lines
   for(int i = 0; i < numFieldLine; i++){
     for(int j = 0; j < numFieldLine; j++){
@@ -457,8 +457,8 @@ int main(int argc, char * argv[]) {
       yStart.push_back(-yRange/2. + j*yRange/(numFieldLine-1));
     }
   }
+  */
   
-  /*
   //Lines generated radially from the center to edge of geometry
   //    The x-direction is the long axis of the geometry. 
   //    This extends past the vertex of the hex unit cell
@@ -466,7 +466,6 @@ int main(int argc, char * argv[]) {
     xStart.push_back(xRange/2.*i/(numFieldLine-1));
     yStart.push_back(0.);
   }
-  */ 
   
   /*
   //Lines populated at corner - spread with uniform random numbers
