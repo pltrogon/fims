@@ -3,10 +3,10 @@ Include "../runControl";
 halfPitch = pitch/2;
 
 //finite element sizes
-holeElm = holeRadius/10;
+holeElm = holeRadius/20;
 gridElm = halfPitch/20;
-padElm = padLength*2;
-farElm = cathodeHeight;
+padElm = padLength;
+farElm = cathodeHeight/6;
 
 
 //**********************************************************************
