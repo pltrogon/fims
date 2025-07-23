@@ -407,18 +407,18 @@ int main(int argc, char * argv[]) {
   fieldFIMS.GetBoundingBox(xmin, ymin, zmin, xmax, ymax, zmax);
 
   //Enable periodicity and set components
-  fieldFIMS.EnablePeriodicityX();
-  fieldFIMS.EnablePeriodicityY();
+  fieldFIMS.EnableMirrorPeriodicityX();
+  fieldFIMS.EnableMirrorPeriodicityY();
   fieldFIMS.SetGas(gasFIMS);
 
   // Import the weighting field for the readout electrode.
-  //fieldFIMS.SetWeightingField(geometryPath+"FIMS_Weighting.result", "wtlel");//TODO
+  //fieldFIMS.SetWeightingField(elmerResultsPath+"FIMS_Weighting.result", "wtlel");//TODO
 
   //Create a sensor
   Sensor* sensorFIMS = new Sensor();
   sensorFIMS->AddComponent(&fieldFIMS);
   sensorFIMS->SetArea(xmin, ymin, zmin, xmax, ymax, zmax);
-  sensorFIMS->AddElectrode(&fieldFIMS, "wtlel");
+  //sensorFIMS->AddElectrode(&fieldFIMS, "wtlel");
 
   //Set up Microscopic Avalanching
   AvalancheMicroscopic* avalancheE = new AvalancheMicroscopic;
@@ -426,7 +426,7 @@ int main(int argc, char * argv[]) {
   avalancheE->EnableAvalancheSizeLimit(avalancheLimit);
 
   ViewDrift viewElectronDrift;
-  viewElectronDrift.SetArea(xmin, ymin, zmin, xmax, ymax, zmax);
+  viewElectronDrift.SetArea(-xmax, -ymax, zmin, xmax, ymax, zmax);
   avalancheE->EnablePlotting(&viewElectronDrift, 100);
 
   //Set up Ion drifting
@@ -436,7 +436,7 @@ int main(int argc, char * argv[]) {
 
   // ***** Find field transparency ***** //
   std::cout << "****************************************\n";
-  std::cout << "Determining field transparency.\n";
+  std::cout << "Calculating field Lines.\n";
   std::cout << "****************************************\n";
 
   DriftLineRKF driftLines(sensorFIMS);
@@ -445,11 +445,11 @@ int main(int argc, char * argv[]) {
   std::vector<double> xStart;
   std::vector<double> yStart;
 
-  double rangeScale = 0.99;
+  double rangeScale = 0.9;
   double xRange = (xmax - xmin)*rangeScale;
   double yRange = (ymax - ymin)*rangeScale;
 
-  
+  /*
   //Create 2D uniformly-spaced array - Note this makes numFieldLine**2 lines
   for(int i = 0; i < numFieldLine; i++){
     for(int j = 0; j < numFieldLine; j++){
@@ -457,16 +457,15 @@ int main(int argc, char * argv[]) {
       yStart.push_back(-yRange/2. + j*yRange/(numFieldLine-1));
     }
   }
-  
-  /*
+  */
+
   //Lines generated radially from the center to edge of geometry
   //    The x-direction is the long axis of the geometry. 
   //    This extends past the vertex of the hex unit cell
   for(int i = 0; i < numFieldLine; i++){
-    xStart.push_back(xRange/2.*i/(numFieldLine-1));
+    xStart.push_back(rangeScale*xmax*i/(numFieldLine-1));
     yStart.push_back(0.);
   }
-  */ 
   
   /*
   //Lines populated at corner - spread with uniform random numbers
@@ -484,7 +483,6 @@ int main(int argc, char * argv[]) {
   std::vector<std::array<float, 3> > fieldLines;
   int totalFieldLines = xStart.size();
   int numAtPad = 0;
-  
   std::cout << "Computing " << totalFieldLines << " field lines." << std::endl;
   int prevDriftLine = 0;
   for(int inFieldLine = 0; inFieldLine < totalFieldLines; inFieldLine++){
@@ -547,6 +545,7 @@ int main(int argc, char * argv[]) {
 
   }//End field line loop
   
+  std::cout << "Done " << totalFieldLines << " field lines; Determing transparency." << std::endl;
   //Determine transparency
   fieldTransparency = (1.*numAtPad) / (1.*totalFieldLines);
   std::cout << "Field transparency is " << fieldTransparency <<  "." << std::endl;
@@ -556,6 +555,7 @@ int main(int argc, char * argv[]) {
     std::cout << "Field transparency lower than limit - Running mimimal avalanche case." << std::endl;
     numAvalanche = 50;
     avalancheLimit = 50;
+    DEBUG = true; // TODO - 
   }
 
   // *** Deal with field line trees *** //

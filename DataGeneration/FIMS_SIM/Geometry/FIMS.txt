@@ -1,21 +1,21 @@
 //**********************************************************************
 // DEFINING THE FIMS GEOMETRY AS MINIMUM CELL
-//      Requires mirroring in x and y
+//     Requires mirroring in x and y
 //**********************************************************************
 
 // Parameters in micrometers
-Include "/Users/tannerp/GitHub/fims/DataGeneration/FIMS_SIM/runControl";
+Include "../runControl";
 
 halfPitch = pitch/2;
 
 // Finite element sizes for different regions
 holeElm = holeRadius/10;
-gridElm = halfPitch/20;
+gridElm = halfPitch/10;
 padElm = padLength/2;
-farElm = cathodeHeight/2.;
+farElm = cathodeHeight/2;
 
 // Derived Z-coordinates for different layers
-//    Center of grid: z = 0
+//     Center of grid: z = 0
 cathodeDistance = gridThickness/2 + cathodeHeight;
 gridTop = gridThickness/2;
 gridBottom = -gridThickness/2;
@@ -83,32 +83,32 @@ Line(19) = {7, 15};
 Line(20) = {8, 16};
 
 // Surface - top of grid
-Curve Loop(1) = {1, 2, 3, 4, 5, 6};
-Plane Surface(1) = {1};
+Curve Loop(21) = {1, 2, 3, 4, 5, 6};
+Plane Surface(21) = {21};
 
 // Surface - bottom of grid
-Curve Loop(2) = {7, 8, 9, 10, 11, 12};
-Plane Surface(2) = {2};
+Curve Loop(22) = {7, 8, 9, 10, 11, 12};
+Plane Surface(22) = {22};
 
 // Surface - Sides of holes in grid
-Curve Loop(3) = {1, 15, -7, -14};
-Surface(3) = {3};
-Curve Loop(4) = {4, 17, -10, -18};
-Surface(4) = {4};
+Curve Loop(23) = {1, 15, -7, -14};
+Plane Surface(23) = {23};
+Curve Loop(24) = {4, 17, -10, -18};
+Plane Surface(24) = {24};
 
 // Surface - Sides of grid
-Curve Loop(5) = {2, 20, -8, -15};
-Plane Surface(5) = {5};
-Curve Loop(6) = {3, 18, -9, -20};
-Plane Surface(6) = {6};
-Curve Loop(7) = {5, 19, -11, -17};
-Plane Surface(7) = {7};
-Curve Loop(8) = {6, 14, -12, -19};
-Plane Surface(8) = {8};
+Curve Loop(25) = {2, 20, -8, -15};
+Plane Surface(25) = {25};
+Curve Loop(26) = {3, 18, -9, -20};
+Plane Surface(26) = {26};
+Curve Loop(27) = {5, 19, -11, -17};
+Plane Surface(27) = {27};
+Curve Loop(28) = {6, 14, -12, -19};
+Plane Surface(28) = {28};
 
 // Volume - Grid
-Surface Loop(1) = {1, 2, 3, 4, 5, 6, 7, 8};
-Volume(1) = {1};
+Surface Loop(201) = {21, 22, 23, 24, 25, 26, 27, 28};
+Volume(1) = {201};
 
 
 //**********************************************************************
@@ -144,10 +144,10 @@ Line(107) = {107, 108};
 Line(108) = {108, 105};
 
 // Surfaces - Pads
-Curve Loop(101) = {101, 102, 103, 104};
-Plane Surface(101) = {101};
-Curve Loop(102) = {105, 106, 107, 108};
-Plane Surface(102) = {102};
+Curve Loop(121) = {101, 102, 103, 104};
+Plane Surface(121) = {121};
+Curve Loop(122) = {105, 106, 107, 108};
+Plane Surface(122) = {122};
 
 
 // ***** Dielectric *****
@@ -186,46 +186,46 @@ Line(120) = {113, 112};
 
 // Connect - Top and Bottom of Dielectric
 Line(121) = {112, 102};
-Line(122) = {113, 103}; 
-Line(123) = {114, 104}; 
-Line(124) = {116, 106}; 
-Line(125) = {117, 107}; 
-Line(126) = {118, 108}; 
-Line(127) = {119, 109}; 
+Line(122) = {113, 103};
+Line(123) = {114, 104};
+Line(124) = {116, 106};
+Line(125) = {117, 107};
+Line(126) = {118, 108};
+Line(127) = {119, 109};
 Line(128) = {120, 110};
 
-Line(129) = {111, 101}; 
+Line(129) = {111, 101};
 Line(130) = {115, 105};
 
 //Surface - top of dielectric
-Curve Loop(103) = {113, 114, 115, 116, 117, 118, 119, 120};
-Plane Surface(103) = {103};
+Curve Loop(123) = {113, 114, 115, 116, 117, 118, 119, 120};
+Plane Surface(123) = {123};
 
 //Surface - bottom of dielectric
-Curve Loop(104) = {109, 110, -107, -106, 111, 112, -103, -102};
-Plane Surface(104) = {104};
+Curve Loop(124) = {109, 110, -107, -106, 111, 112, -103, -102};
+Plane Surface(124) = {124};
 
 //Surface - Sides of dielectric
-Curve Loop(105) = {113, 127, -109, -121};
-Surface(105) = {105};
-Curve Loop(106) = {114, 126, -110, -127};
-Surface(106) = {106};
-Curve Loop(107) = {115, 125, 107, -126};
-Surface(107) = {107};
-Curve Loop(108) = {116, 124, 106, -125};
-Surface(108) = {108};
-Curve Loop(109) = {117, 128, -111, -124};
-Surface(109) = {109};
-Curve Loop(110) = {118, 123, -112, -128};
-Surface(110) = {110};
-Curve Loop(111) = {119, 122, 103, -123};
-Surface(111) = {111};
-Curve Loop(112) = {120, 121, 102, -122};
-Surface(112) = {112};
+Curve Loop(125) = {113, 127, -109, -121};
+Plane Surface(125) = {125};
+Curve Loop(126) = {114, 126, -110, -127};
+Plane Surface(126) = {126};
+Curve Loop(127) = {115, 125, 107, -126};
+Plane Surface(127) = {127};
+Curve Loop(128) = {116, 124, 106, -125};
+Plane Surface(128) = {128};
+Curve Loop(129) = {117, 128, -111, -124};
+Plane Surface(129) = {129};
+Curve Loop(130) = {118, 123, -112, -128};
+Plane Surface(130) = {130};
+Curve Loop(131) = {119, 122, 103, -123};
+Plane Surface(131) = {131};
+Curve Loop(132) = {120, 121, 102, -122};
+Plane Surface(132) = {132};
 
 // Volume - Dielectric
-Surface Loop(101) = {103, 104, 105, 106, 107, 108, 109, 110, 111, 112};
-Volume(101) = {101};
+Surface Loop(202) = {123, 124, 125, 126, 127, 128, 129, 130, 131, 132};
+Volume(101) = {202};
 
 
 //**********************************************************************
@@ -257,31 +257,28 @@ Line(311) = {304, 7};
 Line(312) = {15, 120};
 
 // Surface - Top Gas (Cathode)
-Curve Loop(301) = {301, 302, 303, 304};
-Plane Surface(301) = {301};
+Curve Loop(321) = {301, 302, 303, 304};
+Plane Surface(321) = {321};
 
 // Surfaces - Gas Sides
-Curve Loop(302) = {301, 309, -2, 15, 8, 310, -113, 121, -101, -129, -306, -13, -305};
-Plane Surface(302) = {302};
-Curve Loop(303) = {302, 307, 16, 308, 130, -108, -126, -114, -310, 9, -18, -3, -309};
-Plane Surface(303) = {303};
-Curve Loop(304) = {303, 311, -5, 17, 11, 312, -117, 124, -105, -130, -308, -16, -307};
-Plane Surface(304) = {304};
-Curve Loop(305) = {304, 305, 13, 306, 129, -104, -123, -118, -312, 12, -14, -6, -311};
-Plane Surface(305) = {305};
+Curve Loop(322) = {301, 309, -2, 15, 8, 310, -113, 121, -101, -129, -306, -13, -305};
+Plane Surface(322) = {322};
+Curve Loop(323) = {302, 307, 16, 308, 130, -108, -126, -114, -310, 9, -18, -3, -309};
+Plane Surface(323) = {323};
+Curve Loop(324) = {303, 311, -5, 17, 11, 312, -117, 124, -105, -130, -308, -16, -307};
+Plane Surface(324) = {324};
+Curve Loop(325) = {304, 305, 13, 306, 129, -104, -123, -118, -312, 12, -14, -6, -311};
+Plane Surface(325) = {325};
 
 // Volume - Gas
-
-Surface Loop(301) = {
-    301, //Cathode
-    302, 303, 304, 305, //Sides of volume
-    1, 2, 3, 4, //Grid elements
-    103, 107, 108, 111, 112, //dielectric
-    101, 102 // Pad elements
+Surface Loop(203) = {
+    321, //Cathode
+    322, 323, 324, 325, //Sides of volume
+    21, 22, 23, 24, //Grid elements
+    123, 127, 128, 131, 132, //dielectric
+    121, 122 // Pad elements
 };
-
-//Surface Loop(301) = {301, 302, 303, 304, 305, 1, 2, 3, 4, 103, 107, 108, 111, 112, 101, 102};
-Volume(301) = {301};
+Volume(1001) = {203};
 
 
 //**********************************************************************
@@ -291,24 +288,37 @@ Volume(301) = {301};
 // Physical Volumes
 Physical Volume("Grid") = {1};
 Physical Volume("Dielectric") = {101};
-Physical Volume("Gas") = {301};
+Physical Volume("Gas") = {1001};
 
 
-// Physical Surfaces
-Physical Surface("GridTop") = {1}; // Top of the Grid
-Physical Surface("GridBottom") = {2}; // Bottom of the Grid
-Physical Surface("CentralPad") = {101}; // Central Pad Surface
-Physical Surface("CornerPad") = {102}; // Corner Pad Surface
-Physical Surface("Cathode") = {301}; // Top surface of the Gas volume
+// ***** Physical Surfaces *****
+//Constant elements
+//Primary surfaces
+Physical Surface("GridTop") = {21}; // Top of the Grid
+Physical Surface("GridBottom") = {22}; // Bottom of the Grid
+Physical Surface("CentralPad") = {121}; // Central Pad Surface
+Physical Surface("CornerPad") = {122}; // Corner Pad Surface
+Physical Surface("Cathode") = {321}; // Top surface of the Gas volume
 
-// Mirror Planes
-Physical Surface("MirrorX") = {
-    5, 105, 302, // y=0 Plane
-    7, 109, 304  // y=yMax Plane
-};
-Physical Surface("MirrorY") = {
-    8, 110, 305, // x=0 Plane
-    6, 106, 303  // x=xMax Plane
-};
+//Other Grid elements
+Physical Surface("GridHoleCentral") = {23}; //Side of grid in central hole
+Physical Surface("GridHoleCorner") = {24}; //Side of grid in corner hole
+Physical Surface("GridSideY0") = {25};
+Physical Surface("GridSideXmax") = {26};
+Physical Surface("GridSideYmax") = {27};
+Physical Surface("GridSideX0") = {28};
+
+// Periodic elements
+//Gas sides
+Physical Surface("GasX0") = {325};
+Physical Surface("GasXmax") = {323};
+Physical Surface("GasY0") = {322};
+Physical Surface("GasYmax") = {324};
+
+//Dielectric sides
+Physical Surface("DielectricX0") = {130};
+Physical Surface("DielectricXmax") = {126};
+Physical Surface("DielectricY0") = {125};
+Physical Surface("DielectricYmax") = {129};
 
 Coherence;
