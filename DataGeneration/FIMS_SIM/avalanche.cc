@@ -479,7 +479,7 @@ int main(int argc, char * argv[]) {
   }
   */
 
-  //Calculate field Lines
+  // ***** Calculate field Lines ***** //
   std::vector<std::array<float, 3> > fieldLines;
   int totalFieldLines = xStart.size();
   int numAtPad = 0;
