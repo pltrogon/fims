@@ -417,7 +417,7 @@ int main(int argc, char * argv[]) {
   //Create a sensor
   Sensor* sensorFIMS = new Sensor();
   sensorFIMS->AddComponent(&fieldFIMS);
-  sensorFIMS->SetArea(xmin, ymin, zmin, xmax, ymax, zmax);
+  sensorFIMS->SetArea(-xmax, -ymax, zmin, xmax, ymax, zmax);
   //sensorFIMS->AddElectrode(&fieldFIMS, "wtlel");
 
   //Set up Microscopic Avalanching
