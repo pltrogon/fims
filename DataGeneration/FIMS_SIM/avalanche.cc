@@ -412,7 +412,7 @@ int main(int argc, char * argv[]) {
   fieldFIMS.SetGas(gasFIMS);
 
   // Import the weighting field for the readout electrode.
-  //fieldFIMS.SetWeightingField(elmerResultsPath+"FIMS_Weighting.result", "wtlel");//TODO
+  fieldFIMS.SetWeightingField(elmerResultsPath+"FIMSWeighting.result", "wtlel");
 
   //Create a sensor
   Sensor* sensorFIMS = new Sensor();
