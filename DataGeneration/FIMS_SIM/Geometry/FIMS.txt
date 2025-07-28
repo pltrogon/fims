@@ -9,9 +9,9 @@ Include "../runControl";
 halfPitch = pitch/2;
 
 // Finite element sizes for different regions
-holeElm = holeRadius/20;
-gridElm = halfPitch/20;
-padElm = padLength/2;
+holeElm = gridThickness/2;
+gridElm = holeRadius/10;
+padElm = padLength/10;
 farElm = cathodeHeight/10;
 
 // Derived Z-coordinates for different layers
@@ -291,34 +291,38 @@ Physical Volume("Dielectric") = {101};
 Physical Volume("Gas") = {1001};
 
 
-// ***** Physical Surfaces *****
-//Constant elements
-//Primary surfaces
-Physical Surface("GridTop") = {21}; // Top of the Grid
-Physical Surface("GridBottom") = {22}; // Bottom of the Grid
-Physical Surface("CentralPad") = {121}; // Central Pad Surface
-Physical Surface("CornerPad") = {122}; // Corner Pad Surface
-Physical Surface("Cathode") = {321}; // Top surface of the Gas volume
+// ***** Physical Surfaces ***** //
 
-//Other Grid elements
-Physical Surface("GridHoleCentral") = {23}; //Side of grid in central hole
-Physical Surface("GridHoleCorner") = {24}; //Side of grid in corner hole
-Physical Surface("GridSideY0") = {25};
-Physical Surface("GridSideXmax") = {26};
-Physical Surface("GridSideYmax") = {27};
-Physical Surface("GridSideX0") = {28};
+// *** Constant Elements *** //
 
-// Periodic elements
-//Gas sides
-Physical Surface("GasX0") = {325};
-Physical Surface("GasXmax") = {323};
-Physical Surface("GasY0") = {322};
-Physical Surface("GasYmax") = {324};
+Physical Surface("Cathode") = {
+    321
+};
 
-//Dielectric sides
-Physical Surface("DielectricX0") = {130};
-Physical Surface("DielectricXmax") = {126};
-Physical Surface("DielectricY0") = {125};
-Physical Surface("DielectricYmax") = {129};
+Physical Surface("Grid") = {
+    21, // Top
+    22, // Bottom
+    //Sides
+    23, 24, // Hole
+    27, // Top
+    26, // Right
+    25, // Bottom
+    28 // Left
+};
+
+Physical Surface("CentralPad") = {
+    121
+};
+
+Physical Surface("SurroundingPads") = {
+    122
+};
+
+// *** Boundary Elements *** //
+
+Physical Surface("Boundaries") = {
+    322, 323, 324, 325, //Gas
+    125, 126, 129, 130 // Dielectric
+};
 
 Coherence;

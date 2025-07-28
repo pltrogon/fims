@@ -10,7 +10,7 @@ pitch = 55.0;
 
 //Grid
 gridStandoff = 100.0;
-gridThickness = 0.5;
+gridThickness = 1.0;
 holeRadius = 16.0;
 
 // Other
