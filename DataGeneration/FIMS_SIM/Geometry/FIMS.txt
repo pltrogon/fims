@@ -11,7 +11,7 @@ halfPitch = pitch/2;
 
 // Finite element sizes for different regions
 gridElm = holeRadius/2;
-holeElm = gridThickness;
+holeElm = gridThickness/2;
 padElm = holeElm;
 diElm = thicknessSiO2/2;
 cathElm = halfPitch/2.;
