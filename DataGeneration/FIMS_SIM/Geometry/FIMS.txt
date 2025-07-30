@@ -3,16 +3,18 @@
 //     Requires mirroring in x and y
 //**********************************************************************
 
+// Import values from run control file.
 // Parameters in micrometers
 Include "../runControl";
 
 halfPitch = pitch/2;
 
 // Finite element sizes for different regions
-holeElm = gridThickness/2;
-gridElm = holeRadius/10;
-padElm = padLength/10;
-farElm = cathodeHeight/10;
+gridElm = holeRadius/2;
+holeElm = gridThickness;
+padElm = holeElm;
+diElm = thicknessSiO2/2;
+cathElm = halfPitch/2.;
 
 // Derived Z-coordinates for different layers
 //     Center of grid: z = 0
@@ -34,24 +36,24 @@ yMax = halfPitch;
 
 // Points - top of the grid
 Point(1) = {0, 0, gridTop, holeElm};
-Point(2) = {0, holeRadius, gridTop, gridElm};
-Point(3) = {holeRadius, 0, gridTop, gridElm};
+Point(2) = {0, holeRadius, gridTop, holeElm};
+Point(3) = {holeRadius, 0, gridTop, holeElm};
 
 Point(4) = {xMax, yMax, gridTop, holeElm};
-Point(5) = {xMax - holeRadius, halfPitch, gridTop, gridElm};
-Point(6) = {xMax, yMax - holeRadius, gridTop, gridElm};
+Point(5) = {xMax - holeRadius, halfPitch, gridTop, holeElm};
+Point(6) = {xMax, yMax - holeRadius, gridTop, holeElm};
 
 Point(7) = {0, yMax, gridTop, gridElm};
 Point(8) = {xMax, 0, gridTop, gridElm};
 
 // Points - bottom of the grid
 Point(9) = {0, 0, gridBottom, holeElm};
-Point(10) = {0, holeRadius, gridBottom, gridElm};
-Point(11) = {holeRadius, 0, gridBottom, gridElm};
+Point(10) = {0, holeRadius, gridBottom, holeElm};
+Point(11) = {holeRadius, 0, gridBottom, holeElm};
 
 Point(12) = {xMax, yMax, gridBottom, holeElm};
-Point(13) = {xMax - holeRadius, halfPitch, gridBottom, gridElm};
-Point(14) = {xMax, yMax - holeRadius, gridBottom, gridElm};
+Point(13) = {xMax - holeRadius, halfPitch, gridBottom, holeElm};
+Point(14) = {xMax, yMax - holeRadius, gridBottom, holeElm};
 
 Point(15) = {0, yMax, gridBottom, gridElm};
 Point(16) = {xMax, 0, gridBottom, gridElm};
@@ -92,9 +94,9 @@ Plane Surface(22) = {22};
 
 // Surface - Sides of holes in grid
 Curve Loop(23) = {1, 15, -7, -14};
-Plane Surface(23) = {23};
+Surface(23) = {23};
 Curve Loop(24) = {4, 17, -10, -18};
-Plane Surface(24) = {24};
+Surface(24) = {24};
 
 // Surface - Sides of grid
 Curve Loop(25) = {2, 20, -8, -15};
@@ -153,8 +155,8 @@ Plane Surface(122) = {122};
 // ***** Dielectric *****
 
 // Points - Dielectric Bottom
-Point(109) = {xMax, 0, padBase, padElm};
-Point(110) = {0, yMax, padBase, padElm};
+Point(109) = {xMax, 0, padBase, diElm};
+Point(110) = {0, yMax, padBase, diElm};
 
 // Lines - Dielectric Bottom
 Line(109) = {102, 109};
@@ -171,8 +173,8 @@ Point(115) = {xMax, yMax, topSiO2, padElm};
 Point(116) = {xMax - padLength, yMax, topSiO2, padElm};
 Point(117) = {xMax - halfPad, yMax - padMath, topSiO2, padElm};
 Point(118) = {xMax, yMax - padMath, topSiO2, padElm};
-Point(119) = {xMax, 0, topSiO2, padElm};
-Point(120) = {0, yMax, topSiO2, padElm};
+Point(119) = {xMax, 0, topSiO2, diElm};
+Point(120) = {0, yMax, topSiO2, diElm};
 
 // Lines - Dielectric Top
 Line(113) = {112, 119};
@@ -233,10 +235,10 @@ Volume(101) = {202};
 //**********************************************************************
 
 // Points - Cathode Plane
-Point(301) = {0, 0, cathodeDistance, farElm};
-Point(302) = {xMax, 0, cathodeDistance, farElm};
-Point(303) = {xMax, halfPitch, cathodeDistance, farElm};
-Point(304) = {0, halfPitch, cathodeDistance, farElm};
+Point(301) = {0, 0, cathodeDistance, cathElm};
+Point(302) = {xMax, 0, cathodeDistance, cathElm};
+Point(303) = {xMax, halfPitch, cathodeDistance, cathElm};
+Point(304) = {0, halfPitch, cathodeDistance, cathElm};
 
 // Lines - Cathode Plane
 Line(301) = {301, 302};
