@@ -406,18 +406,38 @@ int main(int argc, char * argv[]) {
   double xmin, ymin, zmin, xmax, ymax, zmax;
   fieldFIMS.GetBoundingBox(xmin, ymin, zmin, xmax, ymax, zmax);
 
+  //Define boundary region for simulation
+  double xBoundary[2], yBoundary[2], zBoundary[2];
+
+  //Simpel criteria for if 1/4 geometry or full
+  //   x=y=0 should be the min if 1/4
+  if(xmin == 0 && ymin == 0){
+    xBoundary[0] = -xmax;
+    xBoundary[1] = xmax;
+    yBoundary[0] = -ymax;
+    yBoundary[1] = ymax;
+  }
+  else{
+    xBoundary[0] = xmin;
+    xBoundary[1] = xmax;
+    yBoundary[0] = ymin;
+    yBoundary[1] = ymax;
+  }
+  zBoundary[0] = zmin;
+  zBoundary[1] = zmax;
+
   //Enable periodicity and set components
-  fieldFIMS.EnablePeriodicityX();
-  fieldFIMS.EnablePeriodicityY();
+  fieldFIMS.EnableMirrorPeriodicityX();
+  fieldFIMS.EnableMirrorPeriodicityY();
   fieldFIMS.SetGas(gasFIMS);
 
   // Import the weighting field for the readout electrode.
-  //fieldFIMS.SetWeightingField(geometryPath+"FIMS_Weighting.result", "wtlel");//TODO
+  fieldFIMS.SetWeightingField(elmerResultsPath+"FIMSWeighting.result", "wtlel");
 
   //Create a sensor
   Sensor* sensorFIMS = new Sensor();
   sensorFIMS->AddComponent(&fieldFIMS);
-  sensorFIMS->SetArea(xmin, ymin, zmin, xmax, ymax, zmax);
+  sensorFIMS->SetArea(xBoundary[0], yBoundary[0], zBoundary[0], xBoundary[1], yBoundary[1], zBoundary[1]);
   sensorFIMS->AddElectrode(&fieldFIMS, "wtlel");
 
   //Set up Microscopic Avalanching
@@ -426,7 +446,7 @@ int main(int argc, char * argv[]) {
   avalancheE->EnableAvalancheSizeLimit(avalancheLimit);
 
   ViewDrift viewElectronDrift;
-  viewElectronDrift.SetArea(xmin, ymin, zmin, xmax, ymax, zmax);
+  viewElectronDrift.SetArea(xBoundary[0], yBoundary[0], zBoundary[0], xBoundary[1], yBoundary[1], zBoundary[1]);
   avalancheE->EnablePlotting(&viewElectronDrift, 100);
 
   //Set up Ion drifting
@@ -436,20 +456,20 @@ int main(int argc, char * argv[]) {
 
   // ***** Find field transparency ***** //
   std::cout << "****************************************\n";
-  std::cout << "Determining field transparency.\n";
+  std::cout << "Calculating field Lines.\n";
   std::cout << "****************************************\n";
 
   DriftLineRKF driftLines(sensorFIMS);
-  driftLines.SetMaximumStepSize(MICRONTOCM);
+  driftLines.SetMaximumStepSize(MICRONTOCM);//MICRONTOCM
 
   std::vector<double> xStart;
   std::vector<double> yStart;
 
-  double rangeScale = 0.99;
-  double xRange = (xmax - xmin)*rangeScale;
-  double yRange = (ymax - ymin)*rangeScale;
+  double rangeScale = 0.9;
+  double xRange = (xBoundary[1] - xBoundary[0])*rangeScale;
+  double yRange = (yBoundary[1] - yBoundary[0])*rangeScale;
 
-  
+  /*
   //Create 2D uniformly-spaced array - Note this makes numFieldLine**2 lines
   for(int i = 0; i < numFieldLine; i++){
     for(int j = 0; j < numFieldLine; j++){
@@ -457,19 +477,19 @@ int main(int argc, char * argv[]) {
       yStart.push_back(-yRange/2. + j*yRange/(numFieldLine-1));
     }
   }
-  
-  /*
+  */
+
   //Lines generated radially from the center to edge of geometry
   //    The x-direction is the long axis of the geometry. 
   //    This extends past the vertex of the hex unit cell
   for(int i = 0; i < numFieldLine; i++){
-    xStart.push_back(xRange/2.*i/(numFieldLine-1));
+    xStart.push_back(rangeScale*xBoundary[1]*i/(numFieldLine-1));
     yStart.push_back(0.);
   }
-  */ 
   
   /*
   //Lines populated at corner - spread with uniform random numbers
+  //TODO - now with hex geomety, do some math to find that corner
   double spreadScale = 0.99995; //Any smaller and goes out of bounds
   for(int i = 0; i < numFieldLine; i++){
     //Get random numbers between 0 and 1
@@ -480,11 +500,10 @@ int main(int argc, char * argv[]) {
   }
   */
 
-  //Calculate field Lines
+  // ***** Calculate field Lines ***** //
   std::vector<std::array<float, 3> > fieldLines;
   int totalFieldLines = xStart.size();
   int numAtPad = 0;
-  
   std::cout << "Computing " << totalFieldLines << " field lines." << std::endl;
   int prevDriftLine = 0;
   for(int inFieldLine = 0; inFieldLine < totalFieldLines; inFieldLine++){
@@ -492,7 +511,7 @@ int main(int argc, char * argv[]) {
     fieldLineID = inFieldLine;
 
     //Calculate from top of volume
-    driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], zmax*rangeScale, fieldLines);
+    driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], zmax*.95, fieldLines);
 
     //Get coordinates of every point along field line and fill the tree
     for(int inLine = 0; inLine < fieldLines.size(); inLine++){
@@ -512,8 +531,9 @@ int main(int argc, char * argv[]) {
     }
 
     //Calculate lines from above grid
+    double gridLineSeparation = 1.1;
     gridFieldLineLocation = 1;
-    driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], 1.01*gridThickness/2., fieldLines);
+    driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], gridLineSeparation*gridThickness/2., fieldLines);
 
     //Get coordinates of every point along field line and fill the tree
     for(int inLine = 0; inLine < fieldLines.size(); inLine++){
@@ -526,7 +546,7 @@ int main(int argc, char * argv[]) {
 
     //Calculate lines from below grid
     gridFieldLineLocation = -1;
-    driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], -1.01*gridThickness/2., fieldLines);
+    driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], -gridLineSeparation*gridThickness/2., fieldLines);
 
     //Get coordinates of every point along field line and fill the tree
     for(int inLine = 0; inLine < fieldLines.size(); inLine++){
@@ -547,6 +567,7 @@ int main(int argc, char * argv[]) {
 
   }//End field line loop
   
+  std::cout << "Done " << totalFieldLines << " field lines; Determing transparency." << std::endl;
   //Determine transparency
   fieldTransparency = (1.*numAtPad) / (1.*totalFieldLines);
   std::cout << "Field transparency is " << fieldTransparency <<  "." << std::endl;
@@ -556,6 +577,7 @@ int main(int argc, char * argv[]) {
     std::cout << "Field transparency lower than limit - Running mimimal avalanche case." << std::endl;
     numAvalanche = 50;
     avalancheLimit = 50;
+    DEBUG = true; // TODO - 
   }
 
   // *** Deal with field line trees *** //
