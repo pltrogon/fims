@@ -10,11 +10,11 @@ Include "../runControl";
 halfPitch = pitch/2;
 
 // Finite element sizes for different regions
-gridElm = holeRadius/2;
-holeElm = gridThickness/2;
-padElm = holeElm;
-diElm = thicknessSiO2/2;
-cathElm = halfPitch/2.;
+gridElm = holeRadius;
+holeElm = gridThickness;
+padElm = thicknessSiO2;
+diElm = gridElm;
+cathElm = gridElm;
 
 // Derived Z-coordinates for different layers
 //     Center of grid: z = 0
