@@ -193,7 +193,6 @@ int main(int argc, char * argv[]) {
   }
 
   //Geometry parameters
-  //Garfield's operational scale is cm
   padLength = std::stod(readParam["padLength"])*MICRONTOCM;
   pitch = std::stod(readParam["pitch"])*MICRONTOCM;
 

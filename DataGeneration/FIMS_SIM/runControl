@@ -5,8 +5,8 @@
 // Dimensions: micron
 
 // Pad
-padLength = 65.0;
-pitch = 250.0;
+padLength = 10.0;
+pitch = 55.0;
 
 //Grid
 gridStandoff = 100.0;
@@ -18,9 +18,9 @@ cathodeHeight = 400.0;
 thicknessSiO2 = 5.0;
 
 //----- Field Parameters -----
-fieldRatio = 60.0;
+fieldRatio = 50.0;
 
-numFieldLine = 200;
+numFieldLine = 25;
 transparencyLimit = 0.1;
 
 //----- Simulation parameters -----
