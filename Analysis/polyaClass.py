@@ -12,11 +12,34 @@ from scipy.optimize import curve_fit, fsolve
 
 class myPolya:
     """
+    Class representing a Polya distribution.
+    Polya parameters are theta (shape) and gain (mean).
+
+    Distribution:
+    $
+    P(n) = 
+            \frac{1}{\bar{n} *
+            \frac{(\theta+1)^{(\theta+1)}{\Gamma(\theta+1)} * 
+            (\frac{n}{\bar{n}})^{\theta}$ *
+            e^{-n/\bar{n}(\theta+1)}
+    $
+
+    This is representative of the size of avalanches in electron multiplication.
+    Note that when theta=0, this reduces to an exponential.
     """
 
 
  #********************************************************************************#   
     def __init__(self, gain=None, theta=None):
+        """
+        Initializes a Polya with a given gain and theta.
+
+        Args:
+            gain (float): The mean value of the distribution.
+                          Must be greater than 0.
+            theta (float): The shape parameter of the distribution.
+                           Must be greater than or equal to 0.
+        """
 
         self.gain = gain
         self.theta = theta
@@ -33,6 +56,13 @@ class myPolya:
  #********************************************************************************#   
     def __call__(self, n, fGain=None, fTheta=None):
         """
+        Allow for calling the Polya like a function.
+        
+        Calculates the probability distribution, 
+        and can sets the gain/theta parameters.
+
+        Args:
+            n (float): 
         """
 
         if fGain is not None:

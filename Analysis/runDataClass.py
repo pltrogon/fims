@@ -8,8 +8,6 @@ import awkward_pandas
 import math
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.interpolate import interp1d
-
 
 from polyaClass import myPolya
 
@@ -150,63 +148,63 @@ class runData:
 
  #********************************************************************************#
     def getDataFrame(self, dataSetName):
-            """
-            Retrieves a specific DataFrame by its attribute name.
+        """
+        Retrieves a specific DataFrame by its attribute name.
 
-            All dimensions are given in microns.
+        All dimensions are given in microns.
 
-            Args:
-                dataSetName (str): The name of the DataFrame attribute.
+        Args:
+            dataSetName (str): The name of the DataFrame attribute.
 
-            Returns:
-                pd.DataFrame: The requested DataFrame if found and loaded, 
-                              otherwise None.
-            """
-            if not self._checkName(dataSetName):
-                return None
+        Returns:
+            pd.DataFrame: The requested DataFrame if found and loaded, 
+                          otherwise None.
+        """
+        if not self._checkName(dataSetName):
+            return None
 
-            #Get a copy of the data - note is saved as cm
-            rawData = getattr(self, dataSetName, None)
-            dataFrame = rawData.copy()
+        #Get a copy of the data - note is saved as cm
+        rawData = getattr(self, dataSetName, None)
+        dataFrame = rawData.copy()
 
-            if dataFrame is None:
-                print(f"Missing '{dataSetName}' data.")
-                return None
+        if dataFrame is None:
+            print(f"Missing '{dataSetName}' data.")
+            return None
 
-            #Scale to micron
-            match dataSetName:
-                case 'fieldLineData' | 'gridFieldLineData':
-                    dataToScale = [
-                        'Field Line x', 
-                        'Field Line y', 
-                        'Field Line z'
-                    ]
+        #Scale to micron
+        match dataSetName:
+            case 'fieldLineData' | 'gridFieldLineData':
+                dataToScale = [
+                    'Field Line x', 
+                    'Field Line y', 
+                    'Field Line z'
+                ]
 
-                case 'electronData' | 'ionData':
-                    dataToScale = [
-                        'Initial x', 
-                        'Initial y',
-                        'Initial z',
-                        'Final x', 
-                        'Final y',
-                        'Final z',
-                    ]
-                
-                case 'electronTrackData':
-                    dataToScale = [
-                        'Drift x', 
-                        'Drift y', 
-                        'Drift z'
-                    ]
+            case 'electronData' | 'ionData':
+                dataToScale = [
+                    'Initial x', 
+                    'Initial y',
+                    'Initial z',
+                    'Final x', 
+                    'Final y',
+                    'Final z',
+                ]
+            
+            case 'electronTrackData':
+                dataToScale = [
+                    'Drift x', 
+                    'Drift y', 
+                    'Drift z'
+                ]
 
-                case _:
-                    dataToScale = []
+            case _:
+                dataToScale = []
 
-            CMTOMICRON = 1e4
-            for toScale in dataToScale:
-                dataFrame[toScale] *= CMTOMICRON
-        
-            return dataFrame
+        CMTOMICRON = 1e4
+        for toScale in dataToScale:
+            dataFrame[toScale] *= CMTOMICRON
+    
+        return dataFrame
             
         
  #********************************************************************************#
@@ -1029,15 +1027,16 @@ class runData:
         targetLine = allFieldLines[allFieldLines['Field Line ID'] == lineID]
         targetLine = targetLine.sort_values(by='Field Line z')
 
-        #define interpolation function:
-        interpolateZ = interp1d(
+        #Get radius for target z using linear interpolation
+        targetRadius = np.interp(
+            zTarget, 
             targetLine['Field Line z'],
-            targetLine['Field Line Radius'],
-            kind='linear',
-            fill_value="extrapolate"
+            targetLine['Field Line Radius']
         )
 
-        #Get radius for target z using linear interpolation
-        targetRadius = interpolateZ(zTarget)
-
         return targetRadius
+
+
+
+
+
