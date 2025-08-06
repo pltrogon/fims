@@ -152,6 +152,3 @@ Boundary Condition 6
   Name = "MirrorBoundary"
   Electric Flux = 0.0
 End
-
-
-

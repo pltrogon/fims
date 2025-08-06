@@ -119,21 +119,13 @@ End
 Boundary Condition 1
   Target Boundaries(1) = 1
   Name = "Cathode"
-<<<<<<< HEAD:DataGeneration/FIMS_SIM/Geometry/FIMS.sif
-	Potential = -537.45
-=======
 	Potential = -418.975
->>>>>>> asClass:Simulation/Geometry/FIMS.sif
 End
 
 Boundary Condition 2
   Target Boundaries(1) = 2
   Name = "Grid"
-<<<<<<< HEAD:DataGeneration/FIMS_SIM/Geometry/FIMS.sif
-	Potential = -497.5
-=======
 	Potential = -399.0
->>>>>>> asClass:Simulation/Geometry/FIMS.sif
 End
 
 Boundary Condition 3

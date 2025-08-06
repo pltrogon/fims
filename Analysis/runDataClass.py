@@ -99,7 +99,7 @@ class runData:
         
     
  #********************************************************************************#
-   def _checkName(self, dataSetName):
+    def _checkName(self, dataSetName):
         """
         Checks that a requested data frame name from the simulation trees is valid.
         
@@ -113,7 +113,7 @@ class runData:
         
 
  #********************************************************************************#
-   def getTreeNames(self):
+    def getTreeNames(self):
         """
         Returns a list of all of the available tree names.
         """
@@ -121,7 +121,7 @@ class runData:
     
 
  #********************************************************************************#
-   def printMetaData(self):
+    def printMetaData(self):
         """
         Prints all metadata information. Dimensions in microns.
         """
@@ -504,7 +504,7 @@ class runData:
 
 
 #********************************************************************************#   
-   def plot2DFieldLines(self, target):
+    def plot2DFieldLines(self, target):
         """
         Generates 2D plots of the simulated field lines. Options include:
             Cathode - Field lines initiated near the cathode.
@@ -580,7 +580,7 @@ class runData:
     def _getRawGain(self):
         """
         """
-        avalancheData = getDataFrame('avalancheData')
+        avalancheData = self.getDataFrame('avalancheData')
         return avalancheData['Total Electrons'].mean()
 
     
@@ -642,7 +642,7 @@ class runData:
 
 
  #********************************************************************************#   
-   def plotAvalancheSize(self, trim=False, binWidth=1):
+    def plotAvalancheSize(self, trim=False, binWidth=1):
         """
         """
         histData = self._histAvalanche(trim, binWidth)
@@ -656,6 +656,7 @@ class runData:
         ax.bar(
             histData['binCenters'], 
             histData['prob'], 
+            width=binWidth,
             label='Simulation'
         )  
         ax.axvline(
@@ -900,7 +901,7 @@ class runData:
     def _fitAvalancheSize(self, binWidth):
         """
         """
-        histData = self._histAvalanche(trim=True, binWidth=1)
+        histData = self._histAvalanche(trim=True, binWidth=binWidth)
 
         gain = histData['gain']
 
@@ -952,7 +953,8 @@ class runData:
 
         ax.bar(
             fitResults['xVal'], 
-            fitResults['yVal'], 
+            fitResults['yVal'],
+            width=binWidth,
             label='Simulation'
         ) 
 
@@ -962,13 +964,19 @@ class runData:
                 label=r'Fitted Polya ($\theta$' 
                     + f' = {fitResults['fitPolya'].theta:.3})')
         ax.axvline(x=fitResults['fitPolya'].gain, 
-               c='m', ls=':', label=f'Fitted Gain = {fitResults['fitPolya'].gain:.1f}e')
+               c='m', ls=':', label=f'Polya Gain = {fitResults['fitPolya'].gain:.1f}e')
         
         ax.plot(fitResults['xVal'], 
                 expoResults, 
                 'r', lw=2, label=f'Fitted Exponential')
         ax.axvline(x=fitResults['fitExpo'].gain, 
-               c='r', ls=':', label=f'Fitted Gain = {fitResults['fitExpo'].gain:.1f}e')
+               c='r', ls=':', label=f'Expo Gain = {fitResults['fitExpo'].gain:.1f}e')
+
+        ax.axvline(x=self._getRawGain(), 
+               c='g', ls=':', label=f'Raw Gain = {self._getRawGain():.1f}e')
+        ax.axvline(x=fitResults['dataGain'], 
+               c='g', ls='--', label=f'Trimmed Gain = {fitResults['dataGain']:.1f}e')
+
 
         plt.xlabel('Avalanche Size')
         plt.ylabel('Probability')

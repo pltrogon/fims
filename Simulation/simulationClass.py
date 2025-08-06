@@ -33,7 +33,7 @@ class FIMS_Simulation:
         if not self._setupSimulation():
             raise RuntimeError('Error setting up simulation.')
 
-
+#***********************************************************************************#
     #String definition
     def __str__(self):
         """
@@ -42,7 +42,7 @@ class FIMS_Simulation:
         paramList = [f'{key}: {value}' for key, value in self.param.items()]            
         return "FIMS Simulation Parameters:\n\t" + "\n\t".join(paramList)
 
-    
+#***********************************************************************************#    
     def defaultParam(self):
         """
         Default FIMS parameters.
@@ -69,7 +69,7 @@ class FIMS_Simulation:
         }
         return defaultParam
 
-    
+#***********************************************************************************#    
     def _checkParam(self):
         """
         Ensures that values exist for all necessary parameters.
@@ -88,7 +88,7 @@ class FIMS_Simulation:
                 
         return True
 
-
+#***********************************************************************************#
     def _getParam(self, parameter):
         """
         Gets and returns desired parameter.
@@ -99,7 +99,7 @@ class FIMS_Simulation:
             
         return self.param[parameter]
 
-        
+ #***********************************************************************************#       
     def _getGarfieldPath(self):
         """
         Reads and returns the filepath to the Garfield++ source script.
@@ -132,12 +132,12 @@ class FIMS_Simulation:
             
         return garfieldPath
 
-
+#***********************************************************************************#
     def _setupSimulation(self):
         """
         Initializes Garfield++ and creates an avalanche executable.
         
-        Reads the Garfiled++ source path, and ensures a build directory.
+        Reads the Garfiled++ source path, and ensures a log and build directory.
         Compiles the executable using cmake and make.
         Initializes a simulation run counter if it does not already exist.
     
@@ -147,7 +147,11 @@ class FIMS_Simulation:
         Returns:
             bool: True if the setup is successful, False otherwise.
         """
-    
+
+        #Check for log/
+        if not os.path.exists("log"):
+            os.makedirs("log")
+            
         #Check for build/
         if not os.path.exists("build"):
             os.makedirs("build")
@@ -175,7 +179,7 @@ class FIMS_Simulation:
                 
         return True
 
-        
+#***********************************************************************************#        
     def _readParam(self):
         """
         Reads the simulation parameters contained in the simulation control file.
@@ -214,7 +218,7 @@ class FIMS_Simulation:
         self.param = readInParam
         return True
 
-    
+#***********************************************************************************#    
     def _writeFile(self, filename, lines):
         """
         Writes a list of strings to a specified file.
@@ -237,7 +241,7 @@ class FIMS_Simulation:
             
         return True
 
-
+#***********************************************************************************#
     def _writeRunControl(self):
         """
         Rewrites the simulation control file with the parameters.
@@ -282,7 +286,7 @@ class FIMS_Simulation:
         #Write new runControl file
         return self._writeFile(filename, newLines)
 
-        
+#***********************************************************************************#        
     def _readSIF(self):
         """
         Reads the FIMS.sif file and returns its content as a list of lines.
@@ -307,7 +311,7 @@ class FIMS_Simulation:
     
         return sifLines
         
-
+#***********************************************************************************#
     def _calcPotentials(self):
         """
         Calculates the required potentials to achieve a desired field ratio.
@@ -340,7 +344,7 @@ class FIMS_Simulation:
         
         return potentials
 
-
+#***********************************************************************************#
     def _writeSIF(self):
         """
         Rewrites the FIMS.sif file boundary conditons based on the given parameters.
@@ -386,7 +390,7 @@ class FIMS_Simulation:
         filename = os.path.join('./Geometry', 'FIMS.sif')
         return self._writeFile(filename, sifLines)
 
-
+#***********************************************************************************#
     def _makeWeighting(self):
         """
         Writes a new .sif file for determining the weighting field.
@@ -426,7 +430,7 @@ class FIMS_Simulation:
         filename = 'Geometry/FIMSWeighting.sif'
         return self._writeFile(filename, sifLinesNew)
 
-
+#***********************************************************************************#
     def _writeParam(self):
         """
         Updates the simulation control files with the specified parameters.
@@ -446,6 +450,7 @@ class FIMS_Simulation:
         
         return True
 
+#***********************************************************************************#
     def resetParam(self, verbose=True):
         """
         Rewrites the run control files with the default simulation parameters.
@@ -466,7 +471,7 @@ class FIMS_Simulation:
         
         return True
 
-
+#***********************************************************************************#
     def _getRunNumber(self):
         """
         Gets the simulation number for the NEXT simulation.
@@ -495,7 +500,7 @@ class FIMS_Simulation:
         return runNo
 
 
-
+#***********************************************************************************#
     def _runGmsh(self):
         """
         Runs the Gmsh program to generate a 3D finite-element mesh of the simulation geometry.
@@ -539,7 +544,7 @@ class FIMS_Simulation:
             
         return True
 
-
+#***********************************************************************************#
     def _runElmer(self):
         """
         Runs Elmer to determine a finite-element Electric field solution.
@@ -593,7 +598,7 @@ class FIMS_Simulation:
             os.chdir(originalCWD)
         return True
 
-
+#***********************************************************************************#
     def _runElmerWeighting(self):
         """
         Runs ElmerSolver to determine the weighing field for a simulation.
@@ -629,7 +634,7 @@ class FIMS_Simulation:
             os.chdir(originalCWD)
         return True
 
-
+#***********************************************************************************#
     def _runGarfield(self):
         """
         Runs a Garfield++ executable to determine field lines and simulate 
@@ -670,7 +675,7 @@ class FIMS_Simulation:
         return True
 
 
-
+#***********************************************************************************#
     def runSimulation(self, changeGeometry=True):
         """
         Executes the full simulation process for the given parameters.

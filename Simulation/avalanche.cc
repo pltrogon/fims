@@ -193,10 +193,7 @@ int main(int argc, char * argv[]) {
   }
 
   //Geometry parameters
-<<<<<<< HEAD:DataGeneration/FIMS_SIM/avalanche.cc
-=======
   //Garfield's operational scale is cm. runControl is defined in microns
->>>>>>> asClass:Simulation/avalanche.cc
   padLength = std::stod(readParam["padLength"])*MICRONTOCM;
   pitch = std::stod(readParam["pitch"])*MICRONTOCM;
 
