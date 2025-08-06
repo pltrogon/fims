@@ -9,6 +9,14 @@ from polyaClass import myPolya
 #********************************************************************************#   
 def getAnalysisNumbers():
     """
+    Reads a list of run numbers to analyzer from a file.
+
+    Assumes filename is 'analysisRunNumbers'.
+    If file does not exist, it is created and initialized with a '-1'.
+
+    Returns:
+        list[int]: List of integers representing the run number to be analyzed.
+                   Empty if an error occurs.
     """
     filename = 'analysisRunNumbers'
 
@@ -38,13 +46,21 @@ def getAnalysisNumbers():
                     
     except Exception as e:
         print(f"An unexpected error occurred while reading '{filename}': {e}")
-        return None
+        return []
 
     return allRunnos
     
 #********************************************************************************#   
 def plotGeneralPolya(theta):
     """
+    Plots the general Polya distribution for a given set of theta values.
+
+    The x-axis represents the normalized avalanche size ($n/\bar{n}$),
+    and the y-axis represents the normalized probability ($\bar{n}$ x Probability).
+
+    Args:
+        theta (float): List or numpy array of values to use as 
+                       theta in Polya calculations.
     """
     n = np.linspace(0, 4, 101)
     plt.figure(figsize=(6, 4))
@@ -66,6 +82,13 @@ def plotGeneralPolya(theta):
 #********************************************************************************#   
 def plotPolya(theta):
     """
+    Generates and plots Polya distributions for various gain and theta values.
+
+    Each subplot corresponds to a single theta with various gain values.
+
+    Args:
+        theta (float): List or numpy array of values to use as 
+                       theta in Polya calculations.
     """
     gain = [10, 25, 50, 75, 100]
 
@@ -101,6 +124,14 @@ def plotPolya(theta):
 #********************************************************************************#   
 def plotPolyaEfficiency(theta):
     """
+    Plots the efficiency of the Polya distribution as a function of the
+    threshold-to-gain ratio ($n_{t} / \bar{n}$).
+
+    Includes reference lines for 95% efficiency for the theta=0 case.
+    
+    Args:
+        theta (float): List or numpy array of values to use as 
+                       theta in Polya calculations.
     """
     k = np.linspace(0, 1, 101) #Ratio: Threshold/Gain
 
@@ -125,11 +156,17 @@ def plotPolyaEfficiency(theta):
     plt.legend()
     plt.grid(True, alpha=0.5)
     plt.show()
+
     return
 
 #********************************************************************************#   
 def plotThreshold():
     """
+    Plots the minimum gain required to achieve specific target efficiencies
+    as a function of detector threshold. 
+    
+    Include the theta=0 case as the maximum, and several other low-theta results.
+    Efficiencies are 95% and 90%.
     """
     threshold = np.linspace(0, 16, 11)
     efficiency = [.95, .9]
@@ -169,9 +206,18 @@ def plotThreshold():
     plt.grid(True, alpha=0.5)
     plt.show()
 
+    return
+
 #********************************************************************************#   
 def plotPolyExamples(thetaStart=0, thetaEnd=5, numSteps=6):
     """
+    Generates a series of plots illustrating various aspects of 
+    the Polya distribution for a given range of theta-values.
+
+    Args:
+        thetaStart (int or float): The starting value for the theta range.
+        thetaEnd (int or float): The ending value for the theta range.
+        numSteps (int): The number of steps to generate within the theta range. 
     """
     theta = np.linspace(thetaStart, thetaEnd, numSteps)
 
@@ -179,6 +225,8 @@ def plotPolyExamples(thetaStart=0, thetaEnd=5, numSteps=6):
     plotPolya(theta)
     plotPolyaEfficiency(theta)
     plotThreshold()
+
+    return
     
 
 

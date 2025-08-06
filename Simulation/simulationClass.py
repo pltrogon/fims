@@ -15,6 +15,45 @@ import re
 
 class FIMS_Simulation:
     """
+    Class representing the FIMS simulation.
+
+    Initializes to a set of default parameters via a dictionary.
+
+    The parameters within this dictionary can be adjusted and then used to execute
+    a simulation. This process is as follows:
+
+        1. Check that all required parameters are present and defined.
+        2. Read and the simulation run number.
+        3. Write the simulation parameters to the control files.
+        4. Execute Gmsh to generate a finite-element mesh of the geometry.
+        5. Execute Elmer to solve the E field for the mesh.
+        6. Execute Elmer to solve the weighting field for the electrode.
+        7. Execute Garfield++ to simulate electron multiplication effects.
+        8. Reset parameters to defaults.
+
+    *****
+    Important: The parameters are reset to defaults after every simulation.
+    *****
+
+    Attributes:
+        param (dict): Parameter dictionary with the following entries:
+            - padLength: Length of the side of the hexagonal pad (micron).
+            - pitch: Distance between neighbouring pads (micron).
+            - gridStandoff: Distance from the top to the SiO2 layer to the bottom of the grid (micron).
+            - gridThickness: Thickness of the grid (micron).
+            - holeRadius: Radius of the hole in the grid (micron).
+            - cathodeHeight: Distance from the top to the grid to the cathode plane (micron).
+            - thicknessSiO2: Thickness of the SiO2 layer (micron).
+            - fieldRatio: Ratio of the amplification field to the drift field.
+                          Note that the drift field is assumed to be 1 kV/cm.
+            - numFieldLine: Number of field lines to calculate for visualization.
+            - transparencyLimit: Electric field transparancy limit.
+            - numAvalanche: Number of electrons (avalanches) to initiate
+            - avalancheLimit: Limit of the number of electrons within a single avalanche.
+            - gasCompAr: Percentage of Argon within gas volume.
+            - gasCompCO2: Percentage of CO2 within gas volume.
+
+    
     """
 
 #***********************************************************************************#
@@ -693,6 +732,7 @@ class FIMS_Simulation:
         Args:
             changeGeometry (bool): Allows for bypassing bypassing the 
                                    Gmsh call to generate a mesh.
+                                   Also skips creating the weighting field.
                                    (Optional for when geometry does not change.)
     
         Returns:
@@ -703,6 +743,17 @@ class FIMS_Simulation:
         if not self._checkParam():
             return -1
     
+        #If geometry does not change, gmash and weighting do not need to be done.
+        #However, check that the mesh and weighting field files exist.
+        #If not, override input and generate.
+        if not changeGeometry:
+            meshFile = os.path.exists('Geometry/FIMS.msh')
+            weightFile = os.path.exists('Geometry/elmerResults/FIMSWeighting.result')
+            if not (meshFile and weightFile):
+                print('Warning. Attempt to skip Gmsh and ElmerWeighting. Overriding input.')
+                changeGeometry = True
+
+
         #get the run number for this simulation
         runNo = self._getRunNumber()
         if runNo == -1:
@@ -724,14 +775,18 @@ class FIMS_Simulation:
         #Determine the Electric and weighting fields
         if not self._runElmer():
                 print('Error executing Elmer (base).')
-                return -1     
-        if not self._runElmerWeighting():
-            print('Error executing Elmer (weighting).')
-            return -1
+                return -1    
+
+        #If geometry does not change, neither will weighting field.
+        if changeGeometry: 
+            if not self._runElmerWeighting():
+                print('Error executing Elmer (weighting).')
+                return -1
     
         #Run the electron transport simulation
         if not self._runGarfield():
             print('Error executing Garfield.')
+            return -1
     
         #reset parameters to finish
         self.resetParam()
