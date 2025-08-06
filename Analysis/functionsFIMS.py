@@ -16,7 +16,7 @@ def getAnalysisNumbers():
         with open(filename, "w") as file:
             file.write('-1')
             print(f"File '{filename}' created with default -1.")
-            return [-1]
+            return []
 
     allRunnos = []
     try:

@@ -5,8 +5,8 @@
 // Dimensions: micron
 
 // Pad
-padLength = 10.0;
-pitch = 55.0;
+padLength = 65.0;
+pitch = 250.0;
 
 //Grid
 gridStandoff = 100.0;
@@ -18,15 +18,8 @@ cathodeHeight = 200.0;
 thicknessSiO2 = 5.0;
 
 //----- Field Parameters -----
-<<<<<<< HEAD:DataGeneration/FIMS_SIM/runControl
-fieldRatio = 50.0;
-
-numFieldLine = 25;
-=======
 fieldRatio = 40.0;
-
 numFieldLine = 51;
->>>>>>> asClass:Simulation/runControl
 transparencyLimit = 0.1;
 
 //----- Simulation parameters -----
