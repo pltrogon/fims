@@ -1,0 +1,847 @@
+//**********************************************************************
+// DEFINING THE FIMS GEOMETRY TO INCLUDE ALL SURROUNDING CELLS
+//
+//**********************************************************************
+
+// Parameters in micrometers
+Include "../runControl";
+
+halfPitch = pitch/2;
+
+// Finite element sizes for different regions
+holeElm = gridThickness/2;
+gridElm = holeRadius/10;
+padElm = padLength/10;
+farElm = cathodeHeight/10;
+
+// Derived Z-coordinates for different layers
+//     Center of grid: z = 0
+cathodeDistance = gridThickness/2 + cathodeHeight;
+gridTop = gridThickness/2;
+gridBottom = -gridThickness/2;
+topSiO2 = - gridThickness/2 - gridStandoff + thicknessSiO2;
+padBase = -gridThickness/2 - gridStandoff;
+
+// Global coordinate limits
+xMax = (3^.5)*halfPitch;
+xMin = -xMax;
+yMax = pitch;
+yMin = -yMax;
+
+//**********************************************************************
+// GRID STRUCTURE
+//**********************************************************************
+
+// Points - top of the grid
+//Corners
+Point(1) = {xMax, yMax, gridTop, holeElm};
+Point(2) = {xMax, yMin, gridTop, holeElm};
+Point(3) = {xMin, yMax, gridTop, holeElm};
+Point(4) = {xMin, yMin, gridTop, holeElm};
+
+//Center hole
+Point(5) = {0, 0, gridTop, holeElm};
+Point(6) = {holeRadius, 0, gridTop, gridElm};
+Point(7) = {-holeRadius, 0, gridTop, gridElm};
+Point(201) = {0, holeRadius, gridTop, gridElm};
+Point(202) = {0, -holeRadius, gridTop, gridElm};
+
+
+//Holes above/below
+Point(8) = {0, yMax, gridTop, gridElm};
+Point(9) = {-holeRadius, yMax, gridTop, gridElm};
+Point(10) = {holeRadius, yMax, gridTop, gridElm};
+Point(11) = {0, yMin, gridTop, gridElm};
+Point(12) = {holeRadius, yMin, gridTop, gridElm};
+Point(13) = {-holeRadius, yMin, gridTop, gridElm};
+
+//Holes along left sides
+Point(14) = {xMin, halfPitch, gridTop, gridElm};
+Point(15) = {xMin, halfPitch - holeRadius, gridTop, gridElm};
+Point(16) = {xMin, halfPitch + holeRadius, gridTop, gridElm};
+
+Point(17) = {xMin, -halfPitch, gridTop, gridElm};
+Point(18) = {xMin, -halfPitch - holeRadius, gridTop, gridElm};
+Point(19) = {xMin, -halfPitch + holeRadius, gridTop, gridElm};
+
+//Holes along right sides
+Point(20) = {xMax, halfPitch, gridTop, gridElm};
+Point(21) = {xMax, halfPitch + holeRadius, gridTop, gridElm};
+Point(22) = {xMax, halfPitch - holeRadius, gridTop, gridElm};
+
+Point(23) = {xMax, -halfPitch, gridTop, gridElm};
+Point(24) = {xMax, -halfPitch + holeRadius, gridTop, gridElm};
+Point(25) = {xMax, -halfPitch - holeRadius, gridTop, gridElm};
+
+
+// Lines - Top of Grid
+//Holes
+Circle(1001) = {6, 5, 201};
+Circle(1201) = {201, 5, 7};
+Circle(1002) = {7, 5, 202};
+Circle(1202) = {202, 5, 6};
+Circle(1003) = {9, 8, 10};
+Circle(1004) = {12, 11, 13};
+Circle(1005) = {15, 14, 16};
+Circle(1006) = {18, 17, 19};
+Circle(1007) = {21, 20, 22};
+Circle(1008) = {24, 23, 25};
+
+//Sides
+Line(1009) = {1, 10};
+Line(1010) = {1, 21};
+Line(1011) = {2, 12};
+Line(1012) = {2, 25};
+Line(1013) = {3, 9};
+Line(1014) = {3, 16};
+Line(1015) = {4, 13};
+Line(1016) = {4, 18};
+Line(1017) = {15, 19};
+Line(1018) = {22, 24};
+
+
+// Points - bottom of the grid
+//Corners
+Point(26) = {xMax, yMax, gridBottom, holeElm};
+Point(27) = {xMax, yMin, gridBottom, holeElm};
+Point(28) = {xMin, yMax, gridBottom, holeElm};
+Point(29) = {xMin, yMin, gridBottom, holeElm};
+
+//Center hole
+Point(30) = {0, 0, gridBottom, holeElm};
+Point(31) = {holeRadius, 0, gridBottom, gridElm};
+Point(32) = {-holeRadius, 0, gridBottom, gridElm};
+Point(203) = {0, holeRadius, gridBottom, gridElm};
+Point(204) = {0, -holeRadius, gridBottom, gridElm};
+
+//Holes above/below
+Point(33) = {0, yMax, gridBottom, gridElm};
+Point(34) = {-holeRadius, yMax, gridBottom, gridElm};
+Point(35) = {holeRadius, yMax, gridBottom, gridElm};
+Point(36) = {0, yMin, gridBottom, gridElm};
+Point(37) = {holeRadius, yMin, gridBottom, gridElm};
+Point(38) = {-holeRadius, yMin, gridBottom, gridElm};
+
+//Holes along left sides
+Point(39) = {xMin, halfPitch, gridBottom, gridElm};
+Point(40) = {xMin, halfPitch - holeRadius, gridBottom, gridElm};
+Point(41) = {xMin, halfPitch + holeRadius, gridBottom, gridElm};
+
+Point(42) = {xMin, -halfPitch, gridBottom, gridElm};
+Point(43) = {xMin, -halfPitch - holeRadius, gridBottom, gridElm};
+Point(44) = {xMin, -halfPitch + holeRadius, gridBottom, gridElm};
+
+//Holes along right sides
+Point(45) = {xMax, halfPitch, gridBottom, gridElm};
+Point(46) = {xMax, halfPitch + holeRadius, gridBottom, gridElm};
+Point(47) = {xMax, halfPitch - holeRadius, gridBottom, gridElm};
+
+Point(48) = {xMax, -halfPitch, gridBottom, gridElm};
+Point(49) = {xMax, -halfPitch + holeRadius, gridBottom, gridElm};
+Point(50) = {xMax, -halfPitch - holeRadius, gridBottom, gridElm};
+
+// Lines - Bottom of Grid
+//Holes
+Circle(1019) = {31, 30, 203};
+Circle(1203) = {203, 30, 32};
+Circle(1020) = {32, 30, 204};
+Circle(1204) = {204, 30, 31};
+Circle(1021) = {34, 33, 35};
+Circle(1022) = {37, 36, 38};
+Circle(1023) = {40, 39, 41};
+Circle(1024) = {43, 42, 44};
+Circle(1025) = {46, 45, 47};
+Circle(1026) = {49, 48, 50};
+
+
+//Sides
+Line(1027) = {26, 35};
+Line(1028) = {26, 46};
+Line(1029) = {27, 37};
+Line(1030) = {27, 50};
+Line(1031) = {28, 34};
+Line(1032) = {28, 41};
+Line(1033) = {29, 38};
+Line(1034) = {29, 43};
+Line(1035) = {40, 44};
+Line(1036) = {47, 49};
+
+// Lines connecting top and bottom of grid
+Line(1037) = {1, 26};
+Line(1038) = {2, 27};
+Line(1039) = {3, 28};
+Line(1040) = {4, 29};
+Line(1041) = {5, 30};
+Line(1042) = {6, 31};
+Line(1043) = {7, 32};
+Line(1044) = {8, 33};
+Line(1045) = {9, 34};
+Line(1046) = {10, 35};
+Line(1047) = {11, 36};
+Line(1048) = {12, 37};
+Line(1049) = {13, 38};
+Line(1050) = {14, 39};
+Line(1051) = {15, 40};
+Line(1052) = {16, 41};
+Line(1053) = {17, 42};
+Line(1054) = {18, 43};
+Line(1055) = {19, 44};
+Line(1056) = {20, 45};
+Line(1057) = {21, 46};
+Line(1058) = {22, 47};
+Line(1059) = {23, 48};
+Line(1060) = {24, 49};
+Line(1061) = {25, 50};
+Line(1205) = {201, 203};
+Line(1206) = {202, 204};
+
+
+//Surfaces
+//Top
+Curve Loop(2001) = {1001, 1201, 1002, 1202}; //Middle Circle
+Curve Loop(2002) = {
+    1013, 1003, -1009, //Top
+    1010, 1007, 1018, 1008, -1012, //Right
+    1011, 1004, -1015, //Bottom
+    1016, 1006, -1017, 1005, -1014 //Left
+};
+Plane Surface(3001) = {2002, -2001};
+
+//Bottom
+Curve Loop(2003) = {1019, 1203, 1020, 1204}; // Middle Circle
+Curve Loop(2004) = {
+    1031, 1021, -1027, //Top
+    1028, 1025, 1036, 1026, -1030, //Right
+    1029, 1022, -1033, //Bottom
+    1034, 1024, -1035, 1023, -1032 //Left
+};
+Plane Surface(3002) = {2004, -2003};
+
+//Sides
+//Center hole
+Curve Loop(2005) = {1001, 1205, -1019, -1042};
+Surface(3003) = {2005};
+Curve Loop(2006) = {1002, 1206, -1020, -1043};
+Surface(3004) = {2006};
+Curve Loop(2201) = {1201, 1043, -1203, -1205};
+Surface(3201) = {2201};
+Curve Loop(2202) = {1202, 1042, -1204, -1206};
+Surface(3202) = {2202};
+
+
+//Top
+Curve Loop(2007) = {1003, 1046, -1021, -1045};
+Surface(3005) = {2007};
+Curve Loop(2008) = {1013, 1045, -1031, -1039};
+Plane Surface(3006) = {2008};
+Curve Loop(2009) = {1009, 1046, -1027, -1037};
+Plane Surface(3007) = {2009};
+
+//Right
+Curve Loop(2010) = {1010, 1057, -1028, -1037};
+Plane Surface(3008) = {2010};
+Curve Loop(2011) = {1007, 1058, -1025, -1057};
+Surface(3009) = {2011};
+Curve Loop(2012) = {1018, 1060, -1036, -1058};
+Plane Surface(3010) = {2012};
+Curve Loop(2013) = {1008, 1061, -1026, -1060};
+Surface(3011) = {2013};
+Curve Loop(2014) = {1012, 1061, -1030, -1038};
+Plane Surface(3012) = {2014};
+
+//Bottom
+Curve Loop(2015) = {1004, 1049, -1022, -1048};
+Surface(3013) = {2015};
+Curve Loop(2016) = {1015, 1049, -1033, -1040};
+Plane Surface(3014) = {2016};
+Curve Loop(2017) = {1011, 1048, -1029, -1038};
+Plane Surface(3015) = {2017};
+
+//Left
+Curve Loop(2018) = {1014, 1052, -1032, -1039};
+Plane Surface(3016) = {2018};
+Curve Loop(2019) = {1005, 1052, -1023, -1051};
+Surface(3017) = {2019};
+Curve Loop(2020) = {1017, 1055, -1035, -1051};
+Plane Surface(3018) = {2020};
+Curve Loop(2021) = {1006, 1055, -1024, -1054};
+Surface(3019) = {2021};
+Curve Loop(2022) = {1016, 1054, -1034, -1040};
+Plane Surface(3020) = {2022};
+
+// ***** Grid Volume ***** //
+Surface Loop(4001) = {
+    3001, // Top
+    3002, // Bottom
+    3003, 3004, 3201, 3202, // Center Hole
+    3005, 3006, 3007, // Top
+    3008, 3009, 3010, 3011, 3012, // Right
+    3013, 3014, 3015, // Bottom
+    3016, 3017, 3018, 3019, 3020 // Left
+};
+Volume(1) = {4001};
+
+
+//**********************************************************************
+// Pads and Dielectric
+//**********************************************************************
+
+// ***** PADS ***** //
+halfPad = padLength/2;
+padInner = (3^.5)*halfPad;
+padOuter = padLength;
+
+//Central pad
+//Points
+Point(51) = {padOuter, 0, padBase, padElm};
+Point(52) = {halfPad, -padInner, padBase, padElm};
+Point(53) = {-halfPad, -padInner, padBase, padElm};
+Point(54) = {-padOuter, 0, padBase, padElm};
+Point(55) = {-halfPad, padInner, padBase, padElm};
+Point(56) = {halfPad, padInner, padBase, padElm};
+
+// Lines
+Line(1062) = {51, 52};
+Line(1063) = {52, 53};
+Line(1064) = {53, 54};
+Line(1065) = {54, 55};
+Line(1066) = {55, 56};
+Line(1067) = {56, 51};
+
+// Surface
+Curve Loop(2023) = {1062, 1063, 1064, 1065, 1066, 1067};
+Plane Surface(3021) = {2023};
+
+
+//Top pad
+//Points
+Point(57) = {padOuter, yMax, padBase, padElm};
+Point(58) = {halfPad, yMax - padInner, padBase, padElm};
+Point(59) = {-halfPad, yMax - padInner, padBase, padElm};
+Point(60) = {-padOuter, yMax, padBase, padElm};
+
+//Lines
+Line(1068) = {57, 58};
+Line(1069) = {58, 59};
+Line(1070) = {59, 60};
+Line(1071) = {60, 57};
+
+//Surface
+Curve Loop(2024) = {1068, 1069, 1070, 1071};
+Plane Surface(3022) = {2024};
+
+
+// Bottom Pad
+//Points
+Point(61) = {padOuter, yMin, padBase, padElm};
+Point(62) = {halfPad, yMin + padInner, padBase, padElm};
+Point(63) = {-halfPad, yMin + padInner, padBase, padElm};
+Point(64) = {-padOuter, yMin, padBase, padElm};
+
+//Lines
+Line(1072) = {61, 62};
+Line(1073) = {62, 63};
+Line(1074) = {63, 64};
+Line(1075) = {64, 61};
+
+//Surface
+Curve Loop(2025) = {1072, 1073, 1074, 1075};
+Plane Surface(3023) = {2025};
+
+
+// Top-Right Pad
+//Points
+Point(65) = {xMax, halfPitch + padOuter, padBase, padElm};
+Point(66) = {xMax - padInner, halfPitch + halfPad, padBase, padElm};
+Point(67) = {xMax - padInner, halfPitch - halfPad, padBase, padElm};
+Point(68) = {xMax, halfPitch - padOuter, padBase, padElm};
+
+//Lines
+Line(1076) = {65, 66};
+Line(1077) = {66, 67};
+Line(1078) = {67, 68};
+Line(1079) = {68, 65};
+
+//Surface
+Curve Loop(2026) = {1076, 1077, 1078, 1079};
+Plane Surface(3024) = {2026};
+
+
+// Bottom-Right Pad
+//Points
+Point(69) = {xMax, -halfPitch + padOuter, padBase, padElm};
+Point(70) = {xMax - padInner, -halfPitch + halfPad, padBase, padElm};
+Point(71) = {xMax - padInner, -halfPitch - halfPad, padBase, padElm};
+Point(72) = {xMax, -halfPitch - padOuter, padBase, padElm};
+
+//Lines
+Line(1080) = {69, 70};
+Line(1081) = {70, 71};
+Line(1082) = {71, 72};
+Line(1083) = {72, 69};
+
+//Surface
+Curve Loop(2027) = {1080, 1081, 1082, 1083};
+Plane Surface(3025) = {2027};
+
+
+// Top-Left Pad
+//Points
+Point(73) = {xMin, halfPitch + padOuter, padBase, padElm};
+Point(74) = {xMin + padInner, halfPitch + halfPad, padBase, padElm};
+Point(75) = {xMin + padInner, halfPitch - halfPad, padBase, padElm};
+Point(76) = {xMin, halfPitch - padOuter, padBase, padElm};
+
+//Lines
+Line(1084) = {73, 74};
+Line(1085) = {74, 75};
+Line(1086) = {75, 76};
+Line(1087) = {76, 73};
+
+//Surface
+Curve Loop(2028) = {1084, 1085, 1086, 1087};
+Plane Surface(3026) = {2028};
+
+
+// Bottom-Left Pad
+//Points
+Point(77) = {xMin, -halfPitch + padOuter, padBase, padElm};
+Point(78) = {xMin + padInner, -halfPitch + halfPad, padBase, padElm};
+Point(79) = {xMin + padInner, -halfPitch - halfPad, padBase, padElm};
+Point(80) = {xMin, -halfPitch - padOuter, padBase, padElm};
+
+//Lines
+Line(1088) = {77, 78};
+Line(1089) = {78, 79};
+Line(1090) = {79, 80};
+Line(1091) = {80, 77};
+
+//Surface
+Curve Loop(2029) = {1088, 1089, 1090, 1091};
+Plane Surface(3027) = {2029};
+
+
+// ***** DIELECTRIC ***** //
+
+// *** Bottom ***
+//Points - Dielectric corners
+Point(81) = {xMax, yMax, padBase, padElm};
+Point(82) = {xMax, yMin, padBase, padElm};
+Point(83) = {xMin, yMax, padBase, padElm};
+Point(84) = {xMin, yMin, padBase, padElm};
+
+//Lines - Outer edges
+//Top
+Line(1092) = {83, 60};
+Line(1093) = {57, 81};
+//Right
+Line(1094) = {81, 65};
+Line(1095) = {68, 69};
+Line(1096) = {72, 82};
+//Bottom
+Line(1097) = {82, 61};
+Line(1098) = {64, 84};
+//Left
+Line(1099) = {84, 80};
+Line(1100) = {77, 76};
+Line(1101) = {73, 83};
+
+//Surface - Dielectric bottom
+Curve Loop(2030) = {
+    1092, -1070, -1069, -1068, 1093, // Top
+    1094, 1076, 1077, 1078, 1095, 1080, 1081, 1082, 1096, // Right
+    1097, 1072, 1073, 1074, 1098, // Bottom
+    1099, -1090, -1089, -1088, 1100, -1086, -1085, -1084, 1101 // Left
+};
+Plane Surface(3028) = {2030, -2023};
+
+// *** Top ***
+//Points 
+//Dielectric  corners
+Point(85) = {xMax, yMax, topSiO2, padElm};
+Point(86) = {xMax, yMin, topSiO2, padElm};
+Point(87) = {xMin, yMax, topSiO2, padElm};
+Point(88) = {xMin, yMin, topSiO2, padElm};
+
+// Central pad
+Point(89) = {padOuter, 0, topSiO2, padElm};
+Point(90) = {halfPad, -padInner, topSiO2, padElm};
+Point(91) = {-halfPad, -padInner, topSiO2, padElm};
+Point(92) = {-padOuter, 0, topSiO2, padElm};
+Point(93) = {-halfPad, padInner, topSiO2, padElm};
+Point(94) = {halfPad, padInner, topSiO2, padElm};
+
+// Top pad
+Point(95) = {padOuter, yMax, topSiO2, padElm};
+Point(96) = {halfPad, yMax - padInner, topSiO2, padElm};
+Point(97) = {-halfPad, yMax - padInner, topSiO2, padElm};
+Point(98) = {-padOuter, yMax, topSiO2, padElm};
+
+//Bottom Pad
+Point(99) = {padOuter, yMin, topSiO2, padElm};
+Point(100) = {halfPad, yMin + padInner, topSiO2, padElm};
+Point(101) = {-halfPad, yMin + padInner, topSiO2, padElm};
+Point(102) = {-padOuter, yMin, topSiO2, padElm};
+
+// Top-Right Pad
+Point(103) = {xMax, halfPitch + padOuter, topSiO2, padElm};
+Point(104) = {xMax - padInner, halfPitch + halfPad, topSiO2, padElm};
+Point(105) = {xMax - padInner, halfPitch - halfPad, topSiO2, padElm};
+Point(106) = {xMax, halfPitch - padOuter, topSiO2, padElm};
+
+// Bottom-Right Pad
+Point(107) = {xMax, -halfPitch + padOuter, topSiO2, padElm};
+Point(108) = {xMax - padInner, -halfPitch + halfPad, topSiO2, padElm};
+Point(109) = {xMax - padInner, -halfPitch - halfPad, topSiO2, padElm};
+Point(110) = {xMax, -halfPitch - padOuter, topSiO2, padElm};
+
+// Top-Left Pad
+Point(111) = {xMin, halfPitch + padOuter, topSiO2, padElm};
+Point(112) = {xMin + padInner, halfPitch + halfPad, topSiO2, padElm};
+Point(113) = {xMin + padInner, halfPitch - halfPad, topSiO2, padElm};
+Point(114) = {xMin, halfPitch - padOuter, topSiO2, padElm};
+
+// Bottom-Left Pad
+Point(115) = {xMin, -halfPitch + padOuter, topSiO2, padElm};
+Point(116) = {xMin + padInner, -halfPitch + halfPad, topSiO2, padElm};
+Point(117) = {xMin + padInner, -halfPitch - halfPad, topSiO2, padElm};
+Point(118) = {xMin, -halfPitch - padOuter, topSiO2, padElm};
+
+//Lines
+//Central pad
+Line(1102) = {89, 90};
+Line(1103) = {90, 91};
+Line(1104) = {91, 92};
+Line(1105) = {92, 93};
+Line(1106) = {93, 94};
+Line(1107) = {94, 89};
+
+//Outer edges
+//Top
+Line(1108) = {87, 98};
+Line(1109) = {98, 97};
+Line(1110) = {97, 96};
+Line(1111) = {96, 95};
+Line(1112) = {95, 85};
+//Right
+Line(1113) = {85, 103};
+Line(1114) = {103, 104};
+Line(1115) = {104, 105};
+Line(1116) = {105, 106};
+Line(1117) = {106, 107};
+Line(1118) = {107, 108};
+Line(1119) = {108, 109};
+Line(1120) = {109, 110};
+Line(1121) = {110, 86};
+//Bottom
+Line(1122) = {86, 99};
+Line(1123) = {99, 100};
+Line(1124) = {100, 101};
+Line(1125) = {101, 102};
+Line(1126) = {102, 88};
+//Left
+Line(1127) = {88, 118};
+Line(1128) = {115, 116};
+Line(1129) = {116, 117};
+Line(1130) = {117, 118};
+Line(1131) = {115, 114};
+Line(1132) = {111, 112};
+Line(1133) = {112, 113};
+Line(1134) = {113, 114};
+Line(1135) = {111, 87};
+
+// Surface - Dielectric top
+Curve Loop(2031) = {1102, 1103, 1104, 1105, 1106, 1107}; // Central pad hole
+Curve Loop(2032) = {
+    1108, 1109, 1110, 1111, 1112, // Top
+    1113, 1114, 1115, 1116, 1117, 1118, 1119, 1120, 1121, // Right
+    1122, 1123, 1124, 1125, 1126, // Bottom 
+    1127, -1130, -1129, -1128, 1131, -1134, -1133, -1132, 1135 // Left
+};
+Plane Surface(3029) = {2032, -2031};
+
+//Lines connecting top and bottom of dielectric
+// Lines connecting top and bottom of dielectric
+// Dielectric corners
+Line(1136) = {81, 85};
+Line(1137) = {82, 86};
+Line(1138) = {83, 87};
+Line(1139) = {84, 88};
+
+// Central pad connections
+Line(1140) = {51, 89};
+Line(1141) = {52, 90};
+Line(1142) = {53, 91};
+Line(1143) = {54, 92};
+Line(1144) = {55, 93};
+Line(1145) = {56, 94};
+
+//Sides
+Line(1146) = {57, 95};
+Line(1147) = {58, 96};
+Line(1148) = {59, 97};
+Line(1149) = {60, 98};
+Line(1150) = {61, 99};
+Line(1151) = {62, 100};
+Line(1152) = {63, 101};
+Line(1153) = {64, 102};
+Line(1154) = {65, 103};
+Line(1155) = {66, 104};
+Line(1156) = {67, 105};
+Line(1157) = {68, 106};
+Line(1158) = {69, 107};
+Line(1159) = {70, 108};
+Line(1160) = {71, 109};
+Line(1161) = {72, 110};
+Line(1162) = {73, 111};
+Line(1163) = {74, 112};
+Line(1164) = {75, 113};
+Line(1165) = {76, 114};
+Line(1166) = {77, 115};
+Line(1167) = {78, 116};
+Line(1168) = {79, 117};
+Line(1169) = {80, 118};
+
+
+// Side Surfaces
+
+// Top Side Surfaces
+Curve Loop(2033) = {1092, 1149, -1108, -1138};
+Plane Surface(3030) = {2033};
+Curve Loop(2034) = {-1070, 1148, -1109, -1149};
+Plane Surface(3031) = {2034};
+Curve Loop(2035) = {-1069, 1147, -1110, -1148};
+Plane Surface(3032) = {2035};
+Curve Loop(2036) = {-1068, 1146, -1111, -1147};
+Plane Surface(3033) = {2036};
+Curve Loop(2037) = {1093, 1136, -1112, -1146};
+Plane Surface(3034) = {2037};
+
+// Right Side Surfaces
+Curve Loop(2038) = {1094, 1154, -1113, -1136};
+Plane Surface(3035) = {2038};
+Curve Loop(2039) = {1076, 1155, -1114, -1154};
+Plane Surface(3036) = {2039};
+Curve Loop(2040) = {1077, 1156, -1115, -1155};
+Plane Surface(3037) = {2040};
+Curve Loop(2041) = {1078, 1157, -1116, -1156};
+Plane Surface(3038) = {2041};
+Curve Loop(2042) = {1095, 1158, -1117, -1157};
+Plane Surface(3039) = {2042};
+Curve Loop(2043) = {1080, 1159, -1118, -1158};
+Plane Surface(3040) = {2043};
+Curve Loop(2044) = {1081, 1160, -1119, -1159};
+Plane Surface(3041) = {2044};
+Curve Loop(2045) = {1082, 1161, -1120, -1160};
+Plane Surface(3042) = {2045};
+Curve Loop(2046) = {1096, 1137, -1121, -1161};
+Plane Surface(3043) = {2046};
+
+// Bottom Side Surfaces
+Curve Loop(2047) = {1097, 1150, -1122, -1137};
+Plane Surface(3044) = {2047};
+Curve Loop(2048) = {1072, 1151, -1123, -1150};
+Plane Surface(3045) = {2048};
+Curve Loop(2049) = {1073, 1152, -1124, -1151};
+Plane Surface(3046) = {2049};
+Curve Loop(2050) = {1074, 1153, -1125, -1152};
+Plane Surface(3047) = {2050};
+Curve Loop(2051) = {1098, 1139, -1126, -1153};
+Plane Surface(3048) = {2051};
+
+// Left Side Surfaces
+Curve Loop(2052) = {1099, 1169, -1127, -1139};
+Plane Surface(3049) = {2052};
+Curve Loop(2053) = {1090, 1169, -1130, -1168};
+Plane Surface(3050) = {2053};
+Curve Loop(2054) = {1089, 1168, -1129, -1167};
+Plane Surface(3051) = {2054};
+Curve Loop(2055) = {1088, 1167, -1128, -1166};
+Plane Surface(3052) = {2055};
+Curve Loop(2056) = {1100, 1165, -1131, -1166};
+Plane Surface(3053) = {2056};
+Curve Loop(2057) = {1086, 1165, -1134, -1164};
+Plane Surface(3054) = {2057};
+Curve Loop(2058) = {1085, 1164, -1133, -1163};
+Plane Surface(3055) = {2058};
+Curve Loop(2059) = {1084, 1163, -1132, -1162};
+Plane Surface(3056) = {2059};
+Curve Loop(2060) = {1101, 1138, -1135, -1162};
+Plane Surface(3057) = {2060};
+
+// Side Surfaces - Central Pad Hole
+Curve Loop(2061) = {1062, 1141, -1102, -1140};
+Plane Surface(3058) = {2061};
+Curve Loop(2062) = {1063, 1142, -1103, -1141};
+Plane Surface(3059) = {2062};
+Curve Loop(2063) = {1064, 1143, -1104, -1142};
+Plane Surface(3060) = {2063};
+Curve Loop(2064) = {1065, 1144, -1105, -1143};
+Plane Surface(3061) = {2064};
+Curve Loop(2065) = {1066, 1145, -1106, -1144};
+Plane Surface(3062) = {2065};
+Curve Loop(2066) = {1067, 1140, -1107, -1145};
+Plane Surface(3063) = {2066};
+
+// ***** Dielectric Volume ***** //
+Surface Loop(4002) = {
+    3028, // Bottom
+    3029, // Top
+    // Outer Side Surfaces
+    3030, 3031, 3032, 3033, 3034,
+    3035, 3036, 3037, 3038, 3039, 3040, 3041, 3042, 3043,
+    3044, 3045, 3046, 3047, 3048,
+    3049, 3050, 3051, 3052, 3053, 3054, 3055, 3056, 3057,
+    // Inner Side Surfaces (Central Pad Hole)
+    3058, 3059, 3060, 3061, 3062, 3063
+};
+Volume(2) = {4002};
+
+//**********************************************************************
+// Gas
+//**********************************************************************
+
+// ***** Cathode Plane ***** //
+// Points
+Point(119) = {xMax, yMax, cathodeDistance, farElm};
+Point(120) = {xMax, yMin, cathodeDistance, farElm};
+Point(121) = {xMin, yMax, cathodeDistance, farElm};
+Point(122) = {xMin, yMin, cathodeDistance, farElm};
+
+//Lines
+Line(1170) = {119, 120};
+Line(1171) = {120, 122};
+Line(1172) = {122, 121};
+Line(1173) = {121, 119};
+
+// Surface (Cathode)
+Curve Loop(2067) = {1170, 1171, 1172, 1173};
+Plane Surface(3064) = {2067};
+
+//Vertical perimeter lines
+Line(1174) = {119, 1};
+Line(1175) = {120, 2};
+Line(1176) = {121, 3};
+Line(1177) = {122, 4};
+
+//Lines from grid to dielectric
+Line(1178) = {26, 85};
+Line(1179) = {27, 86};
+Line(1180) = {28, 87};
+Line(1181) = {29, 88};
+
+// Surfaces
+//Bottom
+Curve Loop(2068) = {
+    -1171, //Top
+    1175, //down to grid
+    1011, 1048, -1029, //along grid
+    1179,  //down to dielectric
+    1122, -1150, -1075, 1153, 1126, //Bottom (dielectric and pad)
+    -1181, //up to grid
+    1033, -1049, -1015, //along grid
+    -1177 // up to top
+};
+Plane Surface(3065) = {2068};
+
+//Top
+Curve Loop(2069) = {
+    -1173, //Top
+    1176, //down to grid
+    1013, 1045, -1031, //along grid
+    1180,  //down to dielectric
+    1108, -1149, 1071, 1146, 1112, //Bottom (dielectric and pad)
+    -1178, //up to grid
+    1027, -1046, -1009, //along grid
+    -1174 // up to top
+};
+Plane Surface(3066) = {2069};
+
+//Right
+Curve Loop(2070) = {
+    -1170, //Top
+    1174, //down to grid
+    1010, 1057, -1028, //along grid
+    1178,  //down to dielectric
+    1113, -1154, -1079, 1157, 1117, -1158, -1083, 1161, 1121, //Bottom (dielectric and pad)
+    -1179, //up to grid
+    1030, -1061, -1012, //along grid
+    -1175 // up to top
+};
+Plane Surface(3067) = {2070, -2012};
+
+//Left
+Curve Loop(2071) = {
+    -1172, //Top
+    1177, //down to grid
+    1016, 1054, -1034, //along grid
+    1181,  //down to dielectric
+    1127, -1169, 1091, 1166, 1131, -1165, 1087, 1162, 1135, //Bottom (dielectric and pad)
+    -1180, //up to grid
+    1032, -1052, -1014, //along grid
+    -1176 // up to top
+};
+Plane Surface(3068) = {2071, -2020};
+
+// ***** Gas Volume ***** //
+Surface Loop(4003) = {
+    3064, // Cathode
+    3065, 3066, 3067, 3068, // Sides
+    //Surfaces of grid
+    3001, 3002, // Top/bottom
+    3003, 3004, 3201, 3202, // Center Hole
+    3005, 3009, 3011, 3013, 3017, 3019, //Surrounding holes
+    //Surfaces of dielectric
+    3029, //Top
+    3058, 3059, 3060, 3061, 3062, 3063, // Central Pad
+    3031, 3032, 3033, 3045, 3046, 3047, // top/bottom  pads
+    3036, 3037, 3038, 3040, 3041, 3042, //right pads
+    3050, 3051, 3052, 3054, 3055, 3056, // left pads
+    //Pads
+    3021, 3022, 3023, 3024, 3025, 3026, 3027
+};
+Volume(3) = {4003};
+
+
+//**********************************************************************
+// PHYSICAL GROUPS
+//**********************************************************************
+
+// Physical Volumes
+Physical Volume("Grid") = {1};
+Physical Volume("Dielectric") = {2};
+Physical Volume("Gas") = {3};
+
+// ***** Physical Surfaces ***** //
+
+// *** Constant Elements *** //
+Physical Surface("Cathode") = {
+    3064
+};
+
+Physical Surface("Grid") = {
+    3001, // Top
+    3002, // Bottom
+    // Sides
+    3003, 3004, 3201, 3202, // Center Hole
+    3005, 3006, 3007, // Top
+    3008, 3009, 3010, 3011, 3012, // Right
+    3013, 3014, 3015, // Bottom
+    3016, 3017, 3018, 3019, 3020 // Left
+};
+
+Physical Surface("CentralPad") = {
+    3021
+};
+
+Physical Surface("SurroundingPads") = {
+    3022, 3023, 3024, 3025, 3026, 3027
+};
+
+// *** Boundary Elements *** //
+Physical Surface("Boundaries") = {
+    3065, 3066, 3067, 3068, //Gas
+    3030, 3034, 3035, 3039, 3043, 3044, 3048, 3049, 3053, 3057 // Dielectric
+};
+
+Coherence;
