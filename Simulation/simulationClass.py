@@ -15,6 +15,10 @@ import re
 
 class FIMS_Simulation:
     """
+    Class definition for the FIMS simulation.
+
+    Initializes to a set of default parameters in a dictionary.
+    Has the capability to 
     """
 
 #***********************************************************************************#
@@ -693,6 +697,7 @@ class FIMS_Simulation:
         Args:
             changeGeometry (bool): Allows for bypassing bypassing the 
                                    Gmsh call to generate a mesh.
+                                   Also skips creating the weighting field.
                                    (Optional for when geometry does not change.)
     
         Returns:
@@ -703,6 +708,17 @@ class FIMS_Simulation:
         if not self._checkParam():
             return -1
     
+        #If geometry does not change, gmash and weighting do not need to be done.
+        #However, check that the mesh and weighting field files exist.
+        #If not, override input and generate.
+        if not changeGeometry:
+            meshFile = os.path.exists('Geometry/FIMS.msh')
+            weightFile = os.path.exists('Geometry/elmerResults/FIMSWeighting.result')
+            if not (meshFile and weightFile):
+                print('Warning. Attempt to skip Gmsh and ElmerWeighting. Overriding input.')
+                changeGeometry = True
+
+
         #get the run number for this simulation
         runNo = self._getRunNumber()
         if runNo == -1:
@@ -724,14 +740,18 @@ class FIMS_Simulation:
         #Determine the Electric and weighting fields
         if not self._runElmer():
                 print('Error executing Elmer (base).')
-                return -1     
-        if not self._runElmerWeighting():
-            print('Error executing Elmer (weighting).')
-            return -1
+                return -1    
+
+        #If geometry does not change, neither will weighting field.
+        if changeGeometry: 
+            if not self._runElmerWeighting():
+                print('Error executing Elmer (weighting).')
+                return -1
     
         #Run the electron transport simulation
         if not self._runGarfield():
             print('Error executing Garfield.')
+            return -1
     
         #reset parameters to finish
         self.resetParam()

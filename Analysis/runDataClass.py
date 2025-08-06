@@ -15,12 +15,44 @@ CMTOMICRON = 1e4
 
 class runData:
     """
+    Class representing the data acquired from a single simulation.
+    The data identifier is the simulation run number.
+
+    The simulation data, originally saved in root format, 
+    is read into pandas dataframes upon initialization.
+    These dataframe names are listed in 'dataTrees'.
+
+    Attributes:
+        runNumber (int): The simulation run number
+        dataTrees (list): List of strings containing the names 
+                          of all of the dataframes.
+
+        Internal Data Frames:
+        *****
+        NOTE: 
+            These dataframes are intended to be internal to the class, and as such 
+            should NOT be accessed directly. Instead utilize the getDataFrame() 
+            method to retrieve a copy of the dataframe.
+            This is to preserve data integrity.
+        *****
+            _metaData: Metadata information, including geometry parameters, 
+                       simulation limits, git version, etc.
+            _fieldLineData: Information for field lines generated at the cathode.
+            _gridFieldLineData: Field line information for those generated 
+                                above and below the grid.
+            _electronData: Information for each individual simulated electron.
+            _ionData: Information for each individual simulated ion.
+            _avalancheData: Information for each simulated avalanche.
+            _electronTrackData: Information for the full tracks of each electron.
+
+
     """
 
 #********************************************************************************#
     # Initialize
     def __init__(self, runNumber):
         """
+        Initializes a data class containing the data from the specified run number.
         """
 
         self.runNumber = runNumber
@@ -35,13 +67,13 @@ class runData:
             'electronTrackData'
         ]
 
-        allData = self._readRootTrees(runNumber)
+        allData = self._readRootTrees()
         if not allData:
             print(f'Warning: No data loaded for run number {runNumber}. \
                     Check file path and contents.')
 
         for treeName in self.dataTrees:
-            setattr(self, treeName, allData.get(treeName))
+            setattr(self, f'_{treeName}', allData.get(treeName))
 
 #********************************************************************************#
     #String representation
@@ -53,13 +85,10 @@ class runData:
 
 #********************************************************************************#
     #Private function to read from data file
-    def _readRootTrees(self, runNumber):
+    def _readRootTrees(self):
         """
         Reads all trees from a ROOT file and returns them as a dictionary.
         The keys are the tree names and the values are pandas DataFrames.
-
-        Args:
-            runNumber (int): The run number of the ROOT file.
 
         Returns:
             dict: A dictionary where keys are tree names (str) and
@@ -68,7 +97,7 @@ class runData:
         """
 
         dataFilePath = '../Data/'
-        dataFile = f'sim.{runNumber}.root'
+        dataFile = f'sim.{self.runNumber}.root'
         fullFilePath = os.path.join(dataFilePath, dataFile)
         
         try:
@@ -121,7 +150,7 @@ class runData:
  #********************************************************************************#
     def printMetaData(self):
         """
-        Prints all metadata information. Dimensions in microns.
+        Prints all metadata information. Dimensions are in microns.
         """
         for inParam in self.dataTrees['metaData'].columns:
             print(f'{inParam}: {self.getRunParameter(inParam)}')
@@ -131,18 +160,17 @@ class runData:
  #********************************************************************************#
     def printColumns(self, dataSetName):
         """
-        Prints the column names for a given data set.
+        Prints all of the column names for a given data set.
         """
         if not self._checkName(dataSetName):
             return
         
-        dataFrame = getattr(self, dataSetName, None)
+        dataFrame = self.getDataFrame(dataSetName)
 
-        if dataFrame is None:
-            print(f"Missing '{dataSetName}' data.")
-        else:
+        if dataFrame is not None:
             print(f'{dataSetName}:')
             print(dataFrame.columns.tolist())
+
         return
 
 
@@ -164,7 +192,7 @@ class runData:
             return None
 
         #Get a copy of the data - note is saved as cm
-        rawData = getattr(self, dataSetName, None)
+        rawData = getattr(self, f'_{dataSetName}', None)
         dataFrame = rawData.copy()
 
         if dataFrame is None:
@@ -213,8 +241,6 @@ class runData:
         Retrieves a given parameter from the metadata information.
 
         Dimensions are returned in microns.
-        Note: Data is defined in runControl as microns, but Garfield's naitive
-              dimension is cm, so avalanche.cc converts and saves as this.
 
         Args:
             paramName (str): Name of the parameter to be retrieved.
@@ -233,20 +259,21 @@ class runData:
             'Thickness SiO2'
         ]
         
-        if self.metaData is None:
+        metaData = self.getDataFrame('metaData')
+        if metaData is None:
             print("Error: 'metaData' unavailable.")
             return None
         
-        if paramName not in self.metaData.columns:
+        if paramName not in metaData.columns:
             print(f"Error: '{paramName}' not in 'metaData'.")
             return None
             
         CMTOMICRON = 1e4
         try:
             if paramName in dimensionalParams:
-                return self.metaData[paramName].iloc[0]*CMTOMICRON
+                return metaData[paramName].iloc[0]*CMTOMICRON
             else:
-                return self.metaData[paramName].iloc[0] 
+                return metaData[paramName].iloc[0] 
         
         except IndexError:
             print(f"Error: 'metaData' DataFrame is empty.")
@@ -257,15 +284,17 @@ class runData:
 
 
  #********************************************************************************#   
-    def getRunNumber(self):
-        """
-        """
-        return self.getRunParameter('runNo')
-
-
- #********************************************************************************#   
     def plotCellGeometry(self):
         """
+        Plots a top-down view of the simulation geometry.
+
+        This includes the primary unit cell with the pad and hole in solid lines,
+        and the surrounding cells as dotted.
+        Additional information such as geometry cell, simulation boundary, and length
+        definitions are included.
+        
+        TODO: The support pillars are also visualized, 
+        however these are not yet included in simulations.
         """
         # Extract relevant geometric parameters from metadata.
         pitch = self.getRunParameter('Pitch')
@@ -389,6 +418,12 @@ class runData:
  #********************************************************************************#   
     def _plotAddCellGeometry(self, axis, axes):
         """
+        Adds geometry elements to 2D plots, including
+        the pad, hole in grid, and outline of the unit cell.
+
+        Args:
+            axis (matplotlib subplot): Axes object where geometry is to be added 
+            axes (str): String defining the catesian dimensions of 'axes'.
         """
         # Extract relevant geometric parameters from metadata.
         pitch = self.getRunParameter('Pitch')
@@ -538,13 +573,13 @@ class runData:
     
             case _:
                 print(f'Error: Plot options are: {plotOptions}')
-                return None
+                return
     
         groupedData = fieldLineData.groupby('Field Line ID')
     
         if groupedData is None:
             print(f"An error occured plotting '{target}'.")
-            return None
+            return
 
         # Create figure and subplots for different projections.
         fig2D = plt.figure(figsize=(14, 7))
@@ -577,6 +612,10 @@ class runData:
  #********************************************************************************#   
     def _getRawGain(self):
         """
+        Returns the mean size of the simulated avalanches.
+
+        This includes any avalanches that hit the simulation limit, and those where
+        some electrons have exitted the simulation boundary.
         """
         avalancheData = self.getDataFrame('avalancheData')
         return avalancheData['Total Electrons'].mean()
@@ -585,6 +624,19 @@ class runData:
  #********************************************************************************#   
     def _trimAvalanche(self):
         """
+        Removes any avalanches that have either:
+            Only a single electron (so no avalanching occured), or
+            that reached the simulation avalanche limit.
+
+        Note that these situations, either no avalanching or an avalanche
+        that was exactly the limit size, can occur. 
+        However, it is much more likely that the intial electron attached or drifted
+        outside of the simulation bounds before causing an avalanche for the e=1 case. 
+        For the avalanche-limit case, it is impossible to tell if this was exacly the
+        limit, or if there should be more electrons.
+
+        Returns:
+            dataframe: The avalancheData dataframe with the 1 and limitting sizes removed.
         """
         avalancheData = self.getDataFrame('avalancheData')
 
@@ -598,6 +650,25 @@ class runData:
  #********************************************************************************#   
     def _histAvalanche(self, trim, binWidth):
         """
+        Calculates a histogram of the avalanche electron count data.
+
+        Can optionally trim the dataset to remove avalanches that either have
+        a single electron or those that reached the limit.
+
+        Args:
+            trim (bool): If True, will remove the edge-case avalanches.
+            binWidth (int): The width of the bins to be used for the histogram.
+
+        Returns:
+            dict: Dictionary containing the histogram data and parameters:
+                - 'binCenters' (ndarray): The center of each histogram bin.
+                - 'gain' (float): The mean value of the total electrons.
+                - 'counts' (ndarray): The number of data points in each bin.
+                - 'countErr' (ndarray): The error in the counts, using Poisson stats.
+                - 'prob' (ndarray): The probability density for each bin.
+                - 'probErr' (ndarray): The error in the probability density.
+                - 'binWidth' (float): The width of the histogram bin.
+                - 'trim' (bool): Indicates if the data was trimmed.
         """
 
         if trim:
@@ -642,12 +713,18 @@ class runData:
  #********************************************************************************#   
     def plotAvalancheSize(self, trim=False, binWidth=1):
         """
+        Plots a histogram of the simulated avalanche size distribution.
+
+        Shows the probability of an avalanche having a certain size.
+
+        Args:
+            trim (bool): If True, the avalanche data is trimmed before plotting.
+            binWidth (int): The width of the histogram bins. 
         """
         histData = self._histAvalanche(trim, binWidth)
-        runNo = self.getRunNumber()
         
         fig = plt.figure(figsize=(8, 5))
-        fig.suptitle(f'Avalanche Size Distribution: Run {runNo}')
+        fig.suptitle(f'Avalanche Size Distribution: Run {self.runNumber}')
         
         ax = fig.add_subplot(111)
         
@@ -679,10 +756,8 @@ class runData:
         Includes individual electron tracks and geometry components.
     
         Args:
-            avalancheID (int): Index of avalance within simulation.
+            avalancheID (int): Index of avalanche within simulation.
     
-        Returns:
-            None
         """
     
         allData = self.getDataFrame('electronTrackData')
@@ -694,7 +769,7 @@ class runData:
     
         if groupedData is None:
             print(f"An error occured plotting ID='{avalancheID}'.")
-            return None
+            return
 
         # Create figure and subplots for different projections.
         fig2D = plt.figure(figsize=(14, 7))
@@ -742,6 +817,14 @@ class runData:
  #********************************************************************************#   
     def plotDiffusion(self, target):
         """
+        Plots the diffusion of simulated particles in the drift direction (z) and 
+        the radial distance within the normal plane (xy).
+
+        Options to plot include: electrons, positive ions, and negative ions.
+        Some geometric distances are included.
+
+        Args:
+            target (str): The type of particle to plot.
         """
         plotOptions = [
             'electron',
@@ -823,6 +906,15 @@ class runData:
  #********************************************************************************#   
     def plotParticleHeatmaps(self, target, numBins=51):
         """
+        Plots 2D histograms displaying heatmaps of the intial and final locations 
+        of simulated particles.
+
+        Options to plot include: electrons, positive ions, and negative ions.
+        Geometry features such as pad and hole are included.
+
+        Args:
+            target (str): The type of particle to plot.
+            numBins (int): Number of bins for each dimension.
         """
         plotOptions = [
             'electron',
@@ -898,6 +990,22 @@ class runData:
  #********************************************************************************#   
     def _fitAvalancheSize(self, binWidth):
         """
+        Fits the trimmed simulated avalanche size distribution 
+        to Polya and exponential curves.
+
+        Args:
+            binWidth (float): The width of the histogram bins used for the fitting.
+
+        Returns:
+            dict: A dictionary containing the fitting results. Includes:
+                - 'xVal' (ndarray): The bin centers of the histogram.
+                - 'yVal' (ndarray): The probability densities of the histogram.
+                - 'dataGain' (float): The calculated mean gain from the data.
+                - 'fitPolya' (myPolya object): An object containing the results 
+                                               of the Polya distribution fit.
+                - 'fitExpo' (myPolya object): An object containing the results 
+                                              of the exponential distribution fit.
+
         """
         histData = self._histAvalanche(trim=True, binWidth=binWidth)
 
@@ -938,6 +1046,13 @@ class runData:
  #********************************************************************************#   
     def plotAvalancheFits(self, binWidth=1):
         """
+        Plots a histogram of the simulated avalanche size distribution.
+        Includes results of Polya and Exponential fits.
+
+        The raw, trimmed, and fitted gains are all indicated.
+
+        Args:
+            binWidth (int): The width of the histogram bins. 
         """
         fitResults = self._fitAvalancheSize(binWidth)
 
@@ -945,7 +1060,7 @@ class runData:
         expoResults = fitResults['fitExpo'].calcPolya(fitResults['xVal'])
         
         fig = plt.figure(figsize=(12, 4))
-        fig.suptitle(f'')
+        fig.suptitle(f'Avalanche Size Distribution: Run {self.runNumber}')
         
         ax = fig.add_subplot(111)
 
@@ -971,13 +1086,13 @@ class runData:
                c='r', ls=':', label=f'Expo Gain = {fitResults['fitExpo'].gain:.1f}e')
 
         ax.axvline(x=self._getRawGain(), 
-               c='g', ls=':', label=f'Raw Gain = {self._getRawGain():.1f}e')
+               c='g', ls='--', label=f'Raw Gain = {self._getRawGain():.1f}e')
         ax.axvline(x=fitResults['dataGain'], 
-               c='g', ls='--', label=f'Trimmed Gain = {fitResults['dataGain']:.1f}e')
+               c='g', ls=':', label=f'Trimmed Gain = {fitResults['dataGain']:.1f}e')
 
 
-        plt.xlabel('Avalanche Size')
-        plt.ylabel('Probability')
+        plt.xlabel('Numer of Electrons in Trimmed Avalanche')
+        plt.ylabel('Probability of Avalanche Size')
         plt.legend()
         plt.grid(True, alpha=0.5)
         plt.show()

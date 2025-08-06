@@ -59,8 +59,8 @@ def plotGeneralPolya(theta):
     and the y-axis represents the normalized probability ($\bar{n}$ x Probability).
 
     Args:
-        theta (floats): List or numpy array of values to use as 
-                        theta in Polya calculations.
+        theta (float): List or numpy array of values to use as 
+                       theta in Polya calculations.
     """
     n = np.linspace(0, 4, 101)
     plt.figure(figsize=(6, 4))
@@ -82,13 +82,13 @@ def plotGeneralPolya(theta):
 #********************************************************************************#   
 def plotPolya(theta):
     """
-    Generates and plots Polya distributions for various mean gains and theta values.
+    Generates and plots Polya distributions for various gain and theta values.
 
-    Each subplot corresponds to a single theta value with various gain values.
+    Each subplot corresponds to a single theta with various gain values.
 
     Args:
-        theta (floats): List or numpy array of values to use as 
-                        theta in Polya calculations.
+        theta (float): List or numpy array of values to use as 
+                       theta in Polya calculations.
     """
     gain = [10, 25, 50, 75, 100]
 
@@ -130,8 +130,8 @@ def plotPolyaEfficiency(theta):
     Includes reference lines for 95% efficiency for the theta=0 case.
     
     Args:
-        theta (floats): List or numpy array of values to use as 
-                        theta in Polya calculations.
+        theta (float): List or numpy array of values to use as 
+                       theta in Polya calculations.
     """
     k = np.linspace(0, 1, 101) #Ratio: Threshold/Gain
 
@@ -156,6 +156,7 @@ def plotPolyaEfficiency(theta):
     plt.legend()
     plt.grid(True, alpha=0.5)
     plt.show()
+
     return
 
 #********************************************************************************#   
@@ -165,6 +166,7 @@ def plotThreshold():
     as a function of detector threshold. 
     
     Include the theta=0 case as the maximum, and several other low-theta results.
+    Efficiencies are 95% and 90%.
     """
     threshold = np.linspace(0, 16, 11)
     efficiency = [.95, .9]
@@ -204,6 +206,8 @@ def plotThreshold():
     plt.grid(True, alpha=0.5)
     plt.show()
 
+    return
+
 #********************************************************************************#   
 def plotPolyExamples(thetaStart=0, thetaEnd=5, numSteps=6):
     """
@@ -221,6 +225,8 @@ def plotPolyExamples(thetaStart=0, thetaEnd=5, numSteps=6):
     plotPolya(theta)
     plotPolyaEfficiency(theta)
     plotThreshold()
+
+    return
     
 
 
