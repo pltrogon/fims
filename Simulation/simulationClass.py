@@ -53,7 +53,7 @@ class FIMS_Simulation:
         """
         defaultParam = {
             'padLength': 65.,
-            'pitch': 250.,
+            'pitch': 225.,
             'gridStandoff': 100.,
             'gridThickness': .5,
             'holeRadius': 90.,
@@ -61,7 +61,7 @@ class FIMS_Simulation:
             'thicknessSiO2': 5.,
             'fieldRatio': 40.,
             'numFieldLine': 51,
-            'transparencyLimit': .1,
+            'transparencyLimit': .95,
             'numAvalanche': 1000,
             'avalancheLimit': 200,
             'gasCompAr': 80.,
@@ -521,7 +521,7 @@ class FIMS_Simulation:
             with open(os.path.join(os.getcwd(), 'log/logGmsh.txt'), 'w+') as gmshOutput:
                 startTime = time.monotonic()
                 runReturn = subprocess.run(
-                    ['gmsh', os.path.join('./Geometry/', geoFile),
+                    ['./gmsh', os.path.join('./Geometry/', geoFile),
                      '-order', '2', '-optimize_ho',
                      '-clextend', '1',
                      '-setnumber', 'Mesh.OptimizeNetgen', '1',
@@ -654,7 +654,7 @@ class FIMS_Simulation:
             with open(os.path.join(originalCWD, 'log/logGarfield.txt'), 'w+') as garfieldOutput:
                 startTime = time.monotonic()
                 setupAvalanche = (
-                    f'source {self._GARFIELDPATH} && '
+#                    f'source {self._GARFIELDPATH} && '
                     f'make && '
                     f'./runAvalanche'
                 )
