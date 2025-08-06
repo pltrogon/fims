@@ -1,2 +1,4 @@
 # Ignore these files in this folder
 analysisRunNumbers
+__pycache__/
+.ipynb_checkpoints/

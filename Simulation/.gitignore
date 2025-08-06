@@ -3,3 +3,6 @@ runNo
 GARFIELDPATH
 log/
 Geometry/elmerResults/
+build/
+__pycache__/
+.ipynb_checkpoints/
