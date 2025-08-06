@@ -15,10 +15,45 @@ import re
 
 class FIMS_Simulation:
     """
-    Class definition for the FIMS simulation.
+    Class representing the FIMS simulation.
 
-    Initializes to a set of default parameters in a dictionary.
-    Has the capability to 
+    Initializes to a set of default parameters via a dictionary.
+
+    The parameters within this dictionary can be adjusted and then used to execute
+    a simulation. This process is as follows:
+
+        1. Check that all required parameters are present and defined.
+        2. Read and the simulation run number.
+        3. Write the simulation parameters to the control files.
+        4. Execute Gmsh to generate a finite-element mesh of the geometry.
+        5. Execute Elmer to solve the E field for the mesh.
+        6. Execute Elmer to solve the weighting field for the electrode.
+        7. Execute Garfield++ to simulate electron multiplication effects.
+        8. Reset parameters to defaults.
+
+    *****
+    Important: The parameters are reset to defaults after every simulation.
+    *****
+
+    Attributes:
+        param (dict): Parameter dictionary with the following entries:
+            - padLength: Length of the side of the hexagonal pad (micron).
+            - pitch: Distance between neighbouring pads (micron).
+            - gridStandoff: Distance from the top to the SiO2 layer to the bottom of the grid (micron).
+            - gridThickness: Thickness of the grid (micron).
+            - holeRadius: Radius of the hole in the grid (micron).
+            - cathodeHeight: Distance from the top to the grid to the cathode plane (micron).
+            - thicknessSiO2: Thickness of the SiO2 layer (micron).
+            - fieldRatio: Ratio of the amplification field to the drift field.
+                          Note that the drift field is assumed to be 1 kV/cm.
+            - numFieldLine: Number of field lines to calculate for visualization.
+            - transparencyLimit: Electric field transparancy limit.
+            - numAvalanche: Number of electrons (avalanches) to initiate
+            - avalancheLimit: Limit of the number of electrons within a single avalanche.
+            - gasCompAr: Percentage of Argon within gas volume.
+            - gasCompCO2: Percentage of CO2 within gas volume.
+
+    
     """
 
 #***********************************************************************************#
