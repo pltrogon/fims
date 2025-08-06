@@ -92,7 +92,7 @@ class FIMS_Simulation:
         """
         defaultParam = {
             'padLength': 65.,
-            'pitch': 250.,
+            'pitch': 225.,
             'gridStandoff': 100.,
             'gridThickness': .5,
             'holeRadius': 90.,
@@ -100,8 +100,8 @@ class FIMS_Simulation:
             'thicknessSiO2': 5.,
             'fieldRatio': 40.,
             'numFieldLine': 51,
-            'transparencyLimit': .1,
-            'numAvalanche': 1000,
+            'transparencyLimit': .95,
+            'numAvalanche': 0,
             'avalancheLimit': 200,
             'gasCompAr': 80.,
             'gasCompCO2': 20.,
@@ -214,7 +214,7 @@ class FIMS_Simulation:
         #Check for run number file
         if not os.path.exists('runNo'):
             with open('runNo', 'w') as file:
-                file.write('1000')
+                file.write('1')
                 
         return True
 
@@ -224,7 +224,7 @@ class FIMS_Simulation:
         Reads the simulation parameters contained in the simulation control file.
     
         Returns:
-            bool: True if parameters are read fro  file, False otherwise.
+            bool: True if parameters are read from file, False otherwise.
         """
         filename = 'runControl'
         readInParam = {}
@@ -560,7 +560,7 @@ class FIMS_Simulation:
             with open(os.path.join(os.getcwd(), 'log/logGmsh.txt'), 'w+') as gmshOutput:
                 startTime = time.monotonic()
                 runReturn = subprocess.run(
-                    ['gmsh', os.path.join('./Geometry/', geoFile),
+                    ['./gmsh', os.path.join('./Geometry/', geoFile),
                      '-order', '2', '-optimize_ho',
                      '-clextend', '1',
                      '-setnumber', 'Mesh.OptimizeNetgen', '1',
@@ -693,7 +693,7 @@ class FIMS_Simulation:
             with open(os.path.join(originalCWD, 'log/logGarfield.txt'), 'w+') as garfieldOutput:
                 startTime = time.monotonic()
                 setupAvalanche = (
-                    f'source {self._GARFIELDPATH} && '
+#                    f'source {self._GARFIELDPATH} && '
                     f'make && '
                     f'./runAvalanche'
                 )
@@ -713,7 +713,16 @@ class FIMS_Simulation:
             os.chdir(originalCWD)
         return True
 
-
+#***********************************************************************************#
+    def checkTransparency(self, transparency):
+        """
+        Checks the transparency of the current simulation and compares it to the 
+        transparency limit. Returns True if the transparency is less than the limit.
+        """
+        limit = self._getParam('transparencyLimit')
+        if transparency < limit:
+            return False
+        return True
 #***********************************************************************************#
     def runSimulation(self, changeGeometry=True):
         """
@@ -730,7 +739,7 @@ class FIMS_Simulation:
             7. Execute the Garfield++ simulation for charge transport.
     
         Args:
-            changeGeometry (bool): Allows for bypassing bypassing the 
+            changeGeometry (bool): Allows for bypassing the 
                                    Gmsh call to generate a mesh.
                                    Also skips creating the weighting field.
                                    (Optional for when geometry does not change.)
