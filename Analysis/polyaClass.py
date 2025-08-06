@@ -22,7 +22,7 @@ class myPolya:
             (theta+1)^(theta+1) *
             1/Gamma(theta+1) *
             (n/nBar)^(theta) *
-            e^(-(theta+1) * n/nBar}
+            e^(-(theta+1) * n/nBar)
     
 
     This is representative of the size of avalanches in electron multiplication.
