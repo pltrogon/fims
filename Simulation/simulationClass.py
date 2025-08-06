@@ -62,7 +62,7 @@ class FIMS_Simulation:
             'fieldRatio': 40.,
             'numFieldLine': 51,
             'transparencyLimit': .95,
-            'numAvalanche': 1000,
+            'numAvalanche': 0,
             'avalancheLimit': 200,
             'gasCompAr': 80.,
             'gasCompCO2': 20.,
@@ -175,7 +175,7 @@ class FIMS_Simulation:
         #Check for run number file
         if not os.path.exists('runNo'):
             with open('runNo', 'w') as file:
-                file.write('1000')
+                file.write('1')
                 
         return True
 
@@ -185,7 +185,7 @@ class FIMS_Simulation:
         Reads the simulation parameters contained in the simulation control file.
     
         Returns:
-            bool: True if parameters are read fro  file, False otherwise.
+            bool: True if parameters are read from file, False otherwise.
         """
         filename = 'runControl'
         readInParam = {}
@@ -674,7 +674,16 @@ class FIMS_Simulation:
             os.chdir(originalCWD)
         return True
 
-
+#***********************************************************************************#
+    def checkTransparency(self, transparency):
+        """
+        Checks the transparency of the current simulation and compares it to the 
+        transparency limit. Returns True if the transparency is less than the limit.
+        """
+        limit = self._getParam('transparencyLimit')
+        if transparency < limit:
+            return False
+        return True
 #***********************************************************************************#
     def runSimulation(self, changeGeometry=True):
         """
@@ -691,7 +700,7 @@ class FIMS_Simulation:
             7. Execute the Garfield++ simulation for charge transport.
     
         Args:
-            changeGeometry (bool): Allows for bypassing bypassing the 
+            changeGeometry (bool): Allows for bypassing the 
                                    Gmsh call to generate a mesh.
                                    (Optional for when geometry does not change.)
     
