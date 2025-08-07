@@ -15,6 +15,27 @@ import re
 
 class FIMS_Simulation:
     """
+    Methods defined in FIMS_Simulation"
+        defaultParam
+        _checkParam
+        _getParam
+        _getGarfieldPath
+        _setupSimulation
+        _readParam
+        _writeFile
+        _writeRunControl
+        _readSIF
+        _calcPotentials
+        _writeSIF
+        _makeWeighting
+        _writeParam
+        resetParam
+        _getRunNumber
+        _runGmsh
+        _runElmer
+        _runElmerWeighting
+        _runGarfield
+        _runSimulation
     """
 
 #***********************************************************************************#
@@ -99,7 +120,7 @@ class FIMS_Simulation:
             
         return self.param[parameter]
 
- #***********************************************************************************#       
+#***********************************************************************************#     
     def _getGarfieldPath(self):
         """
         Reads and returns the filepath to the Garfield++ source script.
@@ -499,6 +520,26 @@ class FIMS_Simulation:
         
         return runNo
 
+#***********************************************************************************#
+    def checkFieldTransparency(self, transparency):
+        """
+        Checks a given field transparency vs the limit specified in the simulation's
+        metaData.
+
+        Args:
+            transparency (float): field transparency of current simulation.
+
+        Returns:
+            bool: True if transparency is greater than the limit, False otherwise.
+        
+        """
+        #TODO: find a way to get the transparency without needing to input it manually
+        
+        limit = self._getParam('transparencyLimit')
+        
+        if transparency < limit:
+            return False
+        return True
 
 #***********************************************************************************#
     def _runGmsh(self):
@@ -521,7 +562,7 @@ class FIMS_Simulation:
             with open(os.path.join(os.getcwd(), 'log/logGmsh.txt'), 'w+') as gmshOutput:
                 startTime = time.monotonic()
                 runReturn = subprocess.run(
-                    ['./gmsh', os.path.join('./Geometry/', geoFile),
+                    ['gmsh', os.path.join('./Geometry/', geoFile),
                      '-order', '2', '-optimize_ho',
                      '-clextend', '1',
                      '-setnumber', 'Mesh.OptimizeNetgen', '1',
@@ -537,7 +578,29 @@ class FIMS_Simulation:
                 if runReturn.returncode != 0:
                     print('Gmsh failed. Check log for details.')
                     return False
-                    
+        except FileNotFoundError:
+            geoFile = 'FIMS.txt'
+            with open(os.path.join(os.getcwd(), 'log/logGmsh.txt'), 'w+') as gmshOutput:
+                startTime = time.monotonic()
+                gmshPath = os.path.abspath('gmsh')
+                runReturn = subprocess.run(
+                    [gmshPath, os.path.join('./Geometry/', geoFile),
+                     '-order', '2', '-optimize_ho',
+                     '-clextend', '1',
+                     '-setnumber', 'Mesh.OptimizeNetgen', '1',
+                     '-setnumber', 'Mesh.MeshSizeFromPoints', '1',
+                     '-3',
+                     '-format', 'msh2'],
+                    stdout=gmshOutput, 
+                    check=True
+                )
+                endTime = time.monotonic()
+                gmshOutput.write(f'\n\nGmsh run time: {endTime - startTime} s')
+    
+                if runReturn.returncode != 0:
+                    print('Gmsh failed. Check log for details.')
+                    return False
+    
         except FileNotFoundError:
             print("Unable to write to 'log/logGmsh.txt'.")
             return False
@@ -674,16 +737,6 @@ class FIMS_Simulation:
             os.chdir(originalCWD)
         return True
 
-#***********************************************************************************#
-    def checkTransparency(self, transparency):
-        """
-        Checks the transparency of the current simulation and compares it to the 
-        transparency limit. Returns True if the transparency is less than the limit.
-        """
-        limit = self._getParam('transparencyLimit')
-        if transparency < limit:
-            return False
-        return True
 #***********************************************************************************#
     def runSimulation(self, changeGeometry=True):
         """
