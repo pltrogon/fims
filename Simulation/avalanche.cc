@@ -146,7 +146,6 @@ int main(int argc, char * argv[]) {
   int numFieldLine;
   int numAvalanche, avalancheLimit;
   double gasCompAr, gasCompCO2;
-  double penningR, penningLambda;
 
   std::ifstream paramFile;
   std::string runControlFile = "../runControl";
@@ -403,7 +402,7 @@ int main(int argc, char * argv[]) {
   //Define boundary region for simulation
   double xBoundary[2], yBoundary[2], zBoundary[2];
 
-  //Simpel criteria for if 1/4 geometry or full
+  //Simple criteria for if 1/4 geometry or full
   //   x=y=0 should be the min if 1/4
   if(xmin == 0 && ymin == 0){
     xBoundary[0] = -xmax;
@@ -459,7 +458,7 @@ int main(int argc, char * argv[]) {
   std::vector<double> xStart;
   std::vector<double> yStart;
 
-  double rangeScale = 0.95;
+  double rangeScale = 0.99;
 
   //Line generated radially in cardinal directions
   //Note this will make 2*numFieldLines lines

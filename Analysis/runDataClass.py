@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from polyaClass import myPolya
+from functionsFIMS import withinHex
 
 CMTOMICRON = 1e4
 
@@ -1099,7 +1100,8 @@ class runData:
         Calculates the radius of the outermost electric field line
         at a specified z-coordinate.
 
-        "Outermost Line" - The line with the largest radius at the cathode.
+        "Outermost Line" - The line with the largest radius at the cathode that
+        initiates within the unit cell.
         Does a linear interpolation between available datapoints.
 
         Args:
@@ -1115,6 +1117,8 @@ class runData:
             raise ValueError('Invalid target z.')
         
         allFieldLines = self.getDataFrame('fieldLineData')
+        pitch = self.getRunParameter('Pitch')
+        unitCellLength = pitch/math.sqrt(3)
 
         #All lines start at same z near cathode
         initialZ = allFieldLines['Field Line z'].iloc[0]
@@ -1127,8 +1131,16 @@ class runData:
 
         #Isolate the largest radius at the cathode
         atCathode = allFieldLines[allFieldLines['Field Line z'] == initialZ]
-        maxRadius = atCathode['Field Line Radius'].max()
-        outermostLine = atCathode[atCathode['Field Line Radius'] == maxRadius]
+        #Determine what lines initiate within the unit cell
+        withinUnitCell = withinHex(
+            atCathode['Field Line x'], 
+            atCathode['Field Line y'], 
+            unitCellLength
+            )
+        cellLines = atCathode[withinUnitCell]
+        #Find line with max radius
+        maxRadius = cellLines['Field Line Radius'].max()
+        outermostLine = cellLines[cellLines['Field Line Radius'] == maxRadius]
         lineID = outermostLine['Field Line ID'].iloc[0]
 
         #get entire outermost field line - ensure sorted for interpolation

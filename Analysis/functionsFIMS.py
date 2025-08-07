@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import math
 import matplotlib.pyplot as plt
 
 from scipy.special import gammaincc
@@ -228,5 +229,32 @@ def plotPolyExamples(thetaStart=0, thetaEnd=5, numSteps=6):
 
     return
     
+#********************************************************************************#   
+def withinHex(xVal, yVal, sideLength):
+    """
+    Determines if a coordiante lies within a regular hexagon.
+    Assumes a flat-top geometry centered at the origin.
 
+    Args:
+        xVal (float): The x-coordinate to check.
+        yVal (float): The y-coordiante to check.
+        sideLength (float): The length of a side of the hexagon.
+
+    Returns:
+        bool: True if the coordiate is within the hexagon, False otherwise.
+    """
+    #Use symmetry of regular hexagon
+    x = np.abs(xVal)
+    y = np.abs(yVal)
+
+    #Check if below flat top
+    checkTop = y <= sideLength*math.sqrt(3)/2.
+
+    #Check if the point is within the sloped edge
+    checkSlope = x+y/math.sqrt(3) <= sideLength
+
+    #Combine conditions
+    inHex = np.logical_and(checkTop, checkSlope)
+
+    return inHex
 

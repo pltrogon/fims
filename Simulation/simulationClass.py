@@ -91,14 +91,14 @@ class FIMS_Simulation:
         """
         defaultParam = {
             'padLength': 65.,
-            'pitch': 250.,
+            'pitch': 225.,
             'gridStandoff': 100.,
             'gridThickness': .5,
             'holeRadius': 90.,
             'cathodeHeight': 200.,
             'thicknessSiO2': 5.,
             'fieldRatio': 40.,
-            'numFieldLine': 51,
+            'numFieldLine': 25,
             'numAvalanche': 1000,
             'avalancheLimit': 200,
             'gasCompAr': 80.,
