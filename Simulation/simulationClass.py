@@ -32,7 +32,7 @@ class FIMS_Simulation:
         8. Reset parameters to defaults.
 
     *****
-    Important: The parameters are reset to defaults after every simulation.
+    IMPORTANT: The parameters are reset to defaults after every simulation.
     *****
 
     Attributes:
@@ -136,7 +136,7 @@ class FIMS_Simulation:
             
         return self.param[parameter]
 
- #***********************************************************************************#       
+#***********************************************************************************#       
     def _getGarfieldPath(self):
         """
         Reads and returns the filepath to the Garfield++ source script.
@@ -222,7 +222,7 @@ class FIMS_Simulation:
         Reads the simulation parameters contained in the simulation control file.
     
         Returns:
-            bool: True if parameters are read fro  file, False otherwise.
+            bool: True if parameters are read from file successfully, False otherwise.
         """
         filename = 'runControl'
         readInParam = {}
@@ -248,7 +248,7 @@ class FIMS_Simulation:
             print(f"An error occurred while reading the file: {e}")
             return False
 
-        if not self._checkParam(param):
+        if not self._checkParam():
             print("Error: Not all parameters found in 'runControl'.")
             return False
 
@@ -728,9 +728,7 @@ class FIMS_Simulation:
             7. Execute the Garfield++ simulation for charge transport.
     
         Args:
-            changeGeometry (bool): Allows for bypassing bypassing the 
-                                   Gmsh call to generate a mesh.
-                                   Also skips creating the weighting field.
+            changeGeometry (bool): Allows for bypassing some executions to.
                                    (Optional for when geometry does not change.)
     
         Returns:
