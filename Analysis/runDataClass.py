@@ -949,27 +949,20 @@ class runData:
         ax2 = fig.add_subplot(222)
         ax3 = fig.add_subplot(223)
         ax4 = fig.add_subplot(224)
-
-        pitch = self.getRunParameter('Pitch')
-        padHeight = self.getRunParameter('Grid Standoff')
-        cathodeHeight = self.getRunParameter('Cathode Height')
-        
-        rangeXY = [[-pitch, pitch], [-pitch, pitch]]
-        rangeXZ = [[-pitch, pitch], [-padHeight, cathodeHeight]]
     
         # Plot data
         ax1.hist2d(particleData['Initial x'], 
                    particleData['Initial y'], 
-                   bins=numBins, range=rangeXY, cmin=1)
+                   bins=numBins, cmin=1)
         ax2.hist2d(particleData['Final x'], 
                    particleData['Final y'], 
-                   bins=numBins, range=rangeXY, cmin=1)
+                   bins=numBins, cmin=1)
         ax3.hist2d(particleData['Initial x'], 
                    particleData['Initial z'], 
-                   bins=numBins, range=rangeXZ, cmin=1)
+                   bins=numBins, cmin=1)
         ax4.hist2d(particleData['Final x'], 
                    particleData['Final z'], 
-                   bins=numBins, range=rangeXZ, cmin=1)
+                   bins=numBins, cmin=1)
     
         #Add geometry Pieces
         self._plotAddCellGeometry(ax1, 'xy')

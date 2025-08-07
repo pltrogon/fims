@@ -47,7 +47,6 @@ class FIMS_Simulation:
             - fieldRatio: Ratio of the amplification field to the drift field.
                           Note that the drift field is assumed to be 1 kV/cm.
             - numFieldLine: Number of field lines to calculate for visualization.
-            - transparencyLimit: Electric field transparancy limit.
             - numAvalanche: Number of electrons (avalanches) to initiate
             - avalancheLimit: Limit of the number of electrons within a single avalanche.
             - gasCompAr: Percentage of Argon within gas volume.
@@ -100,7 +99,6 @@ class FIMS_Simulation:
             'thicknessSiO2': 5.,
             'fieldRatio': 40.,
             'numFieldLine': 51,
-            'transparencyLimit': .1,
             'numAvalanche': 1000,
             'avalancheLimit': 200,
             'gasCompAr': 80.,

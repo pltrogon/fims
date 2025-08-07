@@ -69,26 +69,26 @@ int main(int argc, char * argv[]) {
   FILE * pipe = popen(getGitCommand, "r");
   if(!pipe){
     std::cerr << "Error: Could not open pipe to 'getGitCommand'." << std::endl;
+    return -1;
   }
-  else{ 
-    char gitBuffer[128];
-    std::string gitOutput = "";
-    while(fgets(gitBuffer, sizeof(gitBuffer), pipe) != NULL){
-      gitOutput += gitBuffer;
-    }
-    int gitStatus = pclose(pipe);
 
-    if(!gitOutput.empty() && gitOutput.back() == '\n'){
-      gitOutput.pop_back();
-    }
-
-    if(gitStatus == 0){
-      gitVersion = gitOutput;
-    }
-    else{
-      std::cerr << "Error: 'getGitCommand' failed with status " << gitStatus << std::endl;
-    }
+  char gitBuffer[128];
+  std::string gitOutput = "";
+  while(fgets(gitBuffer, sizeof(gitBuffer), pipe) != NULL){
+    gitOutput += gitBuffer;
   }
+  int gitStatus = pclose(pipe);
+
+  if(!gitOutput.empty() && gitOutput.back() == '\n'){
+    gitOutput.pop_back();
+  }
+
+  if(gitStatus != 0){
+    std::cerr << "Error: 'getGitCommand' failed with status " << gitStatus << std::endl;
+    return -1;
+  }
+  gitVersion = gitOutput;
+
 
   //***** Run numbering *****//
   //Read in run number from runNo
@@ -144,7 +144,6 @@ int main(int argc, char * argv[]) {
   double cathodeHeight, thicknessSiO2;
   double fieldRatio;
   int numFieldLine;
-  double transparencyLimit;
   int numAvalanche, avalancheLimit;
   double gasCompAr, gasCompCO2;
   double penningR, penningLambda;
@@ -187,8 +186,8 @@ int main(int argc, char * argv[]) {
   paramFile.close();
 
   //Parse the values from the map
-  if(numKeys != 14){//Number of user-defined simulation parameters in runControl to search for.
-      std::cerr << "Error: Invalid simulation parameters in 'runControl'." << std::endl;
+  if(numKeys != 13){//Number of user-defined simulation parameters in runControl to search for.
+    std::cerr << "Error: Invalid simulation parameters in 'runControl'." << std::endl;
     return -1;
   }
 
@@ -208,7 +207,6 @@ int main(int argc, char * argv[]) {
   fieldRatio = std::stod(readParam["fieldRatio"]);
 
   numFieldLine = std::stoi(readParam["numFieldLine"]);
-  transparencyLimit = std::stod(readParam["transparencyLimit"]);
 
   //Simulation Parameters
   numAvalanche = std::stoi(readParam["numAvalanche"]);
@@ -223,7 +221,6 @@ int main(int argc, char * argv[]) {
   TTree *metaDataTree = new TTree("metaDataTree", "Simulation Parameters");
 
   //Data to be saved
-  double fieldTransparency;
 
   //Add branches
   //General
@@ -242,16 +239,12 @@ int main(int argc, char * argv[]) {
   //Field Parameters
   metaDataTree->Branch("Electric Field Ratio", &fieldRatio, "fieldRatio/D");
   metaDataTree->Branch("Number of Field Lines", &numFieldLine, "numFieldLine/I");
-  metaDataTree->Branch("Field Transparency", &fieldTransparency, "fieldTransparency/D");
-  metaDataTree->Branch("Field Transparency Limit", &transparencyLimit, "transparencyLimit/D");
 
   //Simulation parameters
   metaDataTree->Branch("Number of Avalanches", &numAvalanche, "numAvalanche/I");
   metaDataTree->Branch("Avalanche Limit", &avalancheLimit, "avalancheLimit/I");
   metaDataTree->Branch("Gas Comp: Ar", &gasCompAr, "gasCompAr/D");
   metaDataTree->Branch("Gas Comp: CO2", &gasCompCO2, "gasCompCO2/D");
-  metaDataTree->Branch("Simulation Run Time", &runTime, "runTime/D");
-
 
   //***** Field Line Data Tree *****//
   //Create
@@ -455,49 +448,42 @@ int main(int argc, char * argv[]) {
   driftIon->SetSensor(sensorFIMS);
   driftIon->SetDistanceSteps(MICRONTOCM/10.);
 
-  // ***** Find field transparency ***** //
+  // ***** Draw field lines for visualization ***** //
   std::cout << "****************************************\n";
   std::cout << "Calculating field Lines.\n";
   std::cout << "****************************************\n";
 
   DriftLineRKF driftLines(sensorFIMS);
-  driftLines.SetMaximumStepSize(MICRONTOCM*10);//MICRONTOCM
+  driftLines.SetMaximumStepSize(MICRONTOCM*10);
 
   std::vector<double> xStart;
   std::vector<double> yStart;
 
-  double rangeScale = 0.9;
-  double xRange = (xBoundary[1] - xBoundary[0])*rangeScale;
-  double yRange = (yBoundary[1] - yBoundary[0])*rangeScale;
+  double rangeScale = 0.95;
 
-  /*
-  //Create 2D uniformly-spaced array - Note this makes numFieldLine**2 lines
-  for(int i = 0; i < numFieldLine; i++){
-    for(int j = 0; j < numFieldLine; j++){
-      xStart.push_back(-xRange/2. + i*xRange/(numFieldLine-1));
-      yStart.push_back(-yRange/2. + j*yRange/(numFieldLine-1));
-    }
-  }
-  */
-
-  //Lines generated radially from the center to edge of geometry
+  //Line generated radially in cardinal directions
+  //Note this will make 2*numFieldLines lines
   //    The x-direction is the long axis of the geometry. 
-  //    This extends past the vertex of the hex unit cell
+  //    x will extend past the vertex of the hex unit cell
+  //    y will go to edge of hex unit cell
+
+  //Field Lines along x:
   for(int i = 0; i < numFieldLine; i++){
     xStart.push_back(rangeScale*xBoundary[1]*i/(numFieldLine-1));
     yStart.push_back(0.);
   }
-  
-  /*
-  //Lines populated at corner - spread with uniform random numbers
-  //TODO - now with hex geomety, do some math to find that corner
-  double spreadScale = 0.99995; //Any smaller and goes out of bounds
+  //Field Lines along y:
   for(int i = 0; i < numFieldLine; i++){
-    //Get random numbers between 0 and 1
-    double randX = 1.0*rand()/RAND_MAX;
-    double randY = 1.0*rand()/RAND_MAX;
-    xStart.push_back(xRange/2. + (randX - 0.5)*(1-spreadScale));
-    yStart.push_back(yRange/2. + (randY - 0.5)*(1-spreadScale));
+    xStart.push_back(0.);
+    yStart.push_back(rangeScale*yBoundary[1]*i/(numFieldLine-1));
+  }
+
+  /*
+  //Additional lines radially from center to corner of geometry
+  //Adds another numFieldLines lines
+  for(int i = 0; i < numFieldLine; i++){
+    xStart.push_back(rangeScale*xBoundary[1]*i/(numFieldLine-1));
+    yStart.push_back(rangeScale*yBoundary[1]*i/(numFieldLine-1));
   }
   */
 
@@ -506,6 +492,7 @@ int main(int argc, char * argv[]) {
   int totalFieldLines = xStart.size();
   int numAtPad = 0;
   std::cout << "Computing " << totalFieldLines << " field lines." << std::endl;
+  std::cout << "     (True number is x3 for cathode, and above/below grid.)" << std::endl;
   int prevDriftLine = 0;
   for(int inFieldLine = 0; inFieldLine < totalFieldLines; inFieldLine++){
     
@@ -568,18 +555,7 @@ int main(int argc, char * argv[]) {
 
   }//End field line loop
   
-  std::cout << "Done " << totalFieldLines << " field lines; Determining transparency." << std::endl;
-  //Determine transparency
-  fieldTransparency = (1.*numAtPad) / (1.*totalFieldLines);
-  std::cout << "Field transparency is " << fieldTransparency <<  "." << std::endl;
-
-  //Handle case where field transparency is too low
-  if(fieldTransparency < transparencyLimit){
-    std::cout << "Field transparency lower than limit - Running mimimal avalanche case." << std::endl;
-    numAvalanche = 50;
-    avalancheLimit = 50;
-    DEBUG = true; // TODO - 
-  }
+  std::cout << "Done " << totalFieldLines << " field lines." << std::endl;
 
   // *** Deal with field line trees *** //
 
