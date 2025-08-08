@@ -13,6 +13,11 @@ import time
 import itertools
 import re
 
+simDir = os.getcwd()
+analysisDir = os.path.join(simDir, '..', 'Analysis')
+sys.path.append(analysisDir)
+from runDataClass import runData
+
 class FIMS_Simulation:
     """
     Class representing the FIMS simulation.
@@ -1065,10 +1070,10 @@ class FIMS_Simulation:
             self.param = saveParam
             
             #rGet the simulation data
-            runData = simData(doneRun)
+            simData = runData(doneRun)
 
             #find locations of stuck electrons
-            electronLocations = runData.findStuckElectrons()
+            electronLocations = simData.findStuckElectrons()
 
             #Determine the amount of built-up charge
             newElectrons = len(electronLocations)
