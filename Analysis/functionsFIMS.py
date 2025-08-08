@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import math
 import matplotlib.pyplot as plt
 
 from scipy.special import gammaincc
@@ -228,5 +229,70 @@ def plotPolyExamples(thetaStart=0, thetaEnd=5, numSteps=6):
 
     return
     
+#********************************************************************************#   
+def withinHex(xVal, yVal, sideLength):
+    """
+    Determines if a coordinate lies within a regular hexagon.
+    Assumes a flat-top geometry centered at the origin.
 
+    Args:
+        xVal (float): The x-coordinate to check.
+        yVal (float): The y-coordiante to check.
+        sideLength (float): The length of a side of the hexagon.
 
+    Returns:
+        bool: True if the coordiate is within the hexagon, False otherwise.
+    """
+    #Use symmetry of regular hexagon
+    x = np.abs(xVal)
+    y = np.abs(yVal)
+
+    #Check if below flat top
+    checkTop = y <= sideLength*math.sqrt(3)/2.
+
+    #Check if the point is within the sloped edge
+    checkSlope = x+y/math.sqrt(3) <= sideLength
+
+    #Combine conditions
+    inHex = np.logical_and(checkTop, checkSlope)
+
+    return inHex
+
+#********************************************************************************#   
+def withinNeighbourHex(xVal, yVal, sideLength, pitch):
+    """
+    Determines if a coordinate lies within a hexagonal region in hexagonal tiling.
+    Assumes a flat-top geometry. 
+    Possible uses: 
+        sideLength = side length of the unit cell - Determines if in nieghbour cell.
+        sideLength = side length of the pad - Determines if in neighrbour pad.
+
+    Args:
+        xVal (float): The x-coordinate to check.
+        yVal (float): The y-coordiante to check.
+        sideLength (float): The length of a side of the hexagon to check.
+        pitch (float): The spacing between the hexagonal tiling.
+    
+    Returns:
+        bool: True if is in neghbouring region, otherwise False.
+    """
+    # Use symmetry of tiling - Only need to check above and top-right
+    x = np.abs(xVal)
+    y = np.abs(yVal)
+
+    #Unit cell dimensions
+    inRadius = pitch/2.
+    outRadius = 2*inRadius/math.sqrt(3)
+    
+    #Centers of neighbouring cells
+    neighbourX = 3./2.*outRadius*np.array([0, 1])
+    neighbourY = inRadius*np.array([2, 1])
+
+    #Check
+    checkTop = withinHex(x - neighbourX[0], y - neighbourY[0], sideLength)
+    checkTopRight = withinHex(x - neighbourX[1], y - neighbourY[1], sideLength)
+
+    #Combine conditions
+    isInNeighbourHex = np.logical_or(checkTop, checkTopRight)
+
+    return isInNeighbourHex

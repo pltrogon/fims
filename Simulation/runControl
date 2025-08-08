@@ -20,7 +20,6 @@ thicknessSiO2 = 5.0;
 //----- Field Parameters -----
 fieldRatio = 40.0;
 numFieldLine = 51;
-transparencyLimit = 0.1;
 
 //----- Simulation parameters -----
 // Avalanche controls

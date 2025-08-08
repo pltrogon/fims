@@ -32,7 +32,7 @@ class FIMS_Simulation:
         8. Reset parameters to defaults.
 
     *****
-    Important: The parameters are reset to defaults after every simulation.
+    IMPORTANT: The parameters are reset to defaults after every simulation.
     *****
 
     Attributes:
@@ -47,7 +47,6 @@ class FIMS_Simulation:
             - fieldRatio: Ratio of the amplification field to the drift field.
                           Note that the drift field is assumed to be 1 kV/cm.
             - numFieldLine: Number of field lines to calculate for visualization.
-            - transparencyLimit: Electric field transparancy limit.
             - numAvalanche: Number of electrons (avalanches) to initiate
             - avalancheLimit: Limit of the number of electrons within a single avalanche.
             - gasCompAr: Percentage of Argon within gas volume.
@@ -92,15 +91,14 @@ class FIMS_Simulation:
         """
         defaultParam = {
             'padLength': 65.,
-            'pitch': 250.,
+            'pitch': 225.,
             'gridStandoff': 100.,
             'gridThickness': .5,
             'holeRadius': 90.,
             'cathodeHeight': 200.,
             'thicknessSiO2': 5.,
             'fieldRatio': 40.,
-            'numFieldLine': 51,
-            'transparencyLimit': .1,
+            'numFieldLine': 25,
             'numAvalanche': 1000,
             'avalancheLimit': 200,
             'gasCompAr': 80.,
@@ -138,7 +136,7 @@ class FIMS_Simulation:
             
         return self.param[parameter]
 
- #***********************************************************************************#       
+#***********************************************************************************#       
     def _getGarfieldPath(self):
         """
         Reads and returns the filepath to the Garfield++ source script.
@@ -224,7 +222,7 @@ class FIMS_Simulation:
         Reads the simulation parameters contained in the simulation control file.
     
         Returns:
-            bool: True if parameters are read fro  file, False otherwise.
+            bool: True if parameters are read from file successfully, False otherwise.
         """
         filename = 'runControl'
         readInParam = {}
@@ -250,7 +248,7 @@ class FIMS_Simulation:
             print(f"An error occurred while reading the file: {e}")
             return False
 
-        if not self._checkParam(param):
+        if not self._checkParam():
             print("Error: Not all parameters found in 'runControl'.")
             return False
 
@@ -730,9 +728,7 @@ class FIMS_Simulation:
             7. Execute the Garfield++ simulation for charge transport.
     
         Args:
-            changeGeometry (bool): Allows for bypassing bypassing the 
-                                   Gmsh call to generate a mesh.
-                                   Also skips creating the weighting field.
+            changeGeometry (bool): Allows for bypassing some executions to.
                                    (Optional for when geometry does not change.)
     
         Returns:

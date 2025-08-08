@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from polyaClass import myPolya
+from functionsFIMS import withinHex
 
 CMTOMICRON = 1e4
 
@@ -361,7 +362,7 @@ class runData:
 
         #Add the cell boundary
         ax1.plot(cellX, cellY, 
-                label='Cell Boundary', c='b', lw=1)
+                label='Unit Cell Boundary', c='b', ls='--', lw=1)
         
         #Add boundaries of neighboring cells and pads
         for i in range(6):
@@ -470,7 +471,7 @@ class runData:
                 axis.plot(padX, padY, 
                         label='Pad', c='m', lw=1)
                 axis.plot(cellX, cellY, 
-                        label='Cell', c='c', lw=1)
+                        label='Cell', c='b', ls='--', lw=1)
                 axis.add_patch(hole)
                 axis.plot(geoX, geoY,
                         c='g', ls='--', lw=1, label='Simulation Boundary')
@@ -486,10 +487,10 @@ class runData:
                         label='Pad', c='m', lw=2)
                 axis.plot([cellX[3], cellX[0], cellX[0], cellX[3], cellX[3]], 
                         [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight],
-                        label='Cell', c='c', lw=1)
+                        label='Cell', c='b', ls='--', lw=1)
                 axis.plot([cellX[2], cellX[1], cellX[1], cellX[2], cellX[2]], 
                         [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight], 
-                        c='c', ls='--', lw=1)
+                        c='b', ls='--', lw=1)
                 axis.plot(holeXY, holeZ, 
                         label='Hole', c='k', ls='-')
                 axis.plot([geoX[0], geoX[1], geoX[1], geoX[0], geoX[0]], 
@@ -509,10 +510,10 @@ class runData:
                         label='Pad', c='m', lw=2)
                 axis.plot([cellY[4], cellY[1], cellY[1], cellY[4], cellY[4]], 
                         [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight],
-                        label='Cell', c='c', lw=1)
+                        label='Cell', c='b', ls='--', lw=1)
                 axis.plot([0, 0], 
                         [padHeight, cathodeHeight],
-                        label='Cell', c='c', ls='--', lw=1)
+                        label='Cell', c='b', ls='--', lw=1)
                 axis.plot(holeXY, holeZ, 
                         label='Hole', c='k', ls='-')
                 axis.plot([geoY[1], geoY[2], geoY[2], geoY[1], geoY[1]], 
@@ -949,27 +950,20 @@ class runData:
         ax2 = fig.add_subplot(222)
         ax3 = fig.add_subplot(223)
         ax4 = fig.add_subplot(224)
-
-        pitch = self.getRunParameter('Pitch')
-        padHeight = self.getRunParameter('Grid Standoff')
-        cathodeHeight = self.getRunParameter('Cathode Height')
-        
-        rangeXY = [[-pitch, pitch], [-pitch, pitch]]
-        rangeXZ = [[-pitch, pitch], [-padHeight, cathodeHeight]]
     
         # Plot data
         ax1.hist2d(particleData['Initial x'], 
                    particleData['Initial y'], 
-                   bins=numBins, range=rangeXY, cmin=1)
+                   bins=numBins, cmin=1)
         ax2.hist2d(particleData['Final x'], 
                    particleData['Final y'], 
-                   bins=numBins, range=rangeXY, cmin=1)
+                   bins=numBins, cmin=1)
         ax3.hist2d(particleData['Initial x'], 
                    particleData['Initial z'], 
-                   bins=numBins, range=rangeXZ, cmin=1)
+                   bins=numBins, cmin=1)
         ax4.hist2d(particleData['Final x'], 
                    particleData['Final z'], 
-                   bins=numBins, range=rangeXZ, cmin=1)
+                   bins=numBins, cmin=1)
     
         #Add geometry Pieces
         self._plotAddCellGeometry(ax1, 'xy')
@@ -1106,7 +1100,8 @@ class runData:
         Calculates the radius of the outermost electric field line
         at a specified z-coordinate.
 
-        "Outermost Line" - The line with the largest radius at the cathode.
+        "Outermost Line" - The line with the largest radius at the cathode that
+        initiates within the unit cell.
         Does a linear interpolation between available datapoints.
 
         Args:
@@ -1122,6 +1117,8 @@ class runData:
             raise ValueError('Invalid target z.')
         
         allFieldLines = self.getDataFrame('fieldLineData')
+        pitch = self.getRunParameter('Pitch')
+        unitCellLength = pitch/math.sqrt(3)
 
         #All lines start at same z near cathode
         initialZ = allFieldLines['Field Line z'].iloc[0]
@@ -1134,8 +1131,16 @@ class runData:
 
         #Isolate the largest radius at the cathode
         atCathode = allFieldLines[allFieldLines['Field Line z'] == initialZ]
-        maxRadius = atCathode['Field Line Radius'].max()
-        outermostLine = atCathode[atCathode['Field Line Radius'] == maxRadius]
+        #Determine what lines initiate within the unit cell
+        withinUnitCell = withinHex(
+            atCathode['Field Line x'], 
+            atCathode['Field Line y'], 
+            unitCellLength
+            )
+        cellLines = atCathode[withinUnitCell]
+        #Find line with max radius
+        maxRadius = cellLines['Field Line Radius'].max()
+        outermostLine = cellLines[cellLines['Field Line Radius'] == maxRadius]
         lineID = outermostLine['Field Line ID'].iloc[0]
 
         #get entire outermost field line - ensure sorted for interpolation

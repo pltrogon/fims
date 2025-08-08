@@ -30,7 +30,7 @@ class myPolya:
     """
 
 
- #********************************************************************************#   
+#********************************************************************************#   
     def __init__(self, gain=None, theta=None):
         """
         Initializes a Polya with a given gain and theta.
@@ -54,7 +54,7 @@ class myPolya:
                 self.theta = None
                 
 
- #********************************************************************************#   
+#********************************************************************************#   
     def __call__(self, n, fGain=None, fTheta=None):
         """
         Allow for calling the Polya class like a function.
@@ -87,7 +87,7 @@ class myPolya:
         return result        
 
     
- #********************************************************************************#   
+#********************************************************************************#   
     def _checkSelf(self):
         """
         Validation for the Polya parameters.
@@ -106,7 +106,7 @@ class myPolya:
         return
     
 
- #********************************************************************************#   
+#********************************************************************************#   
     def calcPolya(self, n):
         """
         Calculates the probability density function of the Polya distribution
@@ -133,7 +133,7 @@ class myPolya:
         return result
 
     
- #********************************************************************************#   
+#********************************************************************************#   
     def calcEfficiency(self, threshold=0):
         """
         Calculates the efficiency of the Polya distribution.
@@ -168,9 +168,55 @@ class myPolya:
 
         efficiency = gammaincc(s, x)
         return efficiency
+    
+
+#********************************************************************************#   
+    def calcEfficiencyErrs(self, threshold=0, gainErr=0, thetaErr=0):
+        """
+        Calculates the efficiency of the Polya distribution and its uncertainty.
+
+        Args:
+            threshold (float): The minimum detectable avalanche size.
+            gainErr (float): The uncertainty in the gain.
+            thetaErr (float): The uncertainty in theta.
+
+        Returns:
+            tuple: A tuple containing (efficiency, efficiency_error).
+        """
+        if gainErr < 0 or thetaErr < 0:
+            raise ValueError('Errors cannot be negative') 
+        
+        #Save current params and calculate nominal efficiency
+        gainSave = self.gain
+        thetaSave = self.theta
+        efficiency = self.calcEfficiency(threshold)
+
+        self.gain = gainSave + gainErr
+        self.theta = thetaSave + thetaErr
+        effpp = self.calcEfficiency(threshold) - efficiency
+
+        self.gain = gainSave + gainErr
+        self.theta = thetaSave - thetaErr
+        effpm = self.calcEfficiency(threshold) - efficiency
+
+        self.gain = gainSave - gainErr
+        self.theta = thetaSave + thetaErr
+        effmp = self.calcEfficiency(threshold) - efficiency
+
+        self.gain = gainSave - gainErr
+        self.theta = thetaSave - thetaErr
+        effmm = self.calcEfficiency(threshold) - efficiency
+
+
+        maxErr = max(effpp, effpm, effmp, effmm)
+        minErr = min(effpp, effpm, effmp, effmm)
+        
+        self.gain = gainSave
+        self.theta = thetaSave
+        return (efficiency, maxErr, minErr)
 
     
- #********************************************************************************#   
+#********************************************************************************#   
     def _fsolveEfficiency(self, fsolveGain, threshold, targetEff):
         """
         Function to be used alongside 'fsolve' to determine the necessary gain 
@@ -196,7 +242,7 @@ class myPolya:
         return targetEff - calcEff
 
     
- #********************************************************************************#   
+#********************************************************************************#   
     def solveForGain(self, targetEff=1, threshold=0, initialGain=1):
         """
         Solves for the gain necessary to achieve a specified efficiency with a
@@ -243,7 +289,7 @@ class myPolya:
         return
 
 
- #********************************************************************************#   
+#********************************************************************************#   
     def fitPolya(self, n, data, gain, dataErr=None, expo=False):
         """
         Fits a Polya distribution to an experimental dataset.
