@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from polyaClass import myPolya
-from functionsFIMS import withinHex
+from functionsFIMS import withinHex, withinNeighbourHex, xyInterpolate
 
 CMTOMICRON = 1e4
 
@@ -126,7 +126,7 @@ class runData:
             return {}
         
     
- #********************************************************************************#
+#********************************************************************************#
     def _checkName(self, dataSetName):
         """
         Checks that a requested data frame name from the simulation trees is valid.
@@ -140,7 +140,7 @@ class runData:
         return True
         
 
- #********************************************************************************#
+#********************************************************************************#
     def getTreeNames(self):
         """
         Returns a list of all of the available tree names.
@@ -148,7 +148,7 @@ class runData:
         return  self.dataTrees
     
 
- #********************************************************************************#
+#********************************************************************************#
     def printMetaData(self):
         """
         Prints all metadata information. Dimensions are in microns.
@@ -158,7 +158,7 @@ class runData:
         return
 
 
- #********************************************************************************#
+#********************************************************************************#
     def printColumns(self, dataSetName):
         """
         Prints all of the column names for a given data set.
@@ -175,7 +175,7 @@ class runData:
         return
 
 
- #********************************************************************************#
+#********************************************************************************#
     def getDataFrame(self, dataSetName):
         """
         Retrieves a specific DataFrame by its attribute name.
@@ -236,7 +236,7 @@ class runData:
         return dataFrame
             
         
- #********************************************************************************#
+#********************************************************************************#
     def getRunParameter(self, paramName):
         """
         Retrieves a given parameter from the metadata information.
@@ -284,7 +284,7 @@ class runData:
             return None
 
 
- #********************************************************************************#   
+#********************************************************************************#   
     def plotCellGeometry(self):
         """
         Plots a top-down view of the simulation geometry.
@@ -416,7 +416,7 @@ class runData:
         
         return
     
- #********************************************************************************#   
+#********************************************************************************#   
     def _plotAddCellGeometry(self, axis, axes):
         """
         Adds geometry elements to 2D plots, including
@@ -610,7 +610,7 @@ class runData:
         return
 
 
- #********************************************************************************#   
+#********************************************************************************#   
     def _getRawGain(self):
         """
         Returns the mean size of the simulated avalanches.
@@ -622,7 +622,7 @@ class runData:
         return avalancheData['Total Electrons'].mean()
 
     
- #********************************************************************************#   
+#********************************************************************************#   
     def _trimAvalanche(self):
         """
         Removes any avalanches that have either:
@@ -648,7 +648,7 @@ class runData:
         return trimmedAvalanche
 
     
- #********************************************************************************#   
+#********************************************************************************#   
     def _histAvalanche(self, trim, binWidth):
         """
         Calculates a histogram of the avalanche electron count data.
@@ -711,7 +711,7 @@ class runData:
         return histData
 
 
- #********************************************************************************#   
+#********************************************************************************#   
     def plotAvalancheSize(self, trim=False, binWidth=1):
         """
         Plots a histogram of the simulated avalanche size distribution.
@@ -749,7 +749,7 @@ class runData:
         
         return 
 
- #********************************************************************************#   
+#********************************************************************************#   
     def plotAvalanche2D(self, avalancheID=0, plotName=''):
         """
         Generates 2D plots of a single electron avalanche.
@@ -815,7 +815,7 @@ class runData:
         return
         
 
- #********************************************************************************#   
+#********************************************************************************#   
     def plotDiffusion(self, target):
         """
         Plots the diffusion of simulated particles in the drift direction (z) and 
@@ -904,7 +904,7 @@ class runData:
         
         return
         
- #********************************************************************************#   
+#********************************************************************************#   
     def plotParticleHeatmaps(self, target, numBins=51):
         """
         Plots 2D histograms displaying heatmaps of the intial and final locations 
@@ -981,7 +981,7 @@ class runData:
     
         return      
 
- #********************************************************************************#   
+#********************************************************************************#   
     def _fitAvalancheSize(self, binWidth):
         """
         Fits the trimmed simulated avalanche size distribution 
@@ -1037,7 +1037,7 @@ class runData:
         return fitResults
 
     
- #********************************************************************************#   
+#********************************************************************************#   
     def plotAvalancheFits(self, binWidth=1):
         """
         Plots a histogram of the simulated avalanche size distribution.
@@ -1094,7 +1094,7 @@ class runData:
         return
 
 
- #********************************************************************************#
+#********************************************************************************#
     def calcBundleRadius(self, zTarget=0):
         """
         Calculates the radius of the outermost electric field line
@@ -1157,6 +1157,64 @@ class runData:
         return targetRadius
 
 
+#********************************************************************************#
+    def findStuckElectrons(self):
+        """
+        Finds the xy coordinates of all electrons tracks that intersect
+        with the top of the SiO2 layer.
 
+        Returns:
+            dataframe: Pandas dataframe containing the x,y,z coordinates of
+                       the stuck electrons at the SiO2 layer.
+        """  
+        #Get geometry parameters      
+        padLength = self.getRunParameter('Pad Length')
+        pitch = self.getRunParameter('Pitch')
+
+        gridThickness = self.getRunParameter('Grid Thickness')
+        gridStandoff = self.getRunParameter('Grid Standoff')
+        thicknessSiO2 = self.getRunParameter('Thickness SiO2')
+
+        zSiO2Top = - gridThickness/2 - gridStandoff + thicknessSiO2
+
+        #Get electron tracks
+        allElectronTracks = self.getDataFrame('electronTrackData')
+
+
+        stuckElectrons = []
+        for electronID, inTrack in allElectronTracks.groupby('Electron ID'):
+
+            #Find the points where z is above and below zSiO2Top
+            pointAbove = None
+            aboveSiO2 = inTrack[inTrack['Drift z'] >= zSiO2Top]
+            if not aboveSiO2.empty:
+                pointAbove = aboveSiO2.iloc[-1] #Last point above
+
+            pointBelow = None
+            belowSiO2 = inTrack[inTrack['Drift z'] <= zSiO2Top] 
+            if not belowSiO2.empty:
+                pointBelow = belowSiO2.iloc[0] # First point below
+
+            
+            if pointAbove is not None and pointBelow is not None:
+                # Linearly interpolate x and y values for z = zSiO2Top
+                try:
+                    newPoint = xyInterpolate(pointAbove, pointBelow, zSiO2Top)             
+                except ValueError as e:
+                    print(f'Error for Electron {electronID} during interpolation: {e}')
+
+                #Check if this point is above the central or neighbour pad
+                if (
+                    withinHex(newPoint['x'], newPoint['y'], padLength)
+                    or withinNeighbourHex(newPoint['x'], newPoint['y'], padLength, pitch)
+                ):
+                    continue
+                
+                stuckElectrons.append(newPoint)
+
+            ##TODO - Can add some other calculation here to determine if electron
+            #  hits wall of SiO2 - Is this unlikely????
+
+        return pd.DataFrame(stuckElectrons)
 
 

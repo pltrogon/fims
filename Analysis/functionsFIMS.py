@@ -296,3 +296,38 @@ def withinNeighbourHex(xVal, yVal, sideLength, pitch):
     isInNeighbourHex = np.logical_or(checkTop, checkTopRight)
 
     return isInNeighbourHex
+
+
+#********************************************************************************#   
+def xyInterpolate(point1, point2, zTarget):
+    """
+    Linear interpolation between two points for a target z-value.
+
+    Args:
+        point1 (tuple): x,y,z coordinates of the first point.
+        point2 (tuple): x,y,z coordinates of the second point.
+        zTarget (float): The target z-value for the interpolation.
+
+    Returns:
+        tuple: Interpolated x,y,z coordinates. None if points are at the same z.
+    """
+    x1, y1, z1 = point1
+    x2, y2, z2 = point2
+
+    # Cannot interpolate if z-values are the same
+    if z1 == z2:
+        return None
+    
+    if not (z1 <= zTarget <= z2):
+        raise ValueError('Target is outside of interpolation range.')
+
+    #Interpolation requires points to be increasing
+    if z1 > z2:
+        z1, z2 = z2, z1
+        x1, x2 = x2, x1
+        y1, y2 = y2, y1
+
+    x = np.interp(zTarget, (z1, z2), (x1, x2))
+    y = np.interp(zTarget, (z1, z2), (y1, y2))
+
+    return (x, y, zTarget)

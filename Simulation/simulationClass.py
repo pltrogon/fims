@@ -791,3 +791,304 @@ class FIMS_Simulation:
 
     
 
+#***********************************************************************************#
+#***********************************************************************************#
+# METHODS FOR RUNNING CHARGE BUILDUP - WIP
+#***********************************************************************************#
+#***********************************************************************************#
+
+
+#***********************************************************************************#
+    def resetCharge(self):
+        """
+        Resets the charge buildup file to be empty.
+
+        Returns:
+            bool: True is reset is successful, False otherwise.
+        """
+        filename = 'Geometry/chargeBuildup.dat'
+
+        try:
+            with open(filename, 'w') as file:
+                file.write('')
+                
+        except FileNotFoundError:
+            print(f"Error: File '{filename}' not found.")
+            return False
+        except Exception as e:
+            print(f'An error occurred with the file: {e}')
+            return False
+        
+        return True
+    
+#***********************************************************************************#
+    def _saveCharge(self, runNumber):
+        """
+        Saves the surface charge buildup to a file designated by runNumber.
+
+        Copies the current charge buildup file into 'savedCharge/' as 'runXXXX.charge.dat'
+
+        Args:
+            runNumber (int): Run identifier for saved file.
+
+        Returns:
+            bool: True is file copy is successful, False otherwise.
+        """
+        chargeDirectory = 'savedCharge'
+        if not os.path.exists(chargeDirectory):
+            try:
+                os.makedirs(chargeDirectory)
+            except OSError as e:
+                print(f"Error creating directory '{chargeDirectory}': {e}")
+                return False
+                
+        saveFile = f'run{runNumber:04d}.charge.dat'
+        saveFilePath = os.path.join('savedCharge', saveFile)
+
+        filename = 'Geometry/chargeBuildup.dat'
+        try:
+            shutil.copyfile(filename, saveFilePath)
+        except FileNotFoundError:
+            print(f"Error: Source file '{filename}' not found.")
+            return False
+        except Exception as e:
+            print(f'An error occurred while saving charge history: {e}')
+            return False
+        
+        return True
+
+
+#***********************************************************************************#
+    def _readCharge(self):
+        """
+        Reads the file containing the built-up surface charge distribution.
+
+        Assumes a space-separated dataset.
+
+        Returns:
+            dataframe: Pandas dataframe containing: x, y, z, and charge density.
+                       None if no data is available or an error occurs.
+        """
+        filename = 'Geometry/chargeBuildup.dat'
+
+        try:
+            chargeData = pd.read_csv(
+                filename, 
+                sep=r'\s+', 
+                header=None, 
+                names=[
+                    'x', 
+                    'y', 
+                    'z', 
+                    'chargeDensity'
+                ], 
+                comment='#'
+            )
+
+            if chargeData.empty:
+                print('No charge density.')
+                return None
+                
+        except FileNotFoundError:
+            print(f"Error: File '{filename}' not found.")
+            return None
+        except Exception as e:
+            print(f"An error occurred with the file: {e}")
+            return None
+
+        return chargeData
+    
+
+#***********************************************************************************#
+    def _writeCharge(self, builtUpCharge):
+        """
+        Writes the built-up surface charge to a file.
+
+        Args:
+            dataframe: Pandas dataframe containing: x, y, z, and charge density.
+
+        Returns:
+            bool: True is write is successful, otherwise False.
+        """
+        filename = 'Geometry/chargeBuildup.dat'
+
+        try:
+            builtUpCharge.to_csv(
+                filename,
+                sep=' ',
+                index=False,
+                header=False,
+                float_format='%.10e'
+            )
+                
+        except FileNotFoundError:
+            print(f"Error: File '{filename}' not found.")
+            return False
+        except Exception as e:
+            print(f"An error occurred with the file: {e}")
+            return False
+        
+        return True
+    
+
+#***********************************************************************************#
+    def _calculateSurfaceCharge(self, electronLocations):
+        """
+        Calculates the surface charge density based on the provided electron locations.
+
+        Args:
+            electronLocations (pd.DataFrame): A DataFrame containing the x, y, z 
+                                              coordinates of the stuck electrons.
+
+        Returns:
+            dataframe: Pandas dataframe with the calculated surface charge density
+                       at the coordinates (x, y, z).
+        """
+        electronCharge = -1.602176634e-19
+
+        #Geometry parameters
+        pitch = self._getParam('pitch')        
+        xMax = math.sqrt(3)/2.*pitch
+        xMin = -xMax
+        yMax = pitch
+        yMin = -yMin
+
+        #Bin resolution and number of bins
+        binResolution = pitch/100.
+        numBinsX = int(np.ceil((xMax - xMin) / binResolution))
+        numBinsY = int(np.ceil((yMax - yMin) / binResolution))
+
+        #Isolate electrons from a given area
+        filteredElectrons = electronLocations[
+            (electronLocations['x'] > xMin) & 
+            (electronLocations['x'] < xMax) &
+            (electronLocations['y'] > yMin) & 
+            (electronLocations['y'] < yMax)
+        ].copy()
+
+        #Assume the same z-coordinate for all data
+        z = 0.
+        if not filteredElectrons.empty:
+            z = filteredElectrons['z'].iloc[0]
+
+        #Generate 2D histogram of stuck electrons
+        electronCounts, xEdges, yEdges = np.histogram2d(
+            filteredElectrons['x'],
+            filteredElectrons['y'],
+            bins=[numBinsX, numBinsY],
+            range=[[xMin, xMax], [yMin, yMax]]
+        )
+        electronCounts = electronCounts.T #because hist is weird
+        
+        # Calculate bin centers from the edges
+        xCenters = (xEdges[:-1] + xEdges[1:]) / 2
+        yCenters = (yEdges[:-1] + yEdges[1:]) / 2
+
+        nonZeroY, nonZeroX = np.where(electronCounts > 0)
+
+        # Calculate total charge and charge density for all bins
+        binArea = binResolution**2
+        totalBinCharge = electronCounts*electronCharge
+        binChargeDensity = totalBinCharge/binArea
+
+        # Extract the relevant data using the indices
+        chargeData = pd.DataFrame({
+            'x': xCenters[nonZeroX],
+            'y': yCenters[nonZeroY],
+            'z': z,
+            'chargeDensity': binChargeDensity[nonZeroY, nonZeroX]
+        })
+
+        surfaceCharge = pd.DataFrame(chargeData)
+        
+        return surfaceCharge
+
+#***********************************************************************************#
+    def _sumChargeDensity(self, charge1, charge2):
+        """
+        """
+        combinedCharge = pd.merge(
+            charge1,
+            charge2,
+            on=['x', 'y', 'z'],
+            how='outer',
+            suffixes=('1', '2')
+        )
+
+        combinedCharge['chargeDensity1'] = combinedCharge['chargeDensity1'].fillna(0)
+        combinedCharge['chargeDensity2'] = combinedCharge['chargeDensity2'].fillna(0)
+        
+        combinedCharge['chargeDensity'] = combinedCharge['chargeDensity1'] + combinedCharge['chargeDensity2']
+        
+        totalCharge = combinedCharge[['x', 'y', 'z', 'chargeDensity']]
+
+        return totalCharge
+
+
+#***********************************************************************************#
+# TODO - Ensure that the simData class is loaded in correctly
+    def runChargeBuildup(self, buildupThreshold=1):
+        """
+        """
+        if not self._checkParam():
+            return -1
+        
+        #Check that the number of avalanches is a reasonable number
+        # too many = too much charge unaffected by new stucks
+        # too few = not enough stuck charges to make a difference
+        numAvalanche = self.param('numAvalanche')
+        if ((numAvalanche < 10) | (numAvalanche > 100)):
+            print(f'Adjust number of avalanches ({numAvalanche}).')
+        
+        #Reset to ensure no initial charge
+        self._resetCharge()
+        
+        #Prepare for iterations
+        totalElectrons = 0
+        numRuns = 0
+        initialRun = True
+
+        #Repeat simulations until electron buildup is less than threshold 
+        newElectrons = buildupThreshold+1
+        while newElectrons > buildupThreshold:
+            #Reset built up charge and run simulation
+            numRuns += 1
+            newElectrons = 0
+
+            #Only have to generate geometry on first run
+            if numRuns > 1:
+                initialRun = False
+                
+            #Run simulation - save parameters s reset at end of sim
+            saveParam = self.param.copy()
+            doneRun = self.runSimulation(changeGeometry=initialRun)
+            self.param = saveParam
+            
+            #rGet the simulation data
+            runData = simData(doneRun)
+
+            #find locations of stuck electrons
+            electronLocations = runData.findStuckElectrons()
+
+            #Determine the amount of built-up charge
+            newElectrons = len(electronLocations)
+            totalElectrons += newElectrons
+            newCharge = self._calculateSurfaceCharge(electronLocations)
+            oldCharge = self._readCharge()
+            totalCharge = self._sumChargeDensity(oldCharge, newCharge)
+
+            #Update boundary condition with new surface charges
+            self._writeCharge(totalCharge)
+
+
+        #Save charge based on last run number, then reset file and all parameters.
+        self._saveCharge(doneRun)
+        self.resetCharge()    
+        self.resetParam()
+
+        chargeBuildupSummary = {
+            'numRuns': numRuns,
+            'finalRun': doneRun,
+            'totalCharge': totalElectrons,
+        }
+        return chargeBuildupSummary
