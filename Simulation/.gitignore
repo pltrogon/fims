@@ -2,6 +2,8 @@
 runNo
 GARFIELDPATH
 log/
+Geometry/FIMS.msh
+Geometry/FIMSWeighting.sif
 Geometry/elmerResults/
 build/
 __pycache__/

@@ -453,7 +453,7 @@ int main(int argc, char * argv[]) {
   std::cout << "****************************************\n";
 
   DriftLineRKF driftLines(sensorFIMS);
-  driftLines.SetMaximumStepSize(MICRONTOCM*10);
+  driftLines.SetMaximumStepSize(MICRONTOCM*5);
 
   std::vector<double> xStart;
   std::vector<double> yStart;
