@@ -6,6 +6,16 @@ from scipy.special import gammaincc
 
 from polyaClass import myPolya
 
+"""
+Functions:
+    getAnalysisNumbers
+    plotGeneralPolya
+    plotPolya
+    plotPolyaEfficiency
+    plotThreshold
+    plotPolyaExample
+"""
+
 #********************************************************************************#   
 def getAnalysisNumbers():
     """

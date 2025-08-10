@@ -17,6 +17,30 @@ CMTOMICRON = 1e4
 
 class runData:
     """
+    Methods:
+    _readRootTrees
+    _checkName
+    getTreeNames
+    printMetaData
+    printColumns
+    getDataFrame
+    getRunParameter
+    getRunNumber
+    plotCellGeometry
+    _plotAddCellGeometry
+    plot2DFieldLines
+    _getRawGain
+    _trimAvalanche
+    _histAvalanche
+    plotAvalancheSize
+    plotAvalanche2D
+    plotDiffusion
+    plotParticleHeatmaps
+    _fitAvalancheSize
+    plotAvalancheFits
+    calcBundleRadius
+    calcOpticalTransparency
+    calcIBF
     """
 
 #********************************************************************************#
@@ -1042,3 +1066,54 @@ class runData:
         targetRadius = interpolateZ(zTarget)
 
         return targetRadius
+#********************************************************************************#
+    def calcOpticalTransparency(self):
+        """
+        returns: optical transparency  of a hexagonal grid (float)
+
+        Finds the geometry from the current run and uses it to calculate the
+        optical transparency of the grid (assumes hexagonal configuration with
+        a single hole centered above each pad)
+        """
+    
+        radius = self.getRunParameter('Hole Radius')
+        pitch = self.getRunParameter('Pitch')
+
+        gridArea = (pitch*pitch)*(math.sqrt(3))
+        holeArea = (math.pi*radius*radius)*2
+        transparency = holeArea/gridArea
+        
+        return round(transparency, 6)
+        
+#********************************************************************************#
+    def calcIBF(self):
+        """
+        Returns: fraction of ions not captured by the grid (float)
+
+        Cuts the ionData to only include ions with a positive charge and that
+        terminate on the grid. It then calculates the IBF and returns the value
+        as a float
+        """
+        
+        #Initialize variables
+        gridThickness = self.getRunParameter('Grid Thickness')
+        ionData = self.getDataFrame('ionData')
+        capIon = 0
+        negativeIon = 0
+        ionNum = 0
+        numIon = len(ionData)
+        ionEnd = ionData['Final z']
+        ionCharge = ionData['Ion Charge']
+
+        
+        while ionNum < numIon:
+            if ionCharge[ionNum] == 1 and ionEnd[ionNum] < gridThickness*1.01 and ionEnd[ionNum] > -gridThickness*1.01:
+                capIon += 1
+            if ionCharge[ionNum] == -1:
+                negativeIon += 1
+            ionNum += 1
+        
+        positiveIon = numIon - negativeIon
+        IBF = (positiveIon - capIon)/positiveIon
+        return IBF
+
