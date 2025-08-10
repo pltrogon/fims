@@ -125,7 +125,8 @@ class runData:
         """
         Prints all metadata information. Dimensions in microns.
         """
-        for inParam in self.dataTrees['metaData'].columns:
+        metaData = getattr(self, 'metaData', None)
+        for inParam in metaData:
             print(f'{inParam}: {self.getRunParameter(inParam)}')
         return
 
