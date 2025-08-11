@@ -68,13 +68,18 @@ class runData:
             'electronTrackData'
         ]
 
+        #Read the root trees to large dataframe
         allData = self._readRootTrees()
         if not allData:
             print(f'Warning: No data loaded for run number {runNumber}.')
             print('Check file path and contents.')
 
+        #Unpack into private dataframes
         for treeName in self.dataTrees:
             setattr(self, f'_{treeName}', allData.get(treeName))
+
+        #Calculate some other parameters
+        self._calcOtherMetaData()
 
 #********************************************************************************#
     #String representation
@@ -284,6 +289,32 @@ class runData:
             print(f"An unexpected error occurred retrieving '{paramName}': {e}")
             return None
 
+
+#********************************************************************************#   
+    def _calcOtherMetaData(self):
+        """
+        Calculate some other useful information and append them to metaData.
+        Including:
+            Optical Transparency
+            Field Bundle Radius
+            Raw Gain
+            IBF
+        """
+        #Optical transparency
+        self._metaData['Optical Transparency'] = self._calcOpticalTransparency()
+
+        #Field bundle radius
+        standoff = self.getRunParameter('Grid Standoff')
+        nominalBundleZ = -standoff/2
+        self._metaData['Field Bundle Radius'] = self.calcBundleRadius(nominalBundleZ)
+
+        #Raw Gain
+        self._metaData['Raw Gain'] = self._getRawGain()
+
+        #Calculate IBF
+        self._metaData['IBF'] = self._calcIBF()
+
+        return
 
 #********************************************************************************#   
     def plotCellGeometry(self):
@@ -1218,3 +1249,44 @@ class runData:
         return pd.DataFrame(stuckElectrons)
 
 
+#********************************************************************************#
+    def _calcIBF(self):
+        """
+        Determines the fraction of positive ions that terminate above the grid.
+
+        Note that this assumes that any ion that the exits the sides of the 
+        simulation volume will not return to the grid. 
+
+        Returns:
+            float: The fraction of backflowing ions (IBF)
+        """
+        
+        allIons = self.getDataFrame('ionData')
+        posIons = allIons[allIons['Ion Charge'] == 1]
+        cathIons = posIons[posIons['Final z'] > self.getRunParameter('Grid Thickness')]
+
+        numCathode = len(cathIons)
+        numAvalanche = self.getRunParameter('Number of Avalanches')
+    
+        IBF = numCathode/numAvalanche
+
+        return IBF
+
+
+#********************************************************************************#
+    def _calcOpticalTransparency(self):
+        """
+        """
+        #Area of the unit cell    
+        pitch = self.getRunParameter('Pitch')
+        unitCellLength = pitch/math.sqrt(3)
+        cellArea = 1.5*math.sqrt(3)*unitCellLength**2
+        
+        #Area of the central hole
+        holeRadius = self.getRunParameter('Hole Radius')
+        holeArea = math.pi*holeRadius**2
+
+        #Find transparency
+        cellTransparency = holeArea/cellArea
+        
+        return cellTransparency

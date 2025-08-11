@@ -104,10 +104,10 @@ class App(tk.Tk):
         dataFrame = None
         if self.simData and hasattr(self.simData, 'getDataFrame'):
             dataFrame = self.simData.getDataFrame(selectedName)
-            print(dataFrame.head())
         
         if dataFrame is not None:
-            show(dataFrame)
+            #show(dataFrame)
+            print(dataFrame.head())
         else:
             messagebox.showerror("Error", f"DataFrame '{selectedName}' not found in simData.")
 
