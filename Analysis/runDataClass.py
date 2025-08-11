@@ -70,8 +70,8 @@ class runData:
 
         allData = self._readRootTrees()
         if not allData:
-            print(f'Warning: No data loaded for run number {runNumber}. \
-                    Check file path and contents.')
+            print(f'Warning: No data loaded for run number {runNumber}.')
+            print('Check file path and contents.')
 
         for treeName in self.dataTrees:
             setattr(self, f'_{treeName}', allData.get(treeName))
@@ -153,7 +153,8 @@ class runData:
         """
         Prints all metadata information. Dimensions are in microns.
         """
-        for inParam in self.dataTrees['metaData'].columns:
+        metaData = self.getDataFrame('metaData')
+        for inParam in metaData:
             print(f'{inParam}: {self.getRunParameter(inParam)}')
         return
 
@@ -412,9 +413,8 @@ class runData:
         ax1.set_ylabel('y (um)')
         ax1.legend(loc='center left', bbox_to_anchor=(1, 0.5))
         plt.tight_layout()   
-        plt.show()
         
-        return
+        return fig
     
 #********************************************************************************#   
     def _plotAddCellGeometry(self, axis, axes):
