@@ -282,7 +282,7 @@ class myPolya:
                 self.gain = gainSolved[0]
             else:
                 self.gain = saveGain
-                raise RuntimeError(f'fsolve did not converge. Message: {mesg['mesg']}')
+                raise RuntimeError(f"fsolve did not converge. Message: {mesg['mesg']}")
         except Exception as e:
             raise RuntimeError(f'Error during fsolve for gain: {e}')
             

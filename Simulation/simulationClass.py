@@ -426,8 +426,8 @@ class FIMS_Simulation:
             return False
     
         #rewrite appropriate lines
-        sifLines[writeCathode] = f'\tPotential = {potentials['cathodeVoltage']}\n'
-        sifLines[writeGrid] = f'\tPotential = {potentials['gridVoltage']}\n'
+        sifLines[writeCathode] = f"\tPotential = {potentials['cathodeVoltage']}\n"
+        sifLines[writeGrid] = f"\tPotential = {potentials['gridVoltage']}\n"
     
         #Write new .sif file
         filename = os.path.join('./Geometry', 'FIMS.sif')

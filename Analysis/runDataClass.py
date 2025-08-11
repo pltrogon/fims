@@ -737,7 +737,7 @@ class runData:
         )  
         ax.axvline(
             histData['gain'], 
-            c='g', ls='--', label=f'Gain = {histData['gain']:.0f}'
+            c='g', ls='--', label=f"Gain = {histData['gain']:.0f}"
         )
         
         ax.set_xlabel('Number of Electrons in Avalanche')
@@ -859,7 +859,7 @@ class runData:
         driftR = np.sqrt(driftX**2 + driftY**2)
 
         fig = plt.figure(figsize=(12, 4))
-        fig.suptitle(f'Total Drift of: {target}s ({self.getRunParameter('Number of Avalanches')} Avalanches)')
+        fig.suptitle(f"Total Drift of: {target}s ({self.getRunParameter('Number of Avalanches')} Avalanches)")
         
         ax1 = fig.add_subplot(121)
         ax2 = fig.add_subplot(122)
@@ -1069,20 +1069,20 @@ class runData:
                 polyaResults, 
                 'm-', lw=2, 
                 label=r'Fitted Polya ($\theta$' 
-                    + f' = {fitResults['fitPolya'].theta:.3})')
+                    + f" = {fitResults['fitPolya'].theta:.3})")
         ax.axvline(x=fitResults['fitPolya'].gain, 
-               c='m', ls=':', label=f'Polya Gain = {fitResults['fitPolya'].gain:.1f}e')
+               c='m', ls=':', label=f"Polya Gain = {fitResults['fitPolya'].gain:.1f}e")
         
         ax.plot(fitResults['xVal'], 
                 expoResults, 
                 'r', lw=2, label=f'Fitted Exponential')
         ax.axvline(x=fitResults['fitExpo'].gain, 
-               c='r', ls=':', label=f'Expo Gain = {fitResults['fitExpo'].gain:.1f}e')
+               c='r', ls=':', label=f"Expo Gain = {fitResults['fitExpo'].gain:.1f}e")
 
         ax.axvline(x=self._getRawGain(), 
-               c='g', ls='--', label=f'Raw Gain = {self._getRawGain():.1f}e')
+               c='g', ls='--', label=f"Raw Gain = {self._getRawGain():.1f}e")
         ax.axvline(x=fitResults['dataGain'], 
-               c='g', ls=':', label=f'Trimmed Gain = {fitResults['dataGain']:.1f}e')
+               c='g', ls=':', label=f"Trimmed Gain = {fitResults['dataGain']:.1f}e")
 
 
         plt.xlabel('Numer of Electrons in Trimmed Avalanche')
