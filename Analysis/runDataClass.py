@@ -154,6 +154,22 @@ class runData:
     
 
 #********************************************************************************#
+    def getMetaData(self):
+        """
+        Returns dictionary of all metadata information. Dimensions are in microns.
+        """
+        metaDataDF = self.getDataFrame('metaData')
+
+        # Initialize an empty dictionary to store the results
+        metaDataDict = {}
+    
+        for inParam in metaDataDF.columns:
+            metaDataDict[inParam] = self.getRunParameter(inParam)
+
+        return metaDataDict
+    
+
+#********************************************************************************#
     def printMetaData(self):
         """
         Prints all metadata information. Dimensions are in microns.
@@ -163,6 +179,19 @@ class runData:
             print(f'{inParam}: {self.getRunParameter(inParam)}')
         return
 
+
+#********************************************************************************#
+    def getColumns(self, dataSetName):
+        """
+        Returns a list of the column names for a given data set.
+        """
+        if not self._checkName(dataSetName):
+            return
+        
+        dataFrame = self.getDataFrame(dataSetName)
+
+        return dataFrame.columns.tolist()
+    
 
 #********************************************************************************#
     def printColumns(self, dataSetName):
@@ -176,7 +205,7 @@ class runData:
 
         if dataFrame is not None:
             print(f'{dataSetName}:')
-            print(dataFrame.columns.tolist())
+            print(self.getColumns(dataSetName))
 
         return
 
@@ -384,7 +413,7 @@ class runData:
         pillar[0].set_label(f'Pillar  (r = {pillarRadius:.0f} um)')
 
         # Make figure and add plots
-        fig = plt.figure(figsize=(10, 6))
+        fig = plt.figure()
         fig.suptitle(f'Cell Geometry')
         ax1 = fig.add_subplot(111)
 
