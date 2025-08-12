@@ -453,7 +453,7 @@ int main(int argc, char * argv[]) {
   std::cout << "****************************************\n";
 
   DriftLineRKF driftLines(sensorFIMS);
-  driftLines.SetMaximumStepSize(MICRONTOCM*5);
+  driftLines.SetMaximumStepSize(MICRONTOCM/10.);
 
   std::vector<double> xStart;
   std::vector<double> yStart;
@@ -489,15 +489,15 @@ int main(int argc, char * argv[]) {
   // ***** Calculate field Lines ***** //
   std::vector<std::array<float, 3> > fieldLines;
   int totalFieldLines = xStart.size();
-  int numAtPad = 0;
   std::cout << "Computing " << totalFieldLines << " field lines." << std::endl;
-  std::cout << "     (True number is x3 for cathode, and above/below grid.)" << std::endl;
+  // Note that true number is 3x totalFieldLines - Cathode, above, and below grid.
   int prevDriftLine = 0;
   for(int inFieldLine = 0; inFieldLine < totalFieldLines; inFieldLine++){
     
     fieldLineID = inFieldLine;
 
     //Calculate from top of volume
+    fieldLines.clear();
     driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], zmax*.95, fieldLines);
 
     //Get coordinates of every point along field line and fill the tree
@@ -509,17 +509,10 @@ int main(int argc, char * argv[]) {
       fieldLineDataTree->Fill();
     }
 
-    //Find if termination point is at pad
-    int lineEnd = fieldLines.size() - 1;
-    if(  (abs(fieldLines[lineEnd][0]) <= padLength/2.)
-      && (abs(fieldLines[lineEnd][1]) <= padLength/2.)
-      && (fieldLines[lineEnd][2] < 0.)){ //TODO - not a good criteria
-        numAtPad++;
-    }
-
     //Calculate lines from above grid
     double gridLineSeparation = 1.1;
     gridFieldLineLocation = 1;
+    fieldLines.clear();
     driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], gridLineSeparation*gridThickness/2., fieldLines);
 
     //Get coordinates of every point along field line and fill the tree
@@ -533,6 +526,7 @@ int main(int argc, char * argv[]) {
 
     //Calculate lines from below grid
     gridFieldLineLocation = -1;
+    fieldLines.clear();
     driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], -gridLineSeparation*gridThickness/2., fieldLines);
 
     //Get coordinates of every point along field line and fill the tree

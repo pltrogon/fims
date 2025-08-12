@@ -1296,6 +1296,9 @@ class runData:
 
         numCathode = len(cathIons)
         numAvalanche = self.getRunParameter('Number of Avalanches')
+
+        if numAvalanche == 0:
+            raise ValueError('Error: Number of avalanches cannot be 0.')
     
         IBF = numCathode/numAvalanche - 1 #Correct for primary ion
 
@@ -1316,6 +1319,10 @@ class runData:
         holeArea = math.pi*holeRadius**2
 
         #Find transparency
+        if cellArea == 0:
+            raise ValueError('Error: Cell area cannot be 0.')
         cellTransparency = holeArea/cellArea
         
         return cellTransparency
+    
+    
