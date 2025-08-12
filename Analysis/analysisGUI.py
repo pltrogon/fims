@@ -106,7 +106,7 @@ class App(tk.Tk):
             dataFrame = self.simData.getDataFrame(selectedName)
         
         if dataFrame is not None:
-            #show(dataFrame)
+            show(dataFrame)
             print(dataFrame.head())
         else:
             messagebox.showerror("Error", f"DataFrame '{selectedName}' not found in simData.")

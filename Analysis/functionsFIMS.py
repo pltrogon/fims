@@ -331,3 +331,95 @@ def xyInterpolate(point1, point2, zTarget):
     y = np.interp(zTarget, (z1, z2), (y1, y2))
 
     return (x, y, zTarget)
+
+#********************************************************************************#
+def getSetData(runList, xVal, yVal):
+    """
+    Retrieves and organizes parameter data from a list of runs.
+
+    Args:
+        runList (list): A list of run numbers for a given trial.
+        xVal (str): The name of the parameter to use for the x-axis.
+        yVal (str): The name of the parameter to use for the y-axis.
+
+    Returns:
+        tuple: A tuple containing two lists: (xData, yData).
+               Each list contains the parameter values for the specified runs.
+    """
+    xData = []
+    yData = []
+    for inRun in runList:
+        simData = runData(inRun)
+        allRunData = simData.getDataFrame('metaData')
+
+        xData.append(data.getRunParameter(xVal))
+        yData.append(data.getRunParameter(yVal))
+
+    return xData, yData
+
+
+#********************************************************************************#
+def plotDataSets(dataSets, xVal, yVal, savePlot=False):
+    """
+    Generates a scatter plot comparing multiple simulation trials.
+
+    Each data set is plotted on the same figure for direct comparison. 
+    The plot can be optionally saved to a 'Plots' directory.
+
+    Args:
+        dataSets (dict): A dictionary where keys are trial labels (strings) and
+                         values are lists of corresponding run numbers.
+        xVal (str): Parameter name for the x-axis.
+        yVal (str): Parameter name for the y-axis.
+        savePlot (bool): Saves plot as a PNG file if True.
+    """
+    if savePlot and not os.path.exists('./Plots'):
+        os.makedirs('./Plots')
+
+    #Check if valid parameters
+    simulation = FIMS_Simulation()
+    allParams = simulation.defaultParam()
+
+    if xVal not in allParams or yVal not in allParams:
+        raise ValueError(f'Error: Invalid parameter specified.')
+
+    #Add units to axis labels if dimensional
+    dimensionalParam = [
+        'Pad Length',
+        'Pitch',
+        'Grid Standoff',
+        'Grid Thickness',
+        'Hole Radius',
+        'Cathode Height',
+        'Thickness SiO2',
+        'Field Bundle Radius'
+    ]
+    xLabel = xVal + ' (um)' if xVal in dimensionalParam else xVal
+    yLabel = yVal + ' (um)' if yVal in dimensionalParam else yVal
+
+    # Make plot and add data
+    fig, ax = plt.subplots()
+    
+    for inTrial, runList in dataSets.items():
+        xData, yData = getSetData(runList, xVal, yVal)
+        ax.scatter(
+            xData,
+            yData,
+            label=inTrial, 
+        )
+
+    ax.set_title(f'{yVal} vs. {xVal}')
+    ax.set_xlabel(f'{xLabel}')
+    ax.set_ylabel(f'{yLabel}')
+    ax.legend()
+    ax.grid()
+    fig.tight_layout()
+
+    #Save plot
+    if savePlot:
+        filename = f'{yVal}_vs_{xVal}.png'
+        fig.savefig(os.path.join('./Plots', filename))
+        
+    plt.show()
+
+    

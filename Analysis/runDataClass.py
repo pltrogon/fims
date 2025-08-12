@@ -1268,7 +1268,7 @@ class runData:
         numCathode = len(cathIons)
         numAvalanche = self.getRunParameter('Number of Avalanches')
     
-        IBF = numCathode/numAvalanche
+        IBF = numCathode/numAvalanche - 1 #Correct for primary ion
 
         return IBF
 
