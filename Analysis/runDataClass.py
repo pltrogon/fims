@@ -1079,11 +1079,11 @@ class runData:
         radius = self.getRunParameter('Hole Radius')
         pitch = self.getRunParameter('Pitch')
 
-        gridArea = (pitch*pitch)*(math.sqrt(3))
-        holeArea = (math.pi*radius*radius)*2
+        gridArea = (pitch**2)*(math.sqrt(3))
+        holeArea = (math.pi*radius**2)*2
         transparency = holeArea/gridArea
         
-        return round(transparency, 6)
+        return transparency
         
 #********************************************************************************#
     def calcIBF(self):
