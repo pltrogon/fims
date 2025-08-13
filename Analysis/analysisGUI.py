@@ -16,6 +16,9 @@ class App(tk.Tk):
         self.geometry("1400x600")
 
         self.simData = None
+        self.currentPlot = None
+        self.currentFig = None
+        self.binWidthValue = 1
 
         # --- Frames ---
         self.runFrame = tk.Frame(self)
@@ -24,48 +27,133 @@ class App(tk.Tk):
         self.mainFrame = tk.Frame(self)
         self.mainFrame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        self.listFrame = tk.Frame(self.mainFrame)
-        self.listFrame.pack(side=tk.LEFT, fill=tk.Y, padx=10)
+        self.optionsFrame = tk.Frame(self.mainFrame)
+        self.optionsFrame.pack(side=tk.LEFT, fill=tk.Y, padx=10)
+
+        self.listFrame = tk.Frame(self.optionsFrame)
+        self.listFrame.pack(side=tk.TOP, fill=tk.Y, padx=10, pady=10)
+
+        self.binFrame = tk.Frame(self.optionsFrame)
+        self.binFrame.pack(side=tk.TOP, fill=tk.Y, padx=5, pady=5)
+
+        self.buttonFrame = tk.Frame(self.optionsFrame)
+        self.buttonFrame.pack(side=tk.TOP, fill=tk.Y, padx=10)
 
         self.metaDataFrame = tk.Frame(self.mainFrame)
         self.metaDataFrame.pack(side=tk.RIGHT, fill=tk.Y, padx=10)
 
-        self.plotFrame = tk.Frame(self.mainFrame)
-        self.plotFrame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
+        self.plottingFrame = tk.Frame(self.mainFrame)
+        self.plottingFrame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
 
         # --- Run number entry ---
-        runLabel = tk.Label(self.runFrame, text="Run Number:")
+        runLabel = tk.Label(
+            self.runFrame, 
+            text="Run Number:", 
+            font=("Arial", 20, "bold"))
         runLabel.pack(side=tk.LEFT, padx=5)
 
-        self.runEntry = tk.Entry(self.runFrame)
+        self.runEntry = tk.Entry(self.runFrame, width=10)
         self.runEntry.pack(side=tk.LEFT, padx=5)
         self.runEntry.insert(0, "1000")
 
-        self.loadRun = tk.Button(self.runFrame, text="Load", command=self.loadData)
+        self.loadRun = tk.Button(
+            self.runFrame, 
+            text="Load", 
+            command=self.loadData)
         self.loadRun.pack(side=tk.LEFT)
 
 
         # --- Treeview for metaData ---
-        metaDataLabel = tk.Label(self.metaDataFrame, text="MetaData:", font=("Arial", 12, "bold"))
+        metaDataLabel = tk.Label(
+            self.metaDataFrame, 
+            text="MetaData:", 
+            font=("Arial", 20, "bold"))
         metaDataLabel.pack(side=tk.TOP, pady=5)
 
-        # Create a Treeview widget with two columns
         self.metaDataTree = ttk.Treeview(self.metaDataFrame, columns=('Value'), show='tree headings')
         self.metaDataTree.heading('#0', text='Parameter')
         self.metaDataTree.heading('Value', text='Value')
         self.metaDataTree.column('#0', width=150)
         self.metaDataTree.column('Value', width=200)
 
-        # Pack the Treeview and its scrollbar
         self.metaDataTree.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
         # --- Listbox for DataFrames ---
-        dataLabel = tk.Label(self.listFrame, text="Available DataFrames", font=("Arial", 12, "bold"))
+        dataLabel = tk.Label(
+            self.listFrame, 
+            text='DataFrames:', 
+            font=("Arial", 20, "bold"))
         dataLabel.pack(side=tk.TOP, pady=(0, 5))
         
         self.dataList = tk.Listbox(self.listFrame, selectmode=tk.SINGLE)
         self.dataList.pack(side=tk.TOP, fill=tk.Y, expand=True)
         self.dataList.bind('<<ListboxSelect>>', self.selectData)
+
+        # --- Bin width ---
+        binLabel = tk.Label(self.binFrame, text="Histogram Bin Width:")
+        binLabel.pack(side=tk.LEFT, pady=(2, 2))
+
+        self.binWidth = tk.Spinbox(
+            self.binFrame, 
+            from_=1, to=10, 
+            wrap=False, width=2, 
+            command=self.updateBinWidth)
+        self.binWidth.pack(side=tk.LEFT)
+        self.binWidth.delete(0, "end")
+        self.binWidth.insert(0, 1)        
+        
+        # --- Plotting Buttons ---
+        plotButtons = tk.Label(
+            self.buttonFrame, 
+            text='Plots:', 
+            font=("Arial", 20, "bold"))
+        plotButtons.pack(side=tk.TOP, padx=5, pady=5)
+
+        self.showGeometry = tk.Button(
+            self.buttonFrame, text='Geometry', 
+            command=lambda: self.plotButton('Geometry')
+            )
+        self.showGeometry.pack(side=tk.TOP)
+
+        self.showFieldLines = tk.Button(
+            self.buttonFrame, text='Field Lines', 
+            command=lambda: self.plotButton('FieldLines')
+            )
+        
+        self.showFieldLines.pack(side=tk.TOP)
+        self.gridLineFrame = tk.Frame(self.buttonFrame)
+        self.gridLineFrame.pack(side=tk.TOP, fill=tk.Y, padx=5, pady=5)
+
+        self.showAboveGrid = tk.Button(
+            self.gridLineFrame, text='AboveGrid', 
+            command=lambda: self.plotButton('AboveGrid')
+            )
+        self.showAboveGrid.pack(side=tk.LEFT)
+
+        self.showBelowGrid = tk.Button(
+            self.gridLineFrame, text='BelowGrid', 
+            command=lambda: self.plotButton('BelowGrid')
+            )
+        self.showBelowGrid.pack(side=tk.RIGHT)
+
+        self.showAvalanche = tk.Button(
+            self.buttonFrame, text='Avalanche Size', 
+            command=lambda: self.plotButton('Avalanche')
+            )
+        self.showAvalanche.pack(side=tk.TOP)
+
+        self.showHeatmap = tk.Button(
+            self.buttonFrame, text='Heatmap', 
+            command=lambda: self.plotButton('Heatmap')
+            )
+        self.showHeatmap.pack(side=tk.TOP)
+
+        self.showDiffusion = tk.Button(
+            self.buttonFrame, text='Diffusion', 
+            command=lambda: self.plotButton('Diffusion')
+            )
+        self.showDiffusion.pack(side=tk.TOP)
+
 
     def loadData(self):
         """
@@ -77,24 +165,33 @@ class App(tk.Tk):
             return
 
         runNo = int(inRunNo)
+        
         try:
             self.simData = runData(runNo)
-            # Call a separate method to handle GUI updates
+
+            if self.simData:
+                if self.currentPlot is None:
+                    self.currentPlot = 'Geometry'
+                self.getPlot()
+
             self.updateGUI()
+
+            
         except Exception as e:
             messagebox.showerror("Error", f"Could not load data: {e}")
 
+
     def updateGUI(self):
         """
-        Updates the plot and the listbox with the loaded data.
+        Updates the the listbox and metadata with the loaded data.
         """
+        
         # Clear existing widgets
-        for widget in self.plotFrame.winfo_children():
-            widget.destroy()
         for item in self.metaDataTree.get_children():
             self.metaDataTree.delete(item)
         self.dataList.delete(0, tk.END)
-
+        for widget in self.plottingFrame.winfo_children():
+            widget.destroy()
 
         # Populate listbox with dataframe names - skip metadata
         if self.simData and hasattr(self.simData, 'dataTrees'):
@@ -108,13 +205,44 @@ class App(tk.Tk):
             for key, value in metaDataDict.items():
                 self.metaDataTree.insert('', tk.END, text=key, values=(value,))
 
-        # Display the geometry plot
-        if self.simData and hasattr(self.simData, 'plotCellGeometry'):
-            fig = self.simData.plotCellGeometry()
-            canvas = FigureCanvasTkAgg(fig, master=self.plotFrame)
+        if self.simData and self.currentFig:
+            canvas = FigureCanvasTkAgg(self.currentFig, master=self.plottingFrame)
             canvasWidget = canvas.get_tk_widget()
             canvasWidget.pack(fill=tk.BOTH, expand=True)
             canvas.draw()
+
+
+    def getPlot(self):
+        """
+        Matches the currentPlot with the appropriate method. Gets the figure.
+        """
+        if self.simData:
+            match self.currentPlot:
+                case 'Geometry':
+                    self.currentFig = self.simData.plotCellGeometry()
+
+                case 'Avalanche':
+                    self.currentFig = self.simData.plotAvalancheFits(binWidth=self.binWidthValue)
+
+                case 'FieldLines':
+                    self.currentFig = self.simData.plot2DFieldLines('Cathode')
+                
+                case 'AboveGrid':
+                    self.currentFig = self.simData.plot2DFieldLines('AboveGrid')
+                case 'BelowGrid':
+                    self.currentFig = self.simData.plot2DFieldLines('BelowGrid')
+
+                case 'Heatmap':
+                    self.currentFig = self.simData.plotParticleHeatmaps('electron')
+
+                case 'Diffusion':
+                    self.currentFig = self.simData.plotDiffusion('electron')
+
+                case _:
+                    print('Incorrect plot - defaulting')
+                    self.currentFig = self.simData.plotCellGeometry()
+
+
             
     def selectData(self, event):
         """
@@ -137,6 +265,36 @@ class App(tk.Tk):
             show(dataFrame)
         else:
             messagebox.showerror("Error", f"DataFrame '{selectedName}' not found in simData.")
+
+    def updateBinWidth(self):
+        """
+        Saves the spinbox value to and updates the plot if data is loaded.
+        """
+        try:
+            # Get the value from the spinbox
+            value = int(self.binWidth.get())
+            
+            if value >= 1:
+                self.binWidthValue = value
+            else:
+                self.binWidth.delete(0, "end")
+                self.binWidth.insert(0, 1)
+                self.binWidthValue = 1
+
+            if self.simData and self.currentPlot:
+                self.getPlot()
+
+            self.updateGUI()
+       
+        except ValueError:
+            messagebox.showerror("Invalid Input", "Bin width must be an integer.")
+            self.binWidth.delete(0, "end")
+            self.binWidth.insert(0, self.binWidthValue)
+
+    def plotButton(self, plotToGet):
+        self.currentPlot = plotToGet
+        self.getPlot()
+        self.updateGUI()
 
 if __name__ == "__main__":
     app = App()

@@ -665,9 +665,8 @@ class runData:
         self._plotAddCellGeometry(ax12, 'yz')
         self._plotAddCellGeometry(ax13, 'xy')
         plt.tight_layout()   
-        plt.show()
         
-        return
+        return fig2D
 
 
 #********************************************************************************#   
@@ -805,9 +804,8 @@ class runData:
         ax.legend()
         ax.grid()
         plt.tight_layout()   
-        plt.show()
         
-        return 
+        return fig
 
 #********************************************************************************#   
     def plotAvalanche2D(self, avalancheID=0, plotName=''):
@@ -870,9 +868,8 @@ class runData:
         self._plotAddCellGeometry(ax12, 'yz')
         self._plotAddCellGeometry(ax13, 'xy')
         plt.tight_layout()   
-        plt.show()
         
-        return
+        return fig2D
         
 
 #********************************************************************************#   
@@ -960,9 +957,8 @@ class runData:
         ax1.grid()
         ax2.grid()
         plt.tight_layout()   
-        plt.show()
         
-        return
+        return fig
         
 #********************************************************************************#   
     def plotParticleHeatmaps(self, target, numBins=51):
@@ -1037,9 +1033,8 @@ class runData:
         ax4.set_title('Final Position')
 
         plt.tight_layout()   
-        plt.show()
     
-        return      
+        return fig
 
 #********************************************************************************#   
     def _fitAvalancheSize(self, binWidth):
@@ -1113,7 +1108,7 @@ class runData:
         polyaResults = fitResults['fitPolya'].calcPolya(fitResults['xVal'])
         expoResults = fitResults['fitExpo'].calcPolya(fitResults['xVal'])
         
-        fig = plt.figure(figsize=(12, 4))
+        fig = plt.figure()
         fig.suptitle(f'Avalanche Size Distribution: Run {self.runNumber}')
         
         ax = fig.add_subplot(111)
@@ -1149,9 +1144,8 @@ class runData:
         plt.ylabel('Probability of Avalanche Size')
         plt.legend()
         plt.grid(True, alpha=0.5)
-        plt.show()
 
-        return
+        return fig
 
 
 #********************************************************************************#
@@ -1324,5 +1318,4 @@ class runData:
         cellTransparency = holeArea/cellArea
         
         return cellTransparency
-    
     
