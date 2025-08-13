@@ -13,12 +13,15 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Simulation Data GUI")
-        self.geometry("1400x600")
+        self.geometry("2000x1000")
 
         self.simData = None
         self.currentPlot = None
         self.currentFig = None
         self.binWidthValue = 1
+        self.curAvalancheID = tk.IntVar(value=0)
+        self.curParticle = tk.StringVar(self)
+        self.curParticle.set('-- Select --')
 
         # --- Frames ---
         self.runFrame = tk.Frame(self)
@@ -35,6 +38,12 @@ class App(tk.Tk):
 
         self.binFrame = tk.Frame(self.optionsFrame)
         self.binFrame.pack(side=tk.TOP, fill=tk.Y, padx=5, pady=5)
+
+        self.avalancheFrame = tk.Frame(self.optionsFrame)
+        self.avalancheFrame.pack(side=tk.TOP, fill=tk.Y, padx=5, pady=5)
+
+        self.particleFrame = tk.Frame(self.optionsFrame)
+        self.particleFrame.pack(side=tk.TOP, fill=tk.Y, padx=5, pady=5)
 
         self.buttonFrame = tk.Frame(self.optionsFrame)
         self.buttonFrame.pack(side=tk.TOP, fill=tk.Y, padx=10)
@@ -61,6 +70,7 @@ class App(tk.Tk):
             text="Load", 
             command=self.loadData)
         self.loadRun.pack(side=tk.LEFT)
+        self.runEntry.bind("<Return>", self.loadData)
 
 
         # --- Treeview for metaData ---
@@ -90,7 +100,7 @@ class App(tk.Tk):
         self.dataList.bind('<<ListboxSelect>>', self.selectData)
 
         # --- Bin width ---
-        binLabel = tk.Label(self.binFrame, text="Histogram Bin Width:")
+        binLabel = tk.Label(self.binFrame, text='Histogram Bin Width:')
         binLabel.pack(side=tk.LEFT, pady=(2, 2))
 
         self.binWidth = tk.Spinbox(
@@ -100,8 +110,33 @@ class App(tk.Tk):
             command=self.updateBinWidth)
         self.binWidth.pack(side=tk.LEFT)
         self.binWidth.delete(0, "end")
-        self.binWidth.insert(0, 1)        
+        self.binWidth.insert(0, 1)    
+
+        # --- Avalanche number ---
+        avalancheLabel = tk.Label(self.avalancheFrame, text='Avalanche ID:')
+        avalancheLabel.pack(side=tk.LEFT, pady=(2, 2))
+
+        self.avalancheID = tk.Spinbox(
+            self.avalancheFrame, 
+            from_=0, to=999, ##TODO - make this maximum match the value in metadata. Or alternative just be very large
+            wrap=False, width=5, 
+            textvariable=self.curAvalancheID,
+            command=self.updateAvalancheID)
+        self.avalancheID.pack(side=tk.LEFT)
+        self.avalancheID.bind("<Return>", self.updateAvalancheID)
         
+        # --- Particle Options ---
+        particleLabel = tk.Label(self.particleFrame, text='Particle Choice:')
+        particleLabel.pack(side=tk.LEFT, pady=(2, 2))
+
+        particleOptions = ['electron', 'posIon', 'negIon']
+        self.particleSelection = tk.OptionMenu(
+            self.particleFrame, 
+            self.curParticle, 
+            *particleOptions)
+        self.particleSelection.pack(side=tk.RIGHT, pady=5, padx=5)
+        self.curParticle.trace('w', self.updateParticle)
+
         # --- Plotting Buttons ---
         plotButtons = tk.Label(
             self.buttonFrame, 
@@ -138,9 +173,15 @@ class App(tk.Tk):
 
         self.showAvalanche = tk.Button(
             self.buttonFrame, text='Avalanche Size', 
-            command=lambda: self.plotButton('Avalanche')
+            command=lambda: self.plotButton('AvalancheSize')
             )
         self.showAvalanche.pack(side=tk.TOP)
+
+        self.showAvalancheTrack = tk.Button(
+            self.buttonFrame, text='Avalanche Tracks', 
+            command=lambda: self.plotButton('AvalancheTracks')
+            )
+        self.showAvalancheTrack.pack(side=tk.TOP)
 
         self.showHeatmap = tk.Button(
             self.buttonFrame, text='Heatmap', 
@@ -155,7 +196,7 @@ class App(tk.Tk):
         self.showDiffusion.pack(side=tk.TOP)
 
 
-    def loadData(self):
+    def loadData(self, *args):
         """
         Loads data and updates the GUI.
         """
@@ -221,7 +262,7 @@ class App(tk.Tk):
                 case 'Geometry':
                     self.currentFig = self.simData.plotCellGeometry()
 
-                case 'Avalanche':
+                case 'AvalancheSize':
                     self.currentFig = self.simData.plotAvalancheFits(binWidth=self.binWidthValue)
 
                 case 'FieldLines':
@@ -232,11 +273,14 @@ class App(tk.Tk):
                 case 'BelowGrid':
                     self.currentFig = self.simData.plot2DFieldLines('BelowGrid')
 
+                case 'AvalancheTracks':
+                    self.currentFig = self.simData.plotAvalanche2D(avalancheID=self.curAvalancheID.get())
+
                 case 'Heatmap':
-                    self.currentFig = self.simData.plotParticleHeatmaps('electron')
+                    self.currentFig = self.simData.plotParticleHeatmaps(self.curParticle.get())
 
                 case 'Diffusion':
-                    self.currentFig = self.simData.plotDiffusion('electron')
+                    self.currentFig = self.simData.plotDiffusion(self.curParticle.get())
 
                 case _:
                     print('Incorrect plot - defaulting')
@@ -290,6 +334,33 @@ class App(tk.Tk):
             messagebox.showerror("Invalid Input", "Bin width must be an integer.")
             self.binWidth.delete(0, "end")
             self.binWidth.insert(0, self.binWidthValue)
+
+    
+    def updateAvalancheID(self, *args):
+        """
+        Updates the Avalanche ID based on the Spinbox value.
+        """
+        try:
+            value = self.curAvalancheID.get()
+            
+            if value < 0:
+                self.curAvalancheID.set(0)
+
+            if self.simData and self.currentPlot:
+                self.getPlot()
+
+            self.updateGUI()
+    
+        except tk.TclError:
+            messagebox.showerror("Invalid Input", "Avalanche ID must be an integer.")
+            self.curAvalancheID.set(0)
+
+    def updateParticle(self, *args):
+        """
+        """
+        self.getPlot()
+        self.updateGUI()
+
 
     def plotButton(self, plotToGet):
         self.currentPlot = plotToGet
