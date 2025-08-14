@@ -542,27 +542,6 @@ class FIMS_Simulation:
         return runNo
 
 #***********************************************************************************#
-    def checkFieldTransparency(self, transparency):
-        """
-        Checks a given field transparency vs the limit specified in the simulation's
-        metaData.
-
-        Args:
-            transparency (float): field transparency of current simulation.
-
-        Returns:
-            bool: True if transparency is greater than the limit, False otherwise.
-        
-        """
-        #TODO: find a way to get the transparency without needing to input it manually
-        
-        limit = self._getParam('transparencyLimit')
-        
-        if transparency < limit:
-            return False
-        return True
-
-#***********************************************************************************#
     def _runGmsh(self):
         """
         Runs the Gmsh program to generate a 3D finite-element mesh of the simulation geometry.
@@ -599,29 +578,7 @@ class FIMS_Simulation:
                 if runReturn.returncode != 0:
                     print('Gmsh failed. Check log for details.')
                     return False
-        except FileNotFoundError:
-            geoFile = 'FIMS.txt'
-            with open(os.path.join(os.getcwd(), 'log/logGmsh.txt'), 'w+') as gmshOutput:
-                startTime = time.monotonic()
-                gmshPath = os.path.abspath('gmsh')
-                runReturn = subprocess.run(
-                    [gmshPath, os.path.join('./Geometry/', geoFile),
-                     '-order', '2', '-optimize_ho',
-                     '-clextend', '1',
-                     '-setnumber', 'Mesh.OptimizeNetgen', '1',
-                     '-setnumber', 'Mesh.MeshSizeFromPoints', '1',
-                     '-3',
-                     '-format', 'msh2'],
-                    stdout=gmshOutput, 
-                    check=True
-                )
-                endTime = time.monotonic()
-                gmshOutput.write(f'\n\nGmsh run time: {endTime - startTime} s')
-    
-                if runReturn.returncode != 0:
-                    print('Gmsh failed. Check log for details.')
-                    return False
-    
+                    
         except FileNotFoundError:
             print("Unable to write to 'log/logGmsh.txt'.")
             return False
@@ -738,7 +695,7 @@ class FIMS_Simulation:
             with open(os.path.join(originalCWD, 'log/logGarfield.txt'), 'w+') as garfieldOutput:
                 startTime = time.monotonic()
                 setupAvalanche = (
-#                    f'source {self._GARFIELDPATH} && '
+                    f'source {self._GARFIELDPATH} && '
                     f'make && '
                     f'./runAvalanche'
                 )
@@ -773,15 +730,15 @@ class FIMS_Simulation:
         originalCWD = os.getcwd()
         os.chdir('./build/')
         try:
-            with open(os.path.join(originalCWD, 'log/logGarfield.txt'), 'w+') as garfieldOutput:
+            with open(os.path.join(originalCWD, 'log/logFieldLines.txt'), 'w+') as garfieldOutput:
                 startTime = time.monotonic()
-                setupAvalanche = (
-#                    f'source {self._GARFIELDPATH} && '
+                setupFieldLines = (
+                    f'source {self._GARFIELDPATH} && '
                     f'make && '
                     f'./runFieldLines'
                 )
                 runReturn = subprocess.run(
-                    setupAvalanche, 
+                    setupFieldLines, 
                     stdout=garfieldOutput, 
                     shell=True, 
                     check=True
@@ -874,90 +831,130 @@ class FIMS_Simulation:
         
         return runNo
         
+
 #***********************************************************************************#
-    def calcMinField(self):
-        #Initialize variables
+#***********************************************************************************#
+# METHODS FOR RUNNING MINIMUM FIELD
+#***********************************************************************************#
+#***********************************************************************************#
+
+#***********************************************************************************#
+    def _calcMinField(self):
+        """
+        Calculates an intial guess for the minimum field ratio to achieve 100%
+        field transparency.
+
+        Calculation is based off of exponential fits to simulated data.
+
+        Returns:
+            float: Numerical solution to the minimum field for 100% transparency.
+        """
+        #Get geometry variables
         radius = self._getParam('holeRadius')
         standoff = self._getParam('gridStandoff')
         pitch = self._getParam('pitch')
     
         #Calculate what the minimum field ratio should be
-        gridArea = (pitch**2)*(math.sqrt(3))
-        holeArea = (math.pi*radius**2)*2
+        gridArea = pitch**2*math.sqrt(3)/2
+        holeArea = math.pi*radius**2
         optTrans = holeArea/gridArea
+
+        #Do calculation using values from fits
+        ## TODO: JAMES: Include some details of these fit results. 
         minField = 570.580*np.exp(-12.670*optTrans) + 27.121*np.exp(-0.071*standoff) + 2
         
         return minField
 
+
 #***********************************************************************************#
-    def deleteFile(self, filePath):
-        """
-        deletes a specified file
-        args: file path (string)
-        returns: 1 (if succesfull, -1 if file does not exist)
-        """
-        if os.path.exists(filePath):
-            os.remove(filePath)
-            print(f'\n{filePath} deleted\n')
-            return 1
-        else:
-            print('\nUnable to delete file because it could not be found\n')
-            return -1
-#***********************************************************************************#
-    def findMinField(baseParams):
+    def findMinField(self, transparencyLimit=0.98):
         """
         Runs simulations to determine what the minimum electric field ratio
         needs to be in order to have 100% Efield transparency.
+
+        First calculates an initial guess for the ratio based on exponential fits 
+        to simulated data. Then generates a Gmsh FEM of the geometry and solves the
+        E field based on this guess using Elmer. Generates field lines via Garfield
+        and determines a transparency. If the transparency is below the limit, a new
+        field ratio is determined, a the resulting field is solved, and new field 
+        lines are generated. This continues until the criteria is reached.
         
-        args:
-            dictionary of geometry parameters
-        returns:
-            minimum field ratio (float)
+        Upon completion, simulation files are reset.
+        
+        NOTE: This assumes that the initial guessed field ratio results in a
+              transparency that is below the limit. The ratio thus is always increased.
+        
+        Returns:
+            bool: True if a minimum field is successfully found, False otherwise.
         """
-        #Initialize Variables
-        fieldGood = True
-        FIMS = FIMS_Simulation()
-        FIMS.param = baseParams
-        FIMS._writeParam()
-        limit = FIMS._getParam('transparencyLimit')
-        
+        #Ensure all parameters exist and save them
+        if not self._checkParam():
+            return False
+        saveParam = self.param.copy()
+
+        #Calculate initial guess
         initialGuess = FIMS.calcMinField()
-            
-        #Generate geometry and begin field ratio loop
-        print('Beginning Simulation', '\n')
-        FIMS._runGmsh()
-        print('Geometry Generated. Beginning Electric Field Ratio scan', '\n')
+        self.param['fieldRatio'] = initialGuess
         
-        print('Projected Value = ', initialGuess)
-        fieldRatio = initialGuess
-        
-        while fieldGood:
-            #Adjust the field ratio and write the new value into the runControl file
-            baseParams['fieldRatio'] = fieldRatio
-            print('Field Ratio = ', fieldRatio, '\n')
-            FIMS.param = baseParams
-            FIMS._writeParam()
+        #Write paramaters and generate geometry
+        if not self._writeParam():
+            print('Error writing parameters.')
+            return False
+        if not self._runGmsh():
+                print('Error executing Gmsh.')
+                return False
+
+        curTransparency = 0
+        while curTransparency < transparencyLimit:
+
+            #Determine new field ratio
+            #Assume the tansparency=0 case is the initial
+            curField = self._getParam('fieldRatio')
+            if curTransparency > 0: 
+                
+                #Determine a step size to change field
+                stepSize = transparencyLimit/curTransparency
+                
+                if stepSize < 1.1:
+                    curField *= 1.1
+                else:
+                    curField *= stepSize
+
+                #Write new field ratio
+                self.param['fieldRatio'] = curField
+                if not self._writeParam():
+                    print('Error writing parameters.')
+                    return False
             
             #Determine the electric field
-            FIMS._runElmer()
-            FIMS._runFieldLines()
-            
-            #Check transparency and determine how much to adjust the field ratio
-            with open('../Data/tempTransparencyFile.txt', 'r') as readFile:
-                transparency = int(readFile.read())
-            FIMS.deleteFile('../Data/tempTransparencyFile.txt')
-            
-            if transparency >= limit:
-                break
-            if limit/transparency < 1.1:
-                fieldRatio *= 1.1
-            else:
-                fieldRatio *= limit/transparency
-                
-        print('Final Transparency: ', transparency, 
-                '\nFinal Field Ratio: ', fieldRatio,)
+            if not self._runElmer():
+                print('Error executing Elmer.')
+                return False
 
-        return fieldRatio
+            #Generate field lines
+            if not self._runFieldLines():
+                print('Error generating field lines.')
+                return False
+            
+            #Get the resulting field transparency
+            with open('../Data/fieldTransparency.txt', 'r') as readFile:
+                curTransparency = int(readFile.read())
+
+            #Print update to monitor convergence
+            print(f'Current field ratio: {curField}')
+            print(f'Current transparency: {curTransparency}')
+
+        #Print solution
+        finalField = self._getParam['fieldRatio']
+        print(f'Solution: Field ratio = {finalField}, Transparency = {curTransparency}')
+        
+        #Reset parameters
+        self.resetParam()
+        #load saved parameters back into class. Update field ratio with solution.
+        self.param = saveParam
+        self.param['fieldRatio'] = finalField
+
+        return True
 
 #***********************************************************************************#
 #***********************************************************************************#

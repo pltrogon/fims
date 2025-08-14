@@ -14,16 +14,6 @@ simulationDir = os.path.join(analysisDir, '..', 'Simulation')
 sys.path.append(simulationDir)
 from simulationClass import FIMS_Simulation
 
-"""
-Functions:
-    getAnalysisNumbers
-    plotGeneralPolya
-    plotPolya
-    plotPolyaEfficiency
-    plotThreshold
-    plotPolyaExample
-"""
-
 #********************************************************************************#   
 def getAnalysisNumbers():
     """
