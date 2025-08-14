@@ -10,7 +10,7 @@ pitch = 225.0;
 
 //Grid
 gridStandoff = 100.0;
-gridThickness = 0.5;
+gridThickness = 1.0;
 holeRadius = 90.0;
 
 // Other
@@ -20,6 +20,7 @@ thicknessSiO2 = 5.0;
 //----- Field Parameters -----
 fieldRatio = 40.0;
 numFieldLine = 25;
+transparencyLimit = 0.98;
 
 //----- Simulation parameters -----
 // Avalanche controls

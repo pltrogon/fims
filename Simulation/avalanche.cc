@@ -142,7 +142,7 @@ int main(int argc, char * argv[]) {
   double  padLength, pitch;
   double gridStandoff, gridThickness, holeRadius;
   double cathodeHeight, thicknessSiO2;
-  double fieldRatio;
+  double fieldRatio, transparencyLimit;
   int numFieldLine;
   int numAvalanche, avalancheLimit;
   double gasCompAr, gasCompCO2;
@@ -185,7 +185,7 @@ int main(int argc, char * argv[]) {
   paramFile.close();
 
   //Parse the values from the map
-  if(numKeys != 13){//Number of user-defined simulation parameters in runControl to search for.
+  if(numKeys != 14){//Number of user-defined simulation parameters in runControl to search for.
     std::cerr << "Error: Invalid simulation parameters in 'runControl'." << std::endl;
     return -1;
   }
@@ -204,6 +204,7 @@ int main(int argc, char * argv[]) {
 
   //Field parameters
   fieldRatio = std::stod(readParam["fieldRatio"]);
+  transparencyLimit = std::stod(readParam["transparencyLimit"]);
 
   numFieldLine = std::stoi(readParam["numFieldLine"]);
 
@@ -238,6 +239,7 @@ int main(int argc, char * argv[]) {
   //Field Parameters
   metaDataTree->Branch("Electric Field Ratio", &fieldRatio, "fieldRatio/D");
   metaDataTree->Branch("Number of Field Lines", &numFieldLine, "numFieldLine/I");
+  metaDataTree->Branch("Transparency Limit", &transparencyLimit, "transparencyLimit/D");
 
   //Simulation parameters
   metaDataTree->Branch("Number of Avalanches", &numAvalanche, "numAvalanche/I");
@@ -490,6 +492,7 @@ int main(int argc, char * argv[]) {
   std::vector<std::array<float, 3> > fieldLines;
   int totalFieldLines = xStart.size();
   std::cout << "Computing " << totalFieldLines << " field lines." << std::endl;
+
   // Note that true number is 3x totalFieldLines - Cathode, above, and below grid.
   int prevDriftLine = 0;
   for(int inFieldLine = 0; inFieldLine < totalFieldLines; inFieldLine++){
@@ -509,33 +512,44 @@ int main(int argc, char * argv[]) {
       fieldLineDataTree->Fill();
     }
 
-    //Calculate lines from above grid
+    //Calculate lines from grid - only do those outside of hole
+    double lineRadius2 = std::pow(xStart[inFieldLine], 2.) + std::pow(yStart[inFieldLine], 2.);
+    double holeRadius2 = std::pow(holeRadius, 2.);
     double gridLineSeparation = 1.1;
+
+
+    //Do above grid
     gridFieldLineLocation = 1;
     fieldLines.clear();
-    driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], gridLineSeparation*gridThickness/2., fieldLines);
 
-    //Get coordinates of every point along field line and fill the tree
-    for(int inLine = 0; inLine < fieldLines.size(); inLine++){
-      gridLineX = fieldLines[inLine][0];
-      gridLineY = fieldLines[inLine][1];
-      gridLineZ = fieldLines[inLine][2];
+    if(lineRadius2 >= holeRadius2){
+      driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], gridLineSeparation*gridThickness/2., fieldLines);
 
-      gridFieldLineDataTree->Fill();
+      //Get coordinates of every point along field line and fill the tree
+      for(int inLine = 0; inLine < fieldLines.size(); inLine++){
+        gridLineX = fieldLines[inLine][0];
+        gridLineY = fieldLines[inLine][1];
+        gridLineZ = fieldLines[inLine][2];
+
+        gridFieldLineDataTree->Fill();
+      }
     }
 
-    //Calculate lines from below grid
+    //Do below grid
     gridFieldLineLocation = -1;
     fieldLines.clear();
-    driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], -gridLineSeparation*gridThickness/2., fieldLines);
 
-    //Get coordinates of every point along field line and fill the tree
-    for(int inLine = 0; inLine < fieldLines.size(); inLine++){
-      gridLineX = fieldLines[inLine][0];
-      gridLineY = fieldLines[inLine][1];
-      gridLineZ = fieldLines[inLine][2];
+    if(lineRadius2 >= holeRadius2){
+      driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], -gridLineSeparation*gridThickness/2., fieldLines);
 
-      gridFieldLineDataTree->Fill();
+      //Get coordinates of every point along field line and fill the tree
+      for(int inLine = 0; inLine < fieldLines.size(); inLine++){
+        gridLineX = fieldLines[inLine][0];
+        gridLineY = fieldLines[inLine][1];
+        gridLineZ = fieldLines[inLine][2];
+
+        gridFieldLineDataTree->Fill();
+      }
     }
     
     //Print a progress update every 10%

@@ -17,6 +17,9 @@
 #include "Garfield/DriftLineRKF.hh"
 #include "Garfield/ViewDrift.hh"
 
+//ROOT includes
+#include "TApplication.h"
+
 //C includes
 #include <iostream>
 #include <cmath>
@@ -103,7 +106,7 @@ int main(int argc, char * argv[]) {
   double  padLength, pitch;
   double gridStandoff, gridThickness, holeRadius;
   double cathodeHeight, thicknessSiO2;
-  double fieldRatio;
+  double fieldRatio, transparencyLimit;
   int numFieldLine;
   int numAvalanche, avalancheLimit;
   double gasCompAr, gasCompCO2;
@@ -146,7 +149,7 @@ int main(int argc, char * argv[]) {
   paramFile.close();
 
   //Parse the values from the map
-  if(numKeys != 13){//Number of user-defined simulation parameters in runControl to search for.
+  if(numKeys != 14){//Number of user-defined simulation parameters in runControl to search for.
     std::cerr << "Error: Invalid simulation parameters in 'runControl'." << std::endl;
     return -1;
   }
@@ -165,6 +168,7 @@ int main(int argc, char * argv[]) {
 
   //Field parameters
   fieldRatio = std::stod(readParam["fieldRatio"]);
+  transparencyLimit = std::stod(readParam["transparencyLimit"]);
 
   numFieldLine = std::stoi(readParam["numFieldLine"]);
 
@@ -322,9 +326,8 @@ int main(int argc, char * argv[]) {
   fieldTransparency = (1.*numAtPad) / (1.*totalFieldLines);
   std::cout << "Field transparency is " << fieldTransparency <<  "." << std::endl;
 
-  //Handle case where field transparency is too low
   if(fieldTransparency < transparencyLimit){
-    std::cout << "Field transparency lower than limit" << "\n";
+    std::cout << "Warning: Field transparency is lower than the limit." << std::endl;
   }
   
   //***** Deal with files *****//

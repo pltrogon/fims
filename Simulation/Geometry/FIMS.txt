@@ -9,11 +9,11 @@ Include "../runControl";
 
 halfPitch = pitch/2;
 
-gridElm = holeRadius;
+gridElm = (pitch - holeRadius)/5;
 holeElm = gridThickness;
 padElm = thicknessSiO2;
-diElm = holeRadius;
-cathElm = holeRadius;
+diElm = padLength/4;
+cathElm = pitch/10;
 
 // Derived Z-coordinates for different layers
 //     Center of grid: z = 0
@@ -22,6 +22,10 @@ gridTop = gridThickness/2;
 gridBottom = -gridThickness/2;
 topSiO2 = - gridThickness/2 - gridStandoff + thicknessSiO2;
 padBase = -gridThickness/2 - gridStandoff;
+
+//Some pad parameters
+halfPad = padLength/2;
+padMath = (3^.5)*halfPad;
 
 // Global coordinate limits
 xMin = 0;
@@ -117,8 +121,6 @@ Volume(1) = {201};
 //**********************************************************************
 
 // ***** PADS *****
-halfPad = padLength/2;
-padMath = (3^.5)*halfPad;
 
 // Points - Central Pad
 Point(101) = {0, 0, padBase, padElm};

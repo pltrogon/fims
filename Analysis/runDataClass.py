@@ -1,6 +1,8 @@
 ########################################
 # CLASS DEFINITION FOR SIMULATION DATA #
 ########################################
+from __future__ import annotations
+
 import os
 import uproot
 import pandas as pd
@@ -329,6 +331,9 @@ class runData:
         """
         #Optical transparency
         self._metaData['Optical Transparency'] = self._calcOpticalTransparency()
+
+        #Field Transparency
+        self._metaData['Field Transparency'] = self._getTransparency()
 
         #Field bundle radius
         standoff = self.getRunParameter('Grid Standoff')
@@ -1152,8 +1157,6 @@ class runData:
         Calculates the radius of the outermost electric field line
         at a specified z-coordinate.
 
-        "Outermost Line" - The line with the largest radius at the cathode that
-        initiates within the unit cell.
         Does a linear interpolation between available datapoints.
 
         Args:
@@ -1168,6 +1171,38 @@ class runData:
         if not (zMin < zTarget < zMax):
             raise ValueError('Invalid target z.')
         
+        lineID = self._getOutermostLineID()
+
+        allFieldLines = self.getDataFrame('fieldLineData')
+
+        outerFieldLine = allFieldLines[allFieldLines['Field Line ID'] == lineID].copy()
+
+        #Determine the radius for all of the outer field line
+        outerFieldLine['Field Line Radius'] = np.sqrt(
+            outerFieldLine['Field Line x']**2 + 
+            outerFieldLine['Field Line y']**2
+        )
+
+        #Get radius for target z using linear interpolation
+        targetRadius = np.interp(
+            zTarget, 
+            outerFieldLine['Field Line z'],
+            outerFieldLine['Field Line Radius']
+        )
+
+        return targetRadius
+
+#********************************************************************************#
+    def _getOutermostLineID(self):
+        """
+        Determines the outermost field line
+
+        "Outermost Line" - The line with the largest radius at the cathode that
+        initiates within the unit cell.
+
+        Returns:
+            int: The line ID number for the outermost field line.
+        """
         allFieldLines = self.getDataFrame('fieldLineData')
         pitch = self.getRunParameter('Pitch')
         unitCellLength = pitch/math.sqrt(3)
@@ -1175,14 +1210,15 @@ class runData:
         #All lines start at same z near cathode
         initialZ = allFieldLines['Field Line z'].iloc[0]
 
-        #Determine the radius for all field lines
-        allFieldLines['Field Line Radius'] = np.sqrt(
-            allFieldLines['Field Line x']**2 + 
-            allFieldLines['Field Line y']**2
+        #Isolate the largest radius at the cathode
+        atCathode = allFieldLines[allFieldLines['Field Line z'] == initialZ].copy()
+
+        #Determine the radius at cathode for all field lines
+        atCathode['Field Line Radius'] = np.sqrt(
+            atCathode['Field Line x']**2 + 
+            atCathode['Field Line y']**2
         )
 
-        #Isolate the largest radius at the cathode
-        atCathode = allFieldLines[allFieldLines['Field Line z'] == initialZ]
         #Determine what lines initiate within the unit cell
         withinUnitCell = withinHex(
             atCathode['Field Line x'], 
@@ -1190,23 +1226,13 @@ class runData:
             unitCellLength
             )
         cellLines = atCathode[withinUnitCell]
+
         #Find line with max radius
         maxRadius = cellLines['Field Line Radius'].max()
         outermostLine = cellLines[cellLines['Field Line Radius'] == maxRadius]
         lineID = outermostLine['Field Line ID'].iloc[0]
 
-        #get entire outermost field line - ensure sorted for interpolation
-        targetLine = allFieldLines[allFieldLines['Field Line ID'] == lineID]
-        targetLine = targetLine.sort_values(by='Field Line z')
-
-        #Get radius for target z using linear interpolation
-        targetRadius = np.interp(
-            zTarget, 
-            targetLine['Field Line z'],
-            targetLine['Field Line Radius']
-        )
-
-        return targetRadius
+        return lineID
 
 
 #********************************************************************************#
@@ -1325,3 +1351,38 @@ class runData:
         
         return cellTransparency
     
+
+#********************************************************************************#
+    def _getTransparency(self):
+        """
+        Determines if the electric field transparency is 100%. 
+        Allows for the outmost filed line within a cell to 'jump' into a 
+        neighbour cell due to numerical precision.
+        
+        Returns:
+            bool: True if outermost field line terminates on a pad, False otherwise.
+        """  
+        lineID = self._getOutermostLineID()
+
+        allFieldLines = self.getDataFrame('fieldLineData')
+        outerFieldLine = allFieldLines[allFieldLines['Field Line ID'] == lineID]
+
+
+        #Check if the last datapoint is above the central pad
+        abovePad = withinHex(
+            outerFieldLine['Field Line x'], 
+            outerFieldLine['Field Line y'], 
+            self.getRunParameter('Pad Length')
+            )
+
+        aboveNeighbour = withinNeighbourHex(
+            outerFieldLine['Field Line x'], 
+            outerFieldLine['Field Line y'], 
+            self.getRunParameter('Pad Length'),
+            self.getRunParameter('Pitch')
+            )
+
+        isTransparent = (abovePad.iloc[-1] or aboveNeighbour.iloc[-1])
+
+        return isTransparent
+            

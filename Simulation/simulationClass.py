@@ -1,6 +1,8 @@
 ###################################
 # CLASS DEFINITION FOR SIMULATION #
 ###################################
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
 import uproot
@@ -13,11 +15,6 @@ import subprocess
 import time
 import itertools
 import re
-
-simDir = os.getcwd()
-analysisDir = os.path.join(simDir, '..', 'Analysis')
-sys.path.append(analysisDir)
-from runDataClass import runData
 
 class FIMS_Simulation:
     """
@@ -64,6 +61,9 @@ class FIMS_Simulation:
         """
         Initializes a FIMS_Simulation object.
         """
+        #Include the analysis object
+        from runDataClass import runData
+
         self.param = self.defaultParam()
         if not self._checkParam():
             raise ValueError('Error initializing parameters.')
@@ -97,11 +97,12 @@ class FIMS_Simulation:
             'padLength': 65.,
             'pitch': 225.,
             'gridStandoff': 100.,
-            'gridThickness': .5,
+            'gridThickness': 1.,
             'holeRadius': 90.,
             'cathodeHeight': 200.,
             'thicknessSiO2': 5.,
             'fieldRatio': 40.,
+            'transparencyLimit': 0.98,
             'numFieldLine': 25,
             'numAvalanche': 1000,
             'avalancheLimit': 200,
@@ -646,7 +647,7 @@ class FIMS_Simulation:
     
         Assumes that the Gmsh mesh has already been converted to 
         Elmer format by ElmerGrid. Creates the appropriate .sif file.
-        Writes the ElmerSolver output to 'log/logElmerSolverWeighting'.
+        Writes the ElmerSolver output to 'log/logElmerWeighting'.
     
         Returns:
             bool: True if ElmerSolver runs successfully, False othwerwise.
@@ -658,7 +659,7 @@ class FIMS_Simulation:
         originalCWD = os.getcwd()
         os.chdir('./Geometry')
         try:
-            with open(os.path.join(originalCWD, 'log/logElmerSolverWeighting.txt'), 'w+') as elmerOutput:
+            with open(os.path.join(originalCWD, 'log/logElmerWeighting.txt'), 'w+') as elmerOutput:
                 startTime = time.monotonic()
                 runReturn = subprocess.run(
                     ['ElmerSolver', 'FIMSWeighting.sif'],
@@ -692,7 +693,7 @@ class FIMS_Simulation:
         originalCWD = os.getcwd()
         os.chdir('./build/')
         try:
-            with open(os.path.join(originalCWD, 'log/logGarfield.txt'), 'w+') as garfieldOutput:
+            with open(os.path.join(originalCWD, 'log/logGarfieldAvalanche.txt'), 'w+') as garfieldOutput:
                 startTime = time.monotonic()
                 setupAvalanche = (
                     f'source {self._GARFIELDPATH} && '
@@ -730,7 +731,7 @@ class FIMS_Simulation:
         originalCWD = os.getcwd()
         os.chdir('./build/')
         try:
-            with open(os.path.join(originalCWD, 'log/logFieldLines.txt'), 'w+') as garfieldOutput:
+            with open(os.path.join(originalCWD, 'log/logGarfieldFieldLines.txt'), 'w+') as garfieldOutput:
                 startTime = time.monotonic()
                 setupFieldLines = (
                     f'source {self._GARFIELDPATH} && '
@@ -867,7 +868,7 @@ class FIMS_Simulation:
 
 
 #***********************************************************************************#
-    def findMinField(self, transparencyLimit=0.98):
+    def findMinField(self, numLines=200):
         """
         Runs simulations to determine what the minimum electric field ratio
         needs to be in order to have 100% Efield transparency.
@@ -884,6 +885,8 @@ class FIMS_Simulation:
         NOTE: This assumes that the initial guessed field ratio results in a
               transparency that is below the limit. The ratio thus is always increased.
         
+        Args:
+            numLines (int): Number of field lines to use to determine transparency.
         Returns:
             bool: True if a minimum field is successfully found, False otherwise.
         """
@@ -893,10 +896,11 @@ class FIMS_Simulation:
         saveParam = self.param.copy()
 
         #Calculate initial guess
-        initialGuess = FIMS.calcMinField()
+        initialGuess = self._calcMinField()
         self.param['fieldRatio'] = initialGuess
         
         #Write paramaters and generate geometry
+        self.param['numFieldLine'] = numLines
         if not self._writeParam():
             print('Error writing parameters.')
             return False
@@ -905,6 +909,7 @@ class FIMS_Simulation:
                 return False
 
         curTransparency = 0
+        transparencyLimit = self._getParam('transparancyLimit')
         while curTransparency < transparencyLimit:
 
             #Determine new field ratio
