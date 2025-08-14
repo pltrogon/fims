@@ -1,4 +1,5 @@
 import os
+import sys
 import numpy as np
 import math
 import matplotlib.pyplot as plt
@@ -6,6 +7,12 @@ import matplotlib.pyplot as plt
 from scipy.special import gammaincc
 
 from polyaClass import myPolya
+from runDataClass import runData
+
+analysisDir = os.getcwd()
+simulationDir = os.path.join(analysisDir, '..', 'Simulation')
+sys.path.append(simulationDir)
+from simulationClass import FIMS_Simulation
 
 #********************************************************************************#   
 def getAnalysisNumbers():
@@ -126,7 +133,7 @@ def plotPolya(theta):
 def plotPolyaEfficiency(theta):
     """
     Plots the efficiency of the Polya distribution as a function of the
-    threshold-to-gain ratio ($n_{t} / \bar{n}$).
+    threshold-to-gain ratio (threshold / gain).
 
     Includes reference lines for 95% efficiency for the theta=0 case.
     
@@ -350,10 +357,9 @@ def getSetData(runList, xVal, yVal):
     yData = []
     for inRun in runList:
         simData = runData(inRun)
-        allRunData = simData.getDataFrame('metaData')
 
-        xData.append(data.getRunParameter(xVal))
-        yData.append(data.getRunParameter(yVal))
+        xData.append(simData.getRunParameter(xVal))
+        yData.append(simData.getRunParameter(yVal))
 
     return xData, yData
 
@@ -379,7 +385,6 @@ def plotDataSets(dataSets, xVal, yVal, savePlot=False):
     #Check if valid parameters
     simulation = FIMS_Simulation()
     allParams = simulation.defaultParam()
-
     if xVal not in allParams or yVal not in allParams:
         raise ValueError(f'Error: Invalid parameter specified.')
 
@@ -421,5 +426,6 @@ def plotDataSets(dataSets, xVal, yVal, savePlot=False):
         fig.savefig(os.path.join('./Plots', filename))
         
     plt.show()
+    return
 
     

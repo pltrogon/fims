@@ -799,7 +799,7 @@ class FIMS_Simulation:
 
 #***********************************************************************************#
 #***********************************************************************************#
-# METHODS FOR RUNNING CHARGE BUILDUP - WIP
+# METHODS FOR RUNNING CHARGE BUILDUP - UNTESTED
 #***********************************************************************************#
 #***********************************************************************************#
 
@@ -1012,6 +1012,13 @@ class FIMS_Simulation:
 #***********************************************************************************#
     def _sumChargeDensity(self, charge1, charge2):
         """
+        Sums two charge density dataframes.
+
+        Args:
+            charge1, charge2 (df): Pandas dataframes containing x,y,z coordiantes and 
+                                   a charge density to be summed together.
+        Returns:
+            DataFrame: The total summed charge density from the input dataframes. 
         """
         combinedCharge = pd.merge(
             charge1,
@@ -1032,12 +1039,35 @@ class FIMS_Simulation:
 
 
 #***********************************************************************************#
-# TODO - Ensure that the simData class is loaded in correctly
     def runChargeBuildup(self, buildupThreshold=1):
         """
+        Runs an iterative simulation of building up charge on the SiO2 layer until a 
+        steady-state solution is reached.
+
+        This steady state corresponds to charge accumulation across the entire SiO2
+        being less than a defined threshold. 
+        
+        Defines the geometry and detemrines an initial electric field solution 
+        with no charge on the SiO2. Executes a series of electron avalanches, finding 
+        the locations of any electrons whose track intersects with the top of the SiO2.
+        A surface charge density is calculated from these locations. A new electric 
+        field solution is determined with this surface charge present, and a new series
+        of avalanches are executed. This process repeats until the amount of new charge
+        is below a given amount. 
+        
+        The final surface charge density is saved to a file specified by the final
+        simulation run number, then all parameter, including the surface charge, is reset.
+    
+        Args:
+            buildupThreshold (int): The threshold for new surface charges signifying
+                                    a steady-state solution.
+    
+        Returns:
+            dict: Dictionary containing a summary of the iterative simulation.
+                  None if an error occurs.
         """
         if not self._checkParam():
-            return -1
+            return None
         
         #Check that the number of avalanches is a reasonable number
         # too many = too much charge unaffected by new stucks
@@ -1045,6 +1075,7 @@ class FIMS_Simulation:
         numAvalanche = self.param('numAvalanche')
         if ((numAvalanche < 10) | (numAvalanche > 100)):
             print(f'Adjust number of avalanches ({numAvalanche}).')
+            return None
         
         #Reset to ensure no initial charge
         self._resetCharge()

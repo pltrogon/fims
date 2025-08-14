@@ -30,7 +30,7 @@ class runData:
 
         Internal Data Frames:
         *****
-        NOTE: 
+            NOTE: 
             These dataframes are intended to be internal to the class, and as such 
             should NOT be accessed directly. Instead utilize the getDataFrame() 
             method to retrieve a copy of the dataframe.
