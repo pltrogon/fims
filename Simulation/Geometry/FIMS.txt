@@ -9,7 +9,6 @@ Include "../runControl";
 
 halfPitch = pitch/2;
 
-// Finite element sizes for different regions
 gridElm = holeRadius;
 holeElm = gridThickness;
 padElm = thicknessSiO2;
@@ -304,12 +303,9 @@ Physical Surface("Cathode") = {
 Physical Surface("Grid") = {
     21, // Top
     22, // Bottom
-    //Sides
+    //Sides 
     23, 24, // Hole
-    27, // Top
-    26, // Right
-    25, // Bottom
-    28 // Left
+    27, 26, 25, 28 //Outer
 };
 
 Physical Surface("CentralPad") = {

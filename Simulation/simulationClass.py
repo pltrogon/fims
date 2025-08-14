@@ -57,8 +57,6 @@ class FIMS_Simulation:
             - avalancheLimit: Limit of the number of electrons within a single avalanche.
             - gasCompAr: Percentage of Argon within gas volume.
             - gasCompCO2: Percentage of CO2 within gas volume.
-
-    
     """
 
 #***********************************************************************************#
@@ -142,6 +140,7 @@ class FIMS_Simulation:
             
         return self.param[parameter]
 
+
 #***********************************************************************************#       
     def _getGarfieldPath(self):
         """
@@ -218,7 +217,7 @@ class FIMS_Simulation:
         #Check for run number file
         if not os.path.exists('runNo'):
             with open('runNo', 'w') as file:
-                file.write('1000')
+                file.write('1')
                 
         return True
 
@@ -542,7 +541,6 @@ class FIMS_Simulation:
         
         return runNo
 
-
 #***********************************************************************************#
     def _runGmsh(self):
         """
@@ -717,6 +715,43 @@ class FIMS_Simulation:
             os.chdir(originalCWD)
         return True
 
+#***********************************************************************************#
+    def _runFieldLines(self):
+        """
+        Runs a Garfield++ executable to determine field lines based on the parameters
+        in 'runControl'.
+    
+        First links garfield libraries, creates the executable, and then runs the simulation.
+        The information from this simulation is saved in .txt format within 'Data/'.
+        
+        Returns:
+            bool: True if Garfield executable runs successfully, False otherwise.
+        """
+        originalCWD = os.getcwd()
+        os.chdir('./build/')
+        try:
+            with open(os.path.join(originalCWD, 'log/logFieldLines.txt'), 'w+') as garfieldOutput:
+                startTime = time.monotonic()
+                setupFieldLines = (
+                    f'source {self._GARFIELDPATH} && '
+                    f'make && '
+                    f'./runFieldLines'
+                )
+                runReturn = subprocess.run(
+                    setupFieldLines, 
+                    stdout=garfieldOutput, 
+                    shell=True, 
+                    check=True
+                )
+                endTime = time.monotonic()
+                garfieldOutput.write(f'\n\nGarfield run time: {endTime - startTime} s')
+    
+            if runReturn.returncode != 0:
+                    print('Garfield++ execution failed. Check log for details.')
+                    return False
+        finally:
+            os.chdir(originalCWD)
+        return True
 
 #***********************************************************************************#
     def runSimulation(self, changeGeometry=True):
@@ -734,8 +769,9 @@ class FIMS_Simulation:
             7. Execute the Garfield++ simulation for charge transport.
     
         Args:
-            changeGeometry (bool): Allows for bypassing some executions to.
-                                   (Optional for when geometry does not change.)
+            changeGeometry (bool): Allows for bypassing some executions such as Gmsh
+                                   and ElmerWeighting. Decreases runtime.
+                                   (For when geometry does not change.)
     
         Returns:
             int: The run number of the simulation that was executed. 
@@ -794,8 +830,131 @@ class FIMS_Simulation:
         self.resetParam()
         
         return runNo
+        
 
+#***********************************************************************************#
+#***********************************************************************************#
+# METHODS FOR RUNNING MINIMUM FIELD
+#***********************************************************************************#
+#***********************************************************************************#
+
+#***********************************************************************************#
+    def _calcMinField(self):
+        """
+        Calculates an intial guess for the minimum field ratio to achieve 100%
+        field transparency.
+
+        Calculation is based off of exponential fits to simulated data.
+
+        Returns:
+            float: Numerical solution to the minimum field for 100% transparency.
+        """
+        #Get geometry variables
+        radius = self._getParam('holeRadius')
+        standoff = self._getParam('gridStandoff')
+        pitch = self._getParam('pitch')
     
+        #Calculate what the minimum field ratio should be
+        gridArea = pitch**2*math.sqrt(3)/2
+        holeArea = math.pi*radius**2
+        optTrans = holeArea/gridArea
+
+        #Do calculation using values from fits
+        ## TODO: JAMES: Include some details of these fit results. 
+        minField = 570.580*np.exp(-12.670*optTrans) + 27.121*np.exp(-0.071*standoff) + 2
+        
+        return minField
+
+
+#***********************************************************************************#
+    def findMinField(self, transparencyLimit=0.98):
+        """
+        Runs simulations to determine what the minimum electric field ratio
+        needs to be in order to have 100% Efield transparency.
+
+        First calculates an initial guess for the ratio based on exponential fits 
+        to simulated data. Then generates a Gmsh FEM of the geometry and solves the
+        E field based on this guess using Elmer. Generates field lines via Garfield
+        and determines a transparency. If the transparency is below the limit, a new
+        field ratio is determined, a the resulting field is solved, and new field 
+        lines are generated. This continues until the criteria is reached.
+        
+        Upon completion, simulation files are reset.
+        
+        NOTE: This assumes that the initial guessed field ratio results in a
+              transparency that is below the limit. The ratio thus is always increased.
+        
+        Returns:
+            bool: True if a minimum field is successfully found, False otherwise.
+        """
+        #Ensure all parameters exist and save them
+        if not self._checkParam():
+            return False
+        saveParam = self.param.copy()
+
+        #Calculate initial guess
+        initialGuess = FIMS.calcMinField()
+        self.param['fieldRatio'] = initialGuess
+        
+        #Write paramaters and generate geometry
+        if not self._writeParam():
+            print('Error writing parameters.')
+            return False
+        if not self._runGmsh():
+                print('Error executing Gmsh.')
+                return False
+
+        curTransparency = 0
+        while curTransparency < transparencyLimit:
+
+            #Determine new field ratio
+            #Assume the tansparency=0 case is the initial
+            curField = self._getParam('fieldRatio')
+            if curTransparency > 0: 
+                
+                #Determine a step size to change field
+                stepSize = transparencyLimit/curTransparency
+                
+                if stepSize < 1.1:
+                    curField *= 1.1
+                else:
+                    curField *= stepSize
+
+                #Write new field ratio
+                self.param['fieldRatio'] = curField
+                if not self._writeParam():
+                    print('Error writing parameters.')
+                    return False
+            
+            #Determine the electric field
+            if not self._runElmer():
+                print('Error executing Elmer.')
+                return False
+
+            #Generate field lines
+            if not self._runFieldLines():
+                print('Error generating field lines.')
+                return False
+            
+            #Get the resulting field transparency
+            with open('../Data/fieldTransparency.txt', 'r') as readFile:
+                curTransparency = int(readFile.read())
+
+            #Print update to monitor convergence
+            print(f'Current field ratio: {curField}')
+            print(f'Current transparency: {curTransparency}')
+
+        #Print solution
+        finalField = self._getParam['fieldRatio']
+        print(f'Solution: Field ratio = {finalField}, Transparency = {curTransparency}')
+        
+        #Reset parameters
+        self.resetParam()
+        #load saved parameters back into class. Update field ratio with solution.
+        self.param = saveParam
+        self.param['fieldRatio'] = finalField
+
+        return True
 
 #***********************************************************************************#
 #***********************************************************************************#

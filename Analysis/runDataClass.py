@@ -45,8 +45,6 @@ class runData:
             _ionData: Information for each individual simulated ion.
             _avalancheData: Information for each simulated avalanche.
             _electronTrackData: Information for the full tracks of each electron.
-
-
     """
 
 #********************************************************************************#
@@ -1216,6 +1214,8 @@ class runData:
         """
         Finds the xy coordinates of all electrons tracks that intersect
         with the top of the SiO2 layer.
+        
+        This is for use with the itereative process of simulating charge-buildup.
 
         Returns:
             dataframe: Pandas dataframe containing the x,y,z coordinates of
@@ -1302,6 +1302,12 @@ class runData:
 #********************************************************************************#
     def _calcOpticalTransparency(self):
         """
+        Determines the optical transparancy of a unit cell.
+        
+        Assumes a hexagonal geometry and a single hole.
+        
+        Returns:
+            float: Fraction of the hole area to the un it cell area.
         """
         #Area of the unit cell    
         pitch = self.getRunParameter('Pitch')
