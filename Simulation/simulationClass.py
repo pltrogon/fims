@@ -738,6 +738,44 @@ class FIMS_Simulation:
         return True
 
 #***********************************************************************************#
+    def _runFieldLines(self):
+        """
+        Runs a Garfield++ executable to determine field lines based on the parameters
+        in 'runControl'.
+    
+        First links garfield libraries, creates the executable, and then runs the simulation.
+        The information from this simulation is saved in .txt format within 'Data/'.
+        
+        Returns:
+            bool: True if Garfield executable runs successfully, False otherwise.
+        """
+        originalCWD = os.getcwd()
+        os.chdir('./build/')
+        try:
+            with open(os.path.join(originalCWD, 'log/logGarfield.txt'), 'w+') as garfieldOutput:
+                startTime = time.monotonic()
+                setupAvalanche = (
+#                    f'source {self._GARFIELDPATH} && '
+                    f'make && '
+                    f'./runFieldLines'
+                )
+                runReturn = subprocess.run(
+                    setupAvalanche, 
+                    stdout=garfieldOutput, 
+                    shell=True, 
+                    check=True
+                )
+                endTime = time.monotonic()
+                garfieldOutput.write(f'\n\nGarfield run time: {endTime - startTime} s')
+    
+            if runReturn.returncode != 0:
+                    print('Garfield++ execution failed. Check log for details.')
+                    return False
+        finally:
+            os.chdir(originalCWD)
+        return True
+
+#***********************************************************************************#
     def runSimulation(self, changeGeometry=True):
         """
         Executes the full simulation process for the given parameters.
@@ -799,6 +837,89 @@ class FIMS_Simulation:
         self.resetParam()
         
         return runNo
-
+        
+#***********************************************************************************#
+    def calcMinField(self):
+        #Initialize variables
+        radius = self._getParam('holeRadius')
+        standoff = self._getParam('gridStandoff')
+        pitch = self._getParam('pitch')
     
+        #Calculate what the minimum field ratio should be
+        gridArea = (pitch**2)*(math.sqrt(3))
+        holeArea = (math.pi*radius**2)*2
+        optTrans = holeArea/gridArea
+        minField = 570.580*np.exp(-12.670*optTrans) + 27.121*np.exp(-0.071*standoff) + 2
+        
+        return minField
+
+#***********************************************************************************#
+    def deleteFile(self, filePath):
+        """
+        deletes a specified file
+        args: file path (string)
+        returns: 1 (if succesfull, -1 if file does not exist)
+        """
+        if os.path.exists(filePath):
+            os.remove(filePath)
+            print(f'\n{filePath} deleted\n')
+            return 1
+        else:
+            print('\nUnable to delete file because it could not be found\n')
+            return -1
+#***********************************************************************************#
+    def findMinField(baseParams):
+        """
+        Runs simulations to determine what the minimum electric field ratio
+        needs to be in order to have 100% Efield transparency.
+        
+        args:
+            dictionary of geometry parameters
+        returns:
+            minimum field ratio (float)
+        """
+        #Initialize Variables
+        fieldGood = True
+        FIMS = FIMS_Simulation()
+        FIMS.param = baseParams
+        FIMS._writeParam()
+        limit = FIMS._getParam('transparencyLimit')
+        
+        initialGuess = FIMS.calcMinField()
+            
+        #Generate geometry and begin field ratio loop
+        print('Beginning Simulation', '\n')
+        FIMS._runGmsh()
+        print('Geometry Generated. Beginning Electric Field Ratio scan', '\n')
+        
+        print('Projected Value = ', initialGuess)
+        fieldRatio = initialGuess
+        
+        while fieldGood:
+            #Adjust the field ratio and write the new value into the runControl file
+            baseParams['fieldRatio'] = fieldRatio
+            print('Field Ratio = ', fieldRatio, '\n')
+            FIMS.param = baseParams
+            FIMS._writeParam()
+            
+            #Determine the electric field
+            FIMS._runElmer()
+            FIMS._runFieldLines()
+            
+            #Check transparency and determine how much to adjust the field ratio
+            with open('../Data/tempTransparencyFile.txt', 'r') as readFile:
+                transparency = int(readFile.read())
+            FIMS.deleteFile('../Data/tempTransparencyFile.txt')
+            
+            if transparency >= limit:
+                break
+            if limit/transparency < 1.1:
+                fieldRatio *= 1.1
+            else:
+                fieldRatio *= limit/transparency
+                
+        print('Final Transparency: ', transparency, 
+                '\nFinal Field Ratio: ', fieldRatio,)
+
+        return fieldRatio
 
