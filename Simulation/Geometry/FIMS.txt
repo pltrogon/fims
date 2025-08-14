@@ -335,7 +335,8 @@ Physical Surface("DielectricTop") = {
 Physical Surface("Boundaries") = {
     25, 26, 27, 28, //Grid
     322, 323, 324, 325, //Gas
-    125, 126, 129, 130 // Dielectric
+    125, 126, 129, 130, // Dielectric
+    27, 26, 25, 28 //Grid
 };
 
 Coherence;

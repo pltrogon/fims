@@ -6,7 +6,7 @@
 
 // Pad
 padLength = 65.0;
-pitch = 250.0;
+pitch = 225.0;
 
 //Grid
 gridStandoff = 100.0;
@@ -19,8 +19,7 @@ thicknessSiO2 = 5.0;
 
 //----- Field Parameters -----
 fieldRatio = 40.0;
-numFieldLine = 51;
-transparencyLimit = 0.1;
+numFieldLine = 25;
 
 //----- Simulation parameters -----
 // Avalanche controls
