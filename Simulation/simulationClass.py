@@ -887,6 +887,7 @@ class FIMS_Simulation:
         
         Args:
             numLines (int): Number of field lines to use to determine transparency.
+
         Returns:
             bool: True if a minimum field is successfully found, False otherwise.
         """
@@ -908,17 +909,17 @@ class FIMS_Simulation:
                 print('Error executing Gmsh.')
                 return False
 
+        print('Beginning search for minimum field...')
         curTransparency = 0
-        transparencyLimit = self._getParam('transparancyLimit')
-        while curTransparency < transparencyLimit:
-
+        transparencyThreshold = self._getParam('transparencyLimit')
+        while curTransparency < transparencyThreshold:
             #Determine new field ratio
             #Assume the tansparency=0 case is the initial
             curField = self._getParam('fieldRatio')
             if curTransparency > 0: 
                 
                 #Determine a step size to change field
-                stepSize = transparencyLimit/curTransparency
+                stepSize = transparencyThreshold/curTransparency
                 
                 if stepSize < 1.1:
                     curField *= 1.1
@@ -950,7 +951,7 @@ class FIMS_Simulation:
             print(f'Current transparency: {curTransparency}')
 
         #Print solution
-        finalField = self._getParam['fieldRatio']
+        finalField = self._getParam('fieldRatio')
         print(f'Solution: Field ratio = {finalField}, Transparency = {curTransparency}')
         
         #Reset parameters
