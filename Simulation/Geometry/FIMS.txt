@@ -16,11 +16,11 @@ halfPitch = pitch/2;
 //diElm: points on the corner of the SiO2 without a pad (x4)
 //cathElm: points along the cathode far above the grid (x4)
 
-gridElm = holeRadius;
-holeElm = gridThickness*4;
-padElm = thicknessSiO2*2;
-diElm = holeRadius;
-cathElm = holeRadius;
+gridElm = (pitch - holeRadius)/5;
+holeElm = gridThickness;
+padElm = thicknessSiO2;
+diElm = padLength/4;
+cathElm = pitch/10;
 
 // Derived Z-coordinates for different layers
 //     Center of grid: z = 0
@@ -29,6 +29,10 @@ gridTop = gridThickness/2;
 gridBottom = -gridThickness/2;
 topSiO2 = - gridThickness/2 - gridStandoff + thicknessSiO2;
 padBase = -gridThickness/2 - gridStandoff;
+
+//Some pad parameters
+halfPad = padLength/2;
+padMath = (3^.5)*halfPad;
 
 // Global coordinate limits
 xMin = 0;
@@ -124,8 +128,6 @@ Volume(1) = {201};
 //**********************************************************************
 
 // ***** PADS *****
-halfPad = padLength/2;
-padMath = (3^.5)*halfPad;
 
 // Points - Central Pad
 Point(101) = {0, 0, padBase, padElm};
@@ -312,10 +314,6 @@ Physical Surface("Grid") = {
     22, // Bottom
     //Sides 
     23, 24 // Hole
-    //27, // Top
-    //26, // Right
-    //25, // Bottom
-    //28 // Left
 };
 
 Physical Surface("CentralPad") = {
@@ -335,7 +333,7 @@ Physical Surface("DielectricTop") = {
 Physical Surface("Boundaries") = {
     25, 26, 27, 28, //Grid
     322, 323, 324, 325, //Gas
-    125, 126, 129, 130 // Dielectric
+    125, 126, 129, 130, // Dielectric
 };
 
 Coherence;

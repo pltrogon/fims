@@ -1,5 +1,5 @@
 /*
- * avalanche.cc
+ * fieldlines.cc
  * 
  * Garfield++ mapping of electric field lines to determine the electric field transparency
  *    Requires an input electric field solved by elmer and geometry from gmsh.
@@ -54,7 +54,7 @@ int main(int argc, char * argv[]) {
   
   //*************** SETUP ***************//
   //Timing variables
-  clock_t startSim, stopSim, lapAvalanche, runTime;
+  clock_t startSim, stopSim, runTime;
 
   TApplication app("app", &argc, argv);
 
@@ -92,8 +92,8 @@ int main(int argc, char * argv[]) {
   std::cout << "****************************************\n";
 
   //***** Data File *****//
-  std::string dataFilename = "tempTransparencyFile.txt";
-  std::string dataPath = "../..//Data/"+dataFilename;
+  std::string dataFilename = "fieldTransparency.txt";
+  std::string dataPath = "../../Data/"+dataFilename;
   std::ofstream dataFile;
   dataFile.open(dataPath);
   
@@ -101,10 +101,7 @@ int main(int argc, char * argv[]) {
   if(!dataFile.is_open()){
     std::cerr << "Error creating or opening file '" << dataFilename << "'." << std::endl;
     return -1;
-  }  
-  
-  std::cout << "File '" << dataFilename << "' created and opened successfully.\n";
-
+  }
 
   //***** Simulation Parameters *****//
   //Read in simulation parameters from runControl
@@ -112,12 +109,9 @@ int main(int argc, char * argv[]) {
   double  padLength, pitch;
   double gridStandoff, gridThickness, holeRadius;
   double cathodeHeight, thicknessSiO2;
-  double fieldRatio;
+  double fieldRatio, transparencyLimit;
   int numFieldLine;
-  double transparencyLimit;
-  int numAvalanche, avalancheLimit;
   double gasCompAr, gasCompCO2;
-  double penningR, penningLambda;
 
   std::ifstream paramFile;
   std::string runControlFile = "../runControl";
@@ -158,7 +152,7 @@ int main(int argc, char * argv[]) {
 
   //Parse the values from the map
   if(numKeys != 14){//Number of user-defined simulation parameters in runControl to search for.
-      std::cerr << "Error: Invalid simulation parameters in 'runControl'." << std::endl;
+    std::cerr << "Error: Invalid simulation parameters in 'runControl'." << std::endl;
     return -1;
   }
 
@@ -176,7 +170,6 @@ int main(int argc, char * argv[]) {
 
   //Field parameters
   fieldRatio = std::stod(readParam["fieldRatio"]);
-
   numFieldLine = std::stoi(readParam["numFieldLine"]);
   transparencyLimit = std::stod(readParam["transparencyLimit"]);
 
@@ -268,7 +261,7 @@ int main(int argc, char * argv[]) {
   std::vector<double> xStart;
   std::vector<double> yStart;
 
-  double rangeScale = 0.9;
+  double rangeScale = 0.99;
   double xRange = (xBoundary[1] - xBoundary[0])*rangeScale;
   double yRange = (yBoundary[1] - yBoundary[0])*rangeScale;
 
@@ -311,6 +304,7 @@ int main(int argc, char * argv[]) {
     }
     
     //Find if termination point is at pad
+    //TODO: With hex geometry, this is bad criteria for if at pad!!
     int lineEnd = fieldLines.size() - 1;
     if(  (abs(fieldLines[lineEnd][0]) <= padLength/2.)
       && (abs(fieldLines[lineEnd][1]) <= padLength/2.)
@@ -335,7 +329,7 @@ int main(int argc, char * argv[]) {
 
   //Handle case where field transparency is too low
   if(fieldTransparency < transparencyLimit){
-    std::cout << "Field transparency lower than limit" << "\n";
+    std::cout << "Warning: Field transparency is lower than the limit." << std::endl;
   }
   
   //***** Deal with files *****//

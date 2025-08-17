@@ -1,12 +1,15 @@
 ###################################
 # CLASS DEFINITION FOR SIMULATION #
 ###################################
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
 import uproot
 import awkward_pandas
 import matplotlib.pyplot as plt
 import os
+import sys
 import math
 import subprocess
 import time
@@ -15,7 +18,44 @@ import re
 
 class FIMS_Simulation:
     """
-    Methods defined in FIMS_Simulation"
+    Class representing the FIMS simulation.
+
+    Initializes to a set of default parameters via a dictionary.
+
+    The parameters within this dictionary can be adjusted and then used to execute
+    a simulation. This process is as follows:
+
+        1. Check that all required parameters are present and defined.
+        2. Read and the simulation run number.
+        3. Write the simulation parameters to the control files.
+        4. Execute Gmsh to generate a finite-element mesh of the geometry.
+        5. Execute Elmer to solve the E field for the mesh.
+        6. Execute Elmer to solve the weighting field for the electrode.
+        7. Execute Garfield++ to simulate electron multiplication effects.
+        8. Reset parameters to defaults.
+
+    *****
+    IMPORTANT: The parameters are reset to defaults after every simulation.
+    *****
+
+    Attributes:
+        param (dict): Parameter dictionary with the following entries:
+            - padLength: Length of the side of the hexagonal pad (micron).
+            - pitch: Distance between neighbouring pads (micron).
+            - gridStandoff: Distance from the top to the SiO2 layer to the bottom of the grid (micron).
+            - gridThickness: Thickness of the grid (micron).
+            - holeRadius: Radius of the hole in the grid (micron).
+            - cathodeHeight: Distance from the top to the grid to the cathode plane (micron).
+            - thicknessSiO2: Thickness of the SiO2 layer (micron).
+            - fieldRatio: Ratio of the amplification field to the drift field.
+                          Note that the drift field is assumed to be 1 kV/cm.
+            - numFieldLine: Number of field lines to calculate for visualization.
+            - numAvalanche: Number of electrons (avalanches) to initiate
+            - avalancheLimit: Limit of the number of electrons within a single avalanche.
+            - gasCompAr: Percentage of Argon within gas volume.
+            - gasCompCO2: Percentage of CO2 within gas volume.
+    
+    Methods defined in FIMS_Simulation:
         defaultParam
         _checkParam
         _getParam
@@ -43,6 +83,9 @@ class FIMS_Simulation:
         """
         Initializes a FIMS_Simulation object.
         """
+        #Include the analysis object
+        from runDataClass import runData
+
         self.param = self.defaultParam()
         if not self._checkParam():
             raise ValueError('Error initializing parameters.')
@@ -76,17 +119,17 @@ class FIMS_Simulation:
             'padLength': 65.,
             'pitch': 225.,
             'gridStandoff': 100.,
-            'gridThickness': .5,
+            'gridThickness': 1.,
             'holeRadius': 90.,
             'cathodeHeight': 200.,
             'thicknessSiO2': 5.,
             'fieldRatio': 40.,
-            'numFieldLine': 51,
-            'transparencyLimit': .95,
-            'numAvalanche': 0,
+            'transparencyLimit': 0.98,
+            'numFieldLine': 200,
+            'numAvalanche': 1000,
             'avalancheLimit': 200,
-            'gasCompAr': 80.,
-            'gasCompCO2': 20.,
+            'gasCompAr': 70.,
+            'gasCompCO2': 30.,
         }
         return defaultParam
 
@@ -120,7 +163,7 @@ class FIMS_Simulation:
             
         return self.param[parameter]
 
-#***********************************************************************************#     
+#***********************************************************************************#       
     def _getGarfieldPath(self):
         """
         Reads and returns the filepath to the Garfield++ source script.
@@ -206,8 +249,9 @@ class FIMS_Simulation:
         Reads the simulation parameters contained in the simulation control file.
     
         Returns:
-            bool: True if parameters are read from file, False otherwise.
+            bool: True if parameters are read from file successfully, False otherwise.
         """
+        
         filename = 'runControl'
         readInParam = {}
         
@@ -232,7 +276,7 @@ class FIMS_Simulation:
             print(f"An error occurred while reading the file: {e}")
             return False
 
-        if not self._checkParam(param):
+        if not self._checkParam():
             print("Error: Not all parameters found in 'runControl'.")
             return False
 
@@ -404,8 +448,8 @@ class FIMS_Simulation:
             return False
     
         #rewrite appropriate lines
-        sifLines[writeCathode] = f'\tPotential = {potentials['cathodeVoltage']}\n'
-        sifLines[writeGrid] = f'\tPotential = {potentials['gridVoltage']}\n'
+        sifLines[writeCathode] = f"\tPotential = {potentials['cathodeVoltage']}\n"
+        sifLines[writeGrid] = f"\tPotential = {potentials['gridVoltage']}\n"
     
         #Write new .sif file
         filename = os.path.join('./Geometry', 'FIMS.sif')
@@ -668,7 +712,7 @@ class FIMS_Simulation:
     
         Assumes that the Gmsh mesh has already been converted to 
         Elmer format by ElmerGrid. Creates the appropriate .sif file.
-        Writes the ElmerSolver output to 'log/logElmerSolverWeighting'.
+        Writes the ElmerSolver output to 'log/logElmerWeighting'.
     
         Returns:
             bool: True if ElmerSolver runs successfully, False othwerwise.
@@ -680,7 +724,7 @@ class FIMS_Simulation:
         originalCWD = os.getcwd()
         os.chdir('./Geometry')
         try:
-            with open(os.path.join(originalCWD, 'log/logElmerSolverWeighting.txt'), 'w+') as elmerOutput:
+            with open(os.path.join(originalCWD, 'log/logElmerWeighting.txt'), 'w+') as elmerOutput:
                 startTime = time.monotonic()
                 runReturn = subprocess.run(
                     ['ElmerSolver', 'FIMSWeighting.sif'],
@@ -714,7 +758,7 @@ class FIMS_Simulation:
         originalCWD = os.getcwd()
         os.chdir('./build/')
         try:
-            with open(os.path.join(originalCWD, 'log/logGarfield.txt'), 'w+') as garfieldOutput:
+            with open(os.path.join(originalCWD, 'log/logGarfieldAvalanche.txt'), 'w+') as garfieldOutput:
                 startTime = time.monotonic()
                 setupAvalanche = (
 #                    f'source {self._GARFIELDPATH} && '
@@ -752,15 +796,15 @@ class FIMS_Simulation:
         originalCWD = os.getcwd()
         os.chdir('./build/')
         try:
-            with open(os.path.join(originalCWD, 'log/logGarfield.txt'), 'w+') as garfieldOutput:
+            with open(os.path.join(originalCWD, 'log/logGarfieldFieldLines.txt'), 'w+') as garfieldOutput:
                 startTime = time.monotonic()
-                setupAvalanche = (
-#                    f'source {self._GARFIELDPATH} && '
+                setupFieldLines = (
+                    f'source {self._GARFIELDPATH} && '
                     f'make && '
                     f'./runFieldLines'
                 )
                 runReturn = subprocess.run(
-                    setupAvalanche, 
+                    setupFieldLines, 
                     stdout=garfieldOutput, 
                     shell=True, 
                     check=True
@@ -791,9 +835,9 @@ class FIMS_Simulation:
             7. Execute the Garfield++ simulation for charge transport.
     
         Args:
-            changeGeometry (bool): Allows for bypassing the 
-                                   Gmsh call to generate a mesh.
-                                   (Optional for when geometry does not change.)
+            changeGeometry (bool): Allows for bypassing some executions such as Gmsh
+                                   and ElmerWeighting. Decreases runtime.
+                                   (For when geometry does not change.)
     
         Returns:
             int: The run number of the simulation that was executed. 
@@ -803,6 +847,17 @@ class FIMS_Simulation:
         if not self._checkParam():
             return -1
     
+        #If geometry does not change, gmash and weighting do not need to be done.
+        #However, check that the mesh and weighting field files exist.
+        #If not, override input and generate.
+        if not changeGeometry:
+            meshFile = os.path.exists('Geometry/FIMS.msh')
+            weightFile = os.path.exists('Geometry/elmerResults/FIMSWeighting.result')
+            if not (meshFile and weightFile):
+                print('Warning. Attempt to skip Gmsh and ElmerWeighting. Overriding input.')
+                changeGeometry = True
+
+
         #get the run number for this simulation
         runNo = self._getRunNumber()
         if runNo == -1:
@@ -824,14 +879,18 @@ class FIMS_Simulation:
         #Determine the Electric and weighting fields
         if not self._runElmer():
                 print('Error executing Elmer (base).')
-                return -1     
-        if not self._runElmerWeighting():
-            print('Error executing Elmer (weighting).')
-            return -1
+                return -1    
+
+        #If geometry does not change, neither will weighting field.
+        if changeGeometry: 
+            if not self._runElmerWeighting():
+                print('Error executing Elmer (weighting).')
+                return -1
     
         #Run the electron transport simulation
         if not self._runGarfield():
             print('Error executing Garfield.')
+            return -1
     
         #reset parameters to finish
         self.resetParam()
@@ -839,19 +898,237 @@ class FIMS_Simulation:
         return runNo
         
 #***********************************************************************************#
-    def calcMinField(self):
-        #Initialize variables
+#***********************************************************************************#
+# METHODS FOR RUNNING MINIMUM FIELD
+#***********************************************************************************#
+#***********************************************************************************#
+    def _calcMinField(self):
+        """
+        Calculates an intial guess for the minimum field ratio to achieve 100%
+        field transparency.
+
+        Calculation is based off of exponential fits to simulated data.
+
+        Returns:
+            float: Numerical solution to the minimum field for 100% transparency.
+        """
+        #Get geometry variables
         radius = self._getParam('holeRadius')
         standoff = self._getParam('gridStandoff')
         pitch = self._getParam('pitch')
     
         #Calculate what the minimum field ratio should be
-        gridArea = (pitch**2)*(math.sqrt(3))
-        holeArea = (math.pi*radius**2)*2
+        gridArea = pitch**2*math.sqrt(3)/2
+        holeArea = math.pi*radius**2
         optTrans = holeArea/gridArea
+
+        #Do calculation using values from fits
+        ## TODO: JAMES: Include some details of these fit results. 
         minField = 570.580*np.exp(-12.670*optTrans) + 27.121*np.exp(-0.071*standoff) + 2
         
         return minField
+
+#***********************************************************************************#
+    def findMinField(self, numLines=200):
+        """
+        Runs simulations to determine what the minimum electric field ratio
+        needs to be in order to have 100% Efield transparency.
+
+        First calculates an initial guess for the ratio based on exponential fits 
+        to simulated data. Then generates a Gmsh FEM of the geometry and solves the
+        E field based on this guess using Elmer. Generates field lines via Garfield
+        and determines a transparency. If the transparency is below the limit, a new
+        field ratio is determined, a the resulting field is solved, and new field 
+        lines are generated. This continues until the criteria is reached.
+        
+        Upon completion, simulation files are reset.
+        
+        NOTE: This assumes that the initial guessed field ratio results in a
+              transparency that is below the limit. The ratio thus is always increased.
+        
+        Args:
+            numLines (int): Number of field lines to use to determine transparency.
+
+        Returns:
+            bool: True if a minimum field is successfully found, False otherwise.
+        """
+        #Ensure all parameters exist and save them
+        if not self._checkParam():
+            return False
+        saveParam = self.param.copy()
+
+        #Calculate initial guess
+        initialGuess = self._calcMinField()
+        self.param['fieldRatio'] = initialGuess
+        
+        #Write paramaters and generate geometry
+        self.param['numFieldLine'] = numLines
+        if not self._writeParam():
+            print('Error writing parameters.')
+            return False
+        if not self._runGmsh():
+                print('Error executing Gmsh.')
+                return False
+
+        print('Beginning search for minimum field...')
+        curTransparency = 0
+        transparencyThreshold = self._getParam('transparencyLimit')
+        while curTransparency < transparencyThreshold:
+            #Determine new field ratio
+            #Assume the tansparency=0 case is the initial
+            curField = self._getParam('fieldRatio')
+            if curTransparency > 0: 
+                
+                #Determine a step size to change field
+                stepSize = transparencyThreshold/curTransparency
+                
+                if stepSize < 1.1:
+                    curField *= 1.1
+                else:
+                    curField *= stepSize
+
+                #Write new field ratio
+                self.param['fieldRatio'] = curField
+                if not self._writeParam():
+                    print('Error writing parameters.')
+                    return False
+            
+            #Determine the electric field
+            if not self._runElmer():
+                print('Error executing Elmer.')
+                return False
+
+            #Generate field lines
+            if not self._runFieldLines():
+                print('Error generating field lines.')
+                return False
+            
+            #Get the resulting field transparency
+            with open('../Data/fieldTransparency.txt', 'r') as readFile:
+                curTransparency = int(readFile.read())
+
+            #Print update to monitor convergence
+            print(f'Current field ratio: {curField}')
+            print(f'Current transparency: {curTransparency}')
+
+        #Print solution
+        finalField = self._getParam('fieldRatio')
+        print(f'Solution: Field ratio = {finalField}, Transparency = {curTransparency}')
+        
+        #Reset parameters
+        self.resetParam()
+        #load saved parameters back into class. Update field ratio with solution.
+        self.param = saveParam
+        self.param['fieldRatio'] = finalField
+
+        return True
+
+#***********************************************************************************#
+#***********************************************************************************#
+# METHODS FOR RUNNING CHARGE BUILDUP - UNTESTED
+#***********************************************************************************#
+#***********************************************************************************#
+
+
+#***********************************************************************************#
+    def resetCharge(self):
+        """
+        Resets the charge buildup file to be empty.
+
+        Returns:
+            bool: True is reset is successful, False otherwise.
+        """
+        filename = 'Geometry/chargeBuildup.dat'
+
+        try:
+            with open(filename, 'w') as file:
+                file.write('')
+                
+        except FileNotFoundError:
+            print(f"Error: File '{filename}' not found.")
+            return False
+        except Exception as e:
+            print(f'An error occurred with the file: {e}')
+            return False
+        
+        return True
+    
+#***********************************************************************************#
+    def _saveCharge(self, runNumber):
+        """
+        Saves the surface charge buildup to a file designated by runNumber.
+
+        Copies the current charge buildup file into 'savedCharge/' as 'runXXXX.charge.dat'
+
+        Args:
+            runNumber (int): Run identifier for saved file.
+
+        Returns:
+            bool: True is file copy is successful, False otherwise.
+        """
+        chargeDirectory = 'savedCharge'
+        if not os.path.exists(chargeDirectory):
+            try:
+                os.makedirs(chargeDirectory)
+            except OSError as e:
+                print(f"Error creating directory '{chargeDirectory}': {e}")
+                return False
+                
+        saveFile = f'run{runNumber:04d}.charge.dat'
+        saveFilePath = os.path.join('savedCharge', saveFile)
+
+        filename = 'Geometry/chargeBuildup.dat'
+        try:
+            shutil.copyfile(filename, saveFilePath)
+        except FileNotFoundError:
+            print(f"Error: Source file '{filename}' not found.")
+            return False
+        except Exception as e:
+            print(f'An error occurred while saving charge history: {e}')
+            return False
+        
+        return True
+
+
+#***********************************************************************************#
+    def _readCharge(self):
+        """
+        Reads the file containing the built-up surface charge distribution.
+
+        Assumes a space-separated dataset.
+
+        Returns:
+            dataframe: Pandas dataframe containing: x, y, z, and charge density.
+                       None if no data is available or an error occurs.
+        """
+        filename = 'Geometry/chargeBuildup.dat'
+
+        try:
+            chargeData = pd.read_csv(
+                filename, 
+                sep=r'\s+', 
+                header=None, 
+                names=[
+                    'x', 
+                    'y', 
+                    'z', 
+                    'chargeDensity'
+                ], 
+                comment='#'
+            )
+
+            if chargeData.empty:
+                print('No charge density.')
+                return None
+                
+        except FileNotFoundError:
+            print(f"Error: File '{filename}' not found.")
+            return None
+        except Exception as e:
+            print(f"An error occurred with the file: {e}")
+            return None
+
+        return chargeData
 
 #***********************************************************************************#
     def deleteFile(self, filePath):
@@ -867,59 +1144,228 @@ class FIMS_Simulation:
         else:
             print('\nUnable to delete file because it could not be found\n')
             return -1
+
 #***********************************************************************************#
-    def findMinField(baseParams):
+    def _writeCharge(self, builtUpCharge):
         """
-        Runs simulations to determine what the minimum electric field ratio
-        needs to be in order to have 100% Efield transparency.
-        
-        args:
-            dictionary of geometry parameters
-        returns:
-            minimum field ratio (float)
+        Writes the built-up surface charge to a file.
+
+        Args:
+            dataframe: Pandas dataframe containing: x, y, z, and charge density.
+
+        Returns:
+            bool: True is write is successful, otherwise False.
         """
-        #Initialize Variables
-        fieldGood = True
-        FIMS = FIMS_Simulation()
-        FIMS.param = baseParams
-        FIMS._writeParam()
-        limit = FIMS._getParam('transparencyLimit')
-        
-        initialGuess = FIMS.calcMinField()
-            
-        #Generate geometry and begin field ratio loop
-        print('Beginning Simulation', '\n')
-        FIMS._runGmsh()
-        print('Geometry Generated. Beginning Electric Field Ratio scan', '\n')
-        
-        print('Projected Value = ', initialGuess)
-        fieldRatio = initialGuess
-        
-        while fieldGood:
-            #Adjust the field ratio and write the new value into the runControl file
-            baseParams['fieldRatio'] = fieldRatio
-            print('Field Ratio = ', fieldRatio, '\n')
-            FIMS.param = baseParams
-            FIMS._writeParam()
-            
-            #Determine the electric field
-            FIMS._runElmer()
-            FIMS._runFieldLines()
-            
-            #Check transparency and determine how much to adjust the field ratio
-            with open('../Data/tempTransparencyFile.txt', 'r') as readFile:
-                transparency = int(readFile.read())
-            FIMS.deleteFile('../Data/tempTransparencyFile.txt')
-            
-            if transparency >= limit:
-                break
-            if limit/transparency < 1.1:
-                fieldRatio *= 1.1
-            else:
-                fieldRatio *= limit/transparency
+        filename = 'Geometry/chargeBuildup.dat'
+
+        try:
+            builtUpCharge.to_csv(
+                filename,
+                sep=' ',
+                index=False,
+                header=False,
+                float_format='%.10e'
+            )
                 
-        print('Final Transparency: ', transparency, 
-                '\nFinal Field Ratio: ', fieldRatio,)
+        except FileNotFoundError:
+            print(f"Error: File '{filename}' not found.")
+            return False
+        except Exception as e:
+            print(f"An error occurred with the file: {e}")
+            return False
+        
+        return True
+    
 
-        return fieldRatio
+#***********************************************************************************#
+    def _calculateSurfaceCharge(self, electronLocations):
+        """
+        Calculates the surface charge density based on the provided electron locations.
 
+        Args:
+            electronLocations (pd.DataFrame): A DataFrame containing the x, y, z 
+                                              coordinates of the stuck electrons.
+
+        Returns:
+            dataframe: Pandas dataframe with the calculated surface charge density
+                       at the coordinates (x, y, z).
+        """
+        electronCharge = -1.602176634e-19
+
+        #Geometry parameters
+        pitch = self._getParam('pitch')        
+        xMax = math.sqrt(3)/2.*pitch
+        xMin = -xMax
+        yMax = pitch
+        yMin = -yMin
+
+        #Bin resolution and number of bins
+        binResolution = pitch/100.
+        numBinsX = int(np.ceil((xMax - xMin) / binResolution))
+        numBinsY = int(np.ceil((yMax - yMin) / binResolution))
+
+        #Isolate electrons from a given area
+        filteredElectrons = electronLocations[
+            (electronLocations['x'] > xMin) & 
+            (electronLocations['x'] < xMax) &
+            (electronLocations['y'] > yMin) & 
+            (electronLocations['y'] < yMax)
+        ].copy()
+
+        #Assume the same z-coordinate for all data
+        z = 0.
+        if not filteredElectrons.empty:
+            z = filteredElectrons['z'].iloc[0]
+
+        #Generate 2D histogram of stuck electrons
+        electronCounts, xEdges, yEdges = np.histogram2d(
+            filteredElectrons['x'],
+            filteredElectrons['y'],
+            bins=[numBinsX, numBinsY],
+            range=[[xMin, xMax], [yMin, yMax]]
+        )
+        electronCounts = electronCounts.T #because hist is weird
+        
+        # Calculate bin centers from the edges
+        xCenters = (xEdges[:-1] + xEdges[1:]) / 2
+        yCenters = (yEdges[:-1] + yEdges[1:]) / 2
+
+        nonZeroY, nonZeroX = np.where(electronCounts > 0)
+
+        # Calculate total charge and charge density for all bins
+        binArea = binResolution**2
+        totalBinCharge = electronCounts*electronCharge
+        binChargeDensity = totalBinCharge/binArea
+
+        # Extract the relevant data using the indices
+        chargeData = pd.DataFrame({
+            'x': xCenters[nonZeroX],
+            'y': yCenters[nonZeroY],
+            'z': z,
+            'chargeDensity': binChargeDensity[nonZeroY, nonZeroX]
+        })
+
+        surfaceCharge = pd.DataFrame(chargeData)
+        
+        return surfaceCharge
+
+#***********************************************************************************#
+    def _sumChargeDensity(self, charge1, charge2):
+        """
+        Sums two charge density dataframes.
+
+        Args:
+            charge1, charge2 (df): Pandas dataframes containing x,y,z coordiantes and 
+                                   a charge density to be summed together.
+        Returns:
+            DataFrame: The total summed charge density from the input dataframes. 
+        """
+        combinedCharge = pd.merge(
+            charge1,
+            charge2,
+            on=['x', 'y', 'z'],
+            how='outer',
+            suffixes=('1', '2')
+        )
+
+        combinedCharge['chargeDensity1'] = combinedCharge['chargeDensity1'].fillna(0)
+        combinedCharge['chargeDensity2'] = combinedCharge['chargeDensity2'].fillna(0)
+        
+        combinedCharge['chargeDensity'] = combinedCharge['chargeDensity1'] + combinedCharge['chargeDensity2']
+        
+        totalCharge = combinedCharge[['x', 'y', 'z', 'chargeDensity']]
+
+        return totalCharge
+
+
+#***********************************************************************************#
+    def runChargeBuildup(self, buildupThreshold=1):
+        """
+        Runs an iterative simulation of building up charge on the SiO2 layer until a 
+        steady-state solution is reached.
+
+        This steady state corresponds to charge accumulation across the entire SiO2
+        being less than a defined threshold. 
+        
+        Defines the geometry and detemrines an initial electric field solution 
+        with no charge on the SiO2. Executes a series of electron avalanches, finding 
+        the locations of any electrons whose track intersects with the top of the SiO2.
+        A surface charge density is calculated from these locations. A new electric 
+        field solution is determined with this surface charge present, and a new series
+        of avalanches are executed. This process repeats until the amount of new charge
+        is below a given amount. 
+        
+        The final surface charge density is saved to a file specified by the final
+        simulation run number, then all parameter, including the surface charge, is reset.
+    
+        Args:
+            buildupThreshold (int): The threshold for new surface charges signifying
+                                    a steady-state solution.
+    
+        Returns:
+            dict: Dictionary containing a summary of the iterative simulation.
+                  None if an error occurs.
+        """
+        if not self._checkParam():
+            return None
+        
+        #Check that the number of avalanches is a reasonable number
+        # too many = too much charge unaffected by new stucks
+        # too few = not enough stuck charges to make a difference
+        numAvalanche = self.param('numAvalanche')
+        if ((numAvalanche < 10) | (numAvalanche > 100)):
+            print(f'Adjust number of avalanches ({numAvalanche}).')
+            return None
+        
+        #Reset to ensure no initial charge
+        self._resetCharge()
+        
+        #Prepare for iterations
+        totalElectrons = 0
+        numRuns = 0
+        initialRun = True
+
+        #Repeat simulations until electron buildup is less than threshold 
+        newElectrons = buildupThreshold+1
+        while newElectrons > buildupThreshold:
+            #Reset built up charge and run simulation
+            numRuns += 1
+            newElectrons = 0
+
+            #Only have to generate geometry on first run
+            if numRuns > 1:
+                initialRun = False
+                
+            #Run simulation - save parameters s reset at end of sim
+            saveParam = self.param.copy()
+            doneRun = self.runSimulation(changeGeometry=initialRun)
+            self.param = saveParam
+            
+            #rGet the simulation data
+            simData = runData(doneRun)
+
+            #find locations of stuck electrons
+            electronLocations = simData.findStuckElectrons()
+
+            #Determine the amount of built-up charge
+            newElectrons = len(electronLocations)
+            totalElectrons += newElectrons
+            newCharge = self._calculateSurfaceCharge(electronLocations)
+            oldCharge = self._readCharge()
+            totalCharge = self._sumChargeDensity(oldCharge, newCharge)
+
+            #Update boundary condition with new surface charges
+            self._writeCharge(totalCharge)
+
+
+        #Save charge based on last run number, then reset file and all parameters.
+        self._saveCharge(doneRun)
+        self.resetCharge()    
+        self.resetParam()
+
+        chargeBuildupSummary = {
+            'numRuns': numRuns,
+            'finalRun': doneRun,
+            'totalCharge': totalElectrons,
+        }
+        return chargeBuildupSummary
