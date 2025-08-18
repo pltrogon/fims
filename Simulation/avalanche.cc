@@ -125,7 +125,7 @@ int main(int argc, char * argv[]) {
 
   //***** Data File *****//
   std::string dataFilename = "sim."+std::to_string(runNo)+".root";
-  std::string dataPath = "../..//Data/"+dataFilename;
+  std::string dataPath = "../../Data/"+dataFilename;
   TFile *dataFile = new TFile(dataPath.c_str(), "NEW");
 
   if(!dataFile->IsOpen()){
