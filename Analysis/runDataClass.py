@@ -670,6 +670,79 @@ class runData:
         plt.tight_layout()   
         
         return fig2D
+    
+
+#********************************************************************************#   
+    def plotAllFieldLines(self):
+        """
+        Generates 2D plots of the simulated field lines.
+
+        These plots display the field lines from the cathode, and both above '
+        and below the grid. Includes the pad geometry and hole in the grid.
+    
+        Returns:
+            Figure.
+        """
+
+        cathodeLines = self.getDataFrame('fieldLineData').groupby('Field Line ID')
+        gridLines = self.getDataFrame('gridFieldLineData')
+
+        aboveGrid = gridLines[gridLines['Grid Line Location'] == 1].groupby('Field Line ID')
+        belowGrid = gridLines[gridLines['Grid Line Location'] == -1].groupby('Field Line ID')
+
+        if cathodeLines is None or aboveGrid is None or belowGrid is None:
+            raise ValueError('Field lines unavailable.')
+
+        fig2D = plt.figure(figsize=(14, 7))
+        fig2D.suptitle('Field Lines')
+        ax11 = fig2D.add_subplot(221)
+        ax12 = fig2D.add_subplot(223)
+        ax13 = fig2D.add_subplot(122)
+
+        # iterate through all cathode lines
+        for _, fieldLine in cathodeLines:
+            ax11.plot(fieldLine['Field Line x'], 
+                      fieldLine['Field Line z'], 
+                      lw=1, c='b')
+            ax12.plot(fieldLine['Field Line y'], 
+                      fieldLine['Field Line z'], 
+                      lw=1, c='b')
+            ax13.plot(fieldLine['Field Line x'], 
+                      fieldLine['Field Line y'], 
+                      lw=1, c='b')
+            
+        # iterate through all above grid lines
+        for _, fieldLine in aboveGrid:
+            ax11.plot(fieldLine['Field Line x'], 
+                      fieldLine['Field Line z'], 
+                      lw=1, c='r')
+            ax12.plot(fieldLine['Field Line y'], 
+                      fieldLine['Field Line z'], 
+                      lw=1, c='r')
+            ax13.plot(fieldLine['Field Line x'], 
+                      fieldLine['Field Line y'], 
+                      lw=1, c='r')
+            
+        # iterate through all above grid lines
+        for _, fieldLine in belowGrid:
+            ax11.plot(fieldLine['Field Line x'], 
+                      fieldLine['Field Line z'], 
+                      lw=1, c='g')
+            ax12.plot(fieldLine['Field Line y'], 
+                      fieldLine['Field Line z'], 
+                      lw=1, c='g')
+            ax13.plot(fieldLine['Field Line x'], 
+                      fieldLine['Field Line y'], 
+                      lw=1, c='g')
+            
+        self._plotAddCellGeometry(ax11, 'xz')
+        self._plotAddCellGeometry(ax12, 'yz')
+        self._plotAddCellGeometry(ax13, 'xy')
+        plt.tight_layout() 
+
+        return fig2D
+
+
 
 
 #********************************************************************************#   
