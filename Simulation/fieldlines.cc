@@ -45,11 +45,14 @@ int main(int argc, char * argv[]) {
   const double CM = 1e-2;
   const double MICRONTOCM = 1e-4;
   bool DEBUG = false;
-  int fieldLineID;
   double fieldLineX, fieldLineY, fieldLineZ;
   int gridFieldLineLocation;
   double gridLineX, gridLineY, gridLineZ;
   double fieldTransparency;
+  double cornerTransparency;
+  int numCornerLines = 5;
+  double xRandMax = 2*MICRONTOCM;
+  double yRandMax = 1*MICRONTOCM; 
 
   
   //*************** SETUP ***************//
@@ -88,21 +91,18 @@ int main(int argc, char * argv[]) {
   }
 
   std::cout << "****************************************\n";
-  std::cout << "Building simulation: " << "\n";
+  std::cout << "Building field line simulation: " << "\n";
   std::cout << "****************************************\n";
 
-  //***** Data File *****//
+  //***** Create Output Files *****//
+  std::string fieldlineFilename = "fieldlinePoints.csv";
+  std::string fieldlinePath = "../../Data/"+fieldlineFilename;
+  std::ofstream fieldlineFile;
+  
   std::string dataFilename = "fieldTransparency.txt";
   std::string dataPath = "../../Data/"+dataFilename;
   std::ofstream dataFile;
-  dataFile.open(dataPath);
   
-  
-  if(!dataFile.is_open()){
-    std::cerr << "Error creating or opening file '" << dataFilename << "'." << std::endl;
-    return -1;
-  }
-
   //***** Simulation Parameters *****//
   //Read in simulation parameters from runControl
 
@@ -123,7 +123,7 @@ int main(int argc, char * argv[]) {
   }
 
   std::cout << "****************************************\n";
-  std::cout << "Setting up simulation.\n";
+  std::cout << "Setting up field line simulation.\n";
   std::cout << "****************************************\n";
   
   std::string curLine;
@@ -174,16 +174,13 @@ int main(int argc, char * argv[]) {
   transparencyLimit = std::stod(readParam["transparencyLimit"]);
 
   //Simulation Parameters
-  numAvalanche = std::stoi(readParam["numAvalanche"]);
-  avalancheLimit = std::stoi(readParam["avalancheLimit"]);
-
   gasCompAr = std::stod(readParam["gasCompAr"]);
   gasCompCO2 = std::stod(readParam["gasCompCO2"]);
 
   
   //*************** SIMULATION ***************//
   std::cout << "****************************************\n";
-  std::cout << "Creating simulation: " << "\n";
+  std::cout << "Creating field line simulation: " << "\n";
   std::cout << "****************************************\n";
   
   // Define the gas mixture
@@ -254,61 +251,73 @@ int main(int argc, char * argv[]) {
   std::cout << "****************************************\n";
   std::cout << "Calculating field Lines.\n";
   std::cout << "****************************************\n";
+  
+  fieldlineFile.open(fieldlinePath);
+  
+  
+  if(!fieldlineFile.is_open()){
+    std::cerr << "Error creating or opening file '" << fieldlineFilename << "'." << std::endl;
+    return -1;
+  }
 
   DriftLineRKF driftLines(sensorFIMS);
-  driftLines.SetMaximumStepSize(MICRONTOCM/10);
+  driftLines.SetMaximumStepSize(MICRONTOCM);
 
   std::vector<double> xStart;
   std::vector<double> yStart;
+  std::vector<double> xRandStart;
+  std::vector<double> yRandStart;
+
 
   double rangeScale = 0.99;
   double xRange = (xBoundary[1] - xBoundary[0])*rangeScale;
   double yRange = (yBoundary[1] - yBoundary[0])*rangeScale;
 
+  
   //Lines generated radially from the center to edge of geometry
   //    The x-direction is the long axis of the geometry. 
-  //    This extends past the vertex of the hex unit cell
   for(int i = 0; i < numFieldLine; i++){
-    xStart.push_back((2/3)*xBoundary[1]*i/(numFieldLine-1));
+    xStart.push_back((2./3.)*xBoundary[1]*i/(numFieldLine-1));
     yStart.push_back(0.);
+    }
+  
+  //Lines populated randomly at the corner along the positive x-axis
+  for(int i = 0; i < numCornerLines; i++){
+    //Get random numbers between 0 and xRandMax/yRandMax
+    double randX = 1.0*rand()/RAND_MAX*(xRandMax);
+    double randY = (0.5 - 1.0*rand()/RAND_MAX)*(yRandMax);
+    xRandStart.push_back((2./3.)*xBoundary[1] - randX);
+    yRandStart.push_back(randY);
   }
   
-  /*
-  //Lines populated at corner - spread with uniform random numbers
-  //TODO - now with hex geomety, do some math to find that corner
-  double spreadScale = 0.99995; //Any smaller and goes out of bounds
-  for(int i = 0; i < numFieldLine; i++){
-    //Get random numbers between 0 and 1
-    double randX = 1.0*rand()/RAND_MAX;
-    double randY = 1.0*rand()/RAND_MAX;
-    xStart.push_back(xRange/2. + (randX - 0.5)*(1-spreadScale));
-    yStart.push_back(yRange/2. + (randY - 0.5)*(1-spreadScale));
-  }
-  */
 
   // ***** Calculate field Lines ***** //
   std::vector<std::array<float, 3> > fieldLines;
+  std::vector<std::array<float, 3> > cornerLines;
   int totalFieldLines = xStart.size();
+  int totalCornerLines = xRandStart.size();
   int numAtPad = 0;
-  std::cout << "Computing " << totalFieldLines << " field lines." << std::endl;
+  int numAtCornerPad = 0;
   int prevDriftLine = 0;
+  
+  std::cout << "Computing " << totalFieldLines << " field lines." << std::endl;
   for(int inFieldLine = 0; inFieldLine < totalFieldLines; inFieldLine++){
-    fieldLineID = inFieldLine;
     //Calculate from top of volume
-    driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], zmax*.95, fieldLines);
+    driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], zmax*rangeScale, fieldLines);
     //Get coordinates of every point along field line
     for(int inLine = 0; inLine < fieldLines.size(); inLine++){
       fieldLineX = fieldLines[inLine][0];
       fieldLineY = fieldLines[inLine][1];
       fieldLineZ = fieldLines[inLine][2];
+//    fieldlineFile << fieldLineX << ", " << fieldLineY << ", " << fieldLineZ << std::endl;
     }
     
     //Find if termination point is at pad
-    //TODO: With hex geometry, this is bad criteria for if at pad!!
+    //TODO: Find more elegant way to determine where a line terminates
     int lineEnd = fieldLines.size() - 1;
-    if(  (abs(fieldLines[lineEnd][0]) <= padLength/2.)
-      && (abs(fieldLines[lineEnd][1]) <= padLength/2.)
-      && (fieldLines[lineEnd][2] < 0.)){
+    if(  (abs(fieldLines[lineEnd][0]) <= padLength)
+      && (abs(fieldLines[lineEnd][1]) <= padLength*sqrt(3)/2)
+      && (fieldLines[lineEnd][2] <= -gridStandoff*rangeScale)){
         numAtPad++;
     }
     
@@ -321,23 +330,61 @@ int main(int argc, char * argv[]) {
     }
 
   }//End field line loop
-  
+
+  std::cout << "Computing corner field lines" << std::endl;
+  for(int inFieldLine = 0; inFieldLine < totalCornerLines; inFieldLine++){
+    //Calculate from the corner
+    driftLines.FieldLine(xRandStart[inFieldLine], yRandStart[inFieldLine], zmax*rangeScale, cornerLines);
+    //Get coordinates of every point along field line
+    for(int inLine = 0; inLine < cornerLines.size(); inLine++){
+      fieldLineX = cornerLines[inLine][0];
+      fieldLineY = cornerLines[inLine][1];
+      fieldLineZ = cornerLines[inLine][2];
+    fieldlineFile << fieldLineX << ", " << fieldLineY << ", " << fieldLineZ << std::endl;
+    }
+    
+    //Find if termination point is at pad
+    //TODO: Find more elegant way to determine where a line terminates
+    int lineEnd = cornerLines.size() - 1;
+    if(  (abs(cornerLines[lineEnd][0]) <= padLength)
+      && (abs(cornerLines[lineEnd][1]) <= padLength*sqrt(3)/2)
+      && (cornerLines[lineEnd][2] <= -gridStandoff*rangeScale)){
+        numAtCornerPad++;
+    }
+    
+    //Print a progress update every 10%
+    int driftLineProgress = (100*(inFieldLine+1))/totalFieldLines;
+    if(   (driftLineProgress % 10 == 0)
+      &&  (driftLineProgress != prevDriftLine)){
+      std::cout << "Driftline Progress: " << driftLineProgress << " %" << std::endl;
+      prevDriftLine = driftLineProgress;
+    }
+
+  }//End corner field line loop
+  fieldlineFile.close();
+
   std::cout << "Done " << totalFieldLines << " field lines; Determining transparency." << "\n";
-  //Determine transparency
+  //Determine transparency of full grid
   fieldTransparency = (1.*numAtPad) / (1.*totalFieldLines);
   std::cout << "Field transparency is " << fieldTransparency <<  "." << std::endl;
-
+  
+  //Determine transparency of corner
+  cornerTransparency = (1.*numAtCornerPad) / (1.*numCornerLines);
+  std::cout << "Corner transparency is " << cornerTransparency <<  "." << std::endl;
+  
   //Handle case where field transparency is too low
   if(fieldTransparency < transparencyLimit){
     std::cout << "Warning: Field transparency is lower than the limit." << std::endl;
   }
   
-  //***** Deal with files *****//
-  dataFile << fieldTransparency;
+  //***** Output transparency value *****//
+  dataFile.open(dataPath);
+  dataFile << fieldTransparency << std::endl;
+  dataFile << cornerTransparency << std::endl;
   dataFile.close();
 
   std::cout << "****************************************\n";
-  std::cout << "Done simulation: " << "\n";
+  std::cout << "Finished field line simulation " << "\n";
   std::cout << "****************************************\n";
   std::cout << std::endl;
 

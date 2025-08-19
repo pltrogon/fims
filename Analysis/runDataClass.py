@@ -369,11 +369,12 @@ class runData:
         nominalBundleZ = -standoff/2
         self._metaData['Field Bundle Radius'] = self.calcBundleRadius(nominalBundleZ)
 
-        #Raw Gain
-        self._metaData['Raw Gain'] = self._getRawGain()
-
-        #Calculate IBF
-        self._metaData['IBF'] = self._calcIBF()
+        if self.getRunParameter('Number of Avalanches') > 0:
+            #Raw Gain
+            self._metaData['Raw Gain'] = self._getRawGain()
+            
+            #Calculate IBF
+            self._metaData['IBF'] = self._calcIBF()
 
         return
 

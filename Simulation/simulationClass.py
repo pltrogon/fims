@@ -84,6 +84,12 @@ class FIMS_Simulation:
         Initializes a FIMS_Simulation object.
         """
         #Include the analysis object
+        #TODO: importing a class from a different directory seems to cause
+        #issues on Linux. Either need to manually insert the file path via 
+        #sys.path.insert() or have a second copy of the imported class in
+        #the working directory (currently opting for the former).
+        
+        sys.path.insert(1, '../Analysis')
         from runDataClass import runData
 
         self.param = self.defaultParam()
@@ -565,27 +571,6 @@ class FIMS_Simulation:
         return runNo
 
 #***********************************************************************************#
-    def checkFieldTransparency(self, transparency):
-        """
-        Checks a given field transparency vs the limit specified in the simulation's
-        metaData.
-
-        Args:
-            transparency (float): field transparency of current simulation.
-
-        Returns:
-            bool: True if transparency is greater than the limit, False otherwise.
-        
-        """
-        #TODO: find a way to get the transparency without needing to input it manually
-        
-        limit = self._getParam('transparencyLimit')
-        
-        if transparency < limit:
-            return False
-        return True
-
-#***********************************************************************************#
     def _runGmsh(self):
         """
         Runs the Gmsh program to generate a 3D finite-element mesh of the simulation geometry.
@@ -761,15 +746,17 @@ class FIMS_Simulation:
             with open(os.path.join(originalCWD, 'log/logGarfieldAvalanche.txt'), 'w+') as garfieldOutput:
                 startTime = time.monotonic()
                 setupAvalanche = (
+                #TODO: find out why the first line of this subprocess command causes non-zero
+                #exit status 2 to occur. Works fine if commented out.
 #                    f'source {self._GARFIELDPATH} && '
                     f'make && '
                     f'./runAvalanche'
                 )
                 runReturn = subprocess.run(
                     setupAvalanche, 
-                    stdout=garfieldOutput, 
-                    shell=True, 
-                    check=True
+                    stdout = garfieldOutput, 
+                    shell = True, 
+                    check = True
                 )
                 endTime = time.monotonic()
                 garfieldOutput.write(f'\n\nGarfield run time: {endTime - startTime} s')
@@ -799,15 +786,16 @@ class FIMS_Simulation:
             with open(os.path.join(originalCWD, 'log/logGarfieldFieldLines.txt'), 'w+') as garfieldOutput:
                 startTime = time.monotonic()
                 setupFieldLines = (
-                    f'source {self._GARFIELDPATH} && '
+                #TODO: See todo above about _garfieldpath line
+#                    f'source {self._GARFIELDPATH} && '
                     f'make && '
                     f'./runFieldLines'
                 )
                 runReturn = subprocess.run(
                     setupFieldLines, 
-                    stdout=garfieldOutput, 
-                    shell=True, 
-                    check=True
+                    stdout = garfieldOutput, 
+                    shell = True, 
+                    check = True
                 )
                 endTime = time.monotonic()
                 garfieldOutput.write(f'\n\nGarfield run time: {endTime - startTime} s')
@@ -847,7 +835,7 @@ class FIMS_Simulation:
         if not self._checkParam():
             return -1
     
-        #If geometry does not change, gmash and weighting do not need to be done.
+        #If geometry does not change, gmsh and weighting do not need to be done.
         #However, check that the mesh and weighting field files exist.
         #If not, override input and generate.
         if not changeGeometry:
@@ -923,13 +911,22 @@ class FIMS_Simulation:
         optTrans = holeArea/gridArea
 
         #Do calculation using values from fits
-        ## TODO: JAMES: Include some details of these fit results. 
+        
+        #The equation was fit using scpy.optimize's curve_fit method.
+        #The given equation was a*np.exp(-b*x) + c, with a, b, and c 
+        #being fit parameters. The method was applied twice: first to
+        #minField vs optical transparency data and the second to minField
+        #vs grid standoff. The results were then added together. The final
+        #fit parameter, c, has currently been set by hand based on
+        #observations of simulation results, but will need to be adjusted to
+        #a more rigorous value in the future.
+        
         minField = 570.580*np.exp(-12.670*optTrans) + 27.121*np.exp(-0.071*standoff) + 2
         
         return minField
 
 #***********************************************************************************#
-    def findMinField(self, numLines=200):
+    def findMinField(self, numLines = 200, safetyMargin = .8):
         """
         Runs simulations to determine what the minimum electric field ratio
         needs to be in order to have 100% Efield transparency.
@@ -938,7 +935,7 @@ class FIMS_Simulation:
         to simulated data. Then generates a Gmsh FEM of the geometry and solves the
         E field based on this guess using Elmer. Generates field lines via Garfield
         and determines a transparency. If the transparency is below the limit, a new
-        field ratio is determined, a the resulting field is solved, and new field 
+        field ratio is determined, the resulting field is solved, and new field 
         lines are generated. This continues until the criteria is reached.
         
         Upon completion, simulation files are reset.
@@ -958,10 +955,10 @@ class FIMS_Simulation:
         saveParam = self.param.copy()
 
         #Calculate initial guess
-        initialGuess = self._calcMinField()
+        initialGuess = self._calcMinField()*safetyMargin
         self.param['fieldRatio'] = initialGuess
         
-        #Write paramaters and generate geometry
+        #Write parameters and generate geometry
         self.param['numFieldLine'] = numLines
         if not self._writeParam():
             print('Error writing parameters.')
@@ -972,15 +969,17 @@ class FIMS_Simulation:
 
         print('Beginning search for minimum field...')
         curTransparency = 0
+        fullTransparency = 0
+        
         transparencyThreshold = self._getParam('transparencyLimit')
         while curTransparency < transparencyThreshold:
             #Determine new field ratio
-            #Assume the tansparency=0 case is the initial
+            #Assume the transparency = 0 case is the initial
             curField = self._getParam('fieldRatio')
-            if curTransparency > 0: 
+            if fullTransparency != 0: 
                 
                 #Determine a step size to change field
-                stepSize = transparencyThreshold/curTransparency
+                stepSize = transparencyThreshold/fullTransparency
                 
                 if stepSize < 1.1:
                     curField *= 1.1
@@ -1005,15 +1004,18 @@ class FIMS_Simulation:
             
             #Get the resulting field transparency
             with open('../Data/fieldTransparency.txt', 'r') as readFile:
-                curTransparency = int(readFile.read())
+                readfieldData = readFile.readlines()
+            fullTransparency = float(readfieldData[0])
+            curTransparency = float(readfieldData[1])
+
 
             #Print update to monitor convergence
             print(f'Current field ratio: {curField}')
-            print(f'Current transparency: {curTransparency}')
+            print(f'Current transparency: {fullTransparency}')
 
         #Print solution
         finalField = self._getParam('fieldRatio')
-        print(f'Solution: Field ratio = {finalField}, Transparency = {curTransparency}')
+        print(f'Solution: Field ratio = {finalField}, Transparency = {fullTransparency}')
         
         #Reset parameters
         self.resetParam()
