@@ -28,5 +28,5 @@ numAvalanche = 1000;
 avalancheLimit = 200;
 
 // Gas composition
-gasCompAr = 80.0;
-gasCompCO2 = 20.0;
+gasCompAr = 70.0;
+gasCompCO2 = 30.0;

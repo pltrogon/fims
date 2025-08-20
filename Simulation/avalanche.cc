@@ -447,7 +447,7 @@ int main(int argc, char * argv[]) {
   //Set up Ion drifting
   AvalancheMC* driftIon = new AvalancheMC;
   driftIon->SetSensor(sensorFIMS);
-  driftIon->SetDistanceSteps(MICRONTOCM);
+  driftIon->SetDistanceSteps(MICRONTOCM/10.);
 
   // ***** Draw field lines for visualization ***** //
   std::cout << "****************************************\n";
@@ -455,7 +455,7 @@ int main(int argc, char * argv[]) {
   std::cout << "****************************************\n";
 
   DriftLineRKF driftLines(sensorFIMS);
-  driftLines.SetMaximumStepSize(MICRONTOCM);
+  driftLines.SetMaximumStepSize(MICRONTOCM/10.);
 
   std::vector<double> xStart;
   std::vector<double> yStart;
