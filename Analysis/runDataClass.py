@@ -47,6 +47,35 @@ class runData:
             _ionData: Information for each individual simulated ion.
             _avalancheData: Information for each simulated avalanche.
             _electronTrackData: Information for the full tracks of each electron.
+            
+    The following methods are defined in this class:
+        _readRootTrees
+        _checkName
+        getTreeNames
+        printMetaData
+        getMetaData
+        printColumns
+        getDataFrame
+        getRunParameter
+        getRunNumber
+        plotCellGeometry
+        _plotAddCellGeometry
+        plot2DFieldLines
+        _getRawGain
+        _trimAvalanche
+        _histAvalanche
+        plotAvalancheSize
+        plotAvalanche2D
+        plotDiffusion
+        plotParticleHeatmaps
+        _fitAvalancheSize
+        plotAvalancheFits
+        calcBundleRadius
+        _getOutermostLineID
+        findStuckElectrons
+        _calcIBF
+        _calcOpticalTransparency
+        _getTransparency
     """
 
 #********************************************************************************#
@@ -174,7 +203,7 @@ class runData:
         """
         Prints all metadata information. Dimensions are in microns.
         """
-        metaData = self.getDataFrame('metaData')
+        metaData = getattr(self, 'metaData', None)
         for inParam in metaData:
             print(f'{inParam}: {self.getRunParameter(inParam)}')
         return
@@ -340,11 +369,12 @@ class runData:
         nominalBundleZ = -standoff/2
         self._metaData['Field Bundle Radius'] = self.calcBundleRadius(nominalBundleZ)
 
-        #Raw Gain
-        self._metaData['Raw Gain'] = self._getRawGain()
-
-        #Calculate IBF
-        self._metaData['IBF'] = self._calcIBF()
+        if self.getRunParameter('Number of Avalanches') > 0:
+            #Raw Gain
+            self._metaData['Raw Gain'] = self._getRawGain()
+            
+            #Calculate IBF
+            self._metaData['IBF'] = self._calcIBF()
 
         return
 
@@ -1315,7 +1345,7 @@ class runData:
         with the top of the SiO2 layer.
         
         This is for use with the itereative process of simulating charge-buildup.
-
+        
         Returns:
             dataframe: Pandas dataframe containing the x,y,z coordinates of
                        the stuck electrons at the SiO2 layer.
@@ -1458,4 +1488,4 @@ class runData:
         isTransparent = (abovePad.iloc[-1] or aboveNeighbour.iloc[-1])
 
         return isTransparent
-            
+

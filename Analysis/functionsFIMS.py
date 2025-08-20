@@ -8,6 +8,21 @@ from scipy.special import gammaincc
 
 
 
+"""
+Functions:
+    getAnalysisNumbers
+    plotGeneralPolya
+    plotPolya
+    plotPolyaEfficiency
+    plotThreshold
+    plotPolyaExamples
+    withinHex
+    withinNeighbourHex
+    xyInterpolate
+    getSetData
+    plotDataSets
+"""
+
 #********************************************************************************#   
 def getAnalysisNumbers():
     """

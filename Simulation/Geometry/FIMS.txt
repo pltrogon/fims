@@ -9,6 +9,13 @@ Include "../runControl";
 
 halfPitch = pitch/2;
 
+// Finite element sizes for different regions
+//gridElm: points on the corner of the grid without a hole (x4)
+//holeElm: points on the hole of the grid (x12)
+//padElm: points along the edge and center of the pad (x16)
+//diElm: points on the corner of the SiO2 without a pad (x4)
+//cathElm: points along the cathode far above the grid (x4)
+
 gridElm = (pitch - holeRadius)/5;
 holeElm = gridThickness;
 padElm = thicknessSiO2;
@@ -307,7 +314,7 @@ Physical Surface("Grid") = {
     22, // Bottom
     //Sides 
     23, 24, // Hole
-    27, 26, 25, 28 //Outer
+    25, 26, 27, 28 //Outer
 };
 
 Physical Surface("CentralPad") = {
@@ -325,9 +332,9 @@ Physical Surface("DielectricTop") = {
 // *** Boundary Elements *** //
 
 Physical Surface("Boundaries") = {
+    25, 26, 27, 28, //Grid
     322, 323, 324, 325, //Gas
-    125, 126, 129, 130, // Dielectric
-    27, 26, 25, 28 //Grid
+    125, 126, 129, 130 // Dielectric
 };
 
 Coherence;
