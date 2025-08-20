@@ -447,7 +447,7 @@ int main(int argc, char * argv[]) {
   //Set up Ion drifting
   AvalancheMC* driftIon = new AvalancheMC;
   driftIon->SetSensor(sensorFIMS);
-  driftIon->SetDistanceSteps(MICRONTOCM/10.);
+  driftIon->SetDistanceSteps(MICRONTOCM);
 
   // ***** Draw field lines for visualization ***** //
   std::cout << "****************************************\n";
@@ -455,7 +455,7 @@ int main(int argc, char * argv[]) {
   std::cout << "****************************************\n";
 
   DriftLineRKF driftLines(sensorFIMS);
-  driftLines.SetMaximumStepSize(MICRONTOCM/10.);
+  driftLines.SetMaximumStepSize(MICRONTOCM);
 
   std::vector<double> xStart;
   std::vector<double> yStart;
@@ -517,7 +517,7 @@ int main(int argc, char * argv[]) {
     double holeRadius2 = std::pow(holeRadius, 2.);
     double gridLineSeparation = 1.1;
 
-
+  /*TODO: The field lines above the grid seem to be causing the simulation to get hung up
     //Do above grid
     gridFieldLineLocation = 1;
     fieldLines.clear();
@@ -534,6 +534,7 @@ int main(int argc, char * argv[]) {
         gridFieldLineDataTree->Fill();
       }
     }
+    */
 
     //Do below grid
     gridFieldLineLocation = -1;

@@ -131,7 +131,7 @@ class FIMS_Simulation:
             'thicknessSiO2': 5.,
             'fieldRatio': 40.,
             'transparencyLimit': 0.98,
-            'numFieldLine': 200,
+            'numFieldLine': 5,
             'numAvalanche': 1000,
             'avalancheLimit': 200,
             'gasCompAr': 70.,
@@ -926,7 +926,7 @@ class FIMS_Simulation:
         return minField
 
 #***********************************************************************************#
-    def findMinField(self, numLines = 200, safetyMargin = .8):
+    def findMinField(self, numLines = 5, safetyMargin = .8):
         """
         Runs simulations to determine what the minimum electric field ratio
         needs to be in order to have 100% Efield transparency.
@@ -945,6 +945,8 @@ class FIMS_Simulation:
         
         Args:
             numLines (int): Number of field lines to use to determine transparency.
+            safetyMargin (float): number multiplied to the predicted value to create a
+            buffer in case the raw value is too large.
 
         Returns:
             bool: True if a minimum field is successfully found, False otherwise.
@@ -968,23 +970,17 @@ class FIMS_Simulation:
                 return False
 
         print('Beginning search for minimum field...')
-        curTransparency = 0
-        fullTransparency = 0
-        
+        firstRun = True
+        isTransparent = False
         transparencyThreshold = self._getParam('transparencyLimit')
-        while curTransparency < transparencyThreshold:
-            #Determine new field ratio
-            #Assume the transparency = 0 case is the initial
-            curField = self._getParam('fieldRatio')
-            if fullTransparency != 0: 
-                
+        curField = self._getParam('fieldRatio')
+        
+        while not isTransparent:
+            #Block that determines the new field ratio
+            if not firstRun:
                 #Determine a step size to change field
-                stepSize = transparencyThreshold/fullTransparency
-                
-                if stepSize < 1.1:
-                    curField *= 1.1
-                else:
-                    curField *= stepSize
+                stepSize = 1.2
+                curField *= stepSize
 
                 #Write new field ratio
                 self.param['fieldRatio'] = curField
@@ -1004,18 +1000,15 @@ class FIMS_Simulation:
             
             #Get the resulting field transparency
             with open('../Data/fieldTransparency.txt', 'r') as readFile:
-                readfieldData = readFile.readlines()
-            fullTransparency = float(readfieldData[0])
-            curTransparency = float(readfieldData[1])
-
+                isTransparent = bool(readFile.read())
 
             #Print update to monitor convergence
             print(f'Current field ratio: {curField}')
-            print(f'Current transparency: {fullTransparency}')
+            firstRun = False
 
         #Print solution
         finalField = self._getParam('fieldRatio')
-        print(f'Solution: Field ratio = {finalField}, Transparency = {fullTransparency}')
+        print(f'Solution: Field ratio = {finalField}')
         
         #Reset parameters
         self.resetParam()

@@ -313,7 +313,8 @@ Physical Surface("Grid") = {
     21, // Top
     22, // Bottom
     //Sides 
-    23, 24 // Hole
+    23, 24, // Hole
+    25, 26, 27, 28 //Outer
 };
 
 Physical Surface("CentralPad") = {
@@ -333,7 +334,7 @@ Physical Surface("DielectricTop") = {
 Physical Surface("Boundaries") = {
     25, 26, 27, 28, //Grid
     322, 323, 324, 325, //Gas
-    125, 126, 129, 130, // Dielectric
+    125, 126, 129, 130 // Dielectric
 };
 
 Coherence;
