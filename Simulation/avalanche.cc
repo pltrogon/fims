@@ -517,7 +517,7 @@ int main(int argc, char * argv[]) {
     double holeRadius2 = std::pow(holeRadius, 2.);
     double gridLineSeparation = 1.1;
 
-  /*TODO: The field lines above the grid seem to be causing the simulation to get hung up
+    //TODO: The field lines above the grid seem to be causing the simulation to get hung up
     //Do above grid
     gridFieldLineLocation = 1;
     fieldLines.clear();
@@ -534,7 +534,6 @@ int main(int argc, char * argv[]) {
         gridFieldLineDataTree->Fill();
       }
     }
-    */
 
     //Do below grid
     gridFieldLineLocation = -1;

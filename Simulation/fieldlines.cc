@@ -332,11 +332,11 @@ int main(int argc, char * argv[]) {
   
   //Evaluates transparency and deals with appropriate outcome
   if(fieldTransparency >= transparencyLimit){
-    isTransparent = "True";
+    isTransparent = "1";
   }
   else{
     std::cout << "Warning: Field transparency is lower than the limit." << std::endl;
-    isTransparent = "False";
+    isTransparent = "0";
   }
   
   //***** Output transparency value *****//

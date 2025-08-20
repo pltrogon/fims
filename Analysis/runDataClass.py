@@ -53,6 +53,7 @@ class runData:
         _checkName
         getTreeNames
         printMetaData
+        getMetaData
         printColumns
         getDataFrame
         getRunParameter
@@ -203,7 +204,6 @@ class runData:
         Prints all metadata information. Dimensions are in microns.
         """
         metaData = getattr(self, 'metaData', None)
-        #metaData = self.getDataFrame('metaData')
         for inParam in metaData:
             print(f'{inParam}: {self.getRunParameter(inParam)}')
         return
@@ -1272,7 +1272,8 @@ class runData:
         with the top of the SiO2 layer.
         
         This is for use with the itereative process of simulating charge-buildup.
-            Returns:
+        
+        Returns:
             dataframe: Pandas dataframe containing the x,y,z coordinates of
                        the stuck electrons at the SiO2 layer.
         """  
@@ -1326,6 +1327,7 @@ class runData:
 
         return pd.DataFrame(stuckElectrons)
 
+
 #********************************************************************************#
     def _calcIBF(self):
         """
@@ -1351,6 +1353,7 @@ class runData:
         IBF = numCathode/numAvalanche - 1 #Correct for primary ion
 
         return IBF
+
 
 #********************************************************************************#
     def _calcOpticalTransparency(self):

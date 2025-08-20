@@ -15,7 +15,12 @@ Functions:
     plotPolya
     plotPolyaEfficiency
     plotThreshold
-    plotPolyaExample
+    plotPolyaExamples
+    withinHex
+    withinNeighbourHex
+    xyInterpolate
+    getSetData
+    plotDataSets
 """
 
 #********************************************************************************#   
