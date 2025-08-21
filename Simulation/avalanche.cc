@@ -520,7 +520,7 @@ int main(int argc, char * argv[]) {
 
     //TODO: The field lines above the grid seem to be causing the simulation to get hung up
     //Do above grid
-    gridFieldLineLocation = 1;
+    /*gridFieldLineLocation = 1;
     fieldLines.clear();
 
     if(lineRadius2 >= holeRadius2){
@@ -534,8 +534,7 @@ int main(int argc, char * argv[]) {
 
         gridFieldLineDataTree->Fill();
       }
-    }
-    */
+    }*/
 
     //Do below grid
     gridFieldLineLocation = -1;
@@ -640,11 +639,11 @@ int main(int argc, char * argv[]) {
       ionDataTree->Fill();
       totalIons++;
 
-      //Check for electron attatchment
+      //Check for electron attachment
       if(stat == -7){
         attachedElectrons++;
 
-        //Drift negative ion from end of electron tracks that attatch
+        //Drift negative ion from end of electron tracks that attach
         ionCharge = -1;
         driftIon->DriftNegativeIon(xf, yf, zf, tf);
         driftIon->GetNegativeIonEndpoint(0, xiIon, yiIon, ziIon, tiIon, xfIon, yfIon, zfIon, tfIon, statIon);

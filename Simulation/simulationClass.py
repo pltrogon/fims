@@ -605,7 +605,8 @@ class FIMS_Simulation:
             with open(os.path.join(os.getcwd(), 'log/logGmsh.txt'), 'w+') as gmshOutput:
                 startTime = time.monotonic()
                 runReturn = subprocess.run(
-                    ['gmsh', os.path.join('./Geometry/', geoFile),
+                #TODO: Linux requires file path to gmsh
+                    ['./gmsh', os.path.join('./Geometry/', geoFile),
                      '-order', '2', '-optimize_ho',
                      '-clextend', '1',
                      '-setnumber', 'Mesh.OptimizeNetgen', '1',
