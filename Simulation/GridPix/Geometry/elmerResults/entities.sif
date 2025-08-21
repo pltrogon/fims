@@ -1,0 +1,34 @@
+!------ Skeleton for body section -----
+Body 1
+  Name = Grid
+End
+
+Body 2
+  Name = Dielectric
+End
+
+Body 3
+  Name = Gas
+End
+
+!------ Skeleton for boundary section -----
+Boundary Condition 1
+  Name = Cathode
+End
+
+Boundary Condition 2
+  Name = Grid
+End
+
+Boundary Condition 3
+  Name = Pad
+End
+
+Boundary Condition 4
+  Name = DielectricTop
+End
+
+Boundary Condition 5
+  Name = Boundaries
+End
+
