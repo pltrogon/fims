@@ -125,7 +125,7 @@ int main(int argc, char * argv[]) {
 
   //***** Data File *****//
   std::string dataFilename = "sim."+std::to_string(runNo)+".root";
-  std::string dataPath = "../..//Data/"+dataFilename;
+  std::string dataPath = "../../Data/"+dataFilename;
   TFile *dataFile = new TFile(dataPath.c_str(), "NEW");
 
   if(!dataFile->IsOpen()){
@@ -517,7 +517,8 @@ int main(int argc, char * argv[]) {
     double holeRadius2 = std::pow(holeRadius, 2.);
     double gridLineSeparation = 1.1;
 
-  /*TODO: The field lines above the grid seem to be causing the simulation to get hung up
+
+    //TODO: The field lines above the grid seem to be causing the simulation to get hung up
     //Do above grid
     gridFieldLineLocation = 1;
     fieldLines.clear();

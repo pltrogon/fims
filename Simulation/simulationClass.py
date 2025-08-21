@@ -83,12 +83,7 @@ class FIMS_Simulation:
         """
         Initializes a FIMS_Simulation object.
         """
-        #Include the analysis object
-        #TODO: importing a class from a different directory seems to cause
-        #issues on Linux. Either need to manually insert the file path via 
-        #sys.path.insert() or have a second copy of the imported class in
-        #the working directory (currently opting for the former).
-        
+        #Include the analysis object        
         sys.path.insert(1, '../Analysis')
         from runDataClass import runData
 
@@ -225,22 +220,41 @@ class FIMS_Simulation:
         #Check for build/
         if not os.path.exists("build"):
             os.makedirs("build")
-        
+
+        # Get garfield path into environment
+        envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
+        try:
+            envOutput = subprocess.check_output(envCommand, shell=True, universal_newlines=True)
+            newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line)
+            os.environ.update(newEnv)
+        except subprocess.CalledProcessError as e:
+            print(f"Failed to source Garfield environment: {e}")
+            return False
+
         #Make executable
         makeBuild = (
-            f'source {self._GARFIELDPATH} && '
-            f'cd build && '
             f'cmake .. && '
             f'make'
         )
-        result = subprocess.run(
-            makeBuild,
-            shell=True,
-            check=True,
-            executable='/bin/bash',
-            capture_output=True,
-            text=True
-        )
+        # Change to the build directory and run cmake and make
+        originalCWD = os.getcwd()
+        os.chdir('build')
+        try:
+            result = subprocess.run(
+                makeBuild,
+                shell=True,
+                check=True,
+                env=os.environ,
+                capture_output=True,
+                text=True
+            )
+        except subprocess.CalledProcessError as e:
+            print(f'Failed to build project: {e.stderr}')
+            os.chdir(originalCWD)
+            return False
+        finally:
+            os.chdir(originalCWD)
+
     
         #Check for run number file
         if not os.path.exists('runNo'):
@@ -607,28 +621,6 @@ class FIMS_Simulation:
                 if runReturn.returncode != 0:
                     print('Gmsh failed. Check log for details.')
                     return False
-        except FileNotFoundError:
-            geoFile = 'FIMS.txt'
-            with open(os.path.join(os.getcwd(), 'log/logGmsh.txt'), 'w+') as gmshOutput:
-                startTime = time.monotonic()
-                gmshPath = os.path.abspath('gmsh')
-                runReturn = subprocess.run(
-                    [gmshPath, os.path.join('./Geometry/', geoFile),
-                     '-order', '2', '-optimize_ho',
-                     '-clextend', '1',
-                     '-setnumber', 'Mesh.OptimizeNetgen', '1',
-                     '-setnumber', 'Mesh.MeshSizeFromPoints', '1',
-                     '-3',
-                     '-format', 'msh2'],
-                    stdout=gmshOutput, 
-                    check=True
-                )
-                endTime = time.monotonic()
-                gmshOutput.write(f'\n\nGmsh run time: {endTime - startTime} s')
-    
-                if runReturn.returncode != 0:
-                    print('Gmsh failed. Check log for details.')
-                    return False
     
         except FileNotFoundError:
             print("Unable to write to 'log/logGmsh.txt'.")
@@ -741,22 +733,26 @@ class FIMS_Simulation:
             bool: True if Garfield executable runs successfully, False otherwise.
         """
         originalCWD = os.getcwd()
-        os.chdir('./build/')
         try:
+            os.chdir('./build/')
+
+            # Get garfield path into environment
+            envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
+            envOutput = subprocess.check_output(envCommand, shell=True, universal_newlines=True)
+            newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line)
+            os.environ.update(newEnv)
+
             with open(os.path.join(originalCWD, 'log/logGarfieldAvalanche.txt'), 'w+') as garfieldOutput:
                 startTime = time.monotonic()
                 setupAvalanche = (
-                #TODO: find out why the first line of this subprocess command causes non-zero
-                #exit status 2 to occur. Works fine if commented out.
-#                    f'source {self._GARFIELDPATH} && '
-                    f'make && '
                     f'./runAvalanche'
                 )
                 runReturn = subprocess.run(
                     setupAvalanche, 
                     stdout = garfieldOutput, 
                     shell = True, 
-                    check = True
+                    check = True,
+                    env = os.environ
                 )
                 endTime = time.monotonic()
                 garfieldOutput.write(f'\n\nGarfield run time: {endTime - startTime} s')
@@ -781,21 +777,26 @@ class FIMS_Simulation:
             bool: True if Garfield executable runs successfully, False otherwise.
         """
         originalCWD = os.getcwd()
-        os.chdir('./build/')
         try:
+            os.chdir('./build/')
+
+            # Get garfield path into environment
+            envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
+            envOutput = subprocess.check_output(envCommand, shell=True, universal_newlines=True)
+            newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line)
+            os.environ.update(newEnv)
+
             with open(os.path.join(originalCWD, 'log/logGarfieldFieldLines.txt'), 'w+') as garfieldOutput:
                 startTime = time.monotonic()
                 setupFieldLines = (
-                #TODO: See todo above about _garfieldpath line
-#                    f'source {self._GARFIELDPATH} && '
-                    f'make && '
                     f'./runFieldLines'
                 )
                 runReturn = subprocess.run(
                     setupFieldLines, 
                     stdout = garfieldOutput, 
                     shell = True, 
-                    check = True
+                    check = True,
+                    env = os.environ
                 )
                 endTime = time.monotonic()
                 garfieldOutput.write(f'\n\nGarfield run time: {endTime - startTime} s')
@@ -911,22 +912,15 @@ class FIMS_Simulation:
         optTrans = holeArea/gridArea
 
         #Do calculation using values from fits
-        
-        #The equation was fit using scpy.optimize's curve_fit method.
-        #The given equation was a*np.exp(-b*x) + c, with a, b, and c 
-        #being fit parameters. The method was applied twice: first to
-        #minField vs optical transparency data and the second to minField
-        #vs grid standoff. The results were then added together. The final
-        #fit parameter, c, has currently been set by hand based on
-        #observations of simulation results, but will need to be adjusted to
-        #a more rigorous value in the future.
-        
+        '''Values come from exponential fits to data - 
+            grid standoff and optical transparency vs minField
+        Results are then added together.'''
         minField = 570.580*np.exp(-12.670*optTrans) + 27.121*np.exp(-0.071*standoff) + 2
         
         return minField
 
 #***********************************************************************************#
-    def findMinField(self, numLines = 5, safetyMargin = .8):
+    def findMinField(self, numLines=5, margin=.8):
         """
         Runs simulations to determine what the minimum electric field ratio
         needs to be in order to have 100% Efield transparency.
@@ -945,8 +939,9 @@ class FIMS_Simulation:
         
         Args:
             numLines (int): Number of field lines to use to determine transparency.
-            safetyMargin (float): number multiplied to the predicted value to create a
-            buffer in case the raw value is too large.
+
+            margin (float): number multiplied to the predicted value to create a
+                            buffer in case the raw value is too large.
 
         Returns:
             bool: True if a minimum field is successfully found, False otherwise.
@@ -957,7 +952,8 @@ class FIMS_Simulation:
         saveParam = self.param.copy()
 
         #Calculate initial guess
-        initialGuess = self._calcMinField()*safetyMargin
+
+        initialGuess = self._calcMinField()*margin
         self.param['fieldRatio'] = initialGuess
         
         #Write parameters and generate geometry
@@ -1000,7 +996,12 @@ class FIMS_Simulation:
             
             #Get the resulting field transparency
             with open('../Data/fieldTransparency.txt', 'r') as readFile:
-                isTransparent = bool(readFile.read())
+                try:
+                    isTransparent = bool(int(readFile.read()))
+
+                except (ValueError, FileNotFoundError):
+                    print("Error: Could not read or parse transparency file.")
+                    return False
 
             #Print update to monitor convergence
             print(f'Current field ratio: {curField}')
@@ -1124,21 +1125,6 @@ class FIMS_Simulation:
             return None
 
         return chargeData
-
-#***********************************************************************************#
-    def deleteFile(self, filePath):
-        """
-        deletes a specified file
-        args: file path (string)
-        returns: 1 (if succesfull, -1 if file does not exist)
-        """
-        if os.path.exists(filePath):
-            os.remove(filePath)
-            print(f'\n{filePath} deleted\n')
-            return 1
-        else:
-            print('\nUnable to delete file because it could not be found\n')
-            return -1
 
 #***********************************************************************************#
     def _writeCharge(self, builtUpCharge):
