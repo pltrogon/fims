@@ -1,6 +1,8 @@
 ########################################
 # CLASS DEFINITION FOR SIMULATION DATA #
 ########################################
+from __future__ import annotations
+
 import os
 import uproot
 import pandas as pd
@@ -30,7 +32,7 @@ class runData:
 
         Internal Data Frames:
         *****
-        NOTE: 
+            NOTE: 
             These dataframes are intended to be internal to the class, and as such 
             should NOT be accessed directly. Instead utilize the getDataFrame() 
             method to retrieve a copy of the dataframe.
@@ -45,8 +47,35 @@ class runData:
             _ionData: Information for each individual simulated ion.
             _avalancheData: Information for each simulated avalanche.
             _electronTrackData: Information for the full tracks of each electron.
-
-
+            
+    The following methods are defined in this class:
+        _readRootTrees
+        _checkName
+        getTreeNames
+        printMetaData
+        getMetaData
+        printColumns
+        getDataFrame
+        getRunParameter
+        getRunNumber
+        plotCellGeometry
+        _plotAddCellGeometry
+        plot2DFieldLines
+        _getRawGain
+        _trimAvalanche
+        _histAvalanche
+        plotAvalancheSize
+        plotAvalanche2D
+        plotDiffusion
+        plotParticleHeatmaps
+        _fitAvalancheSize
+        plotAvalancheFits
+        calcBundleRadius
+        _getOutermostLineID
+        findStuckElectrons
+        _calcIBF
+        _calcOpticalTransparency
+        _getTransparency
     """
 
 #********************************************************************************#
@@ -174,7 +203,7 @@ class runData:
         """
         Prints all metadata information. Dimensions are in microns.
         """
-        metaData = self.getDataFrame('metaData')
+        metaData = getattr(self, 'metaData', None)
         for inParam in metaData:
             print(f'{inParam}: {self.getRunParameter(inParam)}')
         return
@@ -332,16 +361,20 @@ class runData:
         #Optical transparency
         self._metaData['Optical Transparency'] = self._calcOpticalTransparency()
 
+        #Field Transparency
+        self._metaData['Field Transparency'] = self._getTransparency()
+
         #Field bundle radius
         standoff = self.getRunParameter('Grid Standoff')
         nominalBundleZ = -standoff/2
         self._metaData['Field Bundle Radius'] = self.calcBundleRadius(nominalBundleZ)
 
-        #Raw Gain
-        self._metaData['Raw Gain'] = self._getRawGain()
-
-        #Calculate IBN
-        self._metaData['Average IBN'] = self._calcIBN()
+        if self.getRunParameter('Number of Avalanches') > 0:
+            #Raw Gain
+            self._metaData['Raw Gain'] = self._getRawGain()
+            
+            #Calculate IBF
+            self._metaData['Average IBN'] = self._calcIBN()
 
         return
 
@@ -667,6 +700,79 @@ class runData:
         plt.tight_layout()   
         
         return fig2D
+    
+
+#********************************************************************************#   
+    def plotAllFieldLines(self):
+        """
+        Generates 2D plots of the simulated field lines.
+
+        These plots display the field lines from the cathode, and both above '
+        and below the grid. Includes the pad geometry and hole in the grid.
+    
+        Returns:
+            Figure.
+        """
+
+        cathodeLines = self.getDataFrame('fieldLineData').groupby('Field Line ID')
+        gridLines = self.getDataFrame('gridFieldLineData')
+
+        aboveGrid = gridLines[gridLines['Grid Line Location'] == 1].groupby('Field Line ID')
+        belowGrid = gridLines[gridLines['Grid Line Location'] == -1].groupby('Field Line ID')
+
+        if cathodeLines is None or aboveGrid is None or belowGrid is None:
+            raise ValueError('Field lines unavailable.')
+
+        fig2D = plt.figure(figsize=(14, 7))
+        fig2D.suptitle('Field Lines')
+        ax11 = fig2D.add_subplot(221)
+        ax12 = fig2D.add_subplot(223)
+        ax13 = fig2D.add_subplot(122)
+
+        # iterate through all cathode lines
+        for _, fieldLine in cathodeLines:
+            ax11.plot(fieldLine['Field Line x'], 
+                      fieldLine['Field Line z'], 
+                      lw=1, c='b')
+            ax12.plot(fieldLine['Field Line y'], 
+                      fieldLine['Field Line z'], 
+                      lw=1, c='b')
+            ax13.plot(fieldLine['Field Line x'], 
+                      fieldLine['Field Line y'], 
+                      lw=1, c='b')
+            
+        # iterate through all above grid lines
+        for _, fieldLine in aboveGrid:
+            ax11.plot(fieldLine['Field Line x'], 
+                      fieldLine['Field Line z'], 
+                      lw=1, c='r')
+            ax12.plot(fieldLine['Field Line y'], 
+                      fieldLine['Field Line z'], 
+                      lw=1, c='r')
+            ax13.plot(fieldLine['Field Line x'], 
+                      fieldLine['Field Line y'], 
+                      lw=1, c='r')
+            
+        # iterate through all above grid lines
+        for _, fieldLine in belowGrid:
+            ax11.plot(fieldLine['Field Line x'], 
+                      fieldLine['Field Line z'], 
+                      lw=1, c='g')
+            ax12.plot(fieldLine['Field Line y'], 
+                      fieldLine['Field Line z'], 
+                      lw=1, c='g')
+            ax13.plot(fieldLine['Field Line x'], 
+                      fieldLine['Field Line y'], 
+                      lw=1, c='g')
+            
+        self._plotAddCellGeometry(ax11, 'xz')
+        self._plotAddCellGeometry(ax12, 'yz')
+        self._plotAddCellGeometry(ax13, 'xy')
+        plt.tight_layout() 
+
+        return fig2D
+
+
 
 
 #********************************************************************************#   
@@ -1154,8 +1260,6 @@ class runData:
         Calculates the radius of the outermost electric field line
         at a specified z-coordinate.
 
-        "Outermost Line" - The line with the largest radius at the cathode that
-        initiates within the unit cell.
         Does a linear interpolation between available datapoints.
 
         Args:
@@ -1170,6 +1274,38 @@ class runData:
         if not (zMin < zTarget < zMax):
             raise ValueError('Invalid target z.')
         
+        lineID = self._getOutermostLineID()
+
+        allFieldLines = self.getDataFrame('fieldLineData')
+
+        outerFieldLine = allFieldLines[allFieldLines['Field Line ID'] == lineID].copy()
+
+        #Determine the radius for all of the outer field line
+        outerFieldLine['Field Line Radius'] = np.sqrt(
+            outerFieldLine['Field Line x']**2 + 
+            outerFieldLine['Field Line y']**2
+        )
+
+        #Get radius for target z using linear interpolation
+        targetRadius = np.interp(
+            zTarget, 
+            outerFieldLine['Field Line z'],
+            outerFieldLine['Field Line Radius']
+        )
+
+        return targetRadius
+
+#********************************************************************************#
+    def _getOutermostLineID(self):
+        """
+        Determines the outermost field line
+
+        "Outermost Line" - The line with the largest radius at the cathode that
+        initiates within the unit cell.
+
+        Returns:
+            int: The line ID number for the outermost field line.
+        """
         allFieldLines = self.getDataFrame('fieldLineData')
         pitch = self.getRunParameter('Pitch')
         unitCellLength = pitch/math.sqrt(3)
@@ -1177,14 +1313,15 @@ class runData:
         #All lines start at same z near cathode
         initialZ = allFieldLines['Field Line z'].iloc[0]
 
-        #Determine the radius for all field lines
-        allFieldLines['Field Line Radius'] = np.sqrt(
-            allFieldLines['Field Line x']**2 + 
-            allFieldLines['Field Line y']**2
+        #Isolate the largest radius at the cathode
+        atCathode = allFieldLines[allFieldLines['Field Line z'] == initialZ].copy()
+
+        #Determine the radius at cathode for all field lines
+        atCathode['Field Line Radius'] = np.sqrt(
+            atCathode['Field Line x']**2 + 
+            atCathode['Field Line y']**2
         )
 
-        #Isolate the largest radius at the cathode
-        atCathode = allFieldLines[allFieldLines['Field Line z'] == initialZ]
         #Determine what lines initiate within the unit cell
         withinUnitCell = withinHex(
             atCathode['Field Line x'], 
@@ -1192,23 +1329,13 @@ class runData:
             unitCellLength
             )
         cellLines = atCathode[withinUnitCell]
+
         #Find line with max radius
         maxRadius = cellLines['Field Line Radius'].max()
         outermostLine = cellLines[cellLines['Field Line Radius'] == maxRadius]
         lineID = outermostLine['Field Line ID'].iloc[0]
 
-        #get entire outermost field line - ensure sorted for interpolation
-        targetLine = allFieldLines[allFieldLines['Field Line ID'] == lineID]
-        targetLine = targetLine.sort_values(by='Field Line z')
-
-        #Get radius for target z using linear interpolation
-        targetRadius = np.interp(
-            zTarget, 
-            targetLine['Field Line z'],
-            targetLine['Field Line Radius']
-        )
-
-        return targetRadius
+        return lineID
 
 
 #********************************************************************************#
@@ -1216,6 +1343,8 @@ class runData:
         """
         Finds the xy coordinates of all electrons tracks that intersect
         with the top of the SiO2 layer.
+        
+        This is for use with the itereative process of simulating charge-buildup.
 
         Returns:
             dataframe: Pandas dataframe containing the x,y,z coordinates of
@@ -1271,7 +1400,6 @@ class runData:
 
         return pd.DataFrame(stuckElectrons)
 
-
 #********************************************************************************#
     def _calcIBN(self):
         """
@@ -1316,10 +1444,15 @@ class runData:
 
         return IBF
 
-
 #********************************************************************************#
     def _calcOpticalTransparency(self):
         """
+        Determines the optical transparancy of a unit cell.
+        
+        Assumes a hexagonal geometry and a single hole.
+        
+        Returns:
+            float: Fraction of the hole area to the un it cell area.
         """
         #Area of the unit cell    
         pitch = self.getRunParameter('Pitch')
@@ -1337,3 +1470,38 @@ class runData:
         
         return cellTransparency
     
+
+#********************************************************************************#
+    def _getTransparency(self):
+        """
+        Determines if the electric field transparency is 100%. 
+        Allows for the outmost filed line within a cell to 'jump' into a 
+        neighbour cell due to numerical precision.
+        
+        Returns:
+            bool: True if outermost field line terminates on a pad, False otherwise.
+        """  
+        lineID = self._getOutermostLineID()
+
+        allFieldLines = self.getDataFrame('fieldLineData')
+        outerFieldLine = allFieldLines[allFieldLines['Field Line ID'] == lineID]
+
+
+        #Check if the last datapoint is above the central pad
+        abovePad = withinHex(
+            outerFieldLine['Field Line x'], 
+            outerFieldLine['Field Line y'], 
+            self.getRunParameter('Pad Length')
+            )
+
+        aboveNeighbour = withinNeighbourHex(
+            outerFieldLine['Field Line x'], 
+            outerFieldLine['Field Line y'], 
+            self.getRunParameter('Pad Length'),
+            self.getRunParameter('Pitch')
+            )
+
+        isTransparent = (abovePad.iloc[-1] or aboveNeighbour.iloc[-1])
+
+        return isTransparent
+

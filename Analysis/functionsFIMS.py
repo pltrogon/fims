@@ -1,11 +1,27 @@
 import os
+import sys
 import numpy as np
 import math
 import matplotlib.pyplot as plt
 
 from scipy.special import gammaincc
 
-from polyaClass import myPolya
+
+
+"""
+Functions:
+    getAnalysisNumbers
+    plotGeneralPolya
+    plotPolya
+    plotPolyaEfficiency
+    plotThreshold
+    plotPolyaExamples
+    withinHex
+    withinNeighbourHex
+    xyInterpolate
+    getSetData
+    plotDataSets
+"""
 
 #********************************************************************************#   
 def getAnalysisNumbers():
@@ -63,6 +79,8 @@ def plotGeneralPolya(theta):
         theta (float): List or numpy array of values to use as 
                        theta in Polya calculations.
     """
+    from polyaClass import myPolya
+
     n = np.linspace(0, 4, 101)
     plt.figure(figsize=(6, 4))
     
@@ -91,6 +109,8 @@ def plotPolya(theta):
         theta (float): List or numpy array of values to use as 
                        theta in Polya calculations.
     """
+    from polyaClass import myPolya
+
     gain = [10, 25, 50, 75, 100]
 
     n = np.arange(0, 101, 1)
@@ -126,7 +146,7 @@ def plotPolya(theta):
 def plotPolyaEfficiency(theta):
     """
     Plots the efficiency of the Polya distribution as a function of the
-    threshold-to-gain ratio ($n_{t} / \bar{n}$).
+    threshold-to-gain ratio (threshold / gain).
 
     Includes reference lines for 95% efficiency for the theta=0 case.
     
@@ -169,6 +189,8 @@ def plotThreshold():
     Include the theta=0 case as the maximum, and several other low-theta results.
     Efficiencies are 95% and 90%.
     """
+    from polyaClass import myPolya
+
     threshold = np.linspace(0, 16, 11)
     efficiency = [.95, .9]
 
@@ -346,14 +368,15 @@ def getSetData(runList, xVal, yVal):
         tuple: A tuple containing two lists: (xData, yData).
                Each list contains the parameter values for the specified runs.
     """
+    from runDataClass import runData
+
     xData = []
     yData = []
     for inRun in runList:
         simData = runData(inRun)
-        allRunData = simData.getDataFrame('metaData')
 
-        xData.append(data.getRunParameter(xVal))
-        yData.append(data.getRunParameter(yVal))
+        xData.append(simData.getRunParameter(xVal))
+        yData.append(simData.getRunParameter(yVal))
 
     return xData, yData
 
@@ -373,13 +396,14 @@ def plotDataSets(dataSets, xVal, yVal, savePlot=False):
         yVal (str): Parameter name for the y-axis.
         savePlot (bool): Saves plot as a PNG file if True.
     """
+    from simulationClass import FIMS_Simulation
+
     if savePlot and not os.path.exists('./Plots'):
         os.makedirs('./Plots')
 
     #Check if valid parameters
     simulation = FIMS_Simulation()
     allParams = simulation.defaultParam()
-
     if xVal not in allParams or yVal not in allParams:
         raise ValueError(f'Error: Invalid parameter specified.')
 
@@ -421,5 +445,6 @@ def plotDataSets(dataSets, xVal, yVal, savePlot=False):
         fig.savefig(os.path.join('./Plots', filename))
         
     plt.show()
+    return
 
     

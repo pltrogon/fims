@@ -1,6 +1,8 @@
 ###################################
 # CLASS DEFINITION FOR SIMULATION #
 ###################################
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
 import uproot
@@ -13,11 +15,6 @@ import subprocess
 import time
 import itertools
 import re
-
-simDir = os.getcwd()
-analysisDir = os.path.join(simDir, '..', 'Analysis')
-sys.path.append(analysisDir)
-from runDataClass import runData
 
 class FIMS_Simulation:
     """
@@ -57,8 +54,28 @@ class FIMS_Simulation:
             - avalancheLimit: Limit of the number of electrons within a single avalanche.
             - gasCompAr: Percentage of Argon within gas volume.
             - gasCompCO2: Percentage of CO2 within gas volume.
-
     
+    Methods defined in FIMS_Simulation:
+        defaultParam
+        _checkParam
+        _getParam
+        _getGarfieldPath
+        _setupSimulation
+        _readParam
+        _writeFile
+        _writeRunControl
+        _readSIF
+        _calcPotentials
+        _writeSIF
+        _makeWeighting
+        _writeParam
+        resetParam
+        _getRunNumber
+        _runGmsh
+        _runElmer
+        _runElmerWeighting
+        _runGarfield
+        _runSimulation
     """
 
 #***********************************************************************************#
@@ -66,6 +83,10 @@ class FIMS_Simulation:
         """
         Initializes a FIMS_Simulation object.
         """
+        #Include the analysis object        
+        sys.path.insert(1, '../Analysis')
+        from runDataClass import runData
+
         self.param = self.defaultParam()
         if not self._checkParam():
             raise ValueError('Error initializing parameters.')
@@ -99,16 +120,17 @@ class FIMS_Simulation:
             'padLength': 65.,
             'pitch': 225.,
             'gridStandoff': 100.,
-            'gridThickness': .5,
+            'gridThickness': 1.,
             'holeRadius': 90.,
             'cathodeHeight': 200.,
             'thicknessSiO2': 5.,
             'fieldRatio': 40.,
-            'numFieldLine': 25,
+            'transparencyLimit': 0.98,
+            'numFieldLine': 5,
             'numAvalanche': 1000,
             'avalancheLimit': 200,
-            'gasCompAr': 80.,
-            'gasCompCO2': 20.,
+            'gasCompAr': 70.,
+            'gasCompCO2': 30.,
         }
         return defaultParam
 
@@ -198,27 +220,46 @@ class FIMS_Simulation:
         #Check for build/
         if not os.path.exists("build"):
             os.makedirs("build")
-        
+
+        # Get garfield path into environment
+        envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
+        try:
+            envOutput = subprocess.check_output(envCommand, shell=True, universal_newlines=True)
+            newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line)
+            os.environ.update(newEnv)
+        except subprocess.CalledProcessError as e:
+            print(f"Failed to source Garfield environment: {e}")
+            return False
+
         #Make executable
         makeBuild = (
-            f'source {self._GARFIELDPATH} && '
-            f'cd build && '
             f'cmake .. && '
             f'make'
         )
-        result = subprocess.run(
-            makeBuild,
-            shell=True,
-            check=True,
-            executable='/bin/bash',
-            capture_output=True,
-            text=True
-        )
+        # Change to the build directory and run cmake and make
+        originalCWD = os.getcwd()
+        os.chdir('build')
+        try:
+            result = subprocess.run(
+                makeBuild,
+                shell=True,
+                check=True,
+                env=os.environ,
+                capture_output=True,
+                text=True
+            )
+        except subprocess.CalledProcessError as e:
+            print(f'Failed to build project: {e.stderr}')
+            os.chdir(originalCWD)
+            return False
+        finally:
+            os.chdir(originalCWD)
+
     
         #Check for run number file
         if not os.path.exists('runNo'):
             with open('runNo', 'w') as file:
-                file.write('1000')
+                file.write('1')
                 
         return True
 
@@ -230,6 +271,7 @@ class FIMS_Simulation:
         Returns:
             bool: True if parameters are read from file successfully, False otherwise.
         """
+        
         filename = 'runControl'
         readInParam = {}
         
@@ -542,7 +584,6 @@ class FIMS_Simulation:
         
         return runNo
 
-
 #***********************************************************************************#
     def _runGmsh(self):
         """
@@ -580,7 +621,7 @@ class FIMS_Simulation:
                 if runReturn.returncode != 0:
                     print('Gmsh failed. Check log for details.')
                     return False
-                    
+    
         except FileNotFoundError:
             print("Unable to write to 'log/logGmsh.txt'.")
             return False
@@ -648,7 +689,7 @@ class FIMS_Simulation:
     
         Assumes that the Gmsh mesh has already been converted to 
         Elmer format by ElmerGrid. Creates the appropriate .sif file.
-        Writes the ElmerSolver output to 'log/logElmerSolverWeighting'.
+        Writes the ElmerSolver output to 'log/logElmerWeighting'.
     
         Returns:
             bool: True if ElmerSolver runs successfully, False othwerwise.
@@ -660,7 +701,7 @@ class FIMS_Simulation:
         originalCWD = os.getcwd()
         os.chdir('./Geometry')
         try:
-            with open(os.path.join(originalCWD, 'log/logElmerSolverWeighting.txt'), 'w+') as elmerOutput:
+            with open(os.path.join(originalCWD, 'log/logElmerWeighting.txt'), 'w+') as elmerOutput:
                 startTime = time.monotonic()
                 runReturn = subprocess.run(
                     ['ElmerSolver', 'FIMSWeighting.sif'],
@@ -692,20 +733,26 @@ class FIMS_Simulation:
             bool: True if Garfield executable runs successfully, False otherwise.
         """
         originalCWD = os.getcwd()
-        os.chdir('./build/')
         try:
-            with open(os.path.join(originalCWD, 'log/logGarfield.txt'), 'w+') as garfieldOutput:
+            os.chdir('./build/')
+
+            # Get garfield path into environment
+            envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
+            envOutput = subprocess.check_output(envCommand, shell=True, universal_newlines=True)
+            newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line)
+            os.environ.update(newEnv)
+
+            with open(os.path.join(originalCWD, 'log/logGarfieldAvalanche.txt'), 'w+') as garfieldOutput:
                 startTime = time.monotonic()
                 setupAvalanche = (
-                    f'source {self._GARFIELDPATH} && '
-                    f'make && '
                     f'./runAvalanche'
                 )
                 runReturn = subprocess.run(
                     setupAvalanche, 
-                    stdout=garfieldOutput, 
-                    shell=True, 
-                    check=True
+                    stdout = garfieldOutput, 
+                    shell = True, 
+                    check = True,
+                    env = os.environ
                 )
                 endTime = time.monotonic()
                 garfieldOutput.write(f'\n\nGarfield run time: {endTime - startTime} s')
@@ -717,6 +764,49 @@ class FIMS_Simulation:
             os.chdir(originalCWD)
         return True
 
+#***********************************************************************************#
+    def _runFieldLines(self):
+        """
+        Runs a Garfield++ executable to determine field lines based on the parameters
+        in 'runControl'.
+    
+        First links garfield libraries, creates the executable, and then runs the simulation.
+        The information from this simulation is saved in .txt format within 'Data/'.
+        
+        Returns:
+            bool: True if Garfield executable runs successfully, False otherwise.
+        """
+        originalCWD = os.getcwd()
+        try:
+            os.chdir('./build/')
+
+            # Get garfield path into environment
+            envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
+            envOutput = subprocess.check_output(envCommand, shell=True, universal_newlines=True)
+            newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line)
+            os.environ.update(newEnv)
+
+            with open(os.path.join(originalCWD, 'log/logGarfieldFieldLines.txt'), 'w+') as garfieldOutput:
+                startTime = time.monotonic()
+                setupFieldLines = (
+                    f'./runFieldLines'
+                )
+                runReturn = subprocess.run(
+                    setupFieldLines, 
+                    stdout = garfieldOutput, 
+                    shell = True, 
+                    check = True,
+                    env = os.environ
+                )
+                endTime = time.monotonic()
+                garfieldOutput.write(f'\n\nGarfield run time: {endTime - startTime} s')
+    
+            if runReturn.returncode != 0:
+                    print('Garfield++ execution failed. Check log for details.')
+                    return False
+        finally:
+            os.chdir(originalCWD)
+        return True
 
 #***********************************************************************************#
     def runSimulation(self, changeGeometry=True):
@@ -734,8 +824,9 @@ class FIMS_Simulation:
             7. Execute the Garfield++ simulation for charge transport.
     
         Args:
-            changeGeometry (bool): Allows for bypassing some executions to.
-                                   (Optional for when geometry does not change.)
+            changeGeometry (bool): Allows for bypassing some executions such as Gmsh
+                                   and ElmerWeighting. Decreases runtime.
+                                   (For when geometry does not change.)
     
         Returns:
             int: The run number of the simulation that was executed. 
@@ -745,7 +836,7 @@ class FIMS_Simulation:
         if not self._checkParam():
             return -1
     
-        #If geometry does not change, gmash and weighting do not need to be done.
+        #If geometry does not change, gmsh and weighting do not need to be done.
         #However, check that the mesh and weighting field files exist.
         #If not, override input and generate.
         if not changeGeometry:
@@ -794,12 +885,143 @@ class FIMS_Simulation:
         self.resetParam()
         
         return runNo
+        
+#***********************************************************************************#
+#***********************************************************************************#
+# METHODS FOR RUNNING MINIMUM FIELD
+#***********************************************************************************#
+#***********************************************************************************#
+    def _calcMinField(self):
+        """
+        Calculates an intial guess for the minimum field ratio to achieve 100%
+        field transparency.
 
+        Calculation is based off of exponential fits to simulated data.
+
+        Returns:
+            float: Numerical solution to the minimum field for 100% transparency.
+        """
+        #Get geometry variables
+        radius = self._getParam('holeRadius')
+        standoff = self._getParam('gridStandoff')
+        pitch = self._getParam('pitch')
     
+        #Calculate what the minimum field ratio should be
+        gridArea = pitch**2*math.sqrt(3)/2
+        holeArea = math.pi*radius**2
+        optTrans = holeArea/gridArea
+
+        #Do calculation using values from fits
+        '''Values come from exponential fits to data - 
+            grid standoff and optical transparency vs minField
+        Results are then added together.'''
+        minField = 570.580*np.exp(-12.670*optTrans) + 27.121*np.exp(-0.071*standoff) + 2
+        
+        return minField
+
+#***********************************************************************************#
+    def findMinField(self, numLines=5, margin=.8):
+        """
+        Runs simulations to determine what the minimum electric field ratio
+        needs to be in order to have 100% Efield transparency.
+
+        First calculates an initial guess for the ratio based on exponential fits 
+        to simulated data. Then generates a Gmsh FEM of the geometry and solves the
+        E field based on this guess using Elmer. Generates field lines via Garfield
+        and determines a transparency. If the transparency is below the limit, a new
+        field ratio is determined, the resulting field is solved, and new field 
+        lines are generated. This continues until the criteria is reached.
+        
+        Upon completion, simulation files are reset.
+        
+        NOTE: This assumes that the initial guessed field ratio results in a
+              transparency that is below the limit. The ratio thus is always increased.
+        
+        Args:
+            numLines (int): Number of field lines to use to determine transparency.
+
+            margin (float): number multiplied to the predicted value to create a
+                            buffer in case the raw value is too large.
+
+        Returns:
+            bool: True if a minimum field is successfully found, False otherwise.
+        """
+        #Ensure all parameters exist and save them
+        if not self._checkParam():
+            return False
+        saveParam = self.param.copy()
+
+        #Calculate initial guess
+
+        initialGuess = self._calcMinField()*margin
+        self.param['fieldRatio'] = initialGuess
+        
+        #Write parameters and generate geometry
+        self.param['numFieldLine'] = numLines
+        if not self._writeParam():
+            print('Error writing parameters.')
+            return False
+        if not self._runGmsh():
+                print('Error executing Gmsh.')
+                return False
+
+        print('Beginning search for minimum field...')
+        firstRun = True
+        isTransparent = False
+        transparencyThreshold = self._getParam('transparencyLimit')
+        curField = self._getParam('fieldRatio')
+        
+        while not isTransparent:
+            #Block that determines the new field ratio
+            if not firstRun:
+                #Determine a step size to change field
+                stepSize = 1.2
+                curField *= stepSize
+
+                #Write new field ratio
+                self.param['fieldRatio'] = curField
+                if not self._writeParam():
+                    print('Error writing parameters.')
+                    return False
+            
+            #Determine the electric field
+            if not self._runElmer():
+                print('Error executing Elmer.')
+                return False
+
+            #Generate field lines
+            if not self._runFieldLines():
+                print('Error generating field lines.')
+                return False
+            
+            #Get the resulting field transparency
+            with open('../Data/fieldTransparency.txt', 'r') as readFile:
+                try:
+                    isTransparent = bool(int(readFile.read()))
+
+                except (ValueError, FileNotFoundError):
+                    print("Error: Could not read or parse transparency file.")
+                    return False
+
+            #Print update to monitor convergence
+            print(f'Current field ratio: {curField}')
+            firstRun = False
+
+        #Print solution
+        finalField = self._getParam('fieldRatio')
+        print(f'Solution: Field ratio = {finalField}')
+        
+        #Reset parameters
+        self.resetParam()
+        #load saved parameters back into class. Update field ratio with solution.
+        self.param = saveParam
+        self.param['fieldRatio'] = finalField
+
+        return True
 
 #***********************************************************************************#
 #***********************************************************************************#
-# METHODS FOR RUNNING CHARGE BUILDUP - WIP
+# METHODS FOR RUNNING CHARGE BUILDUP - UNTESTED
 #***********************************************************************************#
 #***********************************************************************************#
 
@@ -903,7 +1125,6 @@ class FIMS_Simulation:
             return None
 
         return chargeData
-    
 
 #***********************************************************************************#
     def _writeCharge(self, builtUpCharge):
@@ -1012,6 +1233,13 @@ class FIMS_Simulation:
 #***********************************************************************************#
     def _sumChargeDensity(self, charge1, charge2):
         """
+        Sums two charge density dataframes.
+
+        Args:
+            charge1, charge2 (df): Pandas dataframes containing x,y,z coordiantes and 
+                                   a charge density to be summed together.
+        Returns:
+            DataFrame: The total summed charge density from the input dataframes. 
         """
         combinedCharge = pd.merge(
             charge1,
@@ -1032,12 +1260,35 @@ class FIMS_Simulation:
 
 
 #***********************************************************************************#
-# TODO - Ensure that the simData class is loaded in correctly
     def runChargeBuildup(self, buildupThreshold=1):
         """
+        Runs an iterative simulation of building up charge on the SiO2 layer until a 
+        steady-state solution is reached.
+
+        This steady state corresponds to charge accumulation across the entire SiO2
+        being less than a defined threshold. 
+        
+        Defines the geometry and detemrines an initial electric field solution 
+        with no charge on the SiO2. Executes a series of electron avalanches, finding 
+        the locations of any electrons whose track intersects with the top of the SiO2.
+        A surface charge density is calculated from these locations. A new electric 
+        field solution is determined with this surface charge present, and a new series
+        of avalanches are executed. This process repeats until the amount of new charge
+        is below a given amount. 
+        
+        The final surface charge density is saved to a file specified by the final
+        simulation run number, then all parameter, including the surface charge, is reset.
+    
+        Args:
+            buildupThreshold (int): The threshold for new surface charges signifying
+                                    a steady-state solution.
+    
+        Returns:
+            dict: Dictionary containing a summary of the iterative simulation.
+                  None if an error occurs.
         """
         if not self._checkParam():
-            return -1
+            return None
         
         #Check that the number of avalanches is a reasonable number
         # too many = too much charge unaffected by new stucks
@@ -1045,6 +1296,7 @@ class FIMS_Simulation:
         numAvalanche = self.param('numAvalanche')
         if ((numAvalanche < 10) | (numAvalanche > 100)):
             print(f'Adjust number of avalanches ({numAvalanche}).')
+            return None
         
         #Reset to ensure no initial charge
         self._resetCharge()

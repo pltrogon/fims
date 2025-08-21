@@ -151,13 +151,19 @@ class App(tk.Tk):
         self.showGeometry.pack(side=tk.TOP)
 
         self.showFieldLines = tk.Button(
-            self.buttonFrame, text='Field Lines', 
+            self.buttonFrame, text='All Field Lines', 
             command=lambda: self.plotButton('FieldLines')
             )
-        
         self.showFieldLines.pack(side=tk.TOP)
+
+        self.showCathodeLines = tk.Button(
+            self.buttonFrame, text='Cathode', 
+            command=lambda: self.plotButton('Cathode')
+            )
+        self.showCathodeLines.pack(side=tk.TOP)
+
         self.gridLineFrame = tk.Frame(self.buttonFrame)
-        self.gridLineFrame.pack(side=tk.TOP, fill=tk.Y, padx=5, pady=5)
+        self.gridLineFrame.pack(side=tk.TOP, fill=tk.Y)
 
         self.showAboveGrid = tk.Button(
             self.gridLineFrame, text='AboveGrid', 
@@ -266,6 +272,9 @@ class App(tk.Tk):
                     self.currentFig = self.simData.plotAvalancheFits(binWidth=self.binWidthValue)
 
                 case 'FieldLines':
+                    self.currentFig = self.simData.plotAllFieldLines()
+
+                case 'Cathode':
                     self.currentFig = self.simData.plot2DFieldLines('Cathode')
                 
                 case 'AboveGrid':
