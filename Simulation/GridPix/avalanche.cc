@@ -144,11 +144,11 @@ int main(int argc, char * argv[]) {
   double cathodeHeight = 200.*MICRONTOCM;
   double thicknessSiO2 = 4.*MICRONTOCM;
 
-  double fieldRatio = 69.3;
+  double fieldRatio = -1;
   double transparencyLimit = 0.98;
   int numFieldLine = 25;
-  int numAvalanche = 1000;
-  int avalancheLimit = 5000;
+  int numAvalanche = 500;
+  int avalancheLimit = 10000;
   double gasCompAr = 80.;
   double gasCompCO2 = 20.;
 
@@ -324,8 +324,8 @@ int main(int argc, char * argv[]) {
     "cf4", 3.0, 
     "iC4H10", 2.0
   );*/
-  gasGridPix->SetTemperature(301.63); // Room temperature
-  gasGridPix->SetPressure(775.713792);     // Atmospheric pressure
+  gasGridPix->SetTemperature(293.15); // Room temperature
+  gasGridPix->SetPressure(760.);     // Atmospheric pressure
   gasGridPix->SetMaxElectronEnergy(200);
   gasGridPix->EnablePenningTransfer(0.51, .0, "ar");
   gasGridPix->Initialise(true);

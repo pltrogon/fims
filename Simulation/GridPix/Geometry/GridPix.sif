@@ -119,13 +119,13 @@ End
 Boundary Condition 1
   Target Boundaries(1) = 1
   Name = "Cathode"
-	Potential = -460.0
+	Potential = -520
 End
 
 Boundary Condition 2
   Target Boundaries(1) = 2
   Name = "Grid"
-	Potential = -440.0
+	Potential = -500
 End
 
 Boundary Condition 3
