@@ -327,7 +327,7 @@ class runData:
             Optical Transparency
             Field Bundle Radius
             Raw Gain
-            IBF
+            IBN
         """
         #Optical transparency
         self._metaData['Optical Transparency'] = self._calcOpticalTransparency()
@@ -340,8 +340,8 @@ class runData:
         #Raw Gain
         self._metaData['Raw Gain'] = self._getRawGain()
 
-        #Calculate IBF
-        self._metaData['IBF'] = self._calcIBF()
+        #Calculate IBN
+        self._metaData['Average IBN'] = self._calcIBN()
 
         return
 
@@ -1273,15 +1273,15 @@ class runData:
 
 
 #********************************************************************************#
-    def _calcIBF(self):
+    def _calcIBN(self):
         """
-        Determines the fraction of positive ions that terminate above the grid.
+        Determines the average number of positive ions that terminate above the grid.
 
         Note that this assumes that any ion that the exits the sides of the 
         simulation volume will not return to the grid. 
 
         Returns:
-            float: The fraction of backflowing ions (IBF)
+            float: The average number of backflowing ions
         """
         
         allIons = self.getDataFrame('ionData')
@@ -1294,7 +1294,25 @@ class runData:
         if numAvalanche == 0:
             raise ValueError('Error: Number of avalanches cannot be 0.')
     
-        IBF = numCathode/numAvalanche - 1 #Correct for primary ion
+        IBN = numCathode/numAvalanche - 1 #Correct for primary ion
+
+        return IBN
+    
+#********************************************************************************#
+    def _calcPerAvalancheIBF(self):
+        """
+        """
+        
+        allIons = self.getDataFrame('ionData')
+        posIons = allIons[allIons['Ion Charge'] == 1]
+
+        perAvalanchePosIon = posIons.groupby('Avalanche ID')
+
+        gridThick = self.getRunParameter('Grid Thickness')
+        numAtGrid = perAvalanchePosIon[perAvalanchePosIon['Final z'] < gridThick]
+        numAtCathode = perAvalanchePosIon[perAvalanchePosIon['Final z'] > gridThick]
+
+        IBF = numAtCathode / (numAtCathode + numAtGrid)
 
         return IBF
 

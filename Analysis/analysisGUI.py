@@ -105,7 +105,7 @@ class App(tk.Tk):
 
         self.binWidth = tk.Spinbox(
             self.binFrame, 
-            from_=1, to=10, 
+            from_=1, to=100, 
             wrap=False, width=2, 
             command=self.updateBinWidth)
         self.binWidth.pack(side=tk.LEFT)
