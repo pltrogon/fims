@@ -448,7 +448,7 @@ class runData:
 
         # Define circles representing the pillars.
         #    (Must be done as separate patches)
-        pillarRadius = 10
+        pillarRadius = 20
         pillar = {}
         for i in range(6):
             pillar[i] = plt.Circle(
@@ -499,8 +499,10 @@ class runData:
                 c='g', ls=':', lw=1, label='Geometry Boundary')
 
         #Add simulation boundary
-        simX = 3./2.*outRadius*np.array([-1, 1, 1, -1, -1])
-        simY = inRadius*np.array([1, 1, -1, -1, 1])
+        #simX = 3./2.*outRadius*np.array([-1, 1, 1, -1, -1])
+        #simY = inRadius*np.array([1, 1, -1, -1, 1])
+        simX = pitch*np.array([-1, 1, 1, -1, -1])
+        simY = pitch*np.array([1, 1, -1, -1, 1])
         ax1.plot(simX, simY,
                 c='g', ls='--', lw=1, label='Simulation Boundary')
 
@@ -568,10 +570,13 @@ class runData:
         holeZ = halfGrid*np.array([1, 1, -1, -1, 1])
 
         #Corners of the geometry cell
-        geoX = 3./2.*outRadius*np.array([-1, 1, 1, -1, -1])
-        geoY = inRadius*np.array([1, 1, -1, -1, 1])
+        #geoX = 3./2.*outRadius*np.array([-1, 1, 1, -1, -1])
+        #geoY = inRadius*np.array([1, 1, -1, -1, 1])
+        geoX = pitch*np.array([-1, 1, 1, -1, -1])
+        geoY = pitch*np.array([1, 1, -1, -1, 1])
 
-        axLim = 1.01*3./2.*outRadius
+        #axLim = 1.01*3./2.*outRadius
+        axLim = 1.01*pitch
         
         match axes:
             case 'xy':
@@ -1448,7 +1453,7 @@ class runData:
         if numAvalanche == 0:
             raise ValueError('Error: Number of avalanches cannot be 0.')
     
-        IBN = numCathode/numAvalanche - 1 #Correct for initial ion
+        IBN = numCathode/numAvalanche -1 #Correct for initial ion
 
         return IBN
     
@@ -1480,14 +1485,11 @@ class runData:
 
         numTotal = numAtCathode.add(numAtGrid, fill_value=0)
 
-        #Account for the inital ion - ensure no divby 0
-        trueTotal = numTotal - 1
-        trueTotal[trueTotal == 0] = 1
-        trueCathode = numAtCathode - 1
+        #Correct for Ion from intial electron - it is not backflowing
+        trueCathode = numAtCathode.sub(1, fill_value=0)
+        trueTotal = numTotal.sub(1, fill_value=0)
 
         IBF = trueCathode.div(trueTotal, fill_value=0)
-        # Set IBF to 0 where numTotal was 1, as no ions were produced by the avalanche itself.
-        IBF[numTotal == 1] = 0
 
         return IBF
 
