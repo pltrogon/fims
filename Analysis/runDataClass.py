@@ -73,7 +73,8 @@ class runData:
         calcBundleRadius
         _getOutermostLineID
         findStuckElectrons
-        _calcIBF
+        _calcIBN                    <--------- Note for James, changed from _calcIBF
+        _calcPerAvalancheIBF        <--------- New
         _calcOpticalTransparency
         _getTransparency
     """
@@ -356,7 +357,8 @@ class runData:
             Optical Transparency
             Field Bundle Radius
             Raw Gain
-            IBN
+            Average IBN
+            Average IBF
         """
         #Optical transparency
         self._metaData['Optical Transparency'] = self._calcOpticalTransparency()
@@ -371,10 +373,22 @@ class runData:
 
         if self.getRunParameter('Number of Avalanches') > 0:
             #Raw Gain
-            self._metaData['Raw Gain'] = self._getRawGain()
+            rawGain = self._getRawGain()
+            self._metaData['Raw Gain'] = rawGain
             
-            #Calculate IBF
-            self._metaData['Average IBN'] = self._calcIBN()
+            #Calculate IBN
+            IBN = self._calcIBN()
+            self._metaData['Average IBN'] = IBN
+
+            #Calculate IBF on a per-avalanche basis
+            IBF = self._calcPerAvalancheIBF()
+            meanIBF = IBF.mean()
+            self._metaData['Average IBF'] = meanIBF
+            ## Add results to avalanche data
+            self._avalancheData['IBF'] = self._avalancheData['Avalanche ID'].map(IBF)
+
+            self._metaData['IBF * Raw Gain'] = meanIBF*rawGain
+            
 
         return
 
@@ -1212,7 +1226,7 @@ class runData:
         fitResults = self._fitAvalancheSize(binWidth)
 
         polyaResults = fitResults['fitPolya'].calcPolya(fitResults['xVal'])
-        expoResults = fitResults['fitExpo'].calcPolya(fitResults['xVal'])
+        polyaChi2 = self._getChiSquared(fitResults['yVal'], polyaResults)
         
         fig = plt.figure()
         fig.suptitle(f'Avalanche Size Distribution: Run {self.runNumber}')
@@ -1234,17 +1248,29 @@ class runData:
         ax.axvline(x=fitResults['fitPolya'].gain, 
                c='m', ls=':', label=f"Polya Gain = {fitResults['fitPolya'].gain:.1f}e")
         
+        '''For plotting an exponential
         ax.plot(fitResults['xVal'], 
-                expoResults, 
+                fitResults['fitExpo'].calcPolya(fitResults['xVal']), 
                 'r', lw=2, label=f'Fitted Exponential')
         ax.axvline(x=fitResults['fitExpo'].gain, 
                c='r', ls=':', label=f"Expo Gain = {fitResults['fitExpo'].gain:.1f}e")
+        '''
 
         ax.axvline(x=self._getRawGain(), 
                c='g', ls='--', label=f"Raw Gain = {self._getRawGain():.1f}e")
         ax.axvline(x=fitResults['dataGain'], 
                c='g', ls=':', label=f"Trimmed Gain = {fitResults['dataGain']:.1f}e")
 
+
+        polyaStats = f'Polya Fit Statistics\nChi2 = {polyaChi2['chi2']:.4f}\nrChi2 = {polyaChi2['rChi2']:.4f}'
+        
+        ax.text(0.8, 0.75, polyaStats, 
+                fontsize=10, 
+                horizontalalignment='center',
+                verticalalignment='center', 
+                transform=ax.transAxes,
+                bbox=dict(facecolor='none', edgecolor='black', boxstyle='round,pad=1')
+                )
 
         plt.xlabel('Numer of Electrons in Trimmed Avalanche')
         plt.ylabel('Probability of Avalanche Size')
@@ -1406,7 +1432,7 @@ class runData:
         Determines the average number of positive ions that terminate above the grid.
 
         Note that this assumes that any ion that the exits the sides of the 
-        simulation volume will not return to the grid. 
+        drift volume will not return to the grid. 
 
         Returns:
             float: The average number of backflowing ions
@@ -1422,25 +1448,46 @@ class runData:
         if numAvalanche == 0:
             raise ValueError('Error: Number of avalanches cannot be 0.')
     
-        IBN = numCathode/numAvalanche - 1 #Correct for primary ion
+        IBN = numCathode/numAvalanche - 1 #Correct for initial ion
 
         return IBN
     
 #********************************************************************************#
     def _calcPerAvalancheIBF(self):
         """
+        Calculates the Ion Backflow Fraction (IBF) for each individual electron avalanche.
+
+        IBF - Fraction of total ions that drift to the cathode.
+        Assumes the following for any ions that exit the simulation volume:
+            above the grid - backflow to cathode
+            below the grid - captured by the grid
+
+        Returns:
+            pandas series: IBF for each avalanche, indexed by 'Avalanche ID'.
         """
-        
+        #Get positive ions
         allIons = self.getDataFrame('ionData')
         posIons = allIons[allIons['Ion Charge'] == 1]
 
-        perAvalanchePosIon = posIons.groupby('Avalanche ID')
-
+        #separate based on final z location
+        ## Note that top of grid is actually thickness/2
         gridThick = self.getRunParameter('Grid Thickness')
-        numAtGrid = perAvalanchePosIon[perAvalanchePosIon['Final z'] < gridThick]
-        numAtCathode = perAvalanchePosIon[perAvalanchePosIon['Final z'] > gridThick]
+        atGrid = posIons[posIons['Final z'] <= gridThick]
+        atCathode = posIons[posIons['Final z'] > gridThick]
 
-        IBF = numAtCathode / (numAtCathode + numAtGrid)
+        numAtGrid = atGrid.groupby(posIons['Avalanche ID']).size()
+        numAtCathode = atCathode.groupby(posIons['Avalanche ID']).size()
+
+        numTotal = numAtCathode.add(numAtGrid, fill_value=0)
+
+        #Account for the inital ion - ensure no divby 0
+        trueTotal = numTotal - 1
+        trueTotal[trueTotal == 0] = 1
+        trueCathode = numAtCathode - 1
+
+        IBF = trueCathode.div(trueTotal, fill_value=0)
+        # Set IBF to 0 where numTotal was 1, as no ions were produced by the avalanche itself.
+        IBF[numTotal == 1] = 0
 
         return IBF
 
@@ -1505,3 +1552,22 @@ class runData:
 
         return isTransparent
 
+
+#********************************************************************************#
+    def _getChiSquared(self, data, fit):
+        """
+        """
+        if data is None or fit is None:
+            raise ValueError('Error getting chi-squared.')
+        
+        calc = (data - fit)**2 / fit
+        chi2 = calc.sum()
+        dof = len(data) - 2
+        reducedChi2 = chi2/dof
+
+        chi2Param = {
+            'chi2': chi2,
+            'rChi2': reducedChi2
+        }
+
+        return chi2Param
