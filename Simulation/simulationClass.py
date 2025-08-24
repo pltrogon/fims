@@ -921,7 +921,7 @@ class FIMS_Simulation:
         return minField
 
 #***********************************************************************************#
-    def findMinField(self, numLines=5, margin=.8):
+    def findMinField(self, numLines=5, margin=.8, stepSize = 1.2):
         """
         Runs simulations to determine what the minimum electric field ratio
         needs to be in order to have 100% Efield transparency.
@@ -962,6 +962,8 @@ class FIMS_Simulation:
         if not self._writeParam():
             print('Error writing parameters.')
             return False
+            
+        print('Executing gmsh')
         if not self._runGmsh():
                 print('Error executing Gmsh.')
                 return False
@@ -971,13 +973,16 @@ class FIMS_Simulation:
         isTransparent = False
         transparencyThreshold = self._getParam('transparencyLimit')
         curField = self._getParam('fieldRatio')
+        print(f'Initial field ratio: {curField}')
         
         while not isTransparent:
             #Block that determines the new field ratio
             if not firstRun:
+                #TODO: find better way to determine step size
                 #Determine a step size to change field
-                stepSize = 1.2
+                #stepSize = value set in args
                 curField *= stepSize
+                print(f'Current field ratio: {curField}')
 
                 #Write new field ratio
                 self.param['fieldRatio'] = curField
@@ -986,11 +991,13 @@ class FIMS_Simulation:
                     return False
             
             #Determine the electric field
+            print('Executing Elmer FEM')
             if not self._runElmer():
                 print('Error executing Elmer.')
                 return False
 
             #Generate field lines
+            print('Generating field lines')
             if not self._runFieldLines():
                 print('Error generating field lines.')
                 return False
@@ -1003,14 +1010,12 @@ class FIMS_Simulation:
                 except (ValueError, FileNotFoundError):
                     print("Error: Could not read or parse transparency file.")
                     return False
-
-            #Print update to monitor convergence
-            print(f'Current field ratio: {curField}')
+                    
             firstRun = False
 
         #Print solution
         finalField = self._getParam('fieldRatio')
-        print(f'Solution: Field ratio = {finalField}')
+        print(f'\nSolution: Field ratio = {finalField}')
         
         #Reset parameters
         self.resetParam()
