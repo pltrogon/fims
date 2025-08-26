@@ -75,7 +75,7 @@ class FIMS_Simulation:
         _runElmer
         _runElmerWeighting
         _runGarfield
-        _runSimulation
+        runSimulation
     """
 
 #***********************************************************************************#
