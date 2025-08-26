@@ -359,6 +359,7 @@ class runData:
             Raw Gain
             Average IBN
             Average IBF
+            IBF error (standard deviation)
         """
         #Optical transparency
         self._metaData['Optical Transparency'] = self._calcOpticalTransparency()
@@ -380,15 +381,14 @@ class runData:
             IBN = self._calcIBN()
             self._metaData['Average IBN'] = IBN
 
-            #Calculate IBF on a per-avalanche basis
-            IBF = self._calcPerAvalancheIBF()
-            meanIBF = IBF.mean()
+            #Calculate IBF
+            IBF, meanIBF, meanIBFErr = self._calcIBF()
+            
             self._metaData['Average IBF'] = meanIBF
-            ## Add results to avalanche data
+            self._metaData['IBF Error'] = meanIBFErr
             self._avalancheData['IBF'] = self._avalancheData['Avalanche ID'].map(IBF)
 
-            self._metaData['IBF * Raw Gain'] = meanIBF*rawGain
-            
+            self._metaData['IBF * Raw Gain'] = meanIBF*rawGain  
 
         return
 
@@ -1493,6 +1493,15 @@ class runData:
 
         return IBF
 
+#********************************************************************************#
+    def _calcIBF(self):
+        #Calculate IBF on a per-avalanche basis
+        IBF = self._calcPerAvalancheIBF()
+        meanIBF = IBF.mean()
+        meanIBFErr = IBF.std()
+
+        return IBF, meanIBF, meanIBFErr
+        
 #********************************************************************************#
     def _calcOpticalTransparency(self):
         """
