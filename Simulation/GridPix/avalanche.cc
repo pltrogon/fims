@@ -147,7 +147,7 @@ int main(int argc, char * argv[]) {
   double fieldRatio = -1;
   double transparencyLimit = 0.98;
   int numFieldLine = 25;
-  int numAvalanche = 500;
+  int numAvalanche = 1000;
   int avalancheLimit = 10000;
   double gasCompAr = 80.;
   double gasCompCO2 = 20.;
