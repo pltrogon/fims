@@ -126,7 +126,7 @@ class FIMS_Simulation:
             'thicknessSiO2': 5.,
             'fieldRatio': 40.,
             'transparencyLimit': 0.98,
-            'numFieldLine': 5,
+            'numFieldLine': 25,
             'numAvalanche': 1000,
             'avalancheLimit': 200,
             'gasCompAr': 70.,
@@ -957,7 +957,7 @@ class FIMS_Simulation:
         self.param['fieldRatio'] = initialGuess
         
         #Write parameters and generate geometry
-        self.param['numFieldLine'] = numLines
+        self.param['numFieldLine'] = numLines #TODO - numFieldLine defualts to 5 here. how does this effect when running
         if not self._writeParam():
             print('Error writing parameters.')
             return False

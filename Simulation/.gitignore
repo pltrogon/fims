@@ -8,3 +8,4 @@ Geometry/elmerResults/
 build/
 __pycache__/
 .ipynb_checkpoints/
+GridPix/

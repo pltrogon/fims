@@ -135,7 +135,7 @@ class App(tk.Tk):
             self.curParticle, 
             *particleOptions)
         self.particleSelection.pack(side=tk.RIGHT, pady=5, padx=5)
-        self.curParticle.trace('w', self.updateParticle)
+        self.curParticle.trace_add('write', self.updateParticle)
 
         # --- Plotting Buttons ---
         plotButtons = tk.Label(
