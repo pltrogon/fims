@@ -146,7 +146,7 @@ int main(int argc, char * argv[]) {
 
   double fieldRatio = -1;
   double transparencyLimit = 0.98;
-  int numFieldLine = 25;
+  int numFieldLine = 20;
   int numAvalanche = 1000;
   int avalancheLimit = 10000;
   double gasCompAr = 80.;
@@ -353,10 +353,10 @@ int main(int argc, char * argv[]) {
   //Define boundary region for simulation
   double xBoundary[2], yBoundary[2], zBoundary[2];
 
-  xBoundary[0] = -xmax;
-  xBoundary[1] = xmax;
-  yBoundary[0] = -ymax;
-  yBoundary[1] = ymax;
+  xBoundary[0] = -pitch;
+  xBoundary[1] = pitch;
+  yBoundary[0] = -pitch;
+  yBoundary[1] = pitch;
   zBoundary[0] = zmin;
   zBoundary[1] = zmax;
 
@@ -431,7 +431,7 @@ int main(int argc, char * argv[]) {
     //Calculate lines from grid - only do those outside of hole
     double lineRadius2 = std::pow(xStart[inFieldLine], 2.) + std::pow(yStart[inFieldLine], 2.);
     double holeRadius2 = std::pow(holeRadius, 2.);
-    double gridLineSeparation = 1.1;
+    double gridLineSeparation = 2.0;
 
 
     //Do above grid
