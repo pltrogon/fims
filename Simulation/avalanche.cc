@@ -506,7 +506,7 @@ int main(int argc, char * argv[]) {
 
       //Filename
       int threadID = omp_get_thread_num();
-      std::string parallelDataPath = "parallelData/";//TODO - this needs to be made within 'build/'
+      std::string parallelDataPath = "parallelData/";
       std::string parallelRunNo = "parallelSim." + std::to_string(runNo);
       std::string parallelThreadNo = ".thread." + std::to_string(threadID);
 
