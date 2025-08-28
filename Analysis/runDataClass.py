@@ -77,6 +77,7 @@ class runData:
         _calcPerAvalancheIBF        <--------- New
         _calcOpticalTransparency
         _getTransparency
+        plotEfficiency              <--------- New
     """
 
 #********************************************************************************#
@@ -1573,3 +1574,83 @@ class runData:
         }
 
         return chi2Param
+    
+#********************************************************************************#
+    def plotEfficiency(self, binWidth=1, threshold=0):
+        """
+        """
+
+        fitResults = self._fitAvalancheSize(binWidth)
+
+        xVal = fitResults['xVal']
+        yVal = fitResults['yVal']
+        fitPolya = fitResults['fitPolya']
+
+        cutMask = xVal <= threshold
+
+        #Separate data that gets cut
+        xDataCut = xVal[cutMask]
+        yDataCut = yVal[cutMask]
+
+        #Separate data that is not cut
+        xData = xVal[~cutMask]
+        yData = yVal[~cutMask]
+
+        #Calculate polya - ensure calculated at threshold
+        xPolyaCut = np.append(xDataCut, [threshold])
+        xPolya = np.append([threshold], xData)
+        polyaCut = fitPolya.calcPolya(xPolyaCut)
+        polyaData = fitPolya.calcPolya(xPolya)
+
+        fig = plt.figure()
+        fig.suptitle(f'Detection Efficiency')
+
+        ax = fig.add_subplot(111)
+
+        ax.bar(
+            xDataCut,
+            yDataCut,
+            width=binWidth,
+            label='Data Below Threshold', color='r', alpha=0.5
+        )
+        ax.bar(
+            xData,
+            yData,
+            width=binWidth,
+            label='Detected Data', color='g', alpha=0.5
+        ) 
+        ax.axvline(
+            x=threshold, 
+            c='r', ls='--', label=f"Threshold = {threshold}e"
+        )
+        ax.plot(
+            xPolyaCut, polyaCut, 
+            label='Cut Polya', c='m', ls=':'
+        )
+        ax.plot(
+            xPolya, polyaData, 
+            label='Remaining Polya', c='m', ls='-'
+        )
+
+        simulatedEff = yData.sum()/(yData.sum()+yDataCut.sum())
+        polyaEff = fitPolya.calcEfficiency(threshold)
+
+        efficiencyText = f'Efficiency:\nSimulated = {simulatedEff:.4f}\nPolya = {polyaEff:.4f}'
+
+        ax.text(
+            0.8, 0.5, efficiencyText, 
+            fontsize=10, 
+            horizontalalignment='center',
+            verticalalignment='center', 
+            transform=ax.transAxes,
+            bbox=dict(facecolor='w', edgecolor='black', boxstyle='round,pad=1')
+        )
+
+        plt.xlabel('Number of Electrons in Avalanche')
+        plt.ylabel('Probability of Avalanche Size')
+        plt.legend()
+        plt.grid()
+
+        return fig
+
+
