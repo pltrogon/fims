@@ -31,6 +31,11 @@
 #include "TTree.h"
 #include "TFile.h"
 #include "TString.h"
+#include "TChain.h"
+
+//Parallelization
+#include <omp.h>
+#include "TROOT.h"
 
 //C includes
 #include <iostream>
@@ -43,12 +48,16 @@
 #include <map>
 #include <sstream>
 #include <cstdio>
+#include <vector>
 
 using namespace Garfield;
 
 int main(int argc, char * argv[]) {
-
+  //Random seed
   std::srand(static_cast<unsigned int>(std::time(nullptr)));
+
+  // Enable ROOT's thread safety at the very beginning of the program.
+  ROOT::EnableThreadSafety();
 
   const double MICRON = 1e-6;
   const double CM = 1e-2;
@@ -57,7 +66,7 @@ int main(int argc, char * argv[]) {
   
   //*************** SETUP ***************//
   //Timing variables
-  clock_t startSim, stopSim, lapAvalanche, runTime;
+  clock_t startSim, stopSim, runTime;
 
   TApplication app("app", &argc, argv);
 
@@ -122,19 +131,6 @@ int main(int argc, char * argv[]) {
   }
   runOutFile << runNo+1;
   runOutFile.close();
-
-  //***** Data File *****//
-  std::string dataFilename = "sim."+std::to_string(runNo)+".root";
-  std::string dataPath = "../../Data/"+dataFilename;
-  TFile *dataFile = new TFile(dataPath.c_str(), "NEW");
-
-  if(!dataFile->IsOpen()){
-    std::cerr << "Error creating or opening file '" << dataFilename << "'." << std::endl;
-    return -1;
-  }  
-  
-  std::cout << "File '" << dataFilename << "' created and opened successfully.\n";
-
 
   //***** Simulation Parameters *****//
   //Read in simulation parameters from runControl
@@ -216,37 +212,6 @@ int main(int argc, char * argv[]) {
   gasCompCO2 = std::stod(readParam["gasCompCO2"]);
 
 
-  // ***** Metadata tree ***** //
-  //Create
-  TTree *metaDataTree = new TTree("metaDataTree", "Simulation Parameters");
-
-  //Data to be saved
-
-  //Add branches
-  //General
-  metaDataTree->Branch("Git Version", &gitVersion);
-  metaDataTree->Branch("runNo", &runNo, "runNo/I");
-
-  //Geometry Parameters
-  metaDataTree->Branch("Pad Length", &padLength, "padLength/D");
-  metaDataTree->Branch("Pitch", &pitch, "pitch/D");
-  metaDataTree->Branch("Grid Standoff", &gridStandoff, "gridStandoff/D");
-  metaDataTree->Branch("Grid Thickness", &gridThickness, "gridThickness/D");
-  metaDataTree->Branch("Hole Radius", &holeRadius, "holeRadius/D");
-  metaDataTree->Branch("Cathode Height", &cathodeHeight, "cathodeHeight/D");
-  metaDataTree->Branch("Thickness SiO2", &thicknessSiO2, "thicknessSiO2/D");
-
-  //Field Parameters
-  metaDataTree->Branch("Electric Field Ratio", &fieldRatio, "fieldRatio/D");
-  metaDataTree->Branch("Number of Field Lines", &numFieldLine, "numFieldLine/I");
-  metaDataTree->Branch("Transparency Limit", &transparencyLimit, "transparencyLimit/D");
-
-  //Simulation parameters
-  metaDataTree->Branch("Number of Avalanches", &numAvalanche, "numAvalanche/I");
-  metaDataTree->Branch("Avalanche Limit", &avalancheLimit, "avalancheLimit/I");
-  metaDataTree->Branch("Gas Comp: Ar", &gasCompAr, "gasCompAr/D");
-  metaDataTree->Branch("Gas Comp: CO2", &gasCompCO2, "gasCompCO2/D");
-
   //***** Field Line Data Tree *****//
   //Create
   TTree *fieldLineDataTree = new TTree("fieldLineDataTree", "Field Lines");
@@ -276,95 +241,6 @@ int main(int argc, char * argv[]) {
   gridFieldLineDataTree->Branch("Field Line y", &gridLineY, "gridLineY/D");
   gridFieldLineDataTree->Branch("Field Line z", &gridLineZ, "gridLineZ/D");
 
-  //***** Avalanche Data Tree *****//
-  //Create
-  TTree *avalancheDataTree = new TTree("avalancheDataTree", "Avalanche Results");
-
-  //Data to be saved for each avalanche
-  int avalancheID;
-  bool hitLimit;//T/F if avalanche limit was hit
-  int totalElectrons, attachedElectrons, totalIons;
-
-  //Add Branches
-  avalancheDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
-  avalancheDataTree->Branch("Reached Limit", &hitLimit, "hitLimit/B");
-  avalancheDataTree->Branch("Total Electrons", &totalElectrons, "totalElectrons/I");
-  avalancheDataTree->Branch("Attached Electrons", &attachedElectrons, "attachedElectrons/I");
-  avalancheDataTree->Branch("Total Ions", &totalIons, "totalIons/I");
-
-  //***** Electron Data Tree *****//
-
-  //Create
-  TTree *electronDataTree = new TTree("electronDataTree", "Avalanche Electron Parameters");
-
-  // Data to be saved for each electron
-  int electronID;
-  double xi, yi, zi, ti, Ei; //Initial parameters
-  double xf, yf, zf, tf, Ef; //Final parameters
-  int stat; // Electron status
-
-  //Add Branches
-  electronDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
-  electronDataTree->Branch("Electron ID", &electronID, "electronID/I");
-
-  electronDataTree->Branch("Initial x", &xi, "xi/D");
-  electronDataTree->Branch("Initial y", &yi, "yi/D");
-  electronDataTree->Branch("Initial z", &zi, "zi/D");
-  electronDataTree->Branch("Initial Time", &ti, "ti/D");
-  electronDataTree->Branch("Initial Energy", &Ei, "Ei/D");
-
-  electronDataTree->Branch("Final x", &xf, "xf/D");
-  electronDataTree->Branch("Final y", &yf, "yf/D");
-  electronDataTree->Branch("Final z", &zf, "zf/D");
-  electronDataTree->Branch("Final Time", &tf, "tf/D");
-  electronDataTree->Branch("Final Energy", &Ef, "Ef/D");
-
-  electronDataTree->Branch("Exit Status", &stat, "stat/I");
-
-  //***** Ion Data Tree *****//
-
-  //Create
-  TTree *ionDataTree = new TTree("ionDataTree", "Avalanche Ion Parameters");
-
-  // Data to be saved for each Ion
-  int ionCharge;
-  double xiIon, yiIon, ziIon, tiIon; //Initial parameters
-  double xfIon, yfIon, zfIon, tfIon; //Final parameters
-  int statIon;
-
-  //Add Branches
-  ionDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
-  ionDataTree->Branch("Electron ID", &electronID, "electronID/I");
-  ionDataTree->Branch("Ion Charge", &ionCharge, "ionCharge/I");
-
-  ionDataTree->Branch("Initial x", &xiIon, "xiIon/D");
-  ionDataTree->Branch("Initial y", &yiIon, "yiIon/D");
-  ionDataTree->Branch("Initial z", &ziIon, "ziIon/D");
-  ionDataTree->Branch("Initial Time", &tiIon, "tiIon/D");
-
-  ionDataTree->Branch("Final x", &xfIon, "xfIon/D");
-  ionDataTree->Branch("Final y", &yfIon, "yfIon/D");
-  ionDataTree->Branch("Final z", &zfIon, "zfIon/D");
-  ionDataTree->Branch("Final Time", &tfIon, "tfIon/D");
-
-  ionDataTree->Branch("Exit Status", &statIon, "statIon/I");
-
-
-  //***** Electron Track Data Tree *****/
-  //Create
-  TTree *electronTrackDataTree = new TTree("electronTrackDataTree", "Electron Tracks");
-
-  // Data to be saved for each Electron track
-  float electronDriftx, electronDrifty, electronDriftz;
-
-  //Add Branches
-  electronTrackDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
-  electronTrackDataTree->Branch("Electron ID", &electronID, "electronID/I");
-
-  electronTrackDataTree->Branch("Drift x", &electronDriftx, "electronDriftx/F");
-  electronTrackDataTree->Branch("Drift y", &electronDrifty, "electronDrifty/F");
-  electronTrackDataTree->Branch("Drift z", &electronDriftz, "electronDriftz/F");
-
 
   //*************** SIMULATION ***************//
   std::cout << "****************************************\n";
@@ -375,27 +251,41 @@ int main(int argc, char * argv[]) {
   MediumMagboltz* gasFIMS = new MediumMagboltz();
 
   //Set parameters
-  gasFIMS->SetComposition("ar", gasCompAr, "co2", gasCompCO2);
-  gasFIMS->SetTemperature(293.15); // Room temperature
-  gasFIMS->SetPressure(760.);     // Atmospheric pressure
-  gasFIMS->SetMaxElectronEnergy(200);
+  gasFIMS->SetComposition(
+    "ar", gasCompAr, 
+    "co2", gasCompCO2
+  );
+
+  //gas parameters:
+  double gasTemperature = 293.15; //K
+  double gasPressure = 760.;//torr
+  int maxElectronE = 200;
+  double rPenning = 0.51;
+
+  gasFIMS->SetTemperature(gasTemperature);
+  gasFIMS->SetPressure(gasPressure);
+  gasFIMS->SetMaxElectronEnergy(maxElectronE);
   gasFIMS->Initialise(true);
   // Load the penning transfer and ion mobilities.
-  gasFIMS->EnablePenningTransfer(0.51, .0, "ar");
+  gasFIMS->EnablePenningTransfer(rPenning, .0, "ar");
 
   const std::string path = std::getenv("GARFIELD_INSTALL");
-  gasFIMS->LoadIonMobility(path + "/share/Garfield/Data/IonMobility_Ar+_Ar.txt");
-  gasFIMS->LoadNegativeIonMobility(path + "/share/Garfield/Data/IonMobility_CO2+_CO2.txt");//TODO - Is this correct for negative ion
+  const std::string posIonPath = path + "/share/Garfield/Data/IonMobility_Ar+_Ar.txt";
+  const std::string negIonPath = path + "/share/Garfield/Data/IonMobility_CO2+_CO2.txt";
+  gasFIMS->LoadIonMobility(posIonPath);
+  gasFIMS->LoadNegativeIonMobility(negIonPath);//TODO - Is this correct for negative ion
 
   // Import elmer-generated field map
   std::string geometryPath = "../Geometry/";
   std::string elmerResultsPath = geometryPath+"elmerResults/";
-  ComponentElmer fieldFIMS(elmerResultsPath+"mesh.header",
-                           elmerResultsPath+"mesh.elements",
-                           elmerResultsPath+"mesh.nodes", 
-                           geometryPath+"dielectrics.dat",
-                           elmerResultsPath+"FIMS.result", 
-                           "mum");
+  ComponentElmer fieldFIMS(
+    elmerResultsPath+"mesh.header",
+    elmerResultsPath+"mesh.elements",
+    elmerResultsPath+"mesh.nodes", 
+    geometryPath+"dielectrics.dat",
+    elmerResultsPath+"FIMS.result", 
+    "mum"
+  );
 
   // Get region of elmer geometry
   double xmin, ymin, zmin, xmax, ymax, zmax;
@@ -403,27 +293,9 @@ int main(int argc, char * argv[]) {
 
   //Define boundary region for simulation
   double xBoundary[2], yBoundary[2], zBoundary[2];
-
-  /*
-  //Simple criteria for if 1/4 geometry or full
-  //   x=y=0 should be the min if 1/4
-  if(xmin == 0 && ymin == 0){
-    xBoundary[0] = -xmax;
-    xBoundary[1] = xmax;
-    yBoundary[0] = -ymax;
-    yBoundary[1] = ymax;
-  }
-  else{
-    xBoundary[0] = xmin;
-    xBoundary[1] = xmax;
-    yBoundary[0] = ymin;
-    yBoundary[1] = ymax;
-  }
-  */
   zBoundary[0] = zmin;
   zBoundary[1] = zmax;
-
-  //TODO - Make simulation region extent to pitch in x and y
+  //Extend simulation boundary to +/- pitch in x and y
   xBoundary[0] = -pitch;
   xBoundary[1] = pitch;
   yBoundary[0] = -pitch;
@@ -440,22 +312,12 @@ int main(int argc, char * argv[]) {
   //Create a sensor
   Sensor* sensorFIMS = new Sensor();
   sensorFIMS->AddComponent(&fieldFIMS);
-  sensorFIMS->SetArea(xBoundary[0], yBoundary[0], zBoundary[0], xBoundary[1], yBoundary[1], zBoundary[1]);
+  sensorFIMS->SetArea(
+    xBoundary[0], yBoundary[0], zBoundary[0], 
+    xBoundary[1], yBoundary[1], zBoundary[1]
+  );
   sensorFIMS->AddElectrode(&fieldFIMS, "wtlel");
 
-  //Set up Microscopic Avalanching
-  AvalancheMicroscopic* avalancheE = new AvalancheMicroscopic;
-  avalancheE->SetSensor(sensorFIMS);
-  avalancheE->EnableAvalancheSizeLimit(avalancheLimit);
-
-  ViewDrift viewElectronDrift;
-  viewElectronDrift.SetArea(xBoundary[0], yBoundary[0], zBoundary[0], xBoundary[1], yBoundary[1], zBoundary[1]);
-  avalancheE->EnablePlotting(&viewElectronDrift, 100);
-
-  //Set up Ion drifting
-  AvalancheMC* driftIon = new AvalancheMC;
-  driftIon->SetSensor(sensorFIMS);
-  driftIon->SetDistanceSteps(MICRONTOCM);
 
   // ***** Draw field lines for visualization ***** //
   std::cout << "****************************************\n";
@@ -523,10 +385,8 @@ int main(int argc, char * argv[]) {
     //Calculate lines from grid - only do those outside of hole
     double lineRadius2 = std::pow(xStart[inFieldLine], 2.) + std::pow(yStart[inFieldLine], 2.);
     double holeRadius2 = std::pow(holeRadius, 2.);
-    double gridLineSeparation = 1.1;
+    double gridLineSeparation = 2.0;
 
-
-    //TODO: The field lines above the grid seem to be causing the simulation to get hung up
     //Do above grid
     gridFieldLineLocation = 1;
     fieldLines.clear();
@@ -574,144 +434,255 @@ int main(int argc, char * argv[]) {
   
   std::cout << "Done " << totalFieldLines << " field lines." << std::endl;
 
-  // *** Deal with field line trees *** //
-
-  //Write the field line data tree to file and delete
-  //fieldLineDataTree->Print()
-  fieldLineDataTree->Write();
-  delete fieldLineDataTree;
-
-  //Write the grid field line data tree to file and delete
-  //gridFieldLineDataTree->Print()
-  gridFieldLineDataTree->Write();
-  delete gridFieldLineDataTree;
-
   // ***** Prepare Avalanche Electron ***** //
   //Set the Initial electron parameters
-  double x0 = 0., y0 = 0., z0 = .005;//cm TODO - This is just slightly above grid, but better to parameterize with something
-  double t0 = 0.;//ns
+  double x0 = 0., y0 = 0., z0 = holeRadius;
   double e0 = 0.1;//eV (Garfield is weird when this is 0.)
   double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
 
   //Start timing the sim
   startSim = clock();
-  lapAvalanche = clock();
 
   std::cout << "****************************************\n";
   std::cout << "Starting simulation: " << runNo << "\n";
   std::cout << "****************************************\n";
 
   std::cout << "Starting " << numAvalanche << " avalanches." << std::endl;
-  //***** Avalanche Loop *****//
-  int prevAvalanche = 0;
-  for(int inAvalanche = 0; inAvalanche < numAvalanche; inAvalanche++){
-    if(DEBUG){
-      std::cout << "DEBUGGING - NO AVALANCHE" << std::endl;
-      break;
-    }
-    
-    avalancheID = inAvalanche;
 
-    //Reset avalanche data
-    totalElectrons = 0;
-    attachedElectrons = 0;
-    totalIons = 0;
-    
-    //Begin single-electron avalanche
-    avalancheE->AvalancheElectron(x0, y0, z0, t0, e0, dx0, dy0, dz0);
+  //*** Set up parallel avalanche loops ***//
+  std::vector<std::string> parallelFileNames;
+  #pragma omp parallel
+  {
+    //thread-local pointers
+    ComponentElmer* parallelFieldFIMS = nullptr;
+    Sensor* parallelSensorFIMS = nullptr;
+    AvalancheMicroscopic* avalancheE = nullptr;
+    AvalancheMC* driftIon = nullptr;
+    ViewDrift* viewElectronDrift = nullptr;
+    TFile* parallelDataFile = nullptr;
+    std::string parallelFilename;
 
-    //Electron count - use endpoints to include attached electrons
-    int avalancheElectrons = avalancheE->GetNumberOfElectronEndpoints();
+    // Create thread-local objects
+    #pragma omp critical
+    {//Critical for file I/O
 
-    //Check if avalanche limit was reached
-    if(avalancheElectrons >= avalancheLimit){
-      hitLimit = true;
-    }
-    else{
-      hitLimit = false;
-    }
+      //Cretae objects for this thread
+      parallelFieldFIMS = new ComponentElmer(
+        elmerResultsPath+"mesh.header",
+        elmerResultsPath+"mesh.elements",
+        elmerResultsPath+"mesh.nodes", 
+        geometryPath+"dielectrics.dat",
+        elmerResultsPath+"FIMS.result", 
+        "mum"
+      );
+      parallelSensorFIMS = new Sensor();
+      avalancheE = new AvalancheMicroscopic;
+      driftIon = new AvalancheMC;
+      viewElectronDrift = new ViewDrift();
 
-    //Loop through all electrons in avalanche
-    for(int inElectron = 0; inElectron < avalancheElectrons; inElectron++){
-      electronID = inElectron;
-
-      //Extract individual electron data
-      avalancheE->GetElectronEndpoint(inElectron, xi, yi, zi, ti, Ei, xf, yf, zf, tf, Ef, stat);
-        
-      totalElectrons++;
-
-      ionCharge = 1;
-      driftIon->DriftIon(xi, yi, zi, ti);
-      driftIon->GetIonEndpoint(0, xiIon, yiIon, ziIon, tiIon, xfIon, yfIon, zfIon, tfIon, statIon);
-      //Fill tree with data from this positive ion
-      ionDataTree->Fill();
-      totalIons++;
+      //Link objects
+      parallelFieldFIMS->SetGas(gasFIMS);
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSWeighting.result", "wtlel");
+      parallelFieldFIMS->EnableMirrorPeriodicityX();
+      parallelFieldFIMS->EnableMirrorPeriodicityY();
       
+      parallelSensorFIMS->AddComponent(parallelFieldFIMS);
+      parallelSensorFIMS->SetArea(
+        xBoundary[0], yBoundary[0], zBoundary[0], 
+        xBoundary[1], yBoundary[1], zBoundary[1]
+      );      
+      parallelSensorFIMS->AddElectrode(parallelFieldFIMS, "wtlel");
 
-      //Check for electron attatchment
-      if(stat == -7){
-        attachedElectrons++;
+      avalancheE->SetSensor(parallelSensorFIMS);
 
-        //Drift negative ion from end of electron tracks that attatch
-        ionCharge = -1;
-        driftIon->DriftNegativeIon(xf, yf, zf, tf);
-        driftIon->GetNegativeIonEndpoint(0, xiIon, yiIon, ziIon, tiIon, xfIon, yfIon, zfIon, tfIon, statIon);
-        //Fill tree with data from this negative ion
-        ionDataTree->Fill();
+      driftIon->SetSensor(parallelSensorFIMS);
+      driftIon->SetDistanceSteps(MICRONTOCM/10.);
+      viewElectronDrift->SetArea(
+        xBoundary[0], yBoundary[0], zBoundary[0], 
+        xBoundary[1], yBoundary[1], zBoundary[1]
+      );
+      avalancheE->EnablePlotting(viewElectronDrift, 100);
+
+
+      //Filename
+      int threadID = omp_get_thread_num();
+      std::string parallelDataPath = "parallelData/";//TODO - this needs to be made within 'build/'
+      std::string parallelRunNo = "parallelSim." + std::to_string(runNo);
+      std::string parallelThreadNo = ".thread." + std::to_string(threadID) + ".root";
+
+      parallelFilename = parallelDataPath + parallelRunNo + parallelThreadNo;
+      parallelFileNames.push_back(parallelFilename);
+
+      parallelDataFile = new TFile(parallelFilename.c_str(), "RECREATE");
+
+    }//end critical
+
+    //Variables for trees
+    int avalancheID;
+    bool hitLimit;
+    int totalElectrons, attachedElectrons, totalIons;
+    int electronID;
+    double xi, yi, zi, ti, Ei;
+    double xf, yf, zf, tf, Ef;
+    int stat;
+    int ionCharge;
+    double xiIon, yiIon, ziIon, tiIon;
+    double xfIon, yfIon, zfIon, tfIon;
+    int statIon;
+    float electronDriftx, electronDrifty, electronDriftz;
+
+    TTree* parallelAvalancheDataTree = new TTree("avalancheDataTree", "Avalanche Results");
+    parallelAvalancheDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
+    parallelAvalancheDataTree->Branch("Reached Limit", &hitLimit, "hitLimit/B");
+    parallelAvalancheDataTree->Branch("Total Electrons", &totalElectrons, "totalElectrons/I");
+    parallelAvalancheDataTree->Branch("Attached Electrons", &attachedElectrons, "attachedElectrons/I");
+    parallelAvalancheDataTree->Branch("Total Ions", &totalIons, "totalIons/I");
+
+    TTree* parallelElectronDataTree = new TTree("electronDataTree", "Avalanche Electron Parameters");
+    parallelElectronDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
+    parallelElectronDataTree->Branch("Electron ID", &electronID, "electronID/I");
+    parallelElectronDataTree->Branch("Initial x", &xi, "xi/D");
+    parallelElectronDataTree->Branch("Initial y", &yi, "yi/D");
+    parallelElectronDataTree->Branch("Initial z", &zi, "zi/D");
+    parallelElectronDataTree->Branch("Initial Time", &ti, "ti/D");
+    parallelElectronDataTree->Branch("Initial Energy", &Ei, "Ei/D");
+    parallelElectronDataTree->Branch("Final x", &xf, "xf/D");
+    parallelElectronDataTree->Branch("Final y", &yf, "yf/D");
+    parallelElectronDataTree->Branch("Final z", &zf, "zf/D");
+    parallelElectronDataTree->Branch("Final Time", &tf, "tf/D");
+    parallelElectronDataTree->Branch("Final Energy", &Ef, "Ef/D");
+    parallelElectronDataTree->Branch("Exit Status", &stat, "stat/I");
+
+    TTree *parallelIonDataTree = new TTree("ionDataTree", "Avalanche Ion Parameters");
+    parallelIonDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
+    parallelIonDataTree->Branch("Electron ID", &electronID, "electronID/I");
+    parallelIonDataTree->Branch("Ion Charge", &ionCharge, "ionCharge/I");
+    parallelIonDataTree->Branch("Initial x", &xiIon, "xiIon/D");
+    parallelIonDataTree->Branch("Initial y", &yiIon, "yiIon/D");
+    parallelIonDataTree->Branch("Initial z", &ziIon, "ziIon/D");
+    parallelIonDataTree->Branch("Initial Time", &tiIon, "tiIon/D");
+    parallelIonDataTree->Branch("Final x", &xfIon, "xfIon/D");
+    parallelIonDataTree->Branch("Final y", &yfIon, "yfIon/D");
+    parallelIonDataTree->Branch("Final z", &zfIon, "zfIon/D");
+    parallelIonDataTree->Branch("Final Time", &tfIon, "tfIon/D");
+    parallelIonDataTree->Branch("Exit Status", &statIon, "statIon/I");
+
+    TTree* parallelElectronTrackDataTree = new TTree("electronTrackDataTree", "Electron Tracks");
+    parallelElectronTrackDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
+    parallelElectronTrackDataTree->Branch("Electron ID", &electronID, "electronID/I");
+    parallelElectronTrackDataTree->Branch("Drift x", &electronDriftx, "electronDriftx/F");
+    parallelElectronTrackDataTree->Branch("Drift y", &electronDrifty, "electronDrifty/F");
+    parallelElectronTrackDataTree->Branch("Drift z", &electronDriftz, "electronDriftz/F");
+  
+
+    //***** Parallel Avalanche Loop *****//
+    #pragma omp for schedule(dynamic)
+    for(int inAvalanche = 0; inAvalanche < numAvalanche; inAvalanche++){
+      if(DEBUG){
+        continue;
+      }
+      
+      avalancheID = inAvalanche;
+
+      //Reset avalanche data
+      totalElectrons = 0;
+      attachedElectrons = 0;
+      totalIons = 0;
+      
+      //Begin single-electron avalanche
+      avalancheE->AvalancheElectron(x0, y0, z0, 0., e0, dx0, dy0, dz0);
+
+      //Electron count - use endpoints to include attached electrons
+      int avalancheElectrons = avalancheE->GetNumberOfElectronEndpoints();
+
+      //Check if avalanche limit was reached
+      if(avalancheElectrons >= avalancheLimit){
+        hitLimit = true;
+      }
+      else{
+        hitLimit = false;
+      }
+
+      //Loop through all electrons in avalanche
+      for(int inElectron = 0; inElectron < avalancheElectrons; inElectron++){
+        electronID = inElectron;
+
+        //Extract individual electron data
+        avalancheE->GetElectronEndpoint(inElectron, xi, yi, zi, ti, Ei, xf, yf, zf, tf, Ef, stat);
+          
+        totalElectrons++;
+
+        ionCharge = 1;
+        driftIon->DriftIon(xi, yi, zi, ti);
+        driftIon->GetIonEndpoint(0, xiIon, yiIon, ziIon, tiIon, xfIon, yfIon, zfIon, tfIon, statIon);
+        //Fill tree with data from this positive ion
+        parallelIonDataTree->Fill();
         totalIons++;
-      }
+        
 
-      // Get electron drift line data
-      int numElectronDrift = viewElectronDrift.GetNumberOfDriftLines();
-      bool isElectron;
-      std::vector<std::array<float, 3> > electronDriftLines;
-      viewElectronDrift.GetDriftLine(inElectron, electronDriftLines, isElectron);
-      for(int inPoint = 0; inPoint < electronDriftLines.size(); inPoint++){
-        electronDriftx = electronDriftLines[inPoint][0];
-        electronDrifty = electronDriftLines[inPoint][1];
-        electronDriftz = electronDriftLines[inPoint][2];
+        //Check for electron attatchment
+        if(stat == -7){
+          attachedElectrons++;
 
-        //Fill tree with data from this point
-        electronTrackDataTree->Fill();
-      }
+          //Drift negative ion from end of electron tracks that attatch
+          ionCharge = -1;
+          driftIon->DriftNegativeIon(xf, yf, zf, tf);
+          driftIon->GetNegativeIonEndpoint(0, xiIon, yiIon, ziIon, tiIon, xfIon, yfIon, zfIon, tfIon, statIon);
+          //Fill tree with data from this negative ion
+          parallelIonDataTree->Fill();
+          totalIons++;
+        }
 
+        // Get electron drift line data
+        int numElectronDrift = viewElectronDrift->GetNumberOfDriftLines();
+        bool isElectron;
+        std::vector<std::array<float, 3> > electronDriftLines;
+        viewElectronDrift->GetDriftLine(inElectron, electronDriftLines, isElectron);
+        for(int inPoint = 0; inPoint < electronDriftLines.size(); inPoint++){
+          electronDriftx = electronDriftLines[inPoint][0];
+          electronDrifty = electronDriftLines[inPoint][1];
+          electronDriftz = electronDriftLines[inPoint][2];
+
+          //Fill tree with data from this point
+          parallelElectronTrackDataTree->Fill();
+        }
+
+
+        //*** TODO ***/
+        //Can insert any per-electron analysis/data here.
+        // --Velocity?
+
+        //Fill tree with data from this electron
+        parallelElectronDataTree->Fill();
+
+      }//end electrons in avalanche loop
 
       //*** TODO ***/
-      //Can insert any per-electron analysis/data here.
-      // --Velocity?
+      //Can insert any per-avalanche analysis/data here.
+      // -- Induced signals
+      // -- Histograms of energy loss/collison, time between collisions,
 
-      //Fill tree with data from this electron
-      electronDataTree->Fill();
+      //Fill tree with data from this avalanche
+      parallelAvalancheDataTree->Fill();
+      //clean up memory
+      viewElectronDrift->Clear();
 
-    }//end electrons in avalanche loop
+    }//end avalanche loop
 
-    //*** TODO ***/
-    //Can insert any per-avalanche analysis/data here.
-    // -- Induced signals
-    // -- Histograms of energy loss/collison, time between collisions,
 
-    //Fill tree with data from this avalanche
-    avalancheDataTree->Fill();
+    // Write and close the file.
+    parallelDataFile->Write();
+    parallelDataFile->Close();
 
-    //Print timing every ~10%
-    int avalancheProgress = (100*(inAvalanche+1))/numAvalanche;
-    if(  (avalancheProgress % 10 == 0)
-      && (avalancheProgress != prevAvalanche)){
+    delete parallelSensorFIMS;
+    delete avalancheE;
+    delete driftIon;
+    delete viewElectronDrift;
+    delete parallelDataFile;
 
-      double timeElapsed = (clock() - lapAvalanche) / CLOCKS_PER_SEC;
-      lapAvalanche = clock();
+  }//End parallization
 
-      std::stringstream progressStream;
-      progressStream << "Done ~" << std::fixed << std::setprecision(0) << avalancheProgress;
-      progressStream << "% (~" << std::fixed << std::setprecision(0) << timeElapsed << " s)\n";
-      std::cout << progressStream.str() << std::flush;
-      prevAvalanche = avalancheProgress;
-    }
-
-    //clean up memory
-    viewElectronDrift.Clear();
-
-  }//end avalanche loop
+  delete gasFIMS;
 
   //Final timing
   stopSim = clock();
@@ -722,35 +693,82 @@ int main(int argc, char * argv[]) {
 
   //***** Deal with Root trees and files *****//
 
-  //Fill and write the meta data tree to file then delete
-  metaDataTree->Fill();
-  //metaDataTree->Print();
-  metaDataTree->Write();
-  delete metaDataTree;
+  //Merge the trees from each thread to a single tree
+  std::string dataFilename = "sim."+std::to_string(runNo)+".root";
+  std::string dataPath = "../../Data/"+dataFilename;
+  TFile *dataFile = new TFile(dataPath.c_str(), "NEW");
 
-  //Write the electron data tree to file then delete
-  //electronDataTree->Print()
-  electronDataTree->Write();
-  delete electronDataTree;
+  // Write the non-parallel trees
+  fieldLineDataTree->Write();
+  delete fieldLineDataTree;
+  gridFieldLineDataTree->Write();
+  delete gridFieldLineDataTree;
 
-  //Write the ion data tree to file then delete
-  //ionDataTree->Print()
-  ionDataTree->Write();
-  delete ionDataTree;
+  //chain the parallel trees and merge
+  TChain avalancheChain("avalancheDataTree");
+  TChain electronChain("electronDataTree");
+  TChain ionChain("ionDataTree");
+  TChain electronTrackChain("electronTrackDataTree");
 
-  //Write the avalanche data tree to file then delete
-  //avalancheDataTree->Print()
+  for(const auto& filename : parallelFileNames) {
+    avalancheChain.Add(filename.c_str());
+    electronChain.Add(filename.c_str());
+    ionChain.Add(filename.c_str());
+    electronTrackChain.Add(filename.c_str());
+  }
+
+  // Create the final trees in the main output file
+  TTree *avalancheDataTree = avalancheChain.CloneTree(-1, "fast");
+  TTree *electronDataTree = electronChain.CloneTree(-1, "fast");
+  TTree *ionDataTree = ionChain.CloneTree(-1, "fast");
+  TTree *electronTrackDataTree = electronTrackChain.CloneTree(-1, "fast");
+
+  // Write the final trees then delete
   avalancheDataTree->Write();
   delete avalancheDataTree;
-
-  //Write the electron track data tree to file then delete
-  //electronTrackDataTree->Print()
+  electronDataTree->Write();
+  delete electronDataTree;
+  ionDataTree->Write();
+  delete ionDataTree;
   electronTrackDataTree->Write();
   delete electronTrackDataTree;
 
-  //close the output file
+  // ***** Metadata tree ***** //
+  //Fill and write the meta data tree to file then delete
+  TTree *metaDataTree = new TTree("metaDataTree", "Simulation Parameters");
+
+  metaDataTree->Branch("Git Version", &gitVersion);
+  metaDataTree->Branch("runNo", &runNo, "runNo/I");
+
+  metaDataTree->Branch("Pad Length", &padLength, "padLength/D");
+  metaDataTree->Branch("Pitch", &pitch, "pitch/D");
+  metaDataTree->Branch("Grid Standoff", &gridStandoff, "gridStandoff/D");
+  metaDataTree->Branch("Grid Thickness", &gridThickness, "gridThickness/D");
+  metaDataTree->Branch("Hole Radius", &holeRadius, "holeRadius/D");
+  metaDataTree->Branch("Cathode Height", &cathodeHeight, "cathodeHeight/D");
+  metaDataTree->Branch("Thickness SiO2", &thicknessSiO2, "thicknessSiO2/D");
+
+  metaDataTree->Branch("Electric Field Ratio", &fieldRatio, "fieldRatio/D");
+  metaDataTree->Branch("Number of Field Lines", &numFieldLine, "numFieldLine/I");
+  metaDataTree->Branch("Transparency Limit", &transparencyLimit, "transparencyLimit/D");
+  metaDataTree->Branch("Number of Avalanches", &numAvalanche, "numAvalanche/I");
+  metaDataTree->Branch("Avalanche Limit", &avalancheLimit, "avalancheLimit/I");
+  metaDataTree->Branch("Gas Comp: Ar", &gasCompAr, "gasCompAr/D");
+  metaDataTree->Branch("Gas Comp: CO2", &gasCompCO2, "gasCompCO2/D");
+
+  metaDataTree->Fill();
+  metaDataTree->Write();
+
+  delete metaDataTree;
+
+  // Close the output file
   dataFile->Close();
   delete dataFile;
+
+  // Clean up parallel thread files
+  for(const auto& filename : parallelFileNames) {
+    std::remove(filename.c_str());
+  }
 
   std::cout << "****************************************\n";
   std::cout << "Done simulation: " << runNo << "\n";
