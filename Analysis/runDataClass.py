@@ -1277,7 +1277,7 @@ class runData:
                 bbox=dict(facecolor='none', edgecolor='black', boxstyle='round,pad=1')
                 )
 
-        plt.xlabel('Numer of Electrons in Trimmed Avalanche')
+        plt.xlabel('Number of Electrons in Avalanche')
         plt.ylabel('Probability of Avalanche Size')
         plt.legend()
         plt.grid(True, alpha=0.5)

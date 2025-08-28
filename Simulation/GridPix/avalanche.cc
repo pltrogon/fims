@@ -315,19 +315,29 @@ int main(int argc, char * argv[]) {
   MediumMagboltz* gasGridPix = new MediumMagboltz();
 
   //Set parameters
+  /*  
+  //Parameters for Ar/CO2
   gasGridPix->SetComposition(
     "ar", gasCompAr,
     "co2", gasCompCO2
   );
-  /*gasGridPix->SetComposition(
-    "ar", gasCompAr,
-    "cf4", 3.0, 
-    "iC4H10", 2.0
-  );*/
   gasGridPix->SetTemperature(293.15); // Room temperature
   gasGridPix->SetPressure(760.);     // Atmospheric pressure
   gasGridPix->SetMaxElectronEnergy(200);
   gasGridPix->EnablePenningTransfer(0.51, .0, "ar");
+  gasGridPix->Initialise(true);
+  */
+
+  //Parameters for T2K
+  gasGridPix->SetComposition(
+    "ar", gasCompAr,
+    "cf4", 3.0, 
+    "iC4H10", 2.0
+  );
+  gasGridPix->SetTemperature(301.63);
+  gasGridPix->SetPressure(775.7);
+  gasGridPix->SetMaxElectronEnergy(200);
+  gasGridPix->EnablePenningTransfer(0.385, .0, "ar");
   gasGridPix->Initialise(true);
   
 
