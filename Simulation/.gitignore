@@ -9,3 +9,5 @@ build/
 __pycache__/
 .ipynb_checkpoints/
 GridPix/
+.DS_Store
+../.DS_Store
