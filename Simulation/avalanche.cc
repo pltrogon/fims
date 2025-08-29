@@ -26,6 +26,7 @@
 #include "Garfield/Sensor.hh"
 #include "Garfield/DriftLineRKF.hh"
 #include "Garfield/ViewDrift.hh"
+#include "Garfield/ViewSignal.hh"
 
 //ROOT includes
 #include "TApplication.h"
@@ -33,6 +34,7 @@
 #include "TFile.h"
 #include "TString.h"
 #include "TChain.h"
+#include <TH1D.h>
 
 //Parallelization
 #include <omp.h>
@@ -318,7 +320,6 @@ int main(int argc, char * argv[]) {
     xBoundary[1], yBoundary[1], zBoundary[1]
   );
   sensorFIMS->AddElectrode(&fieldFIMS, "wtlel");
-
 
   // ***** Draw field lines for visualization ***** //
   std::cout << "****************************************\n";
@@ -705,7 +706,8 @@ int main(int argc, char * argv[]) {
     difftens
   );
 
-/*
+
+/*TODO - Get the diffusion coefficients for the amplification field
   double ampDiffusionL, ampDiffusionT, ampVelocity;
   double ampField = driftField*fieldRatio;
   gasFIMS->RunMagboltz(
@@ -794,8 +796,10 @@ int main(int argc, char * argv[]) {
   metaDataTree->Branch("Gas Comp: Ar", &gasCompAr, "gasCompAr/D");
   metaDataTree->Branch("Gas Comp: CO2", &gasCompCO2, "gasCompCO2/D");
 
-  metaDataTree->Branch("Diffusion L (Drift): ", &driftDiffusionL, "driftDiffusionL/D");
-  metaDataTree->Branch("Diffusion T (Drift): ", &driftDiffusionT, "driftDiffusionT/D");
+  metaDataTree->Branch("Drift Field", &driftField, "driftField/D");
+  metaDataTree->Branch("Drift Velocity (Drift) ", &driftVelocity, "driftVelocity/D");
+  metaDataTree->Branch("Diffusion L (Drift)", &driftDiffusionL, "driftDiffusionL/D");
+  metaDataTree->Branch("Diffusion T (Drift)", &driftDiffusionT, "driftDiffusionT/D");
 
   metaDataTree->Fill();
   metaDataTree->Write();
