@@ -496,6 +496,7 @@ int main(int argc, char * argv[]) {
       parallelSensorFIMS->AddElectrode(parallelFieldFIMS, "wtlel");
 
       avalancheE->SetSensor(parallelSensorFIMS);
+      avalancheE->EnableAvalancheSizeLimit(avalancheLimit);
 
       driftIon->SetSensor(parallelSensorFIMS);
       driftIon->SetDistanceSteps(MICRONTOCM/10.);
