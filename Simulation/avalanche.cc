@@ -21,6 +21,7 @@
 #include "Garfield/ComponentElmer.hh"
 #include "Garfield/AvalancheMicroscopic.hh"
 #include "Garfield/MediumMagboltz.hh"
+#include "Garfield/Medium.hh"
 #include "Garfield/AvalancheMC.hh"
 #include "Garfield/Sensor.hh"
 #include "Garfield/DriftLineRKF.hh"
@@ -62,7 +63,7 @@ int main(int argc, char * argv[]) {
   const double MICRON = 1e-6;
   const double CM = 1e-2;
   const double MICRONTOCM = 1e-4;
-  bool DEBUG = false;
+  bool DEBUG = true;
   
   //*************** SETUP ***************//
   //Timing variables
@@ -682,6 +683,43 @@ int main(int argc, char * argv[]) {
 
   }//End parallization
 
+
+  //Calculate diffusion coefficients
+  double vx, vy, wv, wr;
+  double alpha, eta, riontof, ratttof, lor;
+  double vxerr, vyerr, vzerr, wverr, wrerr, dlerr, dterr;
+  double alphaerr, etaerr, riontoferr, ratttoferr, lorerr, alphatof;
+  std::array<double, 6> difftens;
+
+  // Drift field
+  double driftDiffusionL, driftDiffusionT, driftVelocity;
+  double driftField = 1e3;//1kV/cm
+
+  gasFIMS->RunMagboltz(
+    driftField, 0., 0., 1, true,
+    vx, vy, driftVelocity, wv, wr, 
+    driftDiffusionL, driftDiffusionT,
+    alpha, eta, riontof, ratttof, lor, 
+    vxerr, vyerr, vzerr, wverr, wrerr, dlerr, dterr,
+    alphaerr, etaerr, riontoferr, ratttoferr, lorerr, alphatof,
+    difftens
+  );
+
+/*
+  double ampDiffusionL, ampDiffusionT, ampVelocity;
+  double ampField = driftField*fieldRatio;
+  gasFIMS->RunMagboltz(
+    ampField, 0., 0., 1, true,
+    vx, vy, ampVelocity, wv, wr, 
+    ampDiffusionL, ampDiffusionT,
+    alpha, eta, riontof, ratttof, lor, 
+    vxerr, vyerr, vzerr, wverr, wrerr, dlerr, dterr,
+    alphaerr, etaerr, riontoferr, ratttoferr, lorerr, alphatof,
+    difftens
+  );
+  */
+  
+
   delete gasFIMS;
 
   //Final timing
@@ -755,6 +793,9 @@ int main(int argc, char * argv[]) {
   metaDataTree->Branch("Avalanche Limit", &avalancheLimit, "avalancheLimit/I");
   metaDataTree->Branch("Gas Comp: Ar", &gasCompAr, "gasCompAr/D");
   metaDataTree->Branch("Gas Comp: CO2", &gasCompCO2, "gasCompCO2/D");
+
+  metaDataTree->Branch("Diffusion L (Drift): ", &driftDiffusionL, "driftDiffusionL/D");
+  metaDataTree->Branch("Diffusion T (Drift): ", &driftDiffusionT, "driftDiffusionT/D");
 
   metaDataTree->Fill();
   metaDataTree->Write();
