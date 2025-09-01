@@ -126,7 +126,7 @@ class FIMS_Simulation:
             'thicknessSiO2': 5.,
             'fieldRatio': 40.,
             'transparencyLimit': 0.98,
-            'numFieldLine': 5,
+            'numFieldLine': 25,
             'numAvalanche': 1000,
             'avalancheLimit': 200,
             'gasCompAr': 70.,
@@ -605,8 +605,8 @@ class FIMS_Simulation:
             with open(os.path.join(os.getcwd(), 'log/logGmsh.txt'), 'w+') as gmshOutput:
                 startTime = time.monotonic()
                 runReturn = subprocess.run(
-                #TODO: Linux requires file path to gmsh
-                    ['./gmsh', os.path.join('./Geometry/', geoFile),
+                #TODO: Linux requires file path to gmsh (./gmsh in my local build)
+                    ['gmsh', os.path.join('./Geometry/', geoFile),
                      '-order', '2', '-optimize_ho',
                      '-clextend', '1',
                      '-setnumber', 'Mesh.OptimizeNetgen', '1',
@@ -958,7 +958,7 @@ class FIMS_Simulation:
         self.param['fieldRatio'] = initialGuess
         
         #Write parameters and generate geometry
-        self.param['numFieldLine'] = numLines
+        self.param['numFieldLine'] = numLines #TODO - numFieldLine defualts to 5 here. how does this effect when running
         if not self._writeParam():
             print('Error writing parameters.')
             return False

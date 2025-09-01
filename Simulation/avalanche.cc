@@ -404,6 +404,7 @@ int main(int argc, char * argv[]) {
   //Define boundary region for simulation
   double xBoundary[2], yBoundary[2], zBoundary[2];
 
+  /*
   //Simple criteria for if 1/4 geometry or full
   //   x=y=0 should be the min if 1/4
   if(xmin == 0 && ymin == 0){
@@ -418,8 +419,15 @@ int main(int argc, char * argv[]) {
     yBoundary[0] = ymin;
     yBoundary[1] = ymax;
   }
+  */
   zBoundary[0] = zmin;
   zBoundary[1] = zmax;
+
+  //TODO - Make simulation region extent to pitch in x and y
+  xBoundary[0] = -pitch;
+  xBoundary[1] = pitch;
+  yBoundary[0] = -pitch;
+  yBoundary[1] = pitch;
 
   //Enable periodicity and set components
   fieldFIMS.EnableMirrorPeriodicityX();
@@ -520,7 +528,7 @@ int main(int argc, char * argv[]) {
 
     //TODO: The field lines above the grid seem to be causing the simulation to get hung up
     //Do above grid
-    /*gridFieldLineLocation = 1;
+    gridFieldLineLocation = 1;
     fieldLines.clear();
 
     if(lineRadius2 >= holeRadius2){
@@ -534,8 +542,8 @@ int main(int argc, char * argv[]) {
 
         gridFieldLineDataTree->Fill();
       }
-    }*/
-
+    }
+    
     //Do below grid
     gridFieldLineLocation = -1;
     fieldLines.clear();
@@ -631,13 +639,13 @@ int main(int argc, char * argv[]) {
         
       totalElectrons++;
 
-      //Drift positive ion from start of every electron track
       ionCharge = 1;
       driftIon->DriftIon(xi, yi, zi, ti);
       driftIon->GetIonEndpoint(0, xiIon, yiIon, ziIon, tiIon, xfIon, yfIon, zfIon, tfIon, statIon);
       //Fill tree with data from this positive ion
       ionDataTree->Fill();
       totalIons++;
+      
 
       //Check for electron attachment
       if(stat == -7){
