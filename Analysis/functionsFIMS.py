@@ -17,7 +17,7 @@ Functions:
     plotThreshold
     plotPolyaExamples
     withinHex
-    withinNeighbourHex
+    withinneighborHex
     xyInterpolate
     getSetData
     plotDataSets
@@ -281,13 +281,13 @@ def withinHex(xVal, yVal, sideLength):
     return inHex
 
 #********************************************************************************#   
-def withinNeighbourHex(xVal, yVal, sideLength, pitch):
+def withinneighborHex(xVal, yVal, sideLength, pitch):
     """
     Determines if a coordinate lies within a hexagonal region in hexagonal tiling.
     Assumes a flat-top geometry. 
     Possible uses: 
-        sideLength = side length of the unit cell - Determines if in nieghbour cell.
-        sideLength = side length of the pad - Determines if in neighrbour pad.
+        sideLength = side length of the unit cell - Determines if in neighbor cell.
+        sideLength = side length of the pad - Determines if in neighbor pad.
 
     Args:
         xVal (float): The x-coordinate to check.
@@ -296,7 +296,7 @@ def withinNeighbourHex(xVal, yVal, sideLength, pitch):
         pitch (float): The spacing between the hexagonal tiling.
     
     Returns:
-        bool: True if is in neghbouring region, otherwise False.
+        bool: True if is in neighboring region, otherwise False.
     """
     # Use symmetry of tiling - Only need to check above and top-right
     x = np.abs(xVal)
@@ -306,18 +306,18 @@ def withinNeighbourHex(xVal, yVal, sideLength, pitch):
     inRadius = pitch/2.
     outRadius = 2*inRadius/math.sqrt(3)
     
-    #Centers of neighbouring cells
-    neighbourX = 3./2.*outRadius*np.array([0, 1])
-    neighbourY = inRadius*np.array([2, 1])
+    #Centers of neighboring cells
+    neighborX = 3./2.*outRadius*np.array([0, 1])
+    neighborY = inRadius*np.array([2, 1])
 
     #Check
-    checkTop = withinHex(x - neighbourX[0], y - neighbourY[0], sideLength)
-    checkTopRight = withinHex(x - neighbourX[1], y - neighbourY[1], sideLength)
+    checkTop = withinHex(x - neighborX[0], y - neighborY[0], sideLength)
+    checkTopRight = withinHex(x - neighborX[1], y - neighborY[1], sideLength)
 
     #Combine conditions
-    isInNeighbourHex = np.logical_or(checkTop, checkTopRight)
+    isInneighborHex = np.logical_or(checkTop, checkTopRight)
 
-    return isInNeighbourHex
+    return isInneighborHex
 
 
 #********************************************************************************#   

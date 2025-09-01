@@ -41,7 +41,7 @@ class FIMS_Simulation:
     Attributes:
         param (dict): Parameter dictionary with the following entries:
             - padLength: Length of the side of the hexagonal pad (micron).
-            - pitch: Distance between neighbouring pads (micron).
+            - pitch: Distance between neighboring pads (micron).
             - gridStandoff: Distance from the top to the SiO2 layer to the bottom of the grid (micron).
             - gridThickness: Thickness of the grid (micron).
             - holeRadius: Radius of the hole in the grid (micron).
