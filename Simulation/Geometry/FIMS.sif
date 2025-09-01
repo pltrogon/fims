@@ -148,7 +148,7 @@ Boundary Condition 5
 End
 
 Boundary Condition 6
-  Target Boundaries(1) = 6
+  Target Boundaries(1) = 7
   Name = "MirrorBoundary"
   Electric Flux = 0.0
 End
