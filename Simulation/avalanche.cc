@@ -59,13 +59,13 @@ int main(int argc, char * argv[]) {
   //Random seed
   std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
-  // Enable ROOT's thread safety at the very beginning of the program.
+  // Enable ROOT's thread safety
   ROOT::EnableThreadSafety();
 
   const double MICRON = 1e-6;
   const double CM = 1e-2;
   const double MICRONTOCM = 1e-4;
-  bool DEBUG = true;
+  bool DEBUG = false;
   
   //*************** SETUP ***************//
   //Timing variables
@@ -734,48 +734,8 @@ int main(int argc, char * argv[]) {
 
   //***** Deal with Root trees and files *****//
 
-  //Merge the trees from each thread to a single tree
-  std::string dataFilename = "sim."+std::to_string(runNo)+".root";
-  std::string dataPath = "../../Data/"+dataFilename;
-  TFile *dataFile = new TFile(dataPath.c_str(), "NEW");
-
-  // Write the non-parallel trees
-  fieldLineDataTree->Write();
-  delete fieldLineDataTree;
-  gridFieldLineDataTree->Write();
-  delete gridFieldLineDataTree;
-
-  //chain the parallel trees and merge
-  TChain avalancheChain("avalancheDataTree");
-  TChain electronChain("electronDataTree");
-  TChain ionChain("ionDataTree");
-  TChain electronTrackChain("electronTrackDataTree");
-
-  for(const auto& filename : parallelFileNames) {
-    avalancheChain.Add(filename.c_str());
-    electronChain.Add(filename.c_str());
-    ionChain.Add(filename.c_str());
-    electronTrackChain.Add(filename.c_str());
-  }
-
-  // Create the final trees in the main output file
-  TTree *avalancheDataTree = avalancheChain.CloneTree(-1, "fast");
-  TTree *electronDataTree = electronChain.CloneTree(-1, "fast");
-  TTree *ionDataTree = ionChain.CloneTree(-1, "fast");
-  TTree *electronTrackDataTree = electronTrackChain.CloneTree(-1, "fast");
-
-  // Write the final trees then delete
-  avalancheDataTree->Write();
-  delete avalancheDataTree;
-  electronDataTree->Write();
-  delete electronDataTree;
-  ionDataTree->Write();
-  delete ionDataTree;
-  electronTrackDataTree->Write();
-  delete electronTrackDataTree;
-
   // ***** Metadata tree ***** //
-  //Fill and write the meta data tree to file then delete
+  //Fill the meta data tree
   TTree *metaDataTree = new TTree("metaDataTree", "Simulation Parameters");
 
   metaDataTree->Branch("Git Version", &gitVersion);
@@ -803,11 +763,48 @@ int main(int argc, char * argv[]) {
   metaDataTree->Branch("Diffusion T (Drift)", &driftDiffusionT, "driftDiffusionT/D");
 
   metaDataTree->Fill();
+
+
+  // ***** Output data file ***** //  
+  std::string dataFilename = "sim."+std::to_string(runNo)+".root";
+  std::string dataPath = "../../Data/"+dataFilename;
+  TFile *dataFile = new TFile(dataPath.c_str(), "RECREATE");
+
+
+  // ***** Data trees ***** //
   metaDataTree->Write();
-
   delete metaDataTree;
+  fieldLineDataTree->Write();
+  delete fieldLineDataTree;
+  gridFieldLineDataTree->Write();
+  delete gridFieldLineDataTree;
 
-  // Close the output file
+  // Deal with parallel trees
+  std::vector<std::string> treeNames = {
+    "avalancheDataTree",
+    "electronDataTree",
+    "ionDataTree",
+    "electronTrackDataTree"
+  };
+
+  std::cout << "Merging parallel trees...\n";
+  for(const auto& inTree : treeNames){
+
+    //Chain the trees together
+    TChain treeChain(inTree.c_str());
+    for(const auto& filename : parallelFileNames){
+      treeChain.Add(filename.c_str());
+    }
+
+    TTree* newTree = treeChain.CloneTree(-1, "fast");
+    if(!newTree){
+      std::cout << "Error combining parallel tree " << inTree.c_str() << std::endl;
+    }
+    newTree->Write();
+    delete newTree;
+
+  }
+
   dataFile->Close();
   delete dataFile;
 
