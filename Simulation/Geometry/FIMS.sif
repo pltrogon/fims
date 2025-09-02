@@ -121,14 +121,7 @@ End
 
 Body 4
   Target Bodies(1) = 4
-  Name = "Lower Pillar"
-  Equation = 1
-  Material = 4
-End
-
-Body 5
-  Target Bodies(1) = 5
-  Name = "Upper Pillar"
+  Name = "Pillars"
   Equation = 1
   Material = 4
 End
@@ -172,4 +165,26 @@ Boundary Condition 6
   Electric Flux = 0.0
 End
 
-!TODO: Need Boundary Condition for pillars, but this is currently unclear
+!TODO: Pillar boundary condition cannot be zero flux, but is periodic reasonable?
+
+Boundary Condition 7
+  Target Boundaries(1) = 8
+  Name = "Lower Pillar Wall"
+End
+
+Boundary Condition 8
+  Target Boundaries(1) = 7
+  Name = "Lower Pillar Periodic"
+  Periodic BC = 70 ! Periodic ID = (target BC number)*(total number of BCs)
+End
+
+Boundary Condition 9
+  Target Boundaries(1) = 10
+  Name = "Upper Pillar Wall"
+End
+
+Boundary Condition 10
+  Target Boundaries(1) = 9
+  Name = "Upper Pillar Periodic"
+  Periodic BC = 90
+End

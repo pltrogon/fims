@@ -390,8 +390,8 @@ Volume(1001) = {203};
 Physical Volume("Grid") = {1};
 Physical Volume("Dielectric") = {101};
 Physical Volume("Gas") = {1001};
-Physical Volume("LowerPillar") = {2001};
-Physical Volume("UpperPillar") = {2002};
+Physical Volume("LowerPillar") = {2001, 2002};
+//Physical Volume("UpperPillar") = {2002};
 
 
 // ***** Physical Surfaces ***** //
@@ -434,26 +434,25 @@ Physical Surface("Dielectric") = {
 Physical Surface("Boundaries") = {
     25, 26, 27, 28, //Grid
     322, 323, 324, 325, 911, 912, //Gas
-    125, 126, 129, 130, // Dielectric
-    905, 908// Pillars
+    125, 126, 129, 130 // Dielectric
 };
 
 // *** Pillar Elements *** //
 
-Physical Surface("LowerPillarCenter") = {
-    907
+Physical Surface("LowerPillar") = {
+    906, 907
 };
 
-Physical Surface("LowerPillarOuter") = {
-    906
+Physical Surface("LowerPillarBarrier") = {
+    905
 };
 
-Physical Surface("UpperPillarCenter") = {
-    909
+Physical Surface("UpperPillar") = {
+    909, 910
 };
 
-Physical Surface("UpperPillarOuter") = {
-    910
+Physical Surface("UpperPillarBarrier") = {
+    908
 };
 
 Coherence;

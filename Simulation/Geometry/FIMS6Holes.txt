@@ -505,8 +505,7 @@ Volume(1001) = {203};
 Physical Volume("Grid") = {1};
 Physical Volume("Dielectric") = {101};
 Physical Volume("Gas") = {1001};
-Physical Volume("LowerPillar") = {901};
-Physical Volume("UpperPillar") = {902};
+Physical Volume("Pillars") = {901, 902};
 
 
 // ***** Physical Surfaces ***** //
@@ -518,7 +517,7 @@ Physical Surface("Cathode") = {
 };
 
 Physical Surface("Grid") = {
-    3, // Top
+    3, 903, 904, // Top
     6, // Bottom
     //Sides 
     7, 8, 9, 10, 11, 12, 13, 14, // Holes
@@ -534,14 +533,9 @@ Physical Surface("SurroundingPads") = {
 };
 
 Physical Surface("DielectricTop") = {
-    123, // Top
+    123, 901, 902, // Top
     131, 132, // Central pad boundary
     127, 128 // Surrounding pad boundary
-};
-
-Physical Surface("Pillars") = {
-    906, 907, // Lower pillar
-    909, 910 // Upper pillar
 };
 
 // *** Boundary Elements *** //
@@ -549,8 +543,25 @@ Physical Surface("Pillars") = {
 Physical Surface("Boundaries") = {
     15, 18, 19, 20, 23, 24, //Grid
     322, 323, 324, 325, 326, 327, 925, 926, //Gas
-    125, 126, 129, 130, // Dielectric
-    905, 908 // Pillars
+    125, 126, 129, 130 // Dielectric
+};
+
+// *** Pillar Elements *** //
+
+Physical Surface("LowerPillar") = {
+    906, 907
+};
+
+Physical Surface("LowerPillarBarrier") = {
+    905
+};
+
+Physical Surface("UpperPillar") = {
+    909, 910
+};
+
+Physical Surface("UpperPillarBarrier") = {
+    908
 };
 
 Coherence;
