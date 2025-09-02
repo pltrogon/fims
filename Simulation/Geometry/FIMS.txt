@@ -1,6 +1,7 @@
 // Import values from run control file.
 // Parameters in micrometers
 Include "../runControl";
+pillarRadius = 20;
 
 // Finite element sizes for different regions
 //gridElm: points on the corner of the grid without a hole (x4)
@@ -11,10 +12,10 @@ Include "../runControl";
 //cathElm: points along the cathode far above the grid (x4)
 
 gridElm = (pitch - holeRadius)/5;
-holeElm = gridThickness*2;
+holeElm = gridThickness;
 padElm = thicknessSiO2;
 diElm = padLength/6;
-pilElm = padLength/4;
+pilElm = pillarRadius/3;
 cathElm = pitch/10;
 
 // Derived Z-coordinates for different layers
@@ -25,7 +26,6 @@ gridTop = gridThickness/2;
 gridBottom = -gridThickness/2;
 topSiO2 = - gridThickness/2 - gridStandoff + thicknessSiO2;
 padBase = -gridThickness/2 - gridStandoff;
-pillarRadius = 20;
 
 //Some pad parameters
 halfPad = padLength/2;
