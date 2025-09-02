@@ -124,6 +124,7 @@ class FIMS_Simulation:
             'holeRadius': 90.,
             'cathodeHeight': 200.,
             'thicknessSiO2': 5.,
+            'pillarRadius': 20.,
             'fieldRatio': 40.,
             'transparencyLimit': 0.98,
             'numFieldLine': 25,

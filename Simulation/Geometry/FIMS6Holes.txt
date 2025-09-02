@@ -28,7 +28,6 @@ gridTop = gridThickness/2;
 gridBottom = -gridThickness/2;
 topSiO2 = - gridThickness/2 - gridStandoff + thicknessSiO2;
 padBase = -gridThickness/2 - gridStandoff;
-pillarRadius = 20;
 
 //Some pad parameters
 halfPad = padLength/2;

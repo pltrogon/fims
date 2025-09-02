@@ -141,7 +141,7 @@ int main(int argc, char * argv[]) {
 
   double  padLength, pitch;
   double gridStandoff, gridThickness, holeRadius;
-  double cathodeHeight, thicknessSiO2;
+  double cathodeHeight, thicknessSiO2, pillarRadius;
   double fieldRatio, transparencyLimit;
   int numFieldLine;
   int numAvalanche, avalancheLimit;
@@ -185,7 +185,7 @@ int main(int argc, char * argv[]) {
   paramFile.close();
 
   //Parse the values from the map
-  if(numKeys != 14){//Number of user-defined simulation parameters in runControl to search for.
+  if(numKeys != 15){//Number of user-defined simulation parameters in runControl to search for.
     std::cerr << "Error: Invalid simulation parameters in 'runControl'." << std::endl;
     return -1;
   }
@@ -201,6 +201,7 @@ int main(int argc, char * argv[]) {
 
   cathodeHeight = std::stod(readParam["cathodeHeight"])*MICRONTOCM;
   thicknessSiO2 = std::stod(readParam["thicknessSiO2"])*MICRONTOCM;
+  pillarRadius = std::stod(readParam["pillarRadius"])*MICRONTOCM;
 
   //Field parameters
   fieldRatio = std::stod(readParam["fieldRatio"]);
@@ -235,6 +236,7 @@ int main(int argc, char * argv[]) {
   metaDataTree->Branch("Hole Radius", &holeRadius, "holeRadius/D");
   metaDataTree->Branch("Cathode Height", &cathodeHeight, "cathodeHeight/D");
   metaDataTree->Branch("Thickness SiO2", &thicknessSiO2, "thicknessSiO2/D");
+  metaDataTree->Branch("Pillar Radius", &pillarRadius, "pillarRadius/D");
 
   //Field Parameters
   metaDataTree->Branch("Electric Field Ratio", &fieldRatio, "fieldRatio/D");
@@ -404,30 +406,12 @@ int main(int argc, char * argv[]) {
   //Define boundary region for simulation
   double xBoundary[2], yBoundary[2], zBoundary[2];
 
-  /*
-  //Simple criteria for if 1/4 geometry or full
-  //   x=y=0 should be the min if 1/4
-  if(xmin == 0 && ymin == 0){
-    xBoundary[0] = -xmax;
-    xBoundary[1] = xmax;
-    yBoundary[0] = -ymax;
-    yBoundary[1] = ymax;
-  }
-  else{
-    xBoundary[0] = xmin;
-    xBoundary[1] = xmax;
-    yBoundary[0] = ymin;
-    yBoundary[1] = ymax;
-  }
-  */
-  zBoundary[0] = zmin;
-  zBoundary[1] = zmax;
-
-  //TODO - Make simulation region extent to pitch in x and y
   xBoundary[0] = -pitch;
   xBoundary[1] = pitch;
   yBoundary[0] = -pitch;
   yBoundary[1] = pitch;
+  zBoundary[0] = zmin;
+  zBoundary[1] = zmax;
 
   //Enable periodicity and set components
   fieldFIMS.EnableMirrorPeriodicityX();

@@ -322,7 +322,8 @@ class runData:
             'Grid Thickness',
             'Hole Radius',
             'Cathode Height',
-            'Thickness SiO2'
+            'Thickness SiO2',
+            'Pillar Radius'
         ]
         
         metaData = self.getDataFrame('metaData')
@@ -402,13 +403,12 @@ class runData:
         Additional information such as geometry cell, simulation boundary, and length
         definitions are included.
         
-        TODO: The support pillars are also visualized, 
-        however these are not yet included in simulations.
         """
         # Extract relevant geometric parameters from metadata.
         pitch = self.getRunParameter('Pitch')
         padLength = self.getRunParameter('Pad Length')
         holeRadius = self.getRunParameter('Hole Radius')
+        pillarRadius = self.getRunParameter('Pillar Radius')
 
         inRadius = pitch/2.
         outRadius = 2*inRadius/math.sqrt(3)
@@ -448,7 +448,6 @@ class runData:
 
         # Define circles representing the pillars.
         #    (Must be done as separate patches)
-        pillarRadius = 20
         pillar = {}
         for i in range(6):
             pillar[i] = plt.Circle(

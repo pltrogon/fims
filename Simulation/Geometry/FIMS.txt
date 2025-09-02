@@ -1,7 +1,6 @@
 // Import values from run control file.
 // Parameters in micrometers
 Include "../runControl";
-pillarRadius = 20;
 
 // Finite element sizes for different regions
 //gridElm: points on the corner of the grid without a hole (x4)
