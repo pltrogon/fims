@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from polyaClass import myPolya
-from functionsFIMS import withinHex, withinneighborHex, xyInterpolate
+from functionsFIMS import withinHex, withinNeighborHex, xyInterpolate
 
 CMTOMICRON = 1e4
 
@@ -1420,7 +1420,7 @@ class runData:
                 #Check if this point is above the central or neighbor pad
                 if (
                     withinHex(newPoint['x'], newPoint['y'], padLength)
-                    or withinneighborHex(newPoint['x'], newPoint['y'], padLength, pitch)
+                    or withinNeighborHex(newPoint['x'], newPoint['y'], padLength, pitch)
                 ):
                     continue
                 
@@ -1543,14 +1543,14 @@ class runData:
             self.getRunParameter('Pad Length')
             )
 
-        aboveneighbor = withinneighborHex(
+        aboveNeighbor = withinNeighborHex(
             outerFieldLine['Field Line x'], 
             outerFieldLine['Field Line y'], 
             self.getRunParameter('Pad Length'),
             self.getRunParameter('Pitch')
             )
 
-        isTransparent = (abovePad.iloc[-1] or aboveneighbor.iloc[-1])
+        isTransparent = (abovePad.iloc[-1] or aboveNeighbor.iloc[-1])
 
         return isTransparent
 

@@ -17,7 +17,7 @@ Functions:
     plotThreshold
     plotPolyaExamples
     withinHex
-    withinneighborHex
+    withinNeighborHex
     xyInterpolate
     getSetData
     plotDataSets
@@ -281,7 +281,7 @@ def withinHex(xVal, yVal, sideLength):
     return inHex
 
 #********************************************************************************#   
-def withinneighborHex(xVal, yVal, sideLength, pitch):
+def withinNeighborHex(xVal, yVal, sideLength, pitch):
     """
     Determines if a coordinate lies within a hexagonal region in hexagonal tiling.
     Assumes a flat-top geometry. 
@@ -315,9 +315,9 @@ def withinneighborHex(xVal, yVal, sideLength, pitch):
     checkTopRight = withinHex(x - neighborX[1], y - neighborY[1], sideLength)
 
     #Combine conditions
-    isInneighborHex = np.logical_or(checkTop, checkTopRight)
+    isInNeighborHex = np.logical_or(checkTop, checkTopRight)
 
-    return isInneighborHex
+    return isInNeighborHex
 
 
 #********************************************************************************#   
