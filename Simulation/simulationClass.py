@@ -47,6 +47,7 @@ class FIMS_Simulation:
             - holeRadius: Radius of the hole in the grid (micron).
             - cathodeHeight: Distance from the top to the grid to the cathode plane (micron).
             - thicknessSiO2: Thickness of the SiO2 layer (micron).
+            - pillarRadius: The radius of the insulating support pillars (micron).
             - fieldRatio: Ratio of the amplification field to the drift field.
                           Note that the drift field is assumed to be 1 kV/cm.
             - numFieldLine: Number of field lines to calculate for visualization.

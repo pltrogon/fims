@@ -78,6 +78,8 @@ class runData:
         _calcOpticalTransparency
         _getTransparency
         plotEfficiency              <--------- New
+        _getAvalancheGain           <--------- New
+        plotAvalancheSignal         <--------- New
     """
 
 #********************************************************************************#
@@ -105,6 +107,7 @@ class runData:
         if not allData:
             print(f'Warning: No data loaded for run number {runNumber}.')
             print('Check file path and contents.')
+            return
 
         #Unpack into private dataframes
         for treeName in self.dataTrees:
@@ -261,11 +264,12 @@ class runData:
 
         #Get a copy of the data - note is saved as cm
         rawData = getattr(self, f'_{dataSetName}', None)
-        dataFrame = rawData.copy()
 
-        if dataFrame is None:
+        if rawData is None:
             print(f"Missing '{dataSetName}' data.")
             return None
+        
+        dataFrame = rawData.copy()
 
         #Scale to micron
         match dataSetName:
@@ -804,7 +808,9 @@ class runData:
         some electrons have exitted the simulation boundary.
         """
         avalancheData = self.getDataFrame('avalancheData')
-        return avalancheData['Total Electrons'].mean()
+        avalancheGain = avalancheData['Total Electrons'] - avalancheData['Attached Electrons']
+
+        return avalancheGain.mean()
 
     
 #********************************************************************************#   
@@ -948,7 +954,7 @@ class runData:
         allData = self.getDataFrame('electronTrackData')
         singleData = allData[allData['Avalanche ID']==avalancheID]
         
-        gain = singleData['Electron ID'].max()+1
+        gain = self._getAvalancheGain(avalancheID)
     
         groupedData = singleData.groupby('Electron ID')
     
@@ -1654,3 +1660,50 @@ class runData:
         return fig
 
 
+#********************************************************************************#
+    def _getAvalancheGain(self, avalancheID=0):
+        """
+        TODO
+        """
+        allData = self.getDataFrame('avalancheData')
+        singleAvalanche = allData[allData['Avalanche ID']==avalancheID]
+
+        totalElectrons = singleAvalanche['Total Electrons']
+        attachedElectrons = singleAvalanche['Attached Electrons']
+        
+        gain = totalElectrons - attachedElectrons
+
+        return gain.item()
+    
+#********************************************************************************#
+    def plotAvalancheSignal(runData, avalancheID=0):
+        """
+        TPDP
+        """
+        allData = runData.getDataFrame('signalData')
+        singleData = allData[allData['Avalanche ID']==avalancheID]
+        
+        gain = runData._getAvalancheGain(avalancheID)
+        
+        if singleData is None:
+            print(f"An error occured plotting ID='{avalancheID}'.")
+            return
+
+        totalCharge = singleData['Signal Strength'].sum()
+
+        # Create figure
+        fig = plt.figure()
+        fig.suptitle(f'Induced Signal from Avalanche: {avalancheID} (Gain={gain}, Total Charge={totalCharge:.3f})')
+        ax = fig.add_subplot(111)
+        
+        ax.plot(
+            singleData['Signal Time'], singleData['Signal Strength']
+        )
+
+        ax.set_xlabel('Time (ns)')
+        ax.set_ylabel('Signal Strength (C/ns)')#TODO - The units here seem weird
+
+        plt.grid()
+        plt.tight_layout()   
+        
+        return fig

@@ -72,6 +72,7 @@ int main(int argc, char * argv[]) {
   const double MICRON = 1e-6;
   const double CM = 1e-2;
   const double MICRONTOCM = 1e-4;
+  const double ELEMENTARY_CHARGE = 1.602176634e-19;
   bool DEBUG = false;
   
   //*************** SETUP ***************//
@@ -318,7 +319,7 @@ int main(int argc, char * argv[]) {
   fieldFIMS.SetGas(gasFIMS);
 
   // Import the weighting field for the readout electrode.
-  fieldFIMS.SetWeightingField(elmerResultsPath+"FIMSWeighting.result", "wtlel");
+  fieldFIMS.SetWeightingField(elmerResultsPath+"FIMSWeighting.result", "centerPad");
 
   //Create a sensor
   Sensor* sensorFIMS = new Sensor();
@@ -327,7 +328,7 @@ int main(int argc, char * argv[]) {
     xBoundary[0], yBoundary[0], zBoundary[0], 
     xBoundary[1], yBoundary[1], zBoundary[1]
   );
-  sensorFIMS->AddElectrode(&fieldFIMS, "wtlel");
+  sensorFIMS->AddElectrode(&fieldFIMS, "centerPad");
 
   // ***** Draw field lines for visualization ***** //
   std::cout << "****************************************\n";
@@ -442,8 +443,9 @@ int main(int argc, char * argv[]) {
   double e0 = 0.1;//eV (Garfield is weird when this is 0.)
   double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
 
-  int nSignalBins = 100;
-  double timeFinal = 10;//ns
+  double timeFinal = 5.;//ns
+  double timeStep = 0.01;//ns
+  int nSignalBins = timeFinal/timeStep;
 
   //Start timing the sim
   startSim = clock();
@@ -487,7 +489,7 @@ int main(int argc, char * argv[]) {
 
       //Link objects
       parallelFieldFIMS->SetGas(gasFIMS);
-      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSWeighting.result", "wtlel");
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSWeighting.result", "centerPad");
       parallelFieldFIMS->EnableMirrorPeriodicityX();
       parallelFieldFIMS->EnableMirrorPeriodicityY();
       
@@ -496,9 +498,9 @@ int main(int argc, char * argv[]) {
         xBoundary[0], yBoundary[0], zBoundary[0], 
         xBoundary[1], yBoundary[1], zBoundary[1]
       );      
-      //TODO - ADDING INDUCED SIGNALS
-      parallelSensorFIMS->AddElectrode(parallelFieldFIMS, "wtlel");
-      parallelSensorFIMS->SetTimeWindow(0., timeFinal/nSignalBins, nSignalBins);//start, step, numStep [ns]
+
+      parallelSensorFIMS->AddElectrode(parallelFieldFIMS, "centerPad");
+      parallelSensorFIMS->SetTimeWindow(0., timeStep, nSignalBins);
 
       avalancheE->SetSensor(parallelSensorFIMS);
       avalancheE->EnableAvalancheSizeLimit(avalancheLimit);
@@ -669,17 +671,17 @@ int main(int argc, char * argv[]) {
 
       }//end electrons in avalanche loop
 
-
+      //Get signal for each timestep
       for(int inSignal = 0; inSignal < nSignalBins; inSignal++){
-        signalTime = inSignal*timeFinal/nSignalBins;
-        signalStrength = parallelSensorFIMS->GetSignal("wtlel", inSignal); // /ElementaryCharge;
+        signalTime = inSignal*timeStep;
+        signalStrength = parallelSensorFIMS->GetSignal("centerPad", inSignal);
         
+        //Fill tree
         parallelSignalDataTree->Fill();
       }
 
       //*** TODO ***/
-      //Can insert any per-avalanche analysis/data here.
-      // -- Induced signals
+      //Can insert any other per-avalanche analysis/data here.
       // -- Histograms of energy loss/collison, time between collisions,
 
       //Fill tree with data from this avalanche
@@ -765,6 +767,7 @@ int main(int argc, char * argv[]) {
   metaDataTree->Branch("Hole Radius", &holeRadius, "holeRadius/D");
   metaDataTree->Branch("Cathode Height", &cathodeHeight, "cathodeHeight/D");
   metaDataTree->Branch("Thickness SiO2", &thicknessSiO2, "thicknessSiO2/D");
+  metaDataTree->Branch("Pillar Radius", &pillarRadius, "pillarRadius/D");
 
   metaDataTree->Branch("Electric Field Ratio", &fieldRatio, "fieldRatio/D");
   metaDataTree->Branch("Number of Field Lines", &numFieldLine, "numFieldLine/I");
@@ -780,7 +783,6 @@ int main(int argc, char * argv[]) {
   metaDataTree->Branch("Diffusion T (Drift)", &driftDiffusionT, "driftDiffusionT/D");
 
   metaDataTree->Fill();
-
 
   // ***** Output data file ***** //  
   std::string dataFilename = "sim."+std::to_string(runNo)+".root";
