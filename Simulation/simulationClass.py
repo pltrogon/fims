@@ -222,6 +222,10 @@ class FIMS_Simulation:
         if not os.path.exists("build"):
             os.makedirs("build")
 
+        #Check for build/parallelData
+        if not os.path.exists("build/parallelData"):
+            os.makedirs("build/parallelData")
+
         # Get garfield path into environment
         envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
         try:

@@ -95,7 +95,8 @@ class runData:
             'electronData',
             'ionData',
             'avalancheData',
-            'electronTrackData'
+            'electronTrackData',
+            'signalData'
         ]
 
         #Read the root trees to large dataframe
