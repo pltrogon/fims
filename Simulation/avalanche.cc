@@ -741,7 +741,6 @@ int main(int argc, char * argv[]) {
   );
   */
   
-
   delete gasFIMS;
 
   //Final timing
