@@ -16,6 +16,7 @@ holeRadius = 90.0;
 // Other
 cathodeHeight = 200.0;
 thicknessSiO2 = 5.0;
+pillarRadius = 20.0;
 
 //----- Field Parameters -----
 fieldRatio = 40.0;

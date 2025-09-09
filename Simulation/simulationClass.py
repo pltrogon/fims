@@ -41,7 +41,7 @@ class FIMS_Simulation:
     Attributes:
         param (dict): Parameter dictionary with the following entries:
             - padLength: Length of the side of the hexagonal pad (micron).
-            - pitch: Distance between neighbouring pads (micron).
+            - pitch: Distance between neighboring pads (micron).
             - gridStandoff: Distance from the top to the SiO2 layer to the bottom of the grid (micron).
             - gridThickness: Thickness of the grid (micron).
             - holeRadius: Radius of the hole in the grid (micron).
@@ -75,7 +75,7 @@ class FIMS_Simulation:
         _runElmer
         _runElmerWeighting
         _runGarfield
-        _runSimulation
+        runSimulation
     """
 
 #***********************************************************************************#
@@ -124,6 +124,7 @@ class FIMS_Simulation:
             'holeRadius': 90.,
             'cathodeHeight': 200.,
             'thicknessSiO2': 5.,
+            'pillarRadius': 20.,
             'fieldRatio': 40.,
             'transparencyLimit': 0.98,
             'numFieldLine': 25,
@@ -220,6 +221,10 @@ class FIMS_Simulation:
         #Check for build/
         if not os.path.exists("build"):
             os.makedirs("build")
+
+        #Check for build/parallelData
+        if not os.path.exists("build/parallelData"):
+            os.makedirs("build/parallelData")
 
         # Get garfield path into environment
         envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
@@ -491,29 +496,35 @@ class FIMS_Simulation:
             print('An error occurred while reading sif file.')
             return False
     
-        #Convert to a single string
-        sifString = "".join(sifLines)
-    
-        #Replace all 'FIMS' with 'FIMSWeighting'
-        sifString = sifString.replace('FIMS', 'FIMSWeighting')
-    
-        #Change all lines with 'Potential = <number>' to 'Potential = 0.0'
-        # This regex matches 'Potential = ' followed by any number (integer or float, positive or negative)
-        sifString = re.sub(r'Potential = [-+]?\d+\.?\d*', r'Potential = 0.0', sifString)
-    
-        #Handle the 'CentralPad' case separately and set its Potential to 1.0
-        # Note: This is only for the middle Pad. The 'SurroundingPads' case can be handled by replacing the 3's with 4's.
-        sifString = sifString.replace(
-            'Boundary Condition 3\n Target Boundaries(1) = 3\n Name = "CentralPad"\n \tPotential = 0.0',
-            'Boundary Condition 3\n Target Boundaries(1) = 3\n Name = "CentralPad"\n \tPotential = 1.0'
-        )
-    
-        #Convert back to a list
-        sifLinesNew = sifString.splitlines(keepends=True)
-        
+        # Process lines one by one
+        sifLinesNew = []
+        centralPadBC = False
+
+        for line in sifLines:
+            #Replace all 'FIMS' with 'FIMSWeighting'
+            line = line.replace('FIMS', 'FIMSWeighting')
+
+            #Check if BC for Central Pad
+            if 'CentralPad' in line:
+                centralPadBC = True
+
+            #Set potentials -> 1 if Central Pad, 0 otherwise
+            if 'Potential = ' in line:
+                if centralPadBC:
+                    sifLinesNew.append('\tPotential = 1.0\n')
+                    centralPadBC = False
+                    continue
+                else:
+                    sifLinesNew.append('\tPotential = 0.0\n')
+                    continue
+
+            #Keep all other non-potential lines unchanged
+            sifLinesNew.append(line)
+
         #Write new sif file
         filename = 'Geometry/FIMSWeighting.sif'
         return self._writeFile(filename, sifLinesNew)
+        
 
 #***********************************************************************************#
     def _writeParam(self):
@@ -605,6 +616,7 @@ class FIMS_Simulation:
             with open(os.path.join(os.getcwd(), 'log/logGmsh.txt'), 'w+') as gmshOutput:
                 startTime = time.monotonic()
                 runReturn = subprocess.run(
+                #TODO: Linux requires file path to gmsh (./gmsh in my local build)
                     ['gmsh', os.path.join('./Geometry/', geoFile),
                      '-order', '2', '-optimize_ho',
                      '-clextend', '1',
@@ -920,7 +932,7 @@ class FIMS_Simulation:
         return minField
 
 #***********************************************************************************#
-    def findMinField(self, numLines=5, margin=.8):
+    def findMinField(self, numLines=5, margin=.8, stepSize = 1.2):
         """
         Runs simulations to determine what the minimum electric field ratio
         needs to be in order to have 100% Efield transparency.
@@ -961,6 +973,8 @@ class FIMS_Simulation:
         if not self._writeParam():
             print('Error writing parameters.')
             return False
+            
+        print('Executing gmsh')
         if not self._runGmsh():
                 print('Error executing Gmsh.')
                 return False
@@ -970,13 +984,16 @@ class FIMS_Simulation:
         isTransparent = False
         transparencyThreshold = self._getParam('transparencyLimit')
         curField = self._getParam('fieldRatio')
+        print(f'Initial field ratio: {curField}')
         
         while not isTransparent:
             #Block that determines the new field ratio
             if not firstRun:
+                #TODO: find better way to determine step size
                 #Determine a step size to change field
-                stepSize = 1.2
+                #stepSize = value set in args
                 curField *= stepSize
+                print(f'Current field ratio: {curField}')
 
                 #Write new field ratio
                 self.param['fieldRatio'] = curField
@@ -985,11 +1002,13 @@ class FIMS_Simulation:
                     return False
             
             #Determine the electric field
+            print('Executing Elmer FEM')
             if not self._runElmer():
                 print('Error executing Elmer.')
                 return False
 
             #Generate field lines
+            print('Generating field lines')
             if not self._runFieldLines():
                 print('Error generating field lines.')
                 return False
@@ -1002,14 +1021,12 @@ class FIMS_Simulation:
                 except (ValueError, FileNotFoundError):
                     print("Error: Could not read or parse transparency file.")
                     return False
-
-            #Print update to monitor convergence
-            print(f'Current field ratio: {curField}')
+                    
             firstRun = False
 
         #Print solution
         finalField = self._getParam('fieldRatio')
-        print(f'Solution: Field ratio = {finalField}')
+        print(f'\nSolution: Field ratio = {finalField}')
         
         #Reset parameters
         self.resetParam()

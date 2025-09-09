@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from polyaClass import myPolya
-from functionsFIMS import withinHex, withinNeighbourHex, xyInterpolate
+from functionsFIMS import withinHex, withinNeighborHex, xyInterpolate
 
 CMTOMICRON = 1e4
 
@@ -96,7 +96,8 @@ class runData:
             'electronData',
             'ionData',
             'avalancheData',
-            'electronTrackData'
+            'electronTrackData',
+            'signalData'
         ]
 
         #Read the root trees to large dataframe
@@ -323,7 +324,8 @@ class runData:
             'Grid Thickness',
             'Hole Radius',
             'Cathode Height',
-            'Thickness SiO2'
+            'Thickness SiO2',
+            'Pillar Radius'
         ]
         
         metaData = self.getDataFrame('metaData')
@@ -403,22 +405,21 @@ class runData:
         Additional information such as geometry cell, simulation boundary, and length
         definitions are included.
         
-        TODO: The support pillars are also visualized, 
-        however these are not yet included in simulations.
         """
         # Extract relevant geometric parameters from metadata.
         pitch = self.getRunParameter('Pitch')
         padLength = self.getRunParameter('Pad Length')
         holeRadius = self.getRunParameter('Hole Radius')
+        pillarRadius = self.getRunParameter('Pillar Radius')
 
         inRadius = pitch/2.
         outRadius = 2*inRadius/math.sqrt(3)
         
-        #Centers of neighbouring cells
+        #Centers of neighboring cells
         pitchX = pitch*2./math.sqrt(3)
         pitchY = inRadius
-        neighbourX = 3./2.*outRadius*np.array([-1, -1, 0, 0, 1, 1])
-        neighbourY = inRadius*np.array([1, -1, 2, -2, 1, -1])
+        neighborX = 3./2.*outRadius*np.array([-1, -1, 0, 0, 1, 1])
+        neighborY = inRadius*np.array([1, -1, 2, -2, 1, -1])
         
         #Define the vertices of a hexagon
         hexCornerX = np.array([1., .5, -.5, -1., -.5, .5, 1.])
@@ -439,17 +440,16 @@ class runData:
         hole[0] = plt.Circle((0, 0), holeRadius, 
                             facecolor='none', edgecolor='k', lw=1, 
                             label=f'Hole (r = {holeRadius:.0f} um)')
-        # Neighbouring cell holes (#808080 = Grey)
-        for i in range(len(neighbourX)):
+        # Neighboring cell holes (#808080 = Grey)
+        for i in range(len(neighborX)):
             hole[i+1] = plt.Circle(
-                (neighbourX[i], 
-                 neighbourY[i]), 
+                (neighborX[i], 
+                 neighborY[i]), 
                  holeRadius, 
                  facecolor='none', edgecolor='#808080', ls=':', lw=1)
 
         # Define circles representing the pillars.
         #    (Must be done as separate patches)
-        pillarRadius = 20
         pillar = {}
         for i in range(6):
             pillar[i] = plt.Circle(
@@ -475,9 +475,9 @@ class runData:
         
         #Add boundaries of neighboring cells and pads
         for i in range(6):
-            ax1.plot(neighbourX[i]+cellX, neighbourY[i]+cellY,
+            ax1.plot(neighborX[i]+cellX, neighborY[i]+cellY,
                     c='c', ls=':', lw=1)
-            ax1.plot(neighbourX[i]+padX, neighbourY[i]+padY,
+            ax1.plot(neighborX[i]+padX, neighborY[i]+padY,
                     c='m', ls=':', lw=1)
         
         #Add the holes in the grid
@@ -490,7 +490,7 @@ class runData:
 
         #Add markers to center of cells
         ax1.plot(0., 0., marker='x', c='r')
-        ax1.plot(neighbourX, neighbourY,
+        ax1.plot(neighborX, neighborY,
                 marker='.', c='r', ls='')
 
         #Add geometry cell
@@ -508,7 +508,7 @@ class runData:
                 c='g', ls='--', lw=1, label='Simulation Boundary')
 
         #Add dimensions
-        ax1.plot([0, neighbourX[4]], [0, neighbourY[4]],
+        ax1.plot([0, neighborX[4]], [0, neighborY[4]],
                 label=f'Pitch ({pitch:.0f} um)', c='r', ls=':', lw=1)
         ax1.plot([0, padLength], [0, 0],
                 label=f'Pad Length ({padLength:.0f} um)', c='r', ls='-', lw=1)
@@ -1418,10 +1418,10 @@ class runData:
                 except ValueError as e:
                     print(f'Error for Electron {electronID} during interpolation: {e}')
 
-                #Check if this point is above the central or neighbour pad
+                #Check if this point is above the central or neighbor pad
                 if (
                     withinHex(newPoint['x'], newPoint['y'], padLength)
-                    or withinNeighbourHex(newPoint['x'], newPoint['y'], padLength, pitch)
+                    or withinNeighborHex(newPoint['x'], newPoint['y'], padLength, pitch)
                 ):
                     continue
                 
@@ -1526,7 +1526,7 @@ class runData:
         """
         Determines if the electric field transparency is 100%. 
         Allows for the outmost filed line within a cell to 'jump' into a 
-        neighbour cell due to numerical precision.
+        neighbor cell due to numerical precision.
         
         Returns:
             bool: True if outermost field line terminates on a pad, False otherwise.
@@ -1544,14 +1544,14 @@ class runData:
             self.getRunParameter('Pad Length')
             )
 
-        aboveNeighbour = withinNeighbourHex(
+        aboveNeighbor = withinNeighborHex(
             outerFieldLine['Field Line x'], 
             outerFieldLine['Field Line y'], 
             self.getRunParameter('Pad Length'),
             self.getRunParameter('Pitch')
             )
 
-        isTransparent = (abovePad.iloc[-1] or aboveNeighbour.iloc[-1])
+        isTransparent = (abovePad.iloc[-1] or aboveNeighbor.iloc[-1])
 
         return isTransparent
 
