@@ -224,6 +224,12 @@ class App(tk.Tk):
             )
         self.showDiffusion.pack(side=tk.TOP)
 
+        self.showInducedSignal = tk.Button(
+            self.buttonFrame, text='Induced Signal', 
+            command=lambda: self.plotButton('InducedSignal')
+            )
+        self.showInducedSignal.pack(side=tk.TOP)
+
 
     def loadData(self, *args):
         """
@@ -316,6 +322,9 @@ class App(tk.Tk):
 
                 case 'Diffusion':
                     self.currentFig = self.simData.plotDiffusion(self.curParticle.get())
+
+                case 'InducedSignal':
+                    self.currentFig = self.simData.plotAvalancheSignal(avalancheID=self.curAvalancheID.get())
 
                 case _:
                     print('Incorrect plot - defaulting')

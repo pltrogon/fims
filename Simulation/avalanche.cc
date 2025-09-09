@@ -679,6 +679,7 @@ int main(int argc, char * argv[]) {
         //Fill tree
         parallelSignalDataTree->Fill();
       }
+      parallelSensorFIMS->ClearSignal();
 
       //*** TODO ***/
       //Can insert any other per-avalanche analysis/data here.
