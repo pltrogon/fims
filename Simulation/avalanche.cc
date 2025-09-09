@@ -29,6 +29,10 @@
 #include "Garfield/ViewDrift.hh"
 #include "Garfield/ViewSignal.hh"
 
+//WIP - INDUCED SIGNALS
+#include "Garfield/ViewSignal.hh"
+#include "Garfield/ViewField.hh"
+
 //ROOT includes
 #include "TApplication.h"
 #include "TTree.h"
@@ -143,7 +147,7 @@ int main(int argc, char * argv[]) {
 
   double  padLength, pitch;
   double gridStandoff, gridThickness, holeRadius;
-  double cathodeHeight, thicknessSiO2;
+  double cathodeHeight, thicknessSiO2, pillarRadius;
   double fieldRatio, transparencyLimit;
   int numFieldLine;
   int numAvalanche, avalancheLimit;
@@ -187,7 +191,7 @@ int main(int argc, char * argv[]) {
   paramFile.close();
 
   //Parse the values from the map
-  if(numKeys != 14){//Number of user-defined simulation parameters in runControl to search for.
+  if(numKeys != 15){//Number of user-defined simulation parameters in runControl to search for.
     std::cerr << "Error: Invalid simulation parameters in 'runControl'." << std::endl;
     return -1;
   }
@@ -203,6 +207,7 @@ int main(int argc, char * argv[]) {
 
   cathodeHeight = std::stod(readParam["cathodeHeight"])*MICRONTOCM;
   thicknessSiO2 = std::stod(readParam["thicknessSiO2"])*MICRONTOCM;
+  pillarRadius = std::stod(readParam["pillarRadius"])*MICRONTOCM;
 
   //Field parameters
   fieldRatio = std::stod(readParam["fieldRatio"]);
@@ -625,8 +630,7 @@ int main(int argc, char * argv[]) {
         driftIon->GetIonEndpoint(0, xiIon, yiIon, ziIon, tiIon, xfIon, yfIon, zfIon, tfIon, statIon);
         //Fill tree with data from this positive ion
         parallelIonDataTree->Fill();
-        totalIons++;
-        
+        totalIons++;  
 
         //Check for electron attatchment
         if(stat == -7){
