@@ -148,7 +148,7 @@ End
 
 Boundary Condition 4
   Target Boundaries(1) = 4
-  Name = "SurroundingPads"
+  Name = "CornerPad"
   Potential = 0.0
 End
 
@@ -161,30 +161,6 @@ End
 
 Boundary Condition 6
   Target Boundaries(1) = 6
-  Name = "MirrorBoundary"
+  Name = "MirrorBoundaries"
   Electric Flux = 0.0
-End
-
-!TODO: Pillar boundary condition cannot be zero flux, but is periodic reasonable?
-
-Boundary Condition 7
-  Target Boundaries(1) = 8
-  Name = "Lower Pillar Wall"
-End
-
-Boundary Condition 8
-  Target Boundaries(1) = 7
-  Name = "Lower Pillar Periodic"
-  Periodic BC = 70 ! Periodic ID = (target BC number)*(total number of BCs)
-End
-
-Boundary Condition 9
-  Target Boundaries(1) = 10
-  Name = "Upper Pillar Wall"
-End
-
-Boundary Condition 10
-  Target Boundaries(1) = 9
-  Name = "Upper Pillar Periodic"
-  Periodic BC = 90
 End

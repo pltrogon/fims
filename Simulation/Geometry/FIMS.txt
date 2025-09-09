@@ -389,8 +389,7 @@ Volume(1001) = {203};
 Physical Volume("Grid") = {1};
 Physical Volume("Dielectric") = {101};
 Physical Volume("Gas") = {1001};
-Physical Volume("LowerPillar") = {2001, 2002};
-//Physical Volume("UpperPillar") = {2002};
+Physical Volume("Pillars") = {2001, 2002};
 
 
 // ***** Physical Surfaces ***** //
@@ -406,52 +405,28 @@ Physical Surface("Grid") = {
     22, // Bottom
     //Sides 
     23, 24, // Hole
-    25, 26, 27, 28 //Outer
+    25, 26, 27, 28, //Outer
+    903, 904 //Pillar tops
 };
 
 Physical Surface("CentralPad") = {
     121
 };
 
-Physical Surface("SurroundingPads") = {
+Physical Surface("CornerPad") = {
     122
 };
 
-// TODO: Is there a reason that the central and 
-//surrounding pads are separated? 
-//Should the dielectric barrier surrounding the pads 
-//not be included as a physical surface?
-
-Physical Surface("Dielectric") = {
-    123, 901, 902, // Top
-    131, 132, // Central barrier
-    127, 128 // Outer barrier
+Physical Surface("DielectricTop") = {
+    123, // Top
+    901, 902 //Pillar bottoms
 };
-
-// *** Boundary Elements *** //
 
 Physical Surface("Boundaries") = {
     25, 26, 27, 28, //Grid
     322, 323, 324, 325, 911, 912, //Gas
-    125, 126, 129, 130 // Dielectric
-};
-
-// *** Pillar Elements *** //
-
-Physical Surface("LowerPillar") = {
-    906, 907
-};
-
-Physical Surface("LowerPillarBarrier") = {
-    905
-};
-
-Physical Surface("UpperPillar") = {
-    909, 910
-};
-
-Physical Surface("UpperPillarBarrier") = {
-    908
+    125, 126, 129, 130, // Dielectric
+    905, 908 //Pillars
 };
 
 Coherence;

@@ -26,11 +26,16 @@
 #include "Garfield/DriftLineRKF.hh"
 #include "Garfield/ViewDrift.hh"
 
+//WIP - INDUCED SIGNALS
+#include "Garfield/ViewSignal.hh"
+#include "Garfield/ViewField.hh"
+
 //ROOT includes
 #include "TApplication.h"
 #include "TTree.h"
 #include "TFile.h"
 #include "TString.h"
+#include "TCanvas.h"
 
 //C includes
 #include <iostream>
@@ -392,12 +397,14 @@ int main(int argc, char * argv[]) {
   // Import elmer-generated field map
   std::string geometryPath = "../Geometry/";
   std::string elmerResultsPath = geometryPath+"elmerResults/";
-  ComponentElmer fieldFIMS(elmerResultsPath+"mesh.header",
-                           elmerResultsPath+"mesh.elements",
-                           elmerResultsPath+"mesh.nodes", 
-                           geometryPath+"dielectrics.dat",
-                           elmerResultsPath+"FIMS.result", 
-                           "mum");
+  ComponentElmer fieldFIMS(
+    elmerResultsPath+"mesh.header",
+    elmerResultsPath+"mesh.elements",
+    elmerResultsPath+"mesh.nodes", 
+    geometryPath+"dielectrics.dat",
+    elmerResultsPath+"FIMSWeighting.result", //elmerResultsPath+"FIMS.result", 
+    "mum"
+  );
 
   // Get region of elmer geometry
   double xmin, ymin, zmin, xmax, ymax, zmax;
@@ -424,8 +431,20 @@ int main(int argc, char * argv[]) {
   //Create a sensor
   Sensor* sensorFIMS = new Sensor();
   sensorFIMS->AddComponent(&fieldFIMS);
-  sensorFIMS->SetArea(xBoundary[0], yBoundary[0], zBoundary[0], xBoundary[1], yBoundary[1], zBoundary[1]);
+  sensorFIMS->SetArea(
+    xBoundary[0], yBoundary[0], zBoundary[0], 
+    xBoundary[1], yBoundary[1], zBoundary[1]
+  );
   sensorFIMS->AddElectrode(&fieldFIMS, "wtlel");
+
+  //WIP - INDUCED SIGNALS  
+  double tEnd = 10.;
+  int numBins = 100;
+  sensorFIMS->SetTimeWindow(0., tEnd/numBins, numBins);
+  double bscale = tEnd/numBins;  // time per bin
+  double sum = 0.;  // to keep a running sum of the integrated signal
+  sensorFIMS->ClearSignal();
+  TCanvas* cS = new TCanvas("cS", "", 600, 600);
 
   //Set up Microscopic Avalanching
   AvalancheMicroscopic* avalancheE = new AvalancheMicroscopic;
@@ -433,7 +452,10 @@ int main(int argc, char * argv[]) {
   avalancheE->EnableAvalancheSizeLimit(avalancheLimit);
 
   ViewDrift viewElectronDrift;
-  viewElectronDrift.SetArea(xBoundary[0], yBoundary[0], zBoundary[0], xBoundary[1], yBoundary[1], zBoundary[1]);
+  viewElectronDrift.SetArea(
+    xBoundary[0], yBoundary[0], zBoundary[0], 
+    xBoundary[1], yBoundary[1], zBoundary[1]
+  );
   avalancheE->EnablePlotting(&viewElectronDrift, 100);
 
   //Set up Ion drifting
@@ -668,6 +690,7 @@ int main(int argc, char * argv[]) {
 
     }//end electrons in avalanche loop
 
+
     //*** TODO ***/
     //Can insert any per-avalanche analysis/data here.
     // -- Induced signals
@@ -675,6 +698,23 @@ int main(int argc, char * argv[]) {
 
     //Fill tree with data from this avalanche
     avalancheDataTree->Fill();
+
+    //WIP - INDUCED SIGNALS
+    if(inAvalanche==0){
+      std::cout << "Getting signal...\n";
+      for (int i = 0; i < numBins; i++) {
+        double wt = sensorFIMS->GetSignal("wtlel", i);// / ElementaryCharge
+
+        sum += wt;
+      }
+      sensorFIMS->PlotSignal("wtlel", cS);
+      app.Run(kTRUE);
+    }
+    else{
+      std::cout << "Breaking out...\n";
+      break;
+    }
+
 
     //Print timing every ~10%
     int avalancheProgress = (100*(inAvalanche+1))/numAvalanche;
@@ -734,6 +774,24 @@ int main(int argc, char * argv[]) {
   //close the output file
   dataFile->Close();
   delete dataFile;
+
+  /*
+  //WIP - INDUCED SIGNALS
+  // Plot the geometry, field and drift lines.
+  TCanvas* cGeom = new TCanvas("geom", "TEST");
+  cGeom->SetLeftMargin(0.14);
+  const bool plotContours = true;
+  if (plotContours) {
+    ViewField* vf = new ViewField(sensorFIMS);
+    vf->SetCanvas(cGeom);
+    vf->SetArea(xBoundary[0], zBoundary[0], xBoundary[1], zBoundary[1]);
+    vf->SetNumberOfContours(40);
+    vf->SetNumberOfSamples2d(30, 30);
+    vf->SetPlane(0, -1, 0, 0, 0, 0);
+    vf->PlotContour("v");
+  }
+  //-------------------
+  */
 
   std::cout << "****************************************\n";
   std::cout << "Done simulation: " << runNo << "\n";

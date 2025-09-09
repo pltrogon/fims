@@ -492,29 +492,35 @@ class FIMS_Simulation:
             print('An error occurred while reading sif file.')
             return False
     
-        #Convert to a single string
-        sifString = "".join(sifLines)
-    
-        #Replace all 'FIMS' with 'FIMSWeighting'
-        sifString = sifString.replace('FIMS', 'FIMSWeighting')
-    
-        #Change all lines with 'Potential = <number>' to 'Potential = 0.0'
-        # This regex matches 'Potential = ' followed by any number (integer or float, positive or negative)
-        sifString = re.sub(r'Potential = [-+]?\d+\.?\d*', r'Potential = 0.0', sifString)
-    
-        #Handle the 'CentralPad' case separately and set its Potential to 1.0
-        # Note: This is only for the middle Pad. The 'SurroundingPads' case can be handled by replacing the 3's with 4's.
-        sifString = sifString.replace(
-            'Boundary Condition 3\n Target Boundaries(1) = 3\n Name = "CentralPad"\n \tPotential = 0.0',
-            'Boundary Condition 3\n Target Boundaries(1) = 3\n Name = "CentralPad"\n \tPotential = 1.0'
-        )
-    
-        #Convert back to a list
-        sifLinesNew = sifString.splitlines(keepends=True)
-        
+        # Process lines one by one
+        sifLinesNew = []
+        centralPadBC = False
+
+        for line in sifLines:
+            #Replace all 'FIMS' with 'FIMSWeighting'
+            line = line.replace('FIMS', 'FIMSWeighting')
+
+            #Check if BC for Central Pad
+            if 'CentralPad' in line:
+                centralPadBC = True
+
+            #Set potentials -> 1 if Central Pad, 0 otherwise
+            if 'Potential = ' in line:
+                if centralPadBC:
+                    sifLinesNew.append('\tPotential = 1.0\n')
+                    centralPadBC = False
+                    continue
+                else:
+                    sifLinesNew.append('\tPotential = 0.0\n')
+                    continue
+
+            #Keep all other non-potential lines unchanged
+            sifLinesNew.append(line)
+
         #Write new sif file
         filename = 'Geometry/FIMSWeighting.sif'
         return self._writeFile(filename, sifLinesNew)
+        
 
 #***********************************************************************************#
     def _writeParam(self):
