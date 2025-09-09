@@ -19,6 +19,7 @@ class App(tk.Tk):
         self.currentPlot = None
         self.currentFig = None
         self.binWidthValue = 1
+        self.thresholdValue = 0
         self.curAvalancheID = tk.IntVar(value=0)
         self.curParticle = tk.StringVar(self)
         self.curParticle.set('-- Select --')
@@ -38,6 +39,9 @@ class App(tk.Tk):
 
         self.binFrame = tk.Frame(self.optionsFrame)
         self.binFrame.pack(side=tk.TOP, fill=tk.Y, padx=5, pady=5)
+
+        self.threshFrame = tk.Frame(self.optionsFrame)
+        self.threshFrame.pack(side=tk.TOP, fill=tk.Y, padx=5, pady=5)
 
         self.avalancheFrame = tk.Frame(self.optionsFrame)
         self.avalancheFrame.pack(side=tk.TOP, fill=tk.Y, padx=5, pady=5)
@@ -112,6 +116,19 @@ class App(tk.Tk):
         self.binWidth.delete(0, "end")
         self.binWidth.insert(0, 1)    
 
+        # --- Threshold ---
+        threshLabel = tk.Label(self.threshFrame, text='Threshold:')
+        threshLabel.pack(side=tk.LEFT, pady=(2, 2))
+
+        self.threshold = tk.Spinbox(
+            self.threshFrame, 
+            from_=0, to=1000, 
+            wrap=False, width=3, 
+            command=self.updateThreshold)
+        self.threshold.pack(side=tk.LEFT)
+        self.threshold.delete(0, "end")
+        self.threshold.insert(0, 0) 
+
         # --- Avalanche number ---
         avalancheLabel = tk.Label(self.avalancheFrame, text='Avalanche ID:')
         avalancheLabel.pack(side=tk.LEFT, pady=(2, 2))
@@ -182,6 +199,12 @@ class App(tk.Tk):
             command=lambda: self.plotButton('AvalancheSize')
             )
         self.showAvalanche.pack(side=tk.TOP)
+
+        self.showEfficiency = tk.Button(
+            self.buttonFrame, text='Detection Efficiency', 
+            command=lambda: self.plotButton('Efficiency')
+            )
+        self.showEfficiency.pack(side=tk.TOP)
 
         self.showAvalancheTrack = tk.Button(
             self.buttonFrame, text='Avalanche Tracks', 
@@ -270,6 +293,9 @@ class App(tk.Tk):
 
                 case 'AvalancheSize':
                     self.currentFig = self.simData.plotAvalancheFits(binWidth=self.binWidthValue)
+                
+                case 'Efficiency':
+                    self.currentFig = self.simData.plotEfficiency(binWidth=self.binWidthValue, threshold=self.thresholdValue)
 
                 case 'FieldLines':
                     self.currentFig = self.simData.plotAllFieldLines()
@@ -343,6 +369,31 @@ class App(tk.Tk):
             messagebox.showerror("Invalid Input", "Bin width must be an integer.")
             self.binWidth.delete(0, "end")
             self.binWidth.insert(0, self.binWidthValue)
+
+    def updateThreshold(self):
+        """
+        Saves the spinbox value to and updates the plot if data is loaded.
+        """
+        try:
+            # Get the value from the spinbox
+            value = int(self.threshold.get())
+            
+            if value >= 1:
+                self.thresholdValue = value
+            else:
+                self.threshold.delete(0, "end")
+                self.threshold.insert(0, 1)
+                self.thresholdValue = 0
+
+            if self.simData and self.currentPlot:
+                self.getPlot()
+
+            self.updateGUI()
+       
+        except ValueError:
+            messagebox.showerror("Invalid Input", "Threshold must be an integer.")
+            self.threshold.delete(0, "end")
+            self.threshold.insert(0, self.thresholdValue)
 
     
     def updateAvalancheID(self, *args):

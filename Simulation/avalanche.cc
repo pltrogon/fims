@@ -438,6 +438,7 @@ int main(int argc, char * argv[]) {
   // ***** Prepare Avalanche Electron ***** //
   //Set the Initial electron parameters
   double x0 = 0., y0 = 0., z0 = holeRadius;
+  double t0 = 0.;//ns
   double e0 = 0.1;//eV (Garfield is weird when this is 0.)
   double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
 
