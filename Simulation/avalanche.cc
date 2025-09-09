@@ -13,6 +13,7 @@
  *        electronDataTree
  *        ionDataTree
  *        electronTrackDataTree
+ *        signalDataTree
  * 
  * Tanner Polischuk & James Harrison IV
  */
@@ -35,6 +36,8 @@
 #include "TString.h"
 #include "TChain.h"
 #include <TH1D.h>
+#include <TCanvas.h>
+
 
 //Parallelization
 #include <omp.h>
@@ -329,36 +332,28 @@ int main(int argc, char * argv[]) {
   DriftLineRKF driftLines(sensorFIMS);
   driftLines.SetMaximumStepSize(MICRONTOCM);
 
+  //*** Define start loctions for field lines ***/
   std::vector<double> xStart;
   std::vector<double> yStart;
-
   double rangeScale = 0.99;
 
-  //Line generated radially in cardinal directions
+  //Line generated radially in cardinal directions to edge of unit cell
   //Note this will make 2*numFieldLines lines
   //    The x-direction is the long axis of the geometry. 
-  //    x will extend past the vertex of the hex unit cell
-  //    y will go to edge of hex unit cell
+  const double xLineLimit = pitch/sqrt(3.);
+  const double yLineLimit = pitch/2.;
 
   //Field Lines along x:
   for(int i = 0; i < numFieldLine; i++){
-    xStart.push_back(rangeScale*xBoundary[1]*i/(numFieldLine-1));
+    xStart.push_back(rangeScale*xLineLimit*i/(numFieldLine-1));
     yStart.push_back(0.);
   }
   //Field Lines along y:
   for(int i = 0; i < numFieldLine; i++){
     xStart.push_back(0.);
-    yStart.push_back(rangeScale*yBoundary[1]*i/(numFieldLine-1));
+    yStart.push_back(rangeScale*yLineLimit*i/(numFieldLine-1));
   }
 
-  /*
-  //Additional lines radially from center to corner of geometry
-  //Adds another numFieldLines lines
-  for(int i = 0; i < numFieldLine; i++){
-    xStart.push_back(rangeScale*xBoundary[1]*i/(numFieldLine-1));
-    yStart.push_back(rangeScale*yBoundary[1]*i/(numFieldLine-1));
-  }
-  */
 
   // ***** Calculate field Lines ***** //
   std::vector<std::array<float, 3> > fieldLines;
@@ -406,7 +401,6 @@ int main(int argc, char * argv[]) {
       }
     }
     
-
     //Do below grid
     gridFieldLineLocation = -1;
     fieldLines.clear();
@@ -441,6 +435,9 @@ int main(int argc, char * argv[]) {
   double x0 = 0., y0 = 0., z0 = holeRadius;
   double e0 = 0.1;//eV (Garfield is weird when this is 0.)
   double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
+
+  int nSignalBins = 100;
+  double timeFinal = 10;//ns
 
   //Start timing the sim
   startSim = clock();
@@ -493,7 +490,9 @@ int main(int argc, char * argv[]) {
         xBoundary[0], yBoundary[0], zBoundary[0], 
         xBoundary[1], yBoundary[1], zBoundary[1]
       );      
+      //TODO - ADDING INDUCED SIGNALS
       parallelSensorFIMS->AddElectrode(parallelFieldFIMS, "wtlel");
+      parallelSensorFIMS->SetTimeWindow(0., timeFinal/nSignalBins, nSignalBins);//start, step, numStep [ns]
 
       avalancheE->SetSensor(parallelSensorFIMS);
       avalancheE->EnableAvalancheSizeLimit(avalancheLimit);
@@ -533,6 +532,7 @@ int main(int argc, char * argv[]) {
     double xfIon, yfIon, zfIon, tfIon;
     int statIon;
     float electronDriftx, electronDrifty, electronDriftz;
+    double signalTime, signalStrength;
 
     TTree* parallelAvalancheDataTree = new TTree("avalancheDataTree", "Avalanche Results");
     parallelAvalancheDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
@@ -576,6 +576,11 @@ int main(int argc, char * argv[]) {
     parallelElectronTrackDataTree->Branch("Drift x", &electronDriftx, "electronDriftx/F");
     parallelElectronTrackDataTree->Branch("Drift y", &electronDrifty, "electronDrifty/F");
     parallelElectronTrackDataTree->Branch("Drift z", &electronDriftz, "electronDriftz/F");
+
+    TTree* parallelSignalDataTree = new TTree("signalDataTree", "Induced Signal");
+    parallelSignalDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
+    parallelSignalDataTree->Branch("Signal Time", &signalTime, "signalTime/D");
+    parallelSignalDataTree->Branch("Signal Strength", &signalStrength, "signalStrength/D");
   
 
     //***** Parallel Avalanche Loop *****//
@@ -650,7 +655,6 @@ int main(int argc, char * argv[]) {
           parallelElectronTrackDataTree->Fill();
         }
 
-
         //*** TODO ***/
         //Can insert any per-electron analysis/data here.
         // --Velocity?
@@ -659,6 +663,14 @@ int main(int argc, char * argv[]) {
         parallelElectronDataTree->Fill();
 
       }//end electrons in avalanche loop
+
+
+      for(int inSignal = 0; inSignal < nSignalBins; inSignal++){
+        signalTime = inSignal*timeFinal/nSignalBins;
+        signalStrength = parallelSensorFIMS->GetSignal("wtlel", inSignal); // /ElementaryCharge;
+        
+        parallelSignalDataTree->Fill();
+      }
 
       //*** TODO ***/
       //Can insert any per-avalanche analysis/data here.
@@ -784,7 +796,8 @@ int main(int argc, char * argv[]) {
     "avalancheDataTree",
     "electronDataTree",
     "ionDataTree",
-    "electronTrackDataTree"
+    "electronTrackDataTree",
+    "signalDataTree"
   };
 
   std::cout << "Merging parallel trees...\n";
