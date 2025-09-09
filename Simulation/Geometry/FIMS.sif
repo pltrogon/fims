@@ -91,6 +91,11 @@ Material 3
   Relative Permittivity = 3.9
 End
 
+Material 4
+  Name = "Pillars"
+  Relative Permittivity = 3
+End
+
 ! Assigning materials to the Gmsh physical volumes
 
 Body 1
@@ -114,41 +119,48 @@ Body 3
   Material = 3
 End
 
+Body 4
+  Target Bodies(1) = 4
+  Name = "Pillars"
+  Equation = 1
+  Material = 4
+End
+
 ! Boundary conditions
 
 Boundary Condition 1
   Target Boundaries(1) = 1
   Name = "Cathode"
-	Potential = -418.975
+	Potential = -417.95
 End
 
 Boundary Condition 2
   Target Boundaries(1) = 2
   Name = "Grid"
-	Potential = -399.0
+	Potential = -398.0
 End
 
 Boundary Condition 3
   Target Boundaries(1) = 3
   Name = "CentralPad"
-    Potential = 0.0
+  Potential = 0.0
 End
 
 Boundary Condition 4
   Target Boundaries(1) = 4
-  Name = "SurroundingPads"
-    Potential = 0.0
+  Name = "CornerPad"
+  Potential = 0.0
 End
 
 Boundary Condition 5
   Target Boundaries(1) = 5
   Name = "DielectricSurfaceCharge"
-    Charge Density = Variable Coordinate 1, Coordinate 2, Coordinate 3
-    File "chargeBuildup.dat"
+  Charge Density = Variable Coordinate 1, Coordinate 2, Coordinate 3
+  File "chargeBuildup.dat"
 End
 
 Boundary Condition 6
   Target Boundaries(1) = 6
-  Name = "MirrorBoundary"
+  Name = "MirrorBoundaries"
   Electric Flux = 0.0
 End

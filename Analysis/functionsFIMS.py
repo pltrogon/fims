@@ -1,10 +1,27 @@
 import os
+import sys
 import numpy as np
+import math
 import matplotlib.pyplot as plt
 
 from scipy.special import gammaincc
 
-from polyaClass import myPolya
+
+
+"""
+Functions:
+    getAnalysisNumbers
+    plotGeneralPolya
+    plotPolya
+    plotPolyaEfficiency
+    plotThreshold
+    plotPolyaExamples
+    withinHex
+    withinNeighborHex
+    xyInterpolate
+    getSetData
+    plotDataSets
+"""
 
 #********************************************************************************#   
 def getAnalysisNumbers():
@@ -62,6 +79,8 @@ def plotGeneralPolya(theta):
         theta (float): List or numpy array of values to use as 
                        theta in Polya calculations.
     """
+    from polyaClass import myPolya
+
     n = np.linspace(0, 4, 101)
     plt.figure(figsize=(6, 4))
     
@@ -90,6 +109,8 @@ def plotPolya(theta):
         theta (float): List or numpy array of values to use as 
                        theta in Polya calculations.
     """
+    from polyaClass import myPolya
+
     gain = [10, 25, 50, 75, 100]
 
     n = np.arange(0, 101, 1)
@@ -125,7 +146,7 @@ def plotPolya(theta):
 def plotPolyaEfficiency(theta):
     """
     Plots the efficiency of the Polya distribution as a function of the
-    threshold-to-gain ratio ($n_{t} / \bar{n}$).
+    threshold-to-gain ratio (threshold / gain).
 
     Includes reference lines for 95% efficiency for the theta=0 case.
     
@@ -168,6 +189,8 @@ def plotThreshold():
     Include the theta=0 case as the maximum, and several other low-theta results.
     Efficiencies are 95% and 90%.
     """
+    from polyaClass import myPolya
+
     threshold = np.linspace(0, 16, 11)
     efficiency = [.95, .9]
 
@@ -228,5 +251,200 @@ def plotPolyExamples(thetaStart=0, thetaEnd=5, numSteps=6):
 
     return
     
+#********************************************************************************#   
+def withinHex(xVal, yVal, sideLength):
+    """
+    Determines if a coordinate lies within a regular hexagon.
+    Assumes a flat-top geometry centered at the origin.
+
+    Args:
+        xVal (float): The x-coordinate to check.
+        yVal (float): The y-coordiante to check.
+        sideLength (float): The length of a side of the hexagon.
+
+    Returns:
+        bool: True if the coordiate is within the hexagon, False otherwise.
+    """
+    #Use symmetry of regular hexagon
+    x = np.abs(xVal)
+    y = np.abs(yVal)
+
+    #Check if below flat top
+    checkTop = y <= sideLength*math.sqrt(3)/2.
+
+    #Check if the point is within the sloped edge
+    checkSlope = x+y/math.sqrt(3) <= sideLength
+
+    #Combine conditions
+    inHex = np.logical_and(checkTop, checkSlope)
+
+    return inHex
+
+#********************************************************************************#   
+def withinNeighborHex(xVal, yVal, sideLength, pitch):
+    """
+    Determines if a coordinate lies within a hexagonal region in hexagonal tiling.
+    Assumes a flat-top geometry. 
+    Possible uses: 
+        sideLength = side length of the unit cell - Determines if in neighbor cell.
+        sideLength = side length of the pad - Determines if in neighbor pad.
+
+    Args:
+        xVal (float): The x-coordinate to check.
+        yVal (float): The y-coordiante to check.
+        sideLength (float): The length of a side of the hexagon to check.
+        pitch (float): The spacing between the hexagonal tiling.
+    
+    Returns:
+        bool: True if is in neighboring region, otherwise False.
+    """
+    # Use symmetry of tiling - Only need to check above and top-right
+    x = np.abs(xVal)
+    y = np.abs(yVal)
+
+    #Unit cell dimensions
+    inRadius = pitch/2.
+    outRadius = 2*inRadius/math.sqrt(3)
+    
+    #Centers of neighboring cells
+    neighborX = 3./2.*outRadius*np.array([0, 1])
+    neighborY = inRadius*np.array([2, 1])
+
+    #Check
+    checkTop = withinHex(x - neighborX[0], y - neighborY[0], sideLength)
+    checkTopRight = withinHex(x - neighborX[1], y - neighborY[1], sideLength)
+
+    #Combine conditions
+    isInNeighborHex = np.logical_or(checkTop, checkTopRight)
+
+    return isInNeighborHex
 
 
+#********************************************************************************#   
+def xyInterpolate(point1, point2, zTarget):
+    """
+    Linear interpolation between two points for a target z-value.
+
+    Args:
+        point1 (tuple): x,y,z coordinates of the first point.
+        point2 (tuple): x,y,z coordinates of the second point.
+        zTarget (float): The target z-value for the interpolation.
+
+    Returns:
+        tuple: Interpolated x,y,z coordinates. None if points are at the same z.
+    """
+    x1, y1, z1 = point1
+    x2, y2, z2 = point2
+
+    # Cannot interpolate if z-values are the same
+    if z1 == z2:
+        return None
+    
+    if not (z1 <= zTarget <= z2):
+        raise ValueError('Target is outside of interpolation range.')
+
+    #Interpolation requires points to be increasing
+    if z1 > z2:
+        z1, z2 = z2, z1
+        x1, x2 = x2, x1
+        y1, y2 = y2, y1
+
+    x = np.interp(zTarget, (z1, z2), (x1, x2))
+    y = np.interp(zTarget, (z1, z2), (y1, y2))
+
+    return (x, y, zTarget)
+
+#********************************************************************************#
+def getSetData(runList, xVal, yVal):
+    """
+    Retrieves and organizes parameter data from a list of runs.
+
+    Args:
+        runList (list): A list of run numbers for a given trial.
+        xVal (str): The name of the parameter to use for the x-axis.
+        yVal (str): The name of the parameter to use for the y-axis.
+
+    Returns:
+        tuple: A tuple containing two lists: (xData, yData).
+               Each list contains the parameter values for the specified runs.
+    """
+    from runDataClass import runData
+
+    xData = []
+    yData = []
+    for inRun in runList:
+        simData = runData(inRun)
+
+        xData.append(simData.getRunParameter(xVal))
+        yData.append(simData.getRunParameter(yVal))
+
+    return xData, yData
+
+
+#********************************************************************************#
+def plotDataSets(dataSets, xVal, yVal, savePlot=False):
+    """
+    Generates a scatter plot comparing multiple simulation trials.
+
+    Each data set is plotted on the same figure for direct comparison. 
+    The plot can be optionally saved to a 'Plots' directory.
+
+    Args:
+        dataSets (dict): A dictionary where keys are trial labels (strings) and
+                         values are lists of corresponding run numbers.
+        xVal (str): Parameter name for the x-axis.
+        yVal (str): Parameter name for the y-axis.
+        savePlot (bool): Saves plot as a PNG file if True.
+    """
+    from simulationClass import FIMS_Simulation
+
+    if savePlot and not os.path.exists('./Plots'):
+        os.makedirs('./Plots')
+
+    #Check if valid parameters
+    simulation = FIMS_Simulation()
+    allParams = simulation.defaultParam()
+    if xVal not in allParams or yVal not in allParams:
+        raise ValueError(f'Error: Invalid parameter specified.')
+
+    #Add units to axis labels if dimensional
+    dimensionalParam = [
+        'Pad Length',
+        'Pitch',
+        'Grid Standoff',
+        'Grid Thickness',
+        'Hole Radius',
+        'Cathode Height',
+        'Thickness SiO2',
+        'Field Bundle Radius'
+    ]
+    xLabel = xVal + ' (um)' if xVal in dimensionalParam else xVal
+    yLabel = yVal + ' (um)' if yVal in dimensionalParam else yVal
+
+    # Make plot and add data
+    fig, ax = plt.subplots()
+    
+    for inTrial, runList in dataSets.items():
+        xData, yData = getSetData(runList, xVal, yVal)
+        ax.scatter(
+            xData,
+            yData,
+            label=inTrial, 
+        )
+
+    ax.set_title(f'{yVal} vs. {xVal}')
+    ax.set_xlabel(f'{xLabel}')
+    ax.set_ylabel(f'{yLabel}')
+    ax.legend()
+    ax.grid()
+    fig.tight_layout()
+
+    #Save plot
+    if savePlot:
+        filename = f'{yVal}_vs_{xVal}.png'
+        fig.savefig(os.path.join('./Plots', filename))
+        
+    plt.show()
+    return
+
+    

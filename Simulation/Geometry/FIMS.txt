@@ -1,28 +1,34 @@
-//**********************************************************************
-// DEFINING THE FIMS GEOMETRY AS MINIMUM CELL
-//     Requires mirroring in x and y
-//**********************************************************************
-
 // Import values from run control file.
 // Parameters in micrometers
 Include "../runControl";
 
-halfPitch = pitch/2;
-
 // Finite element sizes for different regions
-gridElm = holeRadius;
+//gridElm: points on the corner of the grid without a hole (x4)
+//holeElm: points on the hole of the grid (x12)
+//padElm: points along the edge and center of the pad (x16)
+//diElm: points on the corner of the SiO2 without a pad (x4)
+//pilElm: points on the pillars (x16)
+//cathElm: points along the cathode far above the grid (x4)
+
+gridElm = (pitch - holeRadius)/5;
 holeElm = gridThickness;
 padElm = thicknessSiO2;
-diElm = holeRadius;
-cathElm = holeRadius;
+diElm = padLength/6;
+pilElm = pillarRadius/3;
+cathElm = pitch/10;
 
 // Derived Z-coordinates for different layers
 //     Center of grid: z = 0
+halfPitch = pitch/2;
 cathodeDistance = gridThickness/2 + cathodeHeight;
 gridTop = gridThickness/2;
 gridBottom = -gridThickness/2;
 topSiO2 = - gridThickness/2 - gridStandoff + thicknessSiO2;
 padBase = -gridThickness/2 - gridStandoff;
+
+//Some pad parameters
+halfPad = padLength/2;
+padMath = (3^.5)*halfPad;
 
 // Global coordinate limits
 xMin = 0;
@@ -31,9 +37,95 @@ yMin = 0;
 yMax = halfPitch;
 
 //**********************************************************************
+// PILLAR STRUCTURE
+//**********************************************************************
+// Values left in 900s to allow for easier review before being finalized
+
+// Points - base of the pillars
+Point(901) = {2*xMax/3, 0, topSiO2, pilElm};
+Point(902) = {2*xMax/3 + pillarRadius, 0, topSiO2, pilElm};
+Point(903) = {2*xMax/3 - pillarRadius, 0, topSiO2, pilElm};
+Point(904) = {2*xMax/3, pillarRadius, topSiO2, pilElm};
+
+Point(905) = {xMax/3, yMax, topSiO2, pilElm};
+Point(906) = {xMax/3 + pillarRadius, yMax, topSiO2, pilElm};
+Point(907) = {xMax/3 - pillarRadius, yMax, topSiO2, pilElm};
+Point(908) = {xMax/3, yMax - pillarRadius, topSiO2, pilElm};
+
+// Points - top of the pillars
+Point(909) = {2*xMax/3, 0, gridBottom, pilElm};
+Point(910) = {2*xMax/3 + pillarRadius, 0, gridBottom, pilElm};
+Point(911) = {2*xMax/3 - pillarRadius, 0, gridBottom, pilElm};
+Point(912) = {2*xMax/3, pillarRadius, gridBottom, pilElm};
+
+Point(913) = {xMax/3, yMax, gridBottom, pilElm};
+Point(914) = {xMax/3 + pillarRadius, yMax, gridBottom, pilElm};
+Point(915) = {xMax/3 - pillarRadius, yMax, gridBottom, pilElm};
+Point(916) = {xMax/3, yMax - pillarRadius, gridBottom, pilElm};
+
+// Lines - base of pillars
+Line(901) = {903, 902};
+Circle(902) = {902, 901, 904};
+Circle(903) = {904, 901, 903};
+
+Line(904) = {906, 907};
+Circle(905) = {907, 905, 908};
+Circle(906) = {908, 905, 906};
+
+// Lines - top of pillars
+Line(907) = {911, 910};
+Circle(908) = {910, 909, 912};
+Circle(909) = {912, 909, 911};
+
+Line(910) = {914, 915};
+Circle(911) = {915, 913, 916};
+Circle(912) = {916, 913, 914};
+
+// Lines - connecting top to base of pillars
+Line(913) = {910, 902};
+Line(914) = {911, 903};
+Line(915) = {912, 904};
+
+Line(916) = {914, 906};
+Line(917) = {916, 908};
+Line(918) = {915, 907};
+
+// Surfaces - base of pillars
+Curve Loop(901) = {901, 902, 903};
+Plane Surface(901) = {901};
+Curve Loop(902) = {904, 905, 906};
+Plane Surface(902) = {902};
+
+// Surfaces - top of pillars
+Curve Loop(903) = {907, 908, 909};
+Plane Surface(903) = {903};
+Curve Loop(904) = {910, 911, 912};
+Plane Surface(904) = {904};
+
+// Curves - connecting top to base of pillars
+Curve Loop(905) = {907, 913, -901, -914};
+Plane Surface(905) = {905};
+Curve Loop(906) = {908, 915, -902, -913};
+Surface(906) = {906};
+Curve Loop(907) = {909, 914, -903, -915};
+Surface(907) = {907};
+
+Curve Loop(908) = {910, 918, -904, -916};
+Plane Surface(908) = {908};
+Curve Loop(909) = {911, 917, -905, -918};
+Surface(909) = {909};
+Curve Loop(910) = {912, 916, -906, -917};
+Surface(910) = {910};
+
+// Volume - pillars
+Surface Loop(901) = {901, 903, 905, 906, 907};
+Surface Loop(902) = {902, 904, 908, 909, 910};
+Volume(2001) = {901};
+Volume(2002) = {902};
+
+//**********************************************************************
 // GRID STRUCTURE
 //**********************************************************************
-
 // Points - top of the grid
 Point(1) = {0, 0, gridTop, holeElm};
 Point(2) = {0, holeRadius, gridTop, holeElm};
@@ -68,10 +160,12 @@ Line(6) = {7, 2};
 
 // Curves - bottom of grid
 Circle(7) = {10, 9, 11};
-Line(8) = {11, 16};
+Line(8) = {11, 911};
+Line(921) = {910, 16};
 Line(9) = {16, 14};
 Circle(10) = {14, 12, 13};
-Line(11) = {13, 15};
+Line(11) = {13, 914};
+Line(922) = {915, 15};
 Line(12) = {15, 10};
 
 // Connect - top and bottom of grid
@@ -89,7 +183,7 @@ Curve Loop(21) = {1, 2, 3, 4, 5, 6};
 Plane Surface(21) = {21};
 
 // Surface - bottom of grid
-Curve Loop(22) = {7, 8, 9, 10, 11, 12};
+Curve Loop(22) = {7, 8, -909, -908, 921, 9, 10, 11, -912, -911, 922, 12};
 Plane Surface(22) = {22};
 
 // Surface - Sides of holes in grid
@@ -99,27 +193,24 @@ Curve Loop(24) = {4, 17, -10, -18};
 Surface(24) = {24};
 
 // Surface - Sides of grid
-Curve Loop(25) = {2, 20, -8, -15};
+Curve Loop(25) = {2, 20, -921, -907, -8, -15};
 Plane Surface(25) = {25};
 Curve Loop(26) = {3, 18, -9, -20};
 Plane Surface(26) = {26};
-Curve Loop(27) = {5, 19, -11, -17};
+Curve Loop(27) = {5, 19, -922, -910, -11, -17};
 Plane Surface(27) = {27};
 Curve Loop(28) = {6, 14, -12, -19};
 Plane Surface(28) = {28};
 
 // Volume - Grid
-Surface Loop(201) = {21, 22, 23, 24, 25, 26, 27, 28};
+Surface Loop(201) = {21, 22, 23, 24, 25, 26, 27, 28, 903, 904};
 Volume(1) = {201};
-
 
 //**********************************************************************
 // PADS & DIELECTRIC
 //**********************************************************************
 
 // ***** PADS *****
-halfPad = padLength/2;
-padMath = (3^.5)*halfPad;
 
 // Points - Central Pad
 Point(101) = {0, 0, padBase, padElm};
@@ -177,11 +268,13 @@ Point(119) = {xMax, 0, topSiO2, diElm};
 Point(120) = {0, yMax, topSiO2, diElm};
 
 // Lines - Dielectric Top
-Line(113) = {112, 119};
+Line(113) = {112, 903};
+Line(919) = {902, 119};
 Line(114) = {119, 118};
 Line(115) = {118, 117};
 Line(116) = {117, 116};
-Line(117) = {116, 120};
+Line(117) = {116, 906};
+Line(920) = {907, 120};
 Line(118) = {120, 114};
 Line(119) = {114, 113};
 Line(120) = {113, 112};
@@ -200,7 +293,7 @@ Line(129) = {111, 101};
 Line(130) = {115, 105};
 
 //Surface - top of dielectric
-Curve Loop(123) = {113, 114, 115, 116, 117, 118, 119, 120};
+Curve Loop(123) = {113, -903, -902, 919, 114, 115, 116, 117, -906, -905, 920, 118, 119, 120};
 Plane Surface(123) = {123};
 
 //Surface - bottom of dielectric
@@ -208,7 +301,7 @@ Curve Loop(124) = {109, 110, -107, -106, 111, 112, -103, -102};
 Plane Surface(124) = {124};
 
 //Surface - Sides of dielectric
-Curve Loop(125) = {113, 127, -109, -121};
+Curve Loop(125) = {113, 901, 919, 127, -109, -121};
 Plane Surface(125) = {125};
 Curve Loop(126) = {114, 126, -110, -127};
 Plane Surface(126) = {126};
@@ -216,7 +309,7 @@ Curve Loop(127) = {115, 125, 107, -126};
 Plane Surface(127) = {127};
 Curve Loop(128) = {116, 124, 106, -125};
 Plane Surface(128) = {128};
-Curve Loop(129) = {117, 128, -111, -124};
+Curve Loop(129) = {117, 904, 920, 128, -111, -124};
 Plane Surface(129) = {129};
 Curve Loop(130) = {118, 123, -112, -128};
 Plane Surface(130) = {130};
@@ -226,7 +319,7 @@ Curve Loop(132) = {120, 121, 102, -122};
 Plane Surface(132) = {132};
 
 // Volume - Dielectric
-Surface Loop(202) = {123, 124, 125, 126, 127, 128, 129, 130, 131, 132};
+Surface Loop(202) = {123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 901, 902};
 Volume(101) = {202};
 
 
@@ -263,19 +356,24 @@ Curve Loop(321) = {301, 302, 303, 304};
 Plane Surface(321) = {321};
 
 // Surfaces - Gas Sides
-Curve Loop(322) = {301, 309, -2, 15, 8, 310, -113, 121, -101, -129, -306, -13, -305};
+Curve Loop(322) = {301, 309, -2, 15, 8, 914, -113, 121, -101, -129, -306, -13, -305};
 Plane Surface(322) = {322};
 Curve Loop(323) = {302, 307, 16, 308, 130, -108, -126, -114, -310, 9, -18, -3, -309};
 Plane Surface(323) = {323};
-Curve Loop(324) = {303, 311, -5, 17, 11, 312, -117, 124, -105, -130, -308, -16, -307};
+Curve Loop(324) = {303, 311, -5, 17, 11, 916,-117, 124, -105, -130, -308, -16, -307};
 Plane Surface(324) = {324};
 Curve Loop(325) = {304, 305, 13, 306, 129, -104, -123, -118, -312, 12, -14, -6, -311};
 Plane Surface(325) = {325};
+Curve Loop(911) = {921, 310, -919, -913};
+Plane Surface(911) = {911};
+Curve Loop(912) = {922, 312, -920, -918};
+Plane Surface(912) = {912};
 
 // Volume - Gas
 Surface Loop(203) = {
     321, //Cathode
-    322, 323, 324, 325, //Sides of volume
+    322, 323, 324, 325, 911, 912, //Sides of volume
+    906, 907, 909, 910, //Pillar elements
     21, 22, 23, 24, //Grid elements
     123, 127, 128, 131, 132, //dielectric
     121, 122 // Pad elements
@@ -291,6 +389,7 @@ Volume(1001) = {203};
 Physical Volume("Grid") = {1};
 Physical Volume("Dielectric") = {101};
 Physical Volume("Gas") = {1001};
+Physical Volume("Pillars") = {2001, 2002};
 
 
 // ***** Physical Surfaces ***** //
@@ -304,31 +403,30 @@ Physical Surface("Cathode") = {
 Physical Surface("Grid") = {
     21, // Top
     22, // Bottom
-    //Sides
+    //Sides 
     23, 24, // Hole
-    27, // Top
-    26, // Right
-    25, // Bottom
-    28 // Left
+    25, 26, 27, 28, //Outer
+    903, 904 //Pillar tops
 };
 
 Physical Surface("CentralPad") = {
     121
 };
 
-Physical Surface("SurroundingPads") = {
+Physical Surface("CornerPad") = {
     122
 };
 
 Physical Surface("DielectricTop") = {
-    123
+    123, // Top
+    901, 902 //Pillar bottoms
 };
 
-// *** Boundary Elements *** //
-
 Physical Surface("Boundaries") = {
-    322, 323, 324, 325, //Gas
-    125, 126, 129, 130 // Dielectric
+    25, 26, 27, 28, //Grid
+    322, 323, 324, 325, 911, 912, //Gas
+    125, 126, 129, 130, // Dielectric
+    905, 908 //Pillars
 };
 
 Coherence;
