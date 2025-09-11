@@ -936,7 +936,7 @@ class FIMS_Simulation:
         standoffMinField = 27.121*np.exp(-15.9*standoffRatio)
         padMinField = 143.84*np.exp(-15.17*padRatio)
         
-        minField = radialMinField + standoffMinField + padMinField + 1
+        minField = radialMinField + standoffMinField + padMinField + 3
         
         return minField
 

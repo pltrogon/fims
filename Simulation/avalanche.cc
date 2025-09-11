@@ -73,7 +73,7 @@ int main(int argc, char * argv[]) {
   const double CM = 1e-2;
   const double MICRONTOCM = 1e-4;
   const double ELEMENTARY_CHARGE = 1.602176634e-19;
-  bool DEBUG = false;
+  bool DEBUG = fals;
   
   //*************** SETUP ***************//
   //Timing variables
@@ -252,7 +252,6 @@ int main(int argc, char * argv[]) {
   gridFieldLineDataTree->Branch("Field Line x", &gridLineX, "gridLineX/D");
   gridFieldLineDataTree->Branch("Field Line y", &gridLineY, "gridLineY/D");
   gridFieldLineDataTree->Branch("Field Line z", &gridLineZ, "gridLineZ/D");
-
 
   //*************** SIMULATION ***************//
   std::cout << "****************************************\n";
@@ -435,7 +434,9 @@ int main(int argc, char * argv[]) {
   }//End field line loop
   
   std::cout << "Done " << totalFieldLines << " field lines." << std::endl;
-
+  
+  //TODO: parallel avalanches crashes if numAvalanche = 0
+  
   // ***** Prepare Avalanche Electron ***** //
   //Set the Initial electron parameters
   double x0 = 0., y0 = 0., z0 = holeRadius;
@@ -446,7 +447,7 @@ int main(int argc, char * argv[]) {
   double timeFinal = 5.;//ns
   double timeStep = 0.01;//ns
   int nSignalBins = timeFinal/timeStep;
-
+  
   //Start timing the sim
   startSim = clock();
 
@@ -473,7 +474,7 @@ int main(int argc, char * argv[]) {
     #pragma omp critical
     {//Critical for file I/O
 
-      //Cretae objects for this thread
+      //Create objects for this thread
       parallelFieldFIMS = new ComponentElmer(
         elmerResultsPath+"mesh.header",
         elmerResultsPath+"mesh.elements",
