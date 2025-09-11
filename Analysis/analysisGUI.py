@@ -167,44 +167,47 @@ class App(tk.Tk):
             )
         self.showGeometry.pack(side=tk.TOP)
 
+        self.fieldLineFrame = tk.Frame(self.buttonFrame)
+        self.fieldLineFrame.pack(side=tk.TOP, fill=tk.Y)
+
         self.showFieldLines = tk.Button(
-            self.buttonFrame, text='All Field Lines', 
+            self.fieldLineFrame, text='All Field Lines', 
             command=lambda: self.plotButton('FieldLines')
             )
         self.showFieldLines.pack(side=tk.TOP)
 
         self.showCathodeLines = tk.Button(
-            self.buttonFrame, text='Cathode', 
+            self.fieldLineFrame, text='Cathode', 
             command=lambda: self.plotButton('Cathode')
             )
-        self.showCathodeLines.pack(side=tk.TOP)
-
-        self.gridLineFrame = tk.Frame(self.buttonFrame)
-        self.gridLineFrame.pack(side=tk.TOP, fill=tk.Y)
+        self.showCathodeLines.pack(side=tk.LEFT)
 
         self.showAboveGrid = tk.Button(
-            self.gridLineFrame, text='AboveGrid', 
+            self.fieldLineFrame, text='AboveGrid', 
             command=lambda: self.plotButton('AboveGrid')
             )
         self.showAboveGrid.pack(side=tk.LEFT)
 
         self.showBelowGrid = tk.Button(
-            self.gridLineFrame, text='BelowGrid', 
+            self.fieldLineFrame, text='BelowGrid', 
             command=lambda: self.plotButton('BelowGrid')
             )
-        self.showBelowGrid.pack(side=tk.RIGHT)
+        self.showBelowGrid.pack(side=tk.LEFT)
+
+        self.avalancheFrame = tk.Frame(self.buttonFrame)
+        self.avalancheFrame.pack(side=tk.TOP, fill=tk.Y)
 
         self.showAvalanche = tk.Button(
-            self.buttonFrame, text='Avalanche Size', 
+            self.avalancheFrame, text='Avalanche Size', 
             command=lambda: self.plotButton('AvalancheSize')
             )
-        self.showAvalanche.pack(side=tk.TOP)
+        self.showAvalanche.pack(side=tk.LEFT)
 
         self.showEfficiency = tk.Button(
-            self.buttonFrame, text='Detection Efficiency', 
+            self.avalancheFrame, text='Efficiency', 
             command=lambda: self.plotButton('Efficiency')
             )
-        self.showEfficiency.pack(side=tk.TOP)
+        self.showEfficiency.pack(side=tk.LEFT)
 
         self.showAvalancheTrack = tk.Button(
             self.buttonFrame, text='Avalanche Tracks', 
@@ -213,22 +216,37 @@ class App(tk.Tk):
         self.showAvalancheTrack.pack(side=tk.TOP)
 
         self.showHeatmap = tk.Button(
-            self.buttonFrame, text='Heatmap', 
+            self.buttonFrame, text='Particle Heatmap', 
             command=lambda: self.plotButton('Heatmap')
             )
         self.showHeatmap.pack(side=tk.TOP)
 
         self.showDiffusion = tk.Button(
-            self.buttonFrame, text='Diffusion', 
+            self.buttonFrame, text='Particle Diffusion', 
             command=lambda: self.plotButton('Diffusion')
             )
         self.showDiffusion.pack(side=tk.TOP)
 
+        self.signalFrame = tk.Frame(self.buttonFrame)
+        self.signalFrame.pack(side=tk.TOP, fill=tk.Y)
+
         self.showInducedSignal = tk.Button(
-            self.buttonFrame, text='Induced Signal', 
+            self.signalFrame, text='Induced Signal', 
             command=lambda: self.plotButton('InducedSignal')
             )
-        self.showInducedSignal.pack(side=tk.TOP)
+        self.showInducedSignal.pack(side=tk.LEFT)
+
+        self.showAverageSignal = tk.Button(
+            self.signalFrame, text='Average', 
+            command=lambda: self.plotButton('AverageSignal')
+            )
+        self.showAverageSignal.pack(side=tk.RIGHT)
+
+        self.showSignalvsGain = tk.Button(
+            self.buttonFrame, text='Signal vs. Gain', 
+            command=lambda: self.plotButton('SignalvsGain')
+            )
+        self.showSignalvsGain.pack(side=tk.TOP)
 
 
     def loadData(self, *args):
@@ -325,6 +343,12 @@ class App(tk.Tk):
 
                 case 'InducedSignal':
                     self.currentFig = self.simData.plotAvalancheSignal(avalancheID=self.curAvalancheID.get())
+
+                case 'AverageSignal':
+                    self.currentFig = self.simData.plotAverageSignal()
+
+                case 'SignalvsGain':
+                    self.currentFig = self.simData.plotSignalvsGain()
 
                 case _:
                     print('Incorrect plot - defaulting')
