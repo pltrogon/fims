@@ -728,7 +728,8 @@ int main(int argc, char * argv[]) {
   );
 
 
-/*TODO - Get the diffusion coefficients for the amplification field
+/*
+  //TODO - Get the diffusion coefficients for the amplification field
   double ampDiffusionL, ampDiffusionT, ampVelocity;
   double ampField = driftField*fieldRatio;
   gasFIMS->RunMagboltz(
@@ -740,7 +741,8 @@ int main(int argc, char * argv[]) {
     alphaerr, etaerr, riontoferr, ratttoferr, lorerr, alphatof,
     difftens
   );
-  */
+*/
+  
   
   delete gasFIMS;
 
