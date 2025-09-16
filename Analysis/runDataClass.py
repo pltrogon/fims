@@ -84,6 +84,7 @@ class runData:
         plotEfficiency              <--------- New
         _getAvalancheGain           <--------- New
         plotAvalancheSignal         <--------- New
+        plotAverageSignal           <--------- New
     """
 
 #********************************************************************************#
@@ -1700,34 +1701,139 @@ class runData:
         return gain.item()
     
 #********************************************************************************#
-    def plotAvalancheSignal(runData, avalancheID=0):
+    def plotAvalancheSignal(self, avalancheID=0):
         """
-        TPDP
         """
-        allData = runData.getDataFrame('signalData')
+
+        allData = self.getDataFrame('signalData')
         singleData = allData[allData['Avalanche ID']==avalancheID]
         
-        gain = runData._getAvalancheGain(avalancheID)
-        
-        if singleData is None:
-            print(f"An error occured plotting ID='{avalancheID}'.")
-            return
-
+        gain = self._getAvalancheGain(avalancheID)
         totalCharge = singleData['Signal Strength'].sum()
 
         # Create figure
-        fig = plt.figure()
-        fig.suptitle(f'Induced Signal from Avalanche: {avalancheID} (Gain={gain}, Total Charge={totalCharge:.3f})')
-        ax = fig.add_subplot(111)
+        fig = plt.figure(figsize=(10, 5))
+        fig.suptitle(f'Induced Signal from Avalanche: {avalancheID} (Gain={gain})')
+        ax1 = fig.add_subplot(121)
+        ax2 = fig.add_subplot(122)
         
-        ax.plot(
+        ax1.plot(
             singleData['Signal Time'], singleData['Signal Strength']
         )
 
-        ax.set_xlabel('Time (ns)')
-        ax.set_ylabel('Signal Strength (C/ns)')#TODO - The units here seem weird
+        ax2.plot(
+            singleData['Signal Time'], singleData['Signal Strength'].cumsum()
+        )
+        ax2.axhline(
+            y=totalCharge,
+            label=f'Total Charge = {totalCharge:.3f}', c='r', ls='--'
+        )
 
-        plt.grid()
+        ax1.set_title('Induced Signal')
+        ax1.set_xlabel('Time (ns)')
+        ax1.set_ylabel('Signal Strength (fC/ns)')#TODO - The units here seem weird
+
+        ax2.set_title('Integrated Signal')
+        ax2.set_xlabel('Time (ns)')
+        ax2.set_ylabel('Integrated Signal Strength (fC)')
+
+        ax1.grid()
+        ax2.grid()
+        ax2.legend()
+
         plt.tight_layout()   
         
+        return fig
+    
+#********************************************************************************#
+    def plotAverageSignal(self):
+        """
+        TODO
+        """
+
+        allSignals = self.getDataFrame('signalData')
+        
+        averageSignal = allSignals.groupby('Signal Time')['Signal Strength'].mean()
+        averageCharge = averageSignal.values.cumsum()
+        averageTotalCharge = averageCharge[-1]
+
+        rawGain = self._getRawGain()
+
+        # Create figure
+        fig = plt.figure(figsize=(10, 5))
+        fig.suptitle(f'Average Induced Signal (Gain={rawGain:.1f})')
+        ax1 = fig.add_subplot(121)
+        ax2 = fig.add_subplot(122)
+        
+        ax1.plot(
+            averageSignal.index, averageSignal.values
+        )
+
+        ax2.plot(
+            averageSignal.index, averageCharge
+        )
+        ax2.axhline(
+            y=averageTotalCharge,
+            label=f'Total Charge = {averageTotalCharge:.3f}', c='r', ls='--'
+        )
+
+        ax1.set_title('Average Induced Signal')
+        ax1.set_xlabel('Time (ns)')
+        ax1.set_ylabel('Signal Strength (fC/ns)')#TODO - The units here seem weird
+
+        ax2.set_title('Average Integrated Signal')
+        ax2.set_xlabel('Time (ns)')
+        ax2.set_ylabel('Integrated Signal Strength (fC)')
+
+        ax1.grid()
+        ax2.grid()
+        ax2.legend()
+
+        plt.tight_layout()   
+        
+        return fig
+
+
+#********************************************************************************#
+    def plotSignalvsGain(self):
+        """
+        TODO
+        """
+        allSignals = self.getDataFrame('signalData')
+        allAvalanche = self.getDataFrame('avalancheData')
+
+        sumSignals = allSignals.groupby('Avalanche ID')['Signal Strength'].sum()
+
+        allAvalanche['Gain'] = allAvalanche['Total Electrons'] - allAvalanche['Attached Electrons']
+        allAvalanche = allAvalanche.sort_values(by='Avalanche ID')
+        maxGain = allAvalanche['Gain'].max()+1
+
+
+        fig = plt.figure(figsize=(10, 5))
+        fig.suptitle('Total Integrated Signal vs. Gain')
+        ax = fig.add_subplot(111)
+
+        ax.hist2d(
+            allAvalanche['Gain'], sumSignals,
+            bins=maxGain, cmin=1
+        )
+
+        scale = .25e17
+        charge = -1.6e-19
+        slope = charge*scale
+        ax.plot(
+            [0, maxGain], [0, maxGain*slope],
+            c='r', label=f'Slope = {slope:.2e}'
+        )
+        ax.axvline(
+            x=allAvalanche['Gain'].mean(),
+            c='g', ls='--', label=f'Average Gain = {allAvalanche['Gain'].mean():.1f}'
+        )
+
+        ax.set_xlabel('Electron Gain')
+        ax.set_ylabel('Total Signal (fC)')
+
+        ax.grid()
+        ax.legend()
+
         return fig
