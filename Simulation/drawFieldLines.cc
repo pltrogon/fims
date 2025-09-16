@@ -272,7 +272,7 @@ int main(int argc, char * argv[]) {
   //Lines generated along the x-axis of  the unit cell
   //The x-direction is the long axis of the geometry. 
   for(int i = 0; i < numFieldLine; i++){
-    xStart.push_back((2./3.)xBoundary[0] + (4./3.)*xBoundary[1]*i/(numFieldLine-1));
+    xStart.push_back((2./3.)*xBoundary[0] + (4./3.)*xBoundary[1]*i/(numFieldLine-1));
     yStart.push_back(0.);
     }
   

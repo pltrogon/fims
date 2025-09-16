@@ -73,7 +73,7 @@ int main(int argc, char * argv[]) {
   const double CM = 1e-2;
   const double MICRONTOCM = 1e-4;
   const double ELEMENTARY_CHARGE = 1.602176634e-19;
-  bool DEBUG = fals;
+  bool DEBUG = false;
   
   //*************** SETUP ***************//
   //Timing variables
