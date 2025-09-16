@@ -1707,11 +1707,11 @@ class runData:
 
         ax1.set_title('Induced Signal')
         ax1.set_xlabel('Time (ns)')
-        ax1.set_ylabel('Signal Strength (C/ns)')#TODO - The units here seem weird
+        ax1.set_ylabel('Signal Strength (fC/ns)')#TODO - The units here seem weird
 
         ax2.set_title('Integrated Signal')
         ax2.set_xlabel('Time (ns)')
-        ax2.set_ylabel('Integrated Signal Strength (C)')
+        ax2.set_ylabel('Integrated Signal Strength (fC)')
 
         ax1.grid()
         ax2.grid()
@@ -1755,11 +1755,11 @@ class runData:
 
         ax1.set_title('Average Induced Signal')
         ax1.set_xlabel('Time (ns)')
-        ax1.set_ylabel('Signal Strength (C/ns)')#TODO - The units here seem weird
+        ax1.set_ylabel('Signal Strength (fC/ns)')#TODO - The units here seem weird
 
         ax2.set_title('Average Integrated Signal')
         ax2.set_xlabel('Time (ns)')
-        ax2.set_ylabel('Integrated Signal Strength (C)')
+        ax2.set_ylabel('Integrated Signal Strength (fC)')
 
         ax1.grid()
         ax2.grid()
@@ -1807,7 +1807,7 @@ class runData:
         )
 
         ax.set_xlabel('Electron Gain')
-        ax.set_ylabel('Total Signal (C)')
+        ax.set_ylabel('Total Signal (fC)')
 
         ax.grid()
         ax.legend()

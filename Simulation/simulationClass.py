@@ -122,7 +122,7 @@ class FIMS_Simulation:
             'pitch': 225.,
             'gridStandoff': 100.,
             'gridThickness': 1.,
-            'holeRadius': 90.,
+            'holeRadius': 55.,
             'cathodeHeight': 200.,
             'thicknessSiO2': 5.,
             'pillarRadius': 20.,
@@ -975,7 +975,7 @@ class FIMS_Simulation:
             print('Error writing parameters.')
             return False
             
-        print('Executing gmsh')
+        print('Executing gmsh...')
         if not self._runGmsh():
                 print('Error executing Gmsh.')
                 return False
@@ -992,7 +992,6 @@ class FIMS_Simulation:
             if not firstRun:
                 #TODO: find better way to determine step size
                 #Determine a step size to change field
-                #stepSize = value set in args
                 curField *= stepSize
                 print(f'Current field ratio: {curField}')
 
@@ -1003,13 +1002,13 @@ class FIMS_Simulation:
                     return False
             
             #Determine the electric field
-            print('Executing Elmer FEM')
+            print('\tExecuting Elmer...')
             if not self._runElmer():
                 print('Error executing Elmer.')
                 return False
 
             #Generate field lines
-            print('Generating field lines')
+            print('\tGenerating field lines...')
             if not self._runFieldLines():
                 print('Error generating field lines.')
                 return False
@@ -1039,7 +1038,7 @@ class FIMS_Simulation:
 
 #***********************************************************************************#
 #***********************************************************************************#
-# METHODS FOR RUNNING CHARGE BUILDUP - UNTESTED
+# METHODS FOR RUNNING CHARGE BUILDUP - UNTESTED (TODO)
 #***********************************************************************************#
 #***********************************************************************************#
 

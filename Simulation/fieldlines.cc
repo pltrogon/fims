@@ -105,7 +105,7 @@ int main(int argc, char * argv[]) {
 
   double  padLength, pitch;
   double gridStandoff, gridThickness, holeRadius;
-  double cathodeHeight, thicknessSiO2;
+  double cathodeHeight, thicknessSiO2, pillarRadius;
   double fieldRatio, transparencyLimit;
   int numFieldLine;
   double gasCompAr, gasCompCO2;
@@ -148,7 +148,7 @@ int main(int argc, char * argv[]) {
   paramFile.close();
 
   //Parse the values from the map
-  if(numKeys != 14){//Number of user-defined simulation parameters in runControl to search for.
+  if(numKeys != 15){//Number of user-defined simulation parameters in runControl to search for.
     std::cerr << "Error: Invalid simulation parameters in 'runControl'." << std::endl;
     return -1;
   }
@@ -164,6 +164,7 @@ int main(int argc, char * argv[]) {
 
   cathodeHeight = std::stod(readParam["cathodeHeight"])*MICRONTOCM;
   thicknessSiO2 = std::stod(readParam["thicknessSiO2"])*MICRONTOCM;
+  pillarRadius = std::stod(readParam["pillarRadius"])*MICRONTOCM;
 
   //Field parameters
   fieldRatio = std::stod(readParam["fieldRatio"]);
