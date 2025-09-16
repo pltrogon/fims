@@ -616,12 +616,12 @@ class FIMS_Simulation:
             geoFile = 'FIMS.txt'
             with open(os.path.join(os.getcwd(), 'log/logGmsh.txt'), 'w+') as gmshOutput:
                 startTime = time.monotonic()
-                runReturn = subprocess.run(
-                #TODO: gmsh vs ./gmsh
+                # TODO: gmsh vs ./gmsh
                 '''For James - This is not an OS issue.
                 It is because your gmsh is not installed globally.
                 A solution if you do not want to change where you have it is to add its location to your system's $PATH
                 You can do this in your .bashrc'''
+                runReturn = subprocess.run(
                     ['gmsh', os.path.join('./Geometry/', geoFile),
                      '-order', '2', '-optimize_ho',
                      '-clextend', '1',
