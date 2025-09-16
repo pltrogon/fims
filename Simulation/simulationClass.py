@@ -122,7 +122,7 @@ class FIMS_Simulation:
             'pitch': 225.,
             'gridStandoff': 100.,
             'gridThickness': 1.,
-            'holeRadius': 90.,
+            'holeRadius': 55.,
             'cathodeHeight': 200.,
             'thicknessSiO2': 5.,
             'pillarRadius': 20.,
@@ -616,9 +616,13 @@ class FIMS_Simulation:
             geoFile = 'FIMS.txt'
             with open(os.path.join(os.getcwd(), 'log/logGmsh.txt'), 'w+') as gmshOutput:
                 startTime = time.monotonic()
+                # TODO: gmsh vs ./gmsh
+                '''For James - This is not an OS issue.
+                It is because your gmsh is not installed globally.
+                A solution if you do not want to change where you have it is to add its location to your system's $PATH
+                You can do this in your .bashrc'''
                 runReturn = subprocess.run(
-                #TODO: Linux requires file path to gmsh (./gmsh in my local build)
-                    ['./gmsh', os.path.join('./Geometry/', geoFile),
+                    ['gmsh', os.path.join('./Geometry/', geoFile),
                      '-order', '2', '-optimize_ho',
                      '-clextend', '1',
                      '-setnumber', 'Mesh.OptimizeNetgen', '1',
@@ -932,16 +936,28 @@ class FIMS_Simulation:
             grid standoff ratio, pad length ratio, and 
             optical transparency vs minField.
           Results are then added together.'''
+<<<<<<< HEAD
+=======
+          #TODO - should this not be max(minFields)?
+>>>>>>> 3516cc319e1e10e2f807681e92714ef03a0be0cd
         radialMinField = 570.580*np.exp(-12.670*optTrans)
         standoffMinField = 27.121*np.exp(-15.9*standoffRatio)
         padMinField = 143.84*np.exp(-15.17*padRatio)
         
+<<<<<<< HEAD
         minField = radialMinField + standoffMinField + padMinField + 1
+=======
+        minField = radialMinField + standoffMinField + padMinField + 3
+>>>>>>> 3516cc319e1e10e2f807681e92714ef03a0be0cd
         
         return minField
 
 #***********************************************************************************#
+<<<<<<< HEAD
     def findMinField(self, numLines = 5, margin = 1., stepSize = 1.2):
+=======
+    def findMinField(self, numLines=5, margin=1., stepSize=1.2):
+>>>>>>> 3516cc319e1e10e2f807681e92714ef03a0be0cd
         """
         Runs simulations to determine what the minimum electric field ratio
         needs to be in order to have 100% Efield transparency.
@@ -983,7 +999,7 @@ class FIMS_Simulation:
             print('Error writing parameters.')
             return False
             
-        print('Executing gmsh')
+        print('Executing gmsh...')
         if not self._runGmsh():
                 print('Error executing Gmsh.')
                 return False
@@ -1000,7 +1016,6 @@ class FIMS_Simulation:
             if not firstRun:
                 #TODO: find better way to determine step size
                 #Determine a step size to change field
-                #stepSize = value set in args
                 curField *= stepSize
                 print(f'Current field ratio: {curField}')
 
@@ -1011,13 +1026,13 @@ class FIMS_Simulation:
                     return False
             
             #Determine the electric field
-            print('Executing Elmer FEM')
+            print('\tExecuting Elmer...')
             if not self._runElmer():
                 print('Error executing Elmer.')
                 return False
 
             #Generate field lines
-            print('Generating field lines')
+            print('\tGenerating field lines...')
             if not self._runFieldLines():
                 print('Error generating field lines.')
                 return False
@@ -1047,7 +1062,7 @@ class FIMS_Simulation:
 
 #***********************************************************************************#
 #***********************************************************************************#
-# METHODS FOR RUNNING CHARGE BUILDUP - UNTESTED
+# METHODS FOR RUNNING CHARGE BUILDUP - UNTESTED (TODO)
 #***********************************************************************************#
 #***********************************************************************************#
 

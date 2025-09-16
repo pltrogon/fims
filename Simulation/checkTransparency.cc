@@ -5,7 +5,7 @@
  *    Requires an input electric field solved by elmer and geometry from gmsh.
  *    Reads simulation parameters from runControl.
  * 
- * Tanner Polischuk & James Harrison IV
+ * Tanner Polischuk & James E. Harrison IV
  */
 
 //Garfield includes
