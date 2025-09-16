@@ -43,6 +43,8 @@ class runData:
             _fieldLineData: Information for field lines generated at the cathode.
             _gridFieldLineData: Field line information for those generated 
                                 above and below the grid.
+            _edgeFieldLineData: Information for field lines generated along the
+                                edge of the unit cell, at the cathode.
             _electronData: Information for each individual simulated electron.
             _ionData: Information for each individual simulated ion.
             _avalancheData: Information for each simulated avalanche.
@@ -95,6 +97,7 @@ class runData:
             'metaData',
             'fieldLineData',
             'gridFieldLineData',
+            'edgeFieldLineData',
             'electronData',
             'ionData',
             'avalancheData',
@@ -209,8 +212,8 @@ class runData:
         """
         Prints all metadata information. Dimensions are in microns.
         """
-        metaData = getattr(self, 'metaData', None)
-        for inParam in metaData:
+        metaData = getattr(self, 'metaData', None) 
+        for inParam in metaData: #TODO: typeError: 'NoneType' is not iterable
             print(f'{inParam}: {self.getRunParameter(inParam)}')
         return
 
@@ -273,7 +276,7 @@ class runData:
 
         #Scale to micron
         match dataSetName:
-            case 'fieldLineData' | 'gridFieldLineData':
+            case 'fieldLineData' | 'gridFieldLineData' | 'edgeFieldLineData':
                 dataToScale = [
                     'Field Line x', 
                     'Field Line y', 
@@ -538,7 +541,7 @@ class runData:
 
         Args:
             axis (matplotlib subplot): Axes object where geometry is to be added 
-            axes (str): String defining the catesian dimensions of 'axes'.
+            axes (str): String defining the cartesian dimensions of 'axes'.
         """
         # Extract relevant geometric parameters from metadata.
         pitch = self.getRunParameter('Pitch')
@@ -661,6 +664,7 @@ class runData:
             Cathode - Field lines initiated near the cathode.
             AboveGrid - Field lines initiated just above the grid.
             BelowGrid - Field lines initiated just below the grid.
+            Edge - Field Lines initiated along the edge of the unit cell, at the cathode.
 
         These plots display the field lines, and include 
         the pad geometry and hole in the grid.
@@ -674,7 +678,8 @@ class runData:
         plotOptions = [
             'Cathode',
             'AboveGrid',
-            'BelowGrid'
+            'BelowGrid',
+            'Edge'
         ]
     
         match target:
@@ -688,6 +693,9 @@ class runData:
             case 'BelowGrid':
                 fieldLineData = self.getDataFrame('gridFieldLineData')
                 fieldLineData = fieldLineData[fieldLineData['Grid Line Location']==-1]
+            
+            case 'Edge':
+                fieldLineData = self.getDataFrame('edgeFieldLineData')
     
             case _:
                 print(f'Error: Plot options are: {plotOptions}')
@@ -740,11 +748,12 @@ class runData:
 
         cathodeLines = self.getDataFrame('fieldLineData').groupby('Field Line ID')
         gridLines = self.getDataFrame('gridFieldLineData')
+        edgeLines = self.getDataFrame('edgeFieldLineData').groupby('Field Line ID')
 
         aboveGrid = gridLines[gridLines['Grid Line Location'] == 1].groupby('Field Line ID')
         belowGrid = gridLines[gridLines['Grid Line Location'] == -1].groupby('Field Line ID')
 
-        if cathodeLines is None or aboveGrid is None or belowGrid is None:
+        if cathodeLines is None or aboveGrid is None or belowGrid is None or edgeLines is None:
             raise ValueError('Field lines unavailable.')
 
         fig2D = plt.figure(figsize=(14, 7))
@@ -788,16 +797,28 @@ class runData:
             ax13.plot(fieldLine['Field Line x'], 
                       fieldLine['Field Line y'], 
                       lw=1, c='g')
-            
+
+        # TODO: This currently is a little too cluttered. Perhaps adding a boolean
+        #to optionally remove certain field lines would be better?
+        # iterate through all edge field lines
+        for _, fieldLine in edgeLines:
+            ax11.plot(fieldLine['Field Line x'], 
+                      fieldLine['Field Line z'], 
+                      lw=1, c='m')
+            ax12.plot(fieldLine['Field Line y'], 
+                      fieldLine['Field Line z'], 
+                      lw=1, c='m')
+            ax13.plot(fieldLine['Field Line x'], 
+                      fieldLine['Field Line y'], 
+                      lw=1, c='m')
+
+
         self._plotAddCellGeometry(ax11, 'xz')
         self._plotAddCellGeometry(ax12, 'yz')
         self._plotAddCellGeometry(ax13, 'xy')
         plt.tight_layout() 
 
         return fig2D
-
-
-
 
 #********************************************************************************#   
     def _getRawGain(self):

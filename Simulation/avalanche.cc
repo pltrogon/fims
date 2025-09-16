@@ -9,6 +9,7 @@
  *        metaDataTree
  *        fieldLineDataTree
  *        gridFieldLineDataTree
+ *        edgeFieldLineDataTree
  *        avalancheDataTree
  *        electronDataTree
  *        ionDataTree
@@ -253,6 +254,22 @@ int main(int argc, char * argv[]) {
   gridFieldLineDataTree->Branch("Field Line y", &gridLineY, "gridLineY/D");
   gridFieldLineDataTree->Branch("Field Line z", &gridLineZ, "gridLineZ/D");
 
+  //***** Edge Field Line Data Tree *****//
+  //Create
+  TTree *edgeFieldLineDataTree = new TTree("edgeFieldLineDataTree", "Edge Field Lines");
+
+  //Data to be saved.
+  int edgeLineID;
+  double edgeLineX, edgeLineY, edgeLineZ;
+
+  //Add branches
+  edgeFieldLineDataTree->Branch("Field Line ID", &edgeLineID, "edgeLineID/I");
+  edgeFieldLineDataTree->Branch("Field Line x", &edgeLineX, "edgeLineX/D");
+  edgeFieldLineDataTree->Branch("Field Line y", &edgeLineY, "edgeLineY/D");
+  edgeFieldLineDataTree->Branch("Field Line z", &edgeLineZ, "edgeLineZ/D");
+
+  
+  
   //*************** SIMULATION ***************//
   std::cout << "****************************************\n";
   std::cout << "Creating simulation: " << runNo << "\n";
@@ -337,45 +354,62 @@ int main(int argc, char * argv[]) {
   DriftLineRKF driftLines(sensorFIMS);
   driftLines.SetMaximumStepSize(MICRONTOCM);
 
-  //*** Define start loctions for field lines ***/
+  // *** Define start locations for field lines ***/
   std::vector<double> xStart;
   std::vector<double> yStart;
+  std::vector<double> xEdgeStart;
+  std::vector<double> yEdgeStart;
   double rangeScale = 0.99;
 
-  //Line generated radially in cardinal directions to edge of unit cell
-  //Note this will make 2*numFieldLines lines
-  //    The x-direction is the long axis of the geometry. 
+  // The x-direction is the long axis of the geometry. 
   const double xLineLimit = pitch/sqrt(3.);
   const double yLineLimit = pitch/2.;
-
-  //Field Lines along x:
+  
+  //Note that the total number of field lines is x2 the given number of field lines (x and y)
+  // Field Lines along x:
   for(int i = 0; i < numFieldLine; i++){
     xStart.push_back(rangeScale*xLineLimit*i/(numFieldLine-1));
     yStart.push_back(0.);
   }
-  //Field Lines along y:
+  // Field Lines along y:
   for(int i = 0; i < numFieldLine; i++){
     xStart.push_back(0.);
     yStart.push_back(rangeScale*yLineLimit*i/(numFieldLine-1));
+  }
+  
+  // Lines generated along the perimeter of the unit cell
+  double xWidth = rangeScale*pitch*sqrt(3.)/2.;
+  double yWidth = rangeScale*pitch/2.;
+  
+  //Right edge of unit cell
+  for(int i = 0; i < numFieldLine; i++){
+   xEdgeStart.push_back(xWidth*(2./3. - (1./3.)*i/(numFieldLine-1)) );
+    yEdgeStart.push_back(yWidth*i/(numFieldLine-1));
+  }
+  //upper edge of unit cell  
+  for(int i = 0; i < numFieldLine; i++){  
+    xEdgeStart.push_back((1./3.)*xWidth*(1. - 1.*i/(numFieldLine-1)) );
+    yEdgeStart.push_back(yWidth);
   }
 
 
   // ***** Calculate field Lines ***** //
   std::vector<std::array<float, 3> > fieldLines;
   int totalFieldLines = xStart.size();
-  std::cout << "Computing " << totalFieldLines << " field lines." << std::endl;
+  int totalEdgeFieldLines = xEdgeStart.size();
+  std::cout << "Computing " << totalFieldLines << " field lines along the x and y axes." << std::endl;
 
-  // Note that true number is 3x totalFieldLines - Cathode, above, and below grid.
+  // Note that true number is 3x totalFieldLines - Cathode, above, and below grid
   int prevDriftLine = 0;
   for(int inFieldLine = 0; inFieldLine < totalFieldLines; inFieldLine++){
     
     fieldLineID = inFieldLine;
 
-    //Calculate from top of volume
+    // Calculate from top of volume
     fieldLines.clear();
     driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], zmax*.95, fieldLines);
 
-    //Get coordinates of every point along field line and fill the tree
+    // Get coordinates of every point along field line and fill the tree
     for(int inLine = 0; inLine < fieldLines.size(); inLine++){
       fieldLineX = fieldLines[inLine][0];
       fieldLineY = fieldLines[inLine][1];
@@ -430,8 +464,35 @@ int main(int argc, char * argv[]) {
       std::cout << "Driftline Progress: " << driftLineProgress << " %" << std::endl;
       prevDriftLine = driftLineProgress;
     }
+  }// End field lines loop
+  
+  prevDriftLine = 0;
+  for(int inEdgeFieldLine = 0; inEdgeFieldLine < totalEdgeFieldLines; inEdgeFieldLine++){
+    
+    edgeLineID = inEdgeFieldLine;
 
-  }//End field line loop
+    // Calculate along the perimeter
+    fieldLines.clear();
+    driftLines.FieldLine(xEdgeStart[inEdgeFieldLine], yEdgeStart[inEdgeFieldLine], zmax*.95, fieldLines);
+
+    // Get coordinates of every point along field line and fill the tree
+    for(int inLine = 0; inLine < fieldLines.size(); inLine++){
+      edgeLineX = fieldLines[inLine][0];
+      edgeLineY = fieldLines[inLine][1];
+      edgeLineZ = fieldLines[inLine][2];
+      
+      edgeFieldLineDataTree->Fill();
+    }
+    
+    //Print a progress update every 10%
+    int driftLineProgress = (100*(inEdgeFieldLine+1))/totalEdgeFieldLines;
+    if((driftLineProgress % 10 == 0)
+      &&  (driftLineProgress != prevDriftLine)){
+      std::cout << "Edge Driftline Progress: " << driftLineProgress << " %" << std::endl;
+      prevDriftLine = driftLineProgress;
+    }
+    
+  } //End edge field line loop
   
   std::cout << "Done " << totalFieldLines << " field lines." << std::endl;
   
@@ -797,6 +858,9 @@ int main(int argc, char * argv[]) {
   delete fieldLineDataTree;
   gridFieldLineDataTree->Write();
   delete gridFieldLineDataTree;
+  edgeFieldLineDataTree->Write();
+  delete edgeFieldLineDataTree;
+  
 
   // Deal with parallel trees
   std::vector<std::string> treeNames = {
