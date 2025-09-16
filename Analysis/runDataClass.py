@@ -10,6 +10,8 @@ import awkward_pandas
 import math
 import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.cm as cm
+
 
 from polyaClass import myPolya
 from functionsFIMS import withinHex, withinNeighborHex, xyInterpolate
@@ -43,6 +45,8 @@ class runData:
             _fieldLineData: Information for field lines generated at the cathode.
             _gridFieldLineData: Field line information for those generated 
                                 above and below the grid.
+            _edgeFieldLineData: Information for field lines generated along the
+                                edge of the unit cell, at the cathode.
             _electronData: Information for each individual simulated electron.
             _ionData: Information for each individual simulated ion.
             _avalancheData: Information for each simulated avalanche.
@@ -96,6 +100,7 @@ class runData:
             'metaData',
             'fieldLineData',
             'gridFieldLineData',
+            'edgeFieldLineData',
             'electronData',
             'ionData',
             'avalancheData',
@@ -210,7 +215,11 @@ class runData:
         """
         Prints all metadata information. Dimensions are in microns.
         """
-        metaData = getattr(self, 'metaData', None)
+        metaData = getattr(self, 'metaData', None) 
+        if metaData is None:
+            print('Error: Metadata is unavailable.')
+            return
+
         for inParam in metaData:
             print(f'{inParam}: {self.getRunParameter(inParam)}')
         return
@@ -274,7 +283,7 @@ class runData:
 
         #Scale to micron
         match dataSetName:
-            case 'fieldLineData' | 'gridFieldLineData':
+            case 'fieldLineData' | 'gridFieldLineData' | 'edgeFieldLineData':
                 dataToScale = [
                     'Field Line x', 
                     'Field Line y', 
@@ -539,7 +548,7 @@ class runData:
 
         Args:
             axis (matplotlib subplot): Axes object where geometry is to be added 
-            axes (str): String defining the catesian dimensions of 'axes'.
+            axes (str): String defining the cartesian dimensions of 'axes'.
         """
         # Extract relevant geometric parameters from metadata.
         pitch = self.getRunParameter('Pitch')
@@ -662,6 +671,7 @@ class runData:
             Cathode - Field lines initiated near the cathode.
             AboveGrid - Field lines initiated just above the grid.
             BelowGrid - Field lines initiated just below the grid.
+            Edge - Field Lines initiated along the edge of the unit cell, at the cathode.
 
         These plots display the field lines, and include 
         the pad geometry and hole in the grid.
@@ -675,7 +685,8 @@ class runData:
         plotOptions = [
             'Cathode',
             'AboveGrid',
-            'BelowGrid'
+            'BelowGrid',
+            'Edge'
         ]
     
         match target:
@@ -689,6 +700,9 @@ class runData:
             case 'BelowGrid':
                 fieldLineData = self.getDataFrame('gridFieldLineData')
                 fieldLineData = fieldLineData[fieldLineData['Grid Line Location']==-1]
+            
+            case 'Edge':
+                fieldLineData = self.getDataFrame('edgeFieldLineData')
     
             case _:
                 print(f'Error: Plot options are: {plotOptions}')
@@ -708,16 +722,7 @@ class runData:
         ax13 = fig2D.add_subplot(122)
     
         # iterate through all lines
-        for lineID, fieldLine in groupedData:
-            ax11.plot(fieldLine['Field Line x'], 
-                      fieldLine['Field Line z'], 
-                      lw=1)
-            ax12.plot(fieldLine['Field Line y'], 
-                      fieldLine['Field Line z'], 
-                      lw=1)
-            ax13.plot(fieldLine['Field Line x'], 
-                      fieldLine['Field Line y'], 
-                      lw=1)
+        self.add2DFieldLines([ax11, ax12, ax13], groupedData, 'individual')
     
         self._plotAddCellGeometry(ax11, 'xz')
         self._plotAddCellGeometry(ax12, 'yz')
@@ -726,6 +731,49 @@ class runData:
         
         return fig2D
     
+
+#********************************************************************************#   
+    def add2DFieldLines(self, axes, fieldLineData, target):
+        """
+        TODO
+        """
+
+        #Set color for each field line location
+        match target:
+            case 'individual':
+                numLines = len(fieldLineData)
+            case 'cathodeLines':
+                lineColor = 'b'
+            case 'aboveGrid':
+                lineColor = 'r'
+            case 'belowGrid':
+                lineColor = 'g'
+            case 'edgeLines':
+                lineColor = 'm'
+            case _:
+                raise ValueError(f'Error: Invalid fieldLines - {target}.')
+
+        
+        # iterate through all field lines
+        for inLine, (_, fieldLine) in enumerate(fieldLineData):
+            if target == 'individual':
+                lineColor = cm.viridis(inLine/numLines)
+
+            axes[0].plot(
+                fieldLine['Field Line x'], fieldLine['Field Line z'], 
+                lw=1, c=lineColor
+            )
+            axes[1].plot(
+                fieldLine['Field Line y'], fieldLine['Field Line z'], 
+                lw=1, c=lineColor
+            )
+            axes[2].plot(
+                fieldLine['Field Line x'], fieldLine['Field Line y'], 
+                lw=1, c=lineColor
+            )
+
+        return
+
 
 #********************************************************************************#   
     def plotAllFieldLines(self):
@@ -741,11 +789,17 @@ class runData:
 
         cathodeLines = self.getDataFrame('fieldLineData').groupby('Field Line ID')
         gridLines = self.getDataFrame('gridFieldLineData')
+        edgeLines = self.getDataFrame('edgeFieldLineData').groupby('Field Line ID')
 
         aboveGrid = gridLines[gridLines['Grid Line Location'] == 1].groupby('Field Line ID')
         belowGrid = gridLines[gridLines['Grid Line Location'] == -1].groupby('Field Line ID')
 
-        if cathodeLines is None or aboveGrid is None or belowGrid is None:
+        if (
+            cathodeLines is None or
+            aboveGrid is None or
+            belowGrid is None or
+            edgeLines is None
+        ):
             raise ValueError('Field lines unavailable.')
 
         fig2D = plt.figure(figsize=(14, 7))
@@ -754,50 +808,20 @@ class runData:
         ax12 = fig2D.add_subplot(223)
         ax13 = fig2D.add_subplot(122)
 
-        # iterate through all cathode lines
-        for _, fieldLine in cathodeLines:
-            ax11.plot(fieldLine['Field Line x'], 
-                      fieldLine['Field Line z'], 
-                      lw=1, c='b')
-            ax12.plot(fieldLine['Field Line y'], 
-                      fieldLine['Field Line z'], 
-                      lw=1, c='b')
-            ax13.plot(fieldLine['Field Line x'], 
-                      fieldLine['Field Line y'], 
-                      lw=1, c='b')
-            
-        # iterate through all above grid lines
-        for _, fieldLine in aboveGrid:
-            ax11.plot(fieldLine['Field Line x'], 
-                      fieldLine['Field Line z'], 
-                      lw=1, c='r')
-            ax12.plot(fieldLine['Field Line y'], 
-                      fieldLine['Field Line z'], 
-                      lw=1, c='r')
-            ax13.plot(fieldLine['Field Line x'], 
-                      fieldLine['Field Line y'], 
-                      lw=1, c='r')
-            
-        # iterate through all above grid lines
-        for _, fieldLine in belowGrid:
-            ax11.plot(fieldLine['Field Line x'], 
-                      fieldLine['Field Line z'], 
-                      lw=1, c='g')
-            ax12.plot(fieldLine['Field Line y'], 
-                      fieldLine['Field Line z'], 
-                      lw=1, c='g')
-            ax13.plot(fieldLine['Field Line x'], 
-                      fieldLine['Field Line y'], 
-                      lw=1, c='g')
-            
+        # iterate through all field lines
+        axes = [ax11, ax12, ax13]
+        
+        self.add2DFieldLines(axes, cathodeLines, 'cathodeLines')
+        self.add2DFieldLines(axes, aboveGrid, 'aboveGrid')
+        self.add2DFieldLines(axes, belowGrid, 'belowGrid')
+        #self.add2DFieldLines(axes, edgeLines, 'edgeLines')
+
         self._plotAddCellGeometry(ax11, 'xz')
         self._plotAddCellGeometry(ax12, 'yz')
         self._plotAddCellGeometry(ax13, 'xy')
         plt.tight_layout() 
 
         return fig2D
-
-
 
 
 #********************************************************************************#   

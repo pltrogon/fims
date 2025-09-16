@@ -176,11 +176,23 @@ class App(tk.Tk):
             )
         self.showFieldLines.pack(side=tk.TOP)
 
+        self.cathodeLineFrame = tk.Frame(self.buttonFrame)
+        self.cathodeLineFrame.pack(side=tk.TOP, fill=tk.Y)
+
         self.showCathodeLines = tk.Button(
-            self.fieldLineFrame, text='Cathode', 
+            self.cathodeLineFrame, text='Cathode', 
             command=lambda: self.plotButton('Cathode')
             )
         self.showCathodeLines.pack(side=tk.LEFT)
+
+        self.showEdgeLines = tk.Button(
+            self.cathodeLineFrame, text='Edge', 
+            command=lambda: self.plotButton('Edge')
+            )
+        self.showEdgeLines.pack(side=tk.RIGHT)
+
+        self.gridLineFrame = tk.Frame(self.buttonFrame)
+        self.gridLineFrame.pack(side=tk.TOP, fill=tk.Y)
 
         self.showAboveGrid = tk.Button(
             self.fieldLineFrame, text='AboveGrid', 
@@ -326,6 +338,8 @@ class App(tk.Tk):
 
                 case 'Cathode':
                     self.currentFig = self.simData.plot2DFieldLines('Cathode')
+                case 'Edge':
+                    self.currentFig = self.simData.plot2DFieldLines('Edge')
                 
                 case 'AboveGrid':
                     self.currentFig = self.simData.plot2DFieldLines('AboveGrid')

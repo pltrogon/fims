@@ -616,8 +616,12 @@ class FIMS_Simulation:
             geoFile = 'FIMS.txt'
             with open(os.path.join(os.getcwd(), 'log/logGmsh.txt'), 'w+') as gmshOutput:
                 startTime = time.monotonic()
+                # TODO: gmsh vs ./gmsh
+                '''For James - This is not an OS issue.
+                It is because your gmsh is not installed globally.
+                A solution if you do not want to change where you have it is to add its location to your system's $PATH
+                You can do this in your .bashrc'''
                 runReturn = subprocess.run(
-                #TODO: Linux requires file path to gmsh (./gmsh in my local build)
                     ['gmsh', os.path.join('./Geometry/', geoFile),
                      '-order', '2', '-optimize_ho',
                      '-clextend', '1',
@@ -839,8 +843,7 @@ class FIMS_Simulation:
         Args:
             changeGeometry (bool): Allows for bypassing some executions such as Gmsh
                                    and ElmerWeighting. Decreases runtime.
-                                   (For when geometry does not change.)
-    
+                                   (For when geometry does not change.)    
         Returns:
             int: The run number of the simulation that was executed. 
                  Returns -1 if any errors occur.
@@ -906,7 +909,7 @@ class FIMS_Simulation:
 #***********************************************************************************#
     def _calcMinField(self):
         """
-        Calculates an intial guess for the minimum field ratio to achieve 100%
+        Calculates an initial guess for the minimum field ratio to achieve 100%
         field transparency.
 
         Calculation is based off of exponential fits to simulated data.
@@ -917,23 +920,33 @@ class FIMS_Simulation:
         #Get geometry variables
         radius = self._getParam('holeRadius')
         standoff = self._getParam('gridStandoff')
+        pad = self._getParam('padLength')
         pitch = self._getParam('pitch')
     
         #Calculate what the minimum field ratio should be
         gridArea = pitch**2*math.sqrt(3)/2
         holeArea = math.pi*radius**2
         optTrans = holeArea/gridArea
-
+        
+        standoffRatio = standoff/pitch
+        padRatio = pad/pitch
+        
         #Do calculation using values from fits
         '''Values come from exponential fits to data - 
-            grid standoff and optical transparency vs minField
-        Results are then added together.'''
-        minField = 570.580*np.exp(-12.670*optTrans) + 27.121*np.exp(-0.071*standoff) + 2
+            grid standoff ratio, pad length ratio, and 
+            optical transparency vs minField.
+          Results are then added together.'''
+          #TODO - should this not be max(minFields)?
+        radialMinField = 570.580*np.exp(-12.670*optTrans)
+        standoffMinField = 27.121*np.exp(-15.9*standoffRatio)
+        padMinField = 143.84*np.exp(-15.17*padRatio)
+        
+        minField = radialMinField + standoffMinField + padMinField + 3
         
         return minField
 
 #***********************************************************************************#
-    def findMinField(self, numLines=5, margin=.8, stepSize = 1.2):
+    def findMinField(self, numLines=5, margin=1., stepSize=1.2):
         """
         Runs simulations to determine what the minimum electric field ratio
         needs to be in order to have 100% Efield transparency.

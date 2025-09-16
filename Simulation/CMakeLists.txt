@@ -14,7 +14,8 @@ find_package(OpenMP REQUIRED)
 
 # Add the executable
 add_executable(runAvalanche avalanche.cc)
-add_executable(runFieldLines fieldlines.cc)
+add_executable(runFieldLines checkTransparency.cc)
+
 
 # Link libraries and include directories
 target_include_directories(runAvalanche PRIVATE
