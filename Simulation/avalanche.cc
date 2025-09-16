@@ -383,12 +383,12 @@ int main(int argc, char * argv[]) {
   
   //Right edge of unit cell
   for(int i = 0; i < numFieldLine; i++){
-   xEdgeStart.push_back(xWidth*(2./3. - (1./3.)*i/(numFieldLine-1)) );
+    xEdgeStart.push_back(xWidth*(2./3. - (1./3.)*i/(numFieldLine-1)));
     yEdgeStart.push_back(yWidth*i/(numFieldLine-1));
   }
   //upper edge of unit cell  
   for(int i = 0; i < numFieldLine; i++){  
-    xEdgeStart.push_back((1./3.)*xWidth*(1. - 1.*i/(numFieldLine-1)) );
+    xEdgeStart.push_back((1./3.)*xWidth*(1. - 1.*i/(numFieldLine-1)));
     yEdgeStart.push_back(yWidth);
   }
 
@@ -459,8 +459,7 @@ int main(int argc, char * argv[]) {
     
     //Print a progress update every 10%
     int driftLineProgress = (100*(inFieldLine+1))/totalFieldLines;
-    if(   (driftLineProgress % 10 == 0)
-      &&  (driftLineProgress != prevDriftLine)){
+    if((driftLineProgress % 10 == 0) && (driftLineProgress != prevDriftLine)){
       std::cout << "Driftline Progress: " << driftLineProgress << " %" << std::endl;
       prevDriftLine = driftLineProgress;
     }
@@ -486,13 +485,12 @@ int main(int argc, char * argv[]) {
     
     //Print a progress update every 10%
     int driftLineProgress = (100*(inEdgeFieldLine+1))/totalEdgeFieldLines;
-    if((driftLineProgress % 10 == 0)
-      &&  (driftLineProgress != prevDriftLine)){
+    if((driftLineProgress % 10 == 0) && (driftLineProgress != prevDriftLine)){
       std::cout << "Edge Driftline Progress: " << driftLineProgress << " %" << std::endl;
       prevDriftLine = driftLineProgress;
     }
     
-  } //End edge field line loop
+  }//End edge field line loop
   
   std::cout << "Done " << totalFieldLines << " field lines." << std::endl;
   

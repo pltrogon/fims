@@ -617,8 +617,12 @@ class FIMS_Simulation:
             with open(os.path.join(os.getcwd(), 'log/logGmsh.txt'), 'w+') as gmshOutput:
                 startTime = time.monotonic()
                 runReturn = subprocess.run(
-                #TODO: Linux requires file path to gmsh (./gmsh in my local build)
-                    ['./gmsh', os.path.join('./Geometry/', geoFile),
+                #TODO: gmsh vs ./gmsh
+                '''For James - This is not an OS issue.
+                It is because your gmsh is not installed globally.
+                A solution if you do not want to change where you have it is to add its location to your system's $PATH
+                You can do this in your .bashrc'''
+                    ['gmsh', os.path.join('./Geometry/', geoFile),
                      '-order', '2', '-optimize_ho',
                      '-clextend', '1',
                      '-setnumber', 'Mesh.OptimizeNetgen', '1',
@@ -932,6 +936,7 @@ class FIMS_Simulation:
             grid standoff ratio, pad length ratio, and 
             optical transparency vs minField.
           Results are then added together.'''
+          #TODO - should this not be max(minFields)?
         radialMinField = 570.580*np.exp(-12.670*optTrans)
         standoffMinField = 27.121*np.exp(-15.9*standoffRatio)
         padMinField = 143.84*np.exp(-15.17*padRatio)
@@ -941,7 +946,7 @@ class FIMS_Simulation:
         return minField
 
 #***********************************************************************************#
-    def findMinField(self, numLines = 5, margin = 1., stepSize = 1.2):
+    def findMinField(self, numLines=5, margin=1., stepSize=1.2):
         """
         Runs simulations to determine what the minimum electric field ratio
         needs to be in order to have 100% Efield transparency.

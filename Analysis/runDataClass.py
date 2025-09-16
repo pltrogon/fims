@@ -213,7 +213,11 @@ class runData:
         Prints all metadata information. Dimensions are in microns.
         """
         metaData = getattr(self, 'metaData', None) 
-        for inParam in metaData: #TODO: typeError: 'NoneType' is not iterable
+        if metaData is None:
+            print('Error: Metadata is unavailable.')
+            return
+
+        for inParam in metaData:
             print(f'{inParam}: {self.getRunParameter(inParam)}')
         return
 
@@ -735,6 +739,44 @@ class runData:
     
 
 #********************************************************************************#   
+    def add3DFieldLines(self, axes, fieldLineData):
+        """
+        TODO
+        """
+
+        #Set color for each field line location
+        match fieldLineData:
+            case 'cathodeLines':
+                lineColor = 'b'
+            case 'aboveGrid':
+                lineColor = 'r'
+            case 'belowGrid':
+                lineColor = 'g'
+            case 'edgeLines':
+                lineColor = 'm'
+            case _:
+                raise ValueError('Error: Invalid fieldLines.')
+
+        
+        # iterate through all field lines
+        for _, fieldLine in fieldLineData:
+            axes[0].plot(
+                fieldLine['Field Line x'], fieldLine['Field Line z'], 
+                lw=1, c=lineColor
+            )
+            axes[1].plot(
+                fieldLine['Field Line y'], fieldLine['Field Line z'], 
+                lw=1, c=lineColor
+            )
+            axes[2].plot(
+                fieldLine['Field Line x'], fieldLine['Field Line y'], 
+                lw=1, c=lineColor
+            )
+
+        return
+
+
+#********************************************************************************#   
     def plotAllFieldLines(self):
         """
         Generates 2D plots of the simulated field lines.
@@ -753,7 +795,12 @@ class runData:
         aboveGrid = gridLines[gridLines['Grid Line Location'] == 1].groupby('Field Line ID')
         belowGrid = gridLines[gridLines['Grid Line Location'] == -1].groupby('Field Line ID')
 
-        if cathodeLines is None or aboveGrid is None or belowGrid is None or edgeLines is None:
+        if (
+            cathodeLines is None or
+            aboveGrid is None or
+            belowGrid is None or
+            edgeLines is None
+        ):
             raise ValueError('Field lines unavailable.')
 
         fig2D = plt.figure(figsize=(14, 7))
@@ -762,56 +809,13 @@ class runData:
         ax12 = fig2D.add_subplot(223)
         ax13 = fig2D.add_subplot(122)
 
-        # iterate through all cathode lines
-        for _, fieldLine in cathodeLines:
-            ax11.plot(fieldLine['Field Line x'], 
-                      fieldLine['Field Line z'], 
-                      lw=1, c='b')
-            ax12.plot(fieldLine['Field Line y'], 
-                      fieldLine['Field Line z'], 
-                      lw=1, c='b')
-            ax13.plot(fieldLine['Field Line x'], 
-                      fieldLine['Field Line y'], 
-                      lw=1, c='b')
-            
-        # iterate through all above grid lines
-        for _, fieldLine in aboveGrid:
-            ax11.plot(fieldLine['Field Line x'], 
-                      fieldLine['Field Line z'], 
-                      lw=1, c='r')
-            ax12.plot(fieldLine['Field Line y'], 
-                      fieldLine['Field Line z'], 
-                      lw=1, c='r')
-            ax13.plot(fieldLine['Field Line x'], 
-                      fieldLine['Field Line y'], 
-                      lw=1, c='r')
-            
-        # iterate through all above grid lines
-        for _, fieldLine in belowGrid:
-            ax11.plot(fieldLine['Field Line x'], 
-                      fieldLine['Field Line z'], 
-                      lw=1, c='g')
-            ax12.plot(fieldLine['Field Line y'], 
-                      fieldLine['Field Line z'], 
-                      lw=1, c='g')
-            ax13.plot(fieldLine['Field Line x'], 
-                      fieldLine['Field Line y'], 
-                      lw=1, c='g')
-
-        # TODO: This currently is a little too cluttered. Perhaps adding a boolean
-        #to optionally remove certain field lines would be better?
-        # iterate through all edge field lines
-        for _, fieldLine in edgeLines:
-            ax11.plot(fieldLine['Field Line x'], 
-                      fieldLine['Field Line z'], 
-                      lw=1, c='m')
-            ax12.plot(fieldLine['Field Line y'], 
-                      fieldLine['Field Line z'], 
-                      lw=1, c='m')
-            ax13.plot(fieldLine['Field Line x'], 
-                      fieldLine['Field Line y'], 
-                      lw=1, c='m')
-
+        # iterate through all field lines
+        axes = [ax11, ax12, ax13]
+        
+        self.add3DFieldLines(axes, cathodeLines)
+        self.add3DFieldLines(axes, aboveGrid):
+        self.add3DFieldLines(axes, belowGrid):
+        self.add3DFieldLines(axes, edgeLines):
 
         self._plotAddCellGeometry(ax11, 'xz')
         self._plotAddCellGeometry(ax12, 'yz')
@@ -819,6 +823,7 @@ class runData:
         plt.tight_layout() 
 
         return fig2D
+
 
 #********************************************************************************#   
     def _getRawGain(self):
