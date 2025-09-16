@@ -370,11 +370,17 @@ int main(int argc, char * argv[]) {
   for(int i = 0; i < numFieldLine; i++){
     xStart.push_back(rangeScale*xLineLimit*i/(numFieldLine-1));
     yStart.push_back(0.);
+
+    xStart.push_back(-rangeScale*xLineLimit*i/(numFieldLine-1));
+    yStart.push_back(0.);
   }
   // Field Lines along y:
   for(int i = 0; i < numFieldLine; i++){
     xStart.push_back(0.);
     yStart.push_back(rangeScale*yLineLimit*i/(numFieldLine-1));
+
+    xStart.push_back(0.);
+    yStart.push_back(-rangeScale*yLineLimit*i/(numFieldLine-1));
   }
   
   // Lines generated along the perimeter of the unit cell

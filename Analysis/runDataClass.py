@@ -10,6 +10,8 @@ import awkward_pandas
 import math
 import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.cm as cm
+
 
 from polyaClass import myPolya
 from functionsFIMS import withinHex, withinNeighborHex, xyInterpolate
@@ -719,16 +721,7 @@ class runData:
         ax13 = fig2D.add_subplot(122)
     
         # iterate through all lines
-        for lineID, fieldLine in groupedData:
-            ax11.plot(fieldLine['Field Line x'], 
-                      fieldLine['Field Line z'], 
-                      lw=1)
-            ax12.plot(fieldLine['Field Line y'], 
-                      fieldLine['Field Line z'], 
-                      lw=1)
-            ax13.plot(fieldLine['Field Line x'], 
-                      fieldLine['Field Line y'], 
-                      lw=1)
+        self.add2DFieldLines([ax11, ax12, ax13], groupedData, 'individual')
     
         self._plotAddCellGeometry(ax11, 'xz')
         self._plotAddCellGeometry(ax12, 'yz')
@@ -739,13 +732,15 @@ class runData:
     
 
 #********************************************************************************#   
-    def add3DFieldLines(self, axes, fieldLineData):
+    def add2DFieldLines(self, axes, fieldLineData, target):
         """
         TODO
         """
 
         #Set color for each field line location
-        match fieldLineData:
+        match target:
+            case 'individual':
+                numLines = len(fieldLineData)
             case 'cathodeLines':
                 lineColor = 'b'
             case 'aboveGrid':
@@ -755,11 +750,14 @@ class runData:
             case 'edgeLines':
                 lineColor = 'm'
             case _:
-                raise ValueError('Error: Invalid fieldLines.')
+                raise ValueError(f'Error: Invalid fieldLines - {target}.')
 
         
         # iterate through all field lines
-        for _, fieldLine in fieldLineData:
+        for inLine, (_, fieldLine) in enumerate(fieldLineData):
+            if target == 'individual':
+                lineColor = cm.viridis(inLine/numLines)
+
             axes[0].plot(
                 fieldLine['Field Line x'], fieldLine['Field Line z'], 
                 lw=1, c=lineColor
@@ -812,10 +810,10 @@ class runData:
         # iterate through all field lines
         axes = [ax11, ax12, ax13]
         
-        self.add3DFieldLines(axes, cathodeLines)
-        self.add3DFieldLines(axes, aboveGrid):
-        self.add3DFieldLines(axes, belowGrid):
-        self.add3DFieldLines(axes, edgeLines):
+        self.add2DFieldLines(axes, cathodeLines, 'cathodeLines')
+        self.add2DFieldLines(axes, aboveGrid, 'aboveGrid')
+        self.add2DFieldLines(axes, belowGrid, 'belowGrid')
+        #self.add2DFieldLines(axes, edgeLines, 'edgeLines')
 
         self._plotAddCellGeometry(ax11, 'xz')
         self._plotAddCellGeometry(ax12, 'yz')
