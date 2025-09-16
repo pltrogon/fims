@@ -353,11 +353,18 @@ int main(int argc, char * argv[]) {
   for(int i = 0; i < numFieldLine; i++){
     xStart.push_back(rangeScale*xLineLimit*i/(numFieldLine-1));
     yStart.push_back(0.);
+
+    xStart.push_back(-rangeScale*xLineLimit*i/(numFieldLine-1));
+    yStart.push_back(0.);
   }
+  
   //Field Lines along y:
   for(int i = 0; i < numFieldLine; i++){
     xStart.push_back(0.);
     yStart.push_back(rangeScale*yLineLimit*i/(numFieldLine-1));
+
+    xStart.push_back(0.);
+    yStart.push_back(-rangeScale*yLineLimit*i/(numFieldLine-1));
   }
 
 
@@ -679,6 +686,7 @@ int main(int argc, char * argv[]) {
         //Fill tree
         parallelSignalDataTree->Fill();
       }
+      parallelSensorFIMS->ClearSignal();
 
       //*** TODO ***/
       //Can insert any other per-avalanche analysis/data here.
@@ -727,7 +735,8 @@ int main(int argc, char * argv[]) {
   );
 
 
-/*TODO - Get the diffusion coefficients for the amplification field
+/*
+  //TODO - Get the diffusion coefficients for the amplification field
   double ampDiffusionL, ampDiffusionT, ampVelocity;
   double ampField = driftField*fieldRatio;
   gasFIMS->RunMagboltz(
@@ -739,7 +748,8 @@ int main(int argc, char * argv[]) {
     alphaerr, etaerr, riontoferr, ratttoferr, lorerr, alphatof,
     difftens
   );
-  */
+*/
+  
   
   delete gasFIMS;
 
