@@ -215,7 +215,7 @@ class runData:
         """
         Prints all metadata information. Dimensions are in microns.
         """
-        metaData = getattr(self, 'metaData', None) 
+        metaData = self.getMetaData()
         if metaData is None:
             print('Error: Metadata is unavailable.')
             return
