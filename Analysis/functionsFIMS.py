@@ -167,9 +167,9 @@ def plotPolyaEfficiency(theta):
     plt.axhline(y=targetEfficiency,
                 c='r', ls='--', label=f'{targetEfficiency*100:.0f}% Efficiency')
     plt.axvline(x=-np.log(targetEfficiency),
-                c='r', ls=':', label=r'$\theta = 0$ Max: '+f'{-np.log(targetEfficiency):.3f}')
+                c='r', ls=':', label=r'$\theta = 0$ Limit: '+f'{-np.log(targetEfficiency):.3f}')
 
-    plt.title(f"Efficiency of Polya: "
+    plt.title(f"Parameterized Efficiency: "
               +r"$\eta = \frac{\Gamma\left(\theta+1, (\theta+1)*n_{t}/\bar{n}\right)}{\Gamma\left(\theta+1\right)}$")
     plt.xlabel("Threshold / Gain Fraction: "
                +r"$n_{t} / \bar{n}$")
@@ -201,7 +201,7 @@ def plotThreshold():
     for i, eff in enumerate(efficiency):
         gain = -threshold/np.log(eff)
         plt.plot(threshold, gain,
-                 c=colors[i], label=f'Target Efficiency = {eff*100:.0f}%')
+                 c=colors[i], label=r'$\theta$ = 0.0 '+f'(Efficiency = {eff*100:.0f}%)')
 
         polya5 = myPolya(1, 0.5)
         polya5.solveForGain(targetEff=eff, threshold=1)
@@ -213,13 +213,13 @@ def plotThreshold():
         polya1.solveForGain(targetEff=eff, threshold=1)
         theta1 = threshold*polya1.gain
         plt.plot(threshold, theta1,
-                 c=colors[i], ls='--', label=r'$\theta$ = 1')
+                 c=colors[i], ls='--', label=r'$\theta$ = 1.0')
 
         polya2 = myPolya(1, 2)
         polya2.solveForGain(targetEff=eff, threshold=1)
         theta2 = threshold*polya2.gain
         plt.plot(threshold, theta2,
-                 c=colors[i], ls='-.', label=r'$\theta$ = 2')
+                 c=colors[i], ls='-.', label=r'$\theta$ = 2.0')
                  
 
     plt.title(f'Minimum Gain Required to Achieve Efficiency')

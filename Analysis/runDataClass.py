@@ -1265,7 +1265,7 @@ class runData:
         polyaResults = fitResults['fitPolya'].calcPolya(fitResults['xVal'])
         polyaChi2 = self._getChiSquared(fitResults['yVal'], polyaResults)
         
-        fig = plt.figure()
+        fig = plt.figure(figsize=(10, 8))
         fig.suptitle(f'Avalanche Size Distribution: Run {self.runNumber}')
         
         ax = fig.add_subplot(111)
@@ -1279,38 +1279,39 @@ class runData:
 
         ax.plot(fitResults['xVal'], 
                 polyaResults, 
-                'm-', lw=2, 
+                'm-', lw=3, 
                 label=r'Fitted Polya ($\theta$' 
-                    + f" = {fitResults['fitPolya'].theta:.3})")
+                    + f" = {fitResults['fitPolya'].theta:.2})")
         ax.axvline(x=fitResults['fitPolya'].gain, 
-               c='m', ls=':', label=f"Polya Gain = {fitResults['fitPolya'].gain:.1f}e")
+               c='m', ls=':', label=f"Polya Gain = {fitResults['fitPolya'].gain:.0f}e")
         
         '''For plotting an exponential
         ax.plot(fitResults['xVal'], 
                 fitResults['fitExpo'].calcPolya(fitResults['xVal']), 
                 'r', lw=2, label=f'Fitted Exponential')
         ax.axvline(x=fitResults['fitExpo'].gain, 
-               c='r', ls=':', label=f"Expo Gain = {fitResults['fitExpo'].gain:.1f}e")
+               c='r', ls=':', label=f"Expo Gain = {fitResults['fitExpo'].gain:.0f}e")
         '''
 
         ax.axvline(x=self._getRawGain(), 
-               c='g', ls='--', label=f"Raw Gain = {self._getRawGain():.1f}e")
+               c='g', ls='--', label=f"Raw Gain = {self._getRawGain():.0f}e")
         ax.axvline(x=fitResults['dataGain'], 
-               c='g', ls=':', label=f"Trimmed Gain = {fitResults['dataGain']:.1f}e")
+               c='g', ls=':', label=f"Trimmed Gain = {fitResults['dataGain']:.0f}e")
 
 
         polyaStats = f'Polya Fit Statistics\nChi2 = {polyaChi2['chi2']:.4f}\nrChi2 = {polyaChi2['rChi2']:.4f}'
-        
-        ax.text(0.8, 0.75, polyaStats, 
-                fontsize=10, 
-                horizontalalignment='center',
-                verticalalignment='center', 
-                transform=ax.transAxes,
-                bbox=dict(facecolor='none', edgecolor='black', boxstyle='round,pad=1')
-                )
-
-        plt.xlabel('Numer of Electrons in Trimmed Avalanche')
-        plt.ylabel('Probability of Avalanche Size')
+        '''
+        ax.text(
+            0.8, 0.75, polyaStats, 
+            fontsize=10, 
+            horizontalalignment='center',
+            verticalalignment='center', 
+            transform=ax.transAxes,
+            bbox=dict(facecolor='none', edgecolor='black', boxstyle='round,pad=1')
+        )
+        '''
+        plt.xlabel('Numer of Electrons in Avalanche: n')
+        plt.ylabel('Probability of Avalanche Size: P(n)')
         plt.legend()
         plt.grid(True, alpha=0.5)
 
