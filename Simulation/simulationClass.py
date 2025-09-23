@@ -941,31 +941,37 @@ class FIMS_Simulation:
         return minField
 
 #***********************************************************************************#
-    def findMinField(self, numLines = 5, margin = 1., stepSize = 1.2):
+    def findMinField(self, margin = 1., minStepSize = 1.2, numLines = 10):
         """
         Runs simulations to determine what the minimum electric field ratio
-        needs to be in order to have 100% Efield transparency.
+        needs to be in order to have 100% E-field transparency.
 
-        First calculates an initial guess for the ratio based on exponential fits 
-        to simulated data. Then generates a Gmsh FEM of the geometry and solves the
-        E field based on this guess using Elmer. Generates field lines via Garfield
-        and determines a transparency. If the transparency is below the limit, a new
-        field ratio is determined, the resulting field is solved, and new field 
+        First, it calculates an initial guess for the ratio based on exponential fits 
+        to simulated data. Then, it generates a gmsh FEM of the geometry and solves the
+        E-field based on this guess using Elmer FEM. It then generates field lines via 
+        Garfield++ and determines a transparency. If the transparency is below the limit,
+        a new field ratio is determined. The resulting field is solved, and new field 
         lines are generated. This continues until the criteria is reached.
         
         Upon completion, simulation files are reset.
         
-        NOTE: This assumes that the initial guessed field ratio results in a
-              transparency that is below the limit. The ratio thus is always increased.
+        NOTE: This assumes that the initial guessed field ratio results in a transparency
+        that is below the limit. The ratio is therefore always increased.
         
         Args:
-            numLines (int): Number of field lines to use to determine transparency.
-
             margin (float): number multiplied to the predicted value to create a
-                            buffer in case the raw value is too large.
+                            buffer in case the raw value is too large or too small.
+            
+            minStepSize (float): number used as the step size once the calculated step
+            size becomes too small.
+            
+            numLines (int): number of field lines used to determine the transparency.
+
 
         Returns:
             bool: True if a minimum field is successfully found, False otherwise.
+            
+            finalField (float): the minimum field ratio that results in 100% transparency.
         """
         #Ensure all parameters exist and save them
         if not self._checkParam():
@@ -978,7 +984,8 @@ class FIMS_Simulation:
         self.param['fieldRatio'] = initialGuess
         
         #Write parameters and generate geometry
-        self.param['numFieldLine'] = numLines #TODO - numFieldLine defualts to 5 here. how does this effect when running
+        self.param['numFieldLine'] = numLines
+        
         if not self._writeParam():
             print('Error writing parameters.')
             return False
@@ -991,23 +998,21 @@ class FIMS_Simulation:
         print('Beginning search for minimum field...')
         firstRun = True
         isTransparent = False
-        transparencyThreshold = self._getParam('transparencyLimit')
+        stepSize = 1.
+        transparency = 0.
+        transLimit = self._getParam('transparencyLimit')
         curField = self._getParam('fieldRatio')
-        print(f'Initial field ratio: {curField}')
         
         while not isTransparent:
             #Block that determines the new field ratio
-            if not firstRun:
-                #TODO: find better way to determine step size
-                #Determine a step size to change field
-                curField *= stepSize
-                print(f'Current field ratio: {curField}')
+            curField *= stepSize
+            print(f'Testing field ratio of {curField}')
 
-                #Write new field ratio
-                self.param['fieldRatio'] = curField
-                if not self._writeParam():
-                    print('Error writing parameters.')
-                    return False
+            #Write new field ratio
+            self.param['fieldRatio'] = curField
+            if not self._writeParam():
+                print('Error writing parameters.')
+                return False
             
             #Determine the electric field
             print('\tExecuting Elmer...')
@@ -1024,13 +1029,22 @@ class FIMS_Simulation:
             #Get the resulting field transparency
             with open('../Data/fieldTransparency.txt', 'r') as readFile:
                 try:
-                    isTransparent = bool(int(readFile.read()))
+                    #isTransparent = bool(int(readFile.read()))
+                    transparency = float(readFile.read())
 
                 except (ValueError, FileNotFoundError):
                     print("Error: Could not read or parse transparency file.")
                     return False
-                    
-            firstRun = False
+            
+            #Determine a step size to change field
+            if transLimit/transparency < minStepSize:
+                stepSize = minStepSize
+            else:
+                stepSize = transLimit/transparency
+            
+            #Check transparency to the terminate loop
+            if transparency >= transLimit:
+                isTransparent = True
 
         #Print solution
         finalField = self._getParam('fieldRatio')
@@ -1041,8 +1055,8 @@ class FIMS_Simulation:
         #load saved parameters back into class. Update field ratio with solution.
         self.param = saveParam
         self.param['fieldRatio'] = finalField
-
-        return True
+        
+        return True, finalField
 
 #***********************************************************************************#
 #***********************************************************************************#

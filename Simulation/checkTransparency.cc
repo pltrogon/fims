@@ -266,7 +266,9 @@ int main(int argc, char * argv[]) {
   double rangeScale = 0.99;
   double xRange = (xBoundary[1] - xBoundary[0])*rangeScale;
   double yRange = (yBoundary[1] - yBoundary[0])*rangeScale;
-
+  double xWidth = pitch*sqrt(3.)/3.;
+  double yWidth = rangeScale*pitch/2.;
+  
   /*
   //Lines generated radially from the center to edge of geometry
   //The x-direction is the long axis of the geometry. 
@@ -276,6 +278,7 @@ int main(int argc, char * argv[]) {
     }
   */
   
+  /*
   //Lines populated randomly at the corner along the positive x-axis
   for(int i = 0; i < numFieldLine; i++){
     //Get random numbers between 0 and xRandMax/yRandMax
@@ -284,17 +287,23 @@ int main(int argc, char * argv[]) {
     xStart.push_back((2./3.)*xBoundary[1] - randX);
     yStart.push_back(randY);
   }
+  */
   
-
+  //Lines populated from 5/6ths of the unit cell length to the corner along the positive x-axis
+  for(int i = 0; i < numFieldLine; i++){
+    xStart.push_back(xWidth*((5./6.) + (1./6.)*i/(numFieldLine-1.)));
+    yStart.push_back(0.);
+    std::cout << "starting points:" << xStart[i] << "," << yStart[i] << std::endl;
+  }
+  
   // ***** Calculate field Lines ***** //
   std::vector<std::array<float, 3> > fieldLines;
   int totalFieldLines = xStart.size();
   int numAtPad = 0;
   int prevDriftLine = 0;
 
-  std::cout << "Computing corner field lines" << std::endl;
+  std::cout << "Computing field lines" << std::endl;
   for(int inFieldLine = 0; inFieldLine < totalFieldLines; inFieldLine++){
-    //Calculate from the corner
     driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], zmax*rangeScale, fieldLines);
     //Get coordinates of every point along field line
     for(int inLine = 0; inLine < fieldLines.size(); inLine++){
@@ -308,7 +317,7 @@ int main(int argc, char * argv[]) {
     //TODO: Find more elegant way to determine where a line terminates
     int lineEnd = fieldLines.size() - 1;
     if(  (abs(fieldLines[lineEnd][0]) <= padLength)
-      && (abs(fieldLines[lineEnd][1]) <= padLength*sqrt(3)/2)
+      && (abs(fieldLines[lineEnd][1]) <= padLength*sqrt(3.)/2.)
       && (fieldLines[lineEnd][2] <= -gridStandoff*rangeScale)){
         numAtPad++;
     }
@@ -342,7 +351,7 @@ int main(int argc, char * argv[]) {
   
   //***** Output transparency value *****//
   dataFile.open(dataPath);
-  dataFile << isTransparent << std::endl;
+  dataFile << fieldTransparency << std::endl;
   dataFile.close();
 
   std::cout << "****************************************\n";
