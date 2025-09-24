@@ -77,6 +77,7 @@ class runData:
         calcBundleRadius
         _getOutermostLineID
         findStuckElectrons
+        _calcIBF
         _calcIBN                    <--------- Note for James, changed from _calcIBF
         _calcPerAvalancheIBF        <--------- New
         _calcOpticalTransparency
@@ -398,11 +399,11 @@ class runData:
             self._metaData['Average IBN'] = IBN
 
             #Calculate IBF on a per-avalanche basis
-            IBF = self._calcPerAvalancheIBF()
-            meanIBF = IBF.mean()
-            self._metaData['Average IBF'] = meanIBF
-            ## Add results to avalanche data
+            IBF, meanIBF, meanIBFErr  = self._calcIBF()
+
             self._avalancheData['IBF'] = self._avalancheData['Avalanche ID'].map(IBF)
+            self._metaData['Average IBF'] = meanIBF
+            self._metaData['Average IBF Error'] = meanIBFErr
 
             self._metaData['IBF * Raw Gain'] = meanIBF*rawGain
             
@@ -1525,6 +1526,21 @@ class runData:
         IBF = trueCathode.div(trueTotal, fill_value=0)
 
         return IBF
+    
+
+#********************************************************************************#
+    def _calcIBF(self):
+        """
+        TODO
+        """
+        
+        #Calculate IBF on a per-avalanche basis
+        IBF = self._calcPerAvalancheIBF()
+        meanIBF = IBF.mean()
+        meanIBFErr = IBF.std()
+
+        return IBF, meanIBF, meanIBFErr
+    
 
 #********************************************************************************#
     def _calcOpticalTransparency(self):
