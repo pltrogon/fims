@@ -46,7 +46,7 @@ int main(int argc, char * argv[]) {
   const double MICRONTOCM = 1e-4;
   bool DEBUG = false;
   double fieldLineX, fieldLineY, fieldLineZ;
-  double fieldTransparency;
+  double measuredTransparency, fieldTransparency;
   const char* isTransparent;
   double xRandMax = 2*MICRONTOCM;
   double yRandMax = 1*MICRONTOCM; 
@@ -264,6 +264,7 @@ int main(int argc, char * argv[]) {
   std::vector<double> xStart;
   std::vector<double> yStart;
   double rangeScale = 0.99;
+  double fieldCutoff = 0.2;
   double xRange = (xBoundary[1] - xBoundary[0])*rangeScale;
   double yRange = (yBoundary[1] - yBoundary[0])*rangeScale;
   double xWidth = pitch*sqrt(3.)/3.;
@@ -289,9 +290,9 @@ int main(int argc, char * argv[]) {
   }
   */
   
-  //Lines populated along the last 20% of the unit cell length along the positive x-axis
+  //Lines populated along the positive x-axis beyond a given cutoff point
   for(int i = 0; i < numFieldLine; i++){
-    xStart.push_back(xWidth*((4./5.) + (1./5.)*i/(numFieldLine-1.)));
+    xStart.push_back(xWidth*((1 - fieldCutoff) + fieldCutoff*i/(numFieldLine-1.)));
     yStart.push_back(0.);
     std::cout << "starting points:" << xStart[i] << "," << yStart[i] << std::endl;
   }
@@ -335,8 +336,10 @@ int main(int argc, char * argv[]) {
 
   std::cout << "Done " << totalFieldLines << " field lines; Determining transparency." << "\n";
   
-  //Determine transparency of corner
-  fieldTransparency = (1.*numAtPad) / (1.*numFieldLine);
+  //Determine transparency
+  measuredTransparency = (1.*numAtPad) / (1.*numFieldLine);
+  //Note: assumes that the transparency outside of the measured region is 100%
+  fieldTransparency = (1 - fieldCutoff) + measuredTransparency*fieldCutoff;
   std::cout << "Corner transparency is " << fieldTransparency <<  "." << std::endl;
   
   
