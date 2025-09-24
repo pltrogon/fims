@@ -289,9 +289,9 @@ int main(int argc, char * argv[]) {
   }
   */
   
-  //Lines populated from 5/6ths of the unit cell length to the corner along the positive x-axis
+  //Lines populated along the last 20% of the unit cell length along the positive x-axis
   for(int i = 0; i < numFieldLine; i++){
-    xStart.push_back(xWidth*((5./6.) + (1./6.)*i/(numFieldLine-1.)));
+    xStart.push_back(xWidth*((4./5.) + (1./5.)*i/(numFieldLine-1.)));
     yStart.push_back(0.);
     std::cout << "starting points:" << xStart[i] << "," << yStart[i] << std::endl;
   }

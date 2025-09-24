@@ -1039,6 +1039,8 @@ class FIMS_Simulation:
             #Determine a step size to change field
             if transLimit/transparency < minStepSize:
                 stepSize = minStepSize
+            elif transparency < .4:
+                stepSize = 2.5
             else:
                 stepSize = transLimit/transparency
             
