@@ -941,7 +941,7 @@ class FIMS_Simulation:
         return minField
 
 #***********************************************************************************#
-    def findMinField(self, margin = 1., minStepSize = 1.2, numLines = 10):
+    def findMinField(self, margin = 1., minStepSize = 1.2):
         """
         Runs simulations to determine what the minimum electric field ratio
         needs to be in order to have 100% E-field transparency.
@@ -964,9 +964,6 @@ class FIMS_Simulation:
             
             minStepSize (float): number used as the step size once the calculated step
             size becomes too small.
-            
-            numLines (int): number of field lines used to determine the transparency.
-
 
         Returns:
             bool: True if a minimum field is successfully found, False otherwise.
@@ -979,13 +976,14 @@ class FIMS_Simulation:
         saveParam = self.param.copy()
 
         #Calculate initial guess
-
         initialGuess = self._calcMinField()*margin
         self.param['fieldRatio'] = initialGuess
-        
-        #Write parameters and generate geometry
+       
+        #Adjust the number of field lines to fill only last 20% of the unit cell
+        numLines = int(self._getParam('numFieldLine')*.2)
         self.param['numFieldLine'] = numLines
         
+        #Write parameters and generate geometry
         if not self._writeParam():
             print('Error writing parameters.')
             return False
@@ -996,23 +994,19 @@ class FIMS_Simulation:
                 return False
 
         print('Beginning search for minimum field...')
-        firstRun = True
         isTransparent = False
         stepSize = 1.
-        transparency = 0.
         transLimit = self._getParam('transparencyLimit')
         curField = self._getParam('fieldRatio')
         
         while not isTransparent:
-            #Block that determines the new field ratio
+            #Calculate and write the new field ratio
             curField *= stepSize
-            print(f'Testing field ratio of {curField}')
-
-            #Write new field ratio
             self.param['fieldRatio'] = curField
             if not self._writeParam():
                 print('Error writing parameters.')
                 return False
+            print(f'Testing field ratio of {curField}')            
             
             #Determine the electric field
             print('\tExecuting Elmer...')
@@ -1029,20 +1023,19 @@ class FIMS_Simulation:
             #Get the resulting field transparency
             with open('../Data/fieldTransparency.txt', 'r') as readFile:
                 try:
-                    #isTransparent = bool(int(readFile.read()))
                     transparency = float(readFile.read())
 
                 except (ValueError, FileNotFoundError):
                     print("Error: Could not read or parse transparency file.")
                     return False
             
-            #Determine a step size to change field
+            #Determine new step size
             if transLimit/transparency < minStepSize:
                 stepSize = minStepSize
             else:
                 stepSize = transLimit/transparency
             
-            #Check transparency to the terminate loop
+            #Check transparency to terminate loop
             if transparency >= transLimit:
                 isTransparent = True
 
