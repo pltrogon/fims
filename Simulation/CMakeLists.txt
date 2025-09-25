@@ -15,6 +15,7 @@ find_package(OpenMP REQUIRED)
 # Add the executable
 add_executable(runAvalanche avalanche.cc)
 add_executable(runFieldLines checkTransparency.cc)
+add_executable(runGain checkGain.cc)
 
 
 # Link libraries and include directories
@@ -42,6 +43,21 @@ target_include_directories(runFieldLines PRIVATE
 )
 
 target_link_libraries(runFieldLines
+    PRIVATE
+        GSL::gsl
+        GSL::gslcblas
+        Garfield::Garfield
+	OpenMP::OpenMP_CXX
+)
+
+
+target_include_directories(runGain PRIVATE
+    $<TARGET_PROPERTY:GSL::gsl,INTERFACE_INCLUDE_DIRECTORIES>
+    $<TARGET_PROPERTY:Garfield::Garfield,INTERFACE_INCLUDE_DIRECTORIES>
+    $<TARGET_PROPERTY:ROOT::Hist,INTERFACE_INCLUDE_DIRECTORIES>
+)
+
+target_link_libraries(runGain
     PRIVATE
         GSL::gsl
         GSL::gslcblas
