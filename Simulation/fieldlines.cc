@@ -58,34 +58,6 @@ int main(int argc, char * argv[]) {
 
   TApplication app("app", &argc, argv);
 
-  //***** Git Hash *****//
-  TString gitVersion = "UNKNOWN VERSION";
-
-  const char * getGitCommand = "git describe --tags --always --dirty 2>/dev/null";
-
-  FILE * pipe = popen(getGitCommand, "r");
-  if(!pipe){
-    std::cerr << "Error: Could not open pipe to 'getGitCommand'." << std::endl;
-  }
-  else{ 
-    char gitBuffer[128];
-    std::string gitOutput = "";
-    while(fgets(gitBuffer, sizeof(gitBuffer), pipe) != NULL){
-      gitOutput += gitBuffer;
-    }
-    int gitStatus = pclose(pipe);
-
-    if(!gitOutput.empty() && gitOutput.back() == '\n'){
-      gitOutput.pop_back();
-    }
-
-    if(gitStatus == 0){
-      gitVersion = gitOutput;
-    }
-    else{
-      std::cerr << "Error: 'getGitCommand' failed with status " << gitStatus << std::endl;
-    }
-  }
 
   std::cout << "****************************************\n";
   std::cout << "Building field line simulation: " << "\n";
@@ -199,12 +171,14 @@ int main(int argc, char * argv[]) {
   // Import elmer-generated field map
   std::string geometryPath = "../Geometry/";
   std::string elmerResultsPath = geometryPath+"elmerResults/";
-  ComponentElmer fieldFIMS(elmerResultsPath+"mesh.header",
-                           elmerResultsPath+"mesh.elements",
-                           elmerResultsPath+"mesh.nodes", 
-                           geometryPath+"dielectrics.dat",
-                           elmerResultsPath+"FIMS.result", 
-                           "mum");
+  ComponentElmer fieldFIMS(
+    elmerResultsPath+"mesh.header",
+    elmerResultsPath+"mesh.elements",
+    elmerResultsPath+"mesh.nodes", 
+    geometryPath+"dielectrics.dat",
+    elmerResultsPath+"FIMS.result", 
+    "mum"
+  );
 
   // Get region of elmer geometry
   double xmin, ymin, zmin, xmax, ymax, zmax;
@@ -212,37 +186,26 @@ int main(int argc, char * argv[]) {
 
   //Define boundary region for simulation
   double xBoundary[2], yBoundary[2], zBoundary[2];
-
-  //Simple criteria for if 1/4 geometry or full
-  //   x=y=0 should be the min if 1/4
-  if(xmin == 0 && ymin == 0){
-    xBoundary[0] = -xmax;
-    xBoundary[1] = xmax;
-    yBoundary[0] = -ymax;
-    yBoundary[1] = ymax;
-  }
-  else{
-    xBoundary[0] = xmin;
-    xBoundary[1] = xmax;
-    yBoundary[0] = ymin;
-    yBoundary[1] = ymax;
-  }
   zBoundary[0] = zmin;
   zBoundary[1] = zmax;
+  //Extend simulation boundary to +/- pitch in x and y
+  xBoundary[0] = -pitch;
+  xBoundary[1] = pitch;
+  yBoundary[0] = -pitch;
+  yBoundary[1] = pitch;
 
   //Enable periodicity and set components
   fieldFIMS.EnableMirrorPeriodicityX();
   fieldFIMS.EnableMirrorPeriodicityY();
   fieldFIMS.SetGas(gasFIMS);
 
-  // Import the weighting field for the readout electrode.
-  fieldFIMS.SetWeightingField(elmerResultsPath+"FIMSWeighting.result", "wtlel");
-
   //Create a sensor
   Sensor* sensorFIMS = new Sensor();
   sensorFIMS->AddComponent(&fieldFIMS);
-  sensorFIMS->SetArea(xBoundary[0], yBoundary[0], zBoundary[0], xBoundary[1], yBoundary[1], zBoundary[1]);
-  sensorFIMS->AddElectrode(&fieldFIMS, "wtlel");
+  sensorFIMS->SetArea(
+    xBoundary[0], yBoundary[0], zBoundary[0], 
+    xBoundary[1], yBoundary[1], zBoundary[1]
+  );
 
   // ***** Find field transparency ***** //
   std::cout << "****************************************\n";
@@ -266,21 +229,13 @@ int main(int argc, char * argv[]) {
   double xRange = (xBoundary[1] - xBoundary[0])*rangeScale;
   double yRange = (yBoundary[1] - yBoundary[0])*rangeScale;
 
-  /*
-  //Lines generated radially from the center to edge of geometry
-  //The x-direction is the long axis of the geometry. 
-  for(int i = 0; i < numFieldLine; i++){
-    xStart.push_back((2./3.)*xBoundary[1]*i/(numFieldLine-1));
-    yStart.push_back(0.);
-    }
-  */
   
   //Lines populated randomly at the corner along the positive x-axis
   for(int i = 0; i < numFieldLine; i++){
     //Get random numbers between 0 and xRandMax/yRandMax
     double randX = 1.0*rand()/RAND_MAX*(xRandMax);
     double randY = (0.5 - 1.0*rand()/RAND_MAX)*(yRandMax);
-    xStart.push_back((2./3.)*xBoundary[1] - randX);
+    xStart.push_back(pitch/sqrt(3) - randX);
     yStart.push_back(randY);
   }
   
@@ -306,10 +261,15 @@ int main(int argc, char * argv[]) {
     //Find if termination point is at pad
     //TODO: Find more elegant way to determine where a line terminates
     int lineEnd = fieldLines.size() - 1;
+    /*
     if(  (abs(fieldLines[lineEnd][0]) <= padLength)
       && (abs(fieldLines[lineEnd][1]) <= padLength*sqrt(3)/2)
       && (fieldLines[lineEnd][2] <= -gridStandoff*rangeScale)){
         numAtPad++;
+    }
+    */
+    if(fieldLines[lineEnd][2]<= -gridThickness){
+      numAtPad++;
     }
     
     //Print a progress update every 10%

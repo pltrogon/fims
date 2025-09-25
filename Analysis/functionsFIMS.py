@@ -17,7 +17,7 @@ Functions:
     plotThreshold
     plotPolyaExamples
     withinHex
-    withinNeighbourHex
+    withinNeighborHex
     xyInterpolate
     getSetData
     plotDataSets
@@ -169,7 +169,7 @@ def plotPolyaEfficiency(theta):
     plt.axvline(x=-np.log(targetEfficiency),
                 c='r', ls=':', label=r'$\theta = 0$ Max: '+f'{-np.log(targetEfficiency):.3f}')
 
-    plt.title(f"Efficiency of Polya: "
+    plt.title(f"Parameterized Efficiency: "
               +r"$\eta = \frac{\Gamma\left(\theta+1, (\theta+1)*n_{t}/\bar{n}\right)}{\Gamma\left(\theta+1\right)}$")
     plt.xlabel("Threshold / Gain Fraction: "
                +r"$n_{t} / \bar{n}$")
@@ -281,7 +281,7 @@ def withinHex(xVal, yVal, sideLength):
     return inHex
 
 #********************************************************************************#   
-def withinNeighbourHex(xVal, yVal, sideLength, pitch):
+def withinNeighborHex(xVal, yVal, sideLength, pitch):
     """
     Determines if a coordinate lies within a hexagonal region in hexagonal tiling.
     Assumes a flat-top geometry. 
@@ -306,18 +306,18 @@ def withinNeighbourHex(xVal, yVal, sideLength, pitch):
     inRadius = pitch/2.
     outRadius = 2*inRadius/math.sqrt(3)
     
-    #Centers of neighbouring cells
-    neighbourX = 3./2.*outRadius*np.array([0, 1])
-    neighbourY = inRadius*np.array([2, 1])
+    #Centers of neighboring cells
+    neighborX = 3./2.*outRadius*np.array([0, 1])
+    neighborY = inRadius*np.array([2, 1])
 
     #Check
-    checkTop = withinHex(x - neighbourX[0], y - neighbourY[0], sideLength)
-    checkTopRight = withinHex(x - neighbourX[1], y - neighbourY[1], sideLength)
+    checkTop = withinHex(x - neighborX[0], y - neighborY[0], sideLength)
+    checkTopRight = withinHex(x - neighborX[1], y - neighborY[1], sideLength)
 
     #Combine conditions
-    isInNeighbourHex = np.logical_or(checkTop, checkTopRight)
+    isInNeighborHex = np.logical_or(checkTop, checkTopRight)
 
-    return isInNeighbourHex
+    return isInNeighborHex
 
 
 #********************************************************************************#   
