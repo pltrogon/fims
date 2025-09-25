@@ -317,7 +317,7 @@ class myPolya:
             initial = [gain, 0.5] #TODO - 0, 0.5, or 1 - whats best here
             bounds = (
                 [1, 0],
-                [2*gain, 1]
+                [2*gain, 2]
             )
 
         try:

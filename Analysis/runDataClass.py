@@ -77,7 +77,6 @@ class runData:
         calcBundleRadius
         _getOutermostLineID
         findStuckElectrons
-        _calcIBF
         _calcIBN                    <--------- Note for James, changed from _calcIBF
         _calcPerAvalancheIBF        <--------- New
         _calcOpticalTransparency
@@ -377,17 +376,19 @@ class runData:
             Raw Gain
             Average IBN
             Average IBF
+            IBF error (standard deviation)
         """
         #Optical transparency
         self._metaData['Optical Transparency'] = self._calcOpticalTransparency()
 
-        #Field Transparency
-        self._metaData['Field Transparency'] = self._getTransparency()
+        if self.getRunParameter('Number of Field Lines') > 0:
+            #Field Transparency
+            self._metaData['Field Transparency'] = self._getTransparency()
 
-        #Field bundle radius
-        standoff = self.getRunParameter('Grid Standoff')
-        nominalBundleZ = -standoff/2
-        self._metaData['Field Bundle Radius'] = self.calcBundleRadius(nominalBundleZ)
+            #Field bundle radius
+            standoff = self.getRunParameter('Grid Standoff')
+            nominalBundleZ = -.9*standoff
+            self._metaData['Field Bundle Radius'] = self.calcBundleRadius(nominalBundleZ)
 
         if self.getRunParameter('Number of Avalanches') > 0:
             #Raw Gain
@@ -491,7 +492,7 @@ class runData:
         #Add boundaries of neighboring cells and pads
         for i in range(6):
             ax1.plot(neighborX[i]+cellX, neighborY[i]+cellY,
-                    c='c', ls=':', lw=1)
+                    c='b', ls=':', lw=1)
             ax1.plot(neighborX[i]+padX, neighborY[i]+padY,
                     c='m', ls=':', lw=1)
         
@@ -507,7 +508,7 @@ class runData:
         ax1.plot(0., 0., marker='x', c='r')
         ax1.plot(neighborX, neighborY,
                 marker='.', c='r', ls='')
-
+        '''
         #Add geometry cell
         geoX = 3./2.*outRadius*np.array([0, 1, 1, 0, 0])
         geoY = inRadius*np.array([1, 1, 0, 0, 1])
@@ -521,12 +522,20 @@ class runData:
         simY = pitch*np.array([1, 1, -1, -1, 1])
         ax1.plot(simX, simY,
                 c='g', ls='--', lw=1, label='Simulation Boundary')
-
+        '''
         #Add dimensions
-        ax1.plot([0, neighborX[4]], [0, neighborY[4]],
-                label=f'Pitch ({pitch:.0f} um)', c='r', ls=':', lw=1)
-        ax1.plot([0, padLength], [0, 0],
-                label=f'Pad Length ({padLength:.0f} um)', c='r', ls='-', lw=1)
+        ax1.plot(
+            [0, neighborX[4]], [0, neighborY[4]],
+            label=f'Pitch ({pitch:.0f} um)', c='r', ls=':', lw=1
+        )
+        ax1.plot(
+            [0, padLength], [0, 0],
+            label=f'Pad Length ({padLength:.0f} um)', c='r', ls='-', lw=1
+        )
+        ax1.plot(
+            [0, 0], [0, holeRadius],
+            label=f'Hole Radius', c='r', ls='--', lw=1
+        )
         
         # Set other plot elements
         ax1.grid()
@@ -772,6 +781,27 @@ class runData:
                 fieldLine['Field Line x'], fieldLine['Field Line y'], 
                 lw=1, c=lineColor
             )
+
+        #Add nominal field bundle radius - TODO: This assumes a circle.
+        nominalBundleR = self.getRunParameter('Field Bundle Radius')
+        nominalBundleZ = -0.9*self.getRunParameter('Grid Standoff')
+        
+        nominalFieldBundle = plt.Circle(
+            (0, 0), nominalBundleR, 
+            facecolor='none', edgecolor='c', lw=2
+        )
+
+        axes[0].plot(
+                [-nominalBundleR, nominalBundleR], [nominalBundleZ, nominalBundleZ], 
+                lw=2, c='c'
+            )
+        axes[1].plot(
+                [-nominalBundleR, nominalBundleR], [nominalBundleZ, nominalBundleZ], 
+                lw=2, c='c'
+            )
+        axes[2].add_patch(nominalFieldBundle)
+        
+
 
         return
 
@@ -1526,22 +1556,19 @@ class runData:
         IBF = trueCathode.div(trueTotal, fill_value=0)
 
         return IBF
-    
 
 #********************************************************************************#
     def _calcIBF(self):
         """
         TODO
         """
-        
         #Calculate IBF on a per-avalanche basis
         IBF = self._calcPerAvalancheIBF()
         meanIBF = IBF.mean()
-        meanIBFErr = IBF.std()
+        meanIBFErr = IBF.std()/np.sqrt(self.getRunParameter('Number of Avalanches'))
 
         return IBF, meanIBF, meanIBFErr
-    
-
+        
 #********************************************************************************#
     def _calcOpticalTransparency(self):
         """
@@ -1592,6 +1619,7 @@ class runData:
             self.getRunParameter('Pad Length')
             )
 
+        #Check if the last datapoint is above the neighbor pad
         aboveNeighbor = withinNeighborHex(
             outerFieldLine['Field Line x'], 
             outerFieldLine['Field Line y'], 

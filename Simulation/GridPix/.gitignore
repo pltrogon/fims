@@ -1,0 +1,10 @@
+# Ignore these files in this folder
+
+.ipynb_checkpoints
+runNo
+
+build/
+log/
+
+Geometry/GridPix.msh
+Geometry/elmerResults/

@@ -77,6 +77,7 @@ class FIMS_Simulation:
         _runElmerWeighting
         _runGarfield
         runSimulation
+        runForOptimizer         <----- NEW
     """
 
 #***********************************************************************************#
@@ -1380,3 +1381,49 @@ class FIMS_Simulation:
             'totalCharge': totalElectrons,
         }
         return chargeBuildupSummary
+
+
+#***********************************************************************************#
+    def runForOptimizer(self):
+        """
+        Runs the simulation, preserving the parameters.
+
+        NOTE: This does not run gmsh or elmer to detemine the E Field. 
+              It is assumed that these results exist already.
+            
+        Returns:
+            int: The run number of the simulation that was executed.
+        """
+
+        #Check and save parameters
+        if not self._checkParam():
+            return -1
+        saveParam = self.param.copy()
+
+
+        #get the run number for this simulation
+        runNo = self._getRunNumber()
+        if runNo == -1:
+            print("Error reading 'runNo'")
+            return -1
+        print(f'Running simulation - Run number: {runNo}')
+
+
+        #Solve for the weighting field
+        if not self._runElmerWeighting():
+            print('Error executing Elmer (weighting).')
+            return -1
+        
+        #Run the electron transport simulation
+        if not self._runGarfield():
+            print('Error executing Garfield.')
+            return -1
+        
+        #Reset parameters
+        self.resetParam()
+        #Ensure saved parameters are still maintained
+        self.param = saveParam
+        
+        return runNo
+        
+        
