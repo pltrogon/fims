@@ -77,6 +77,7 @@ class runData:
         calcBundleRadius
         _getOutermostLineID
         findStuckElectrons
+        _calcIBF
         _calcIBN                    <--------- Note for James, changed from _calcIBF
         _calcPerAvalancheIBF        <--------- New
         _calcOpticalTransparency
