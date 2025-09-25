@@ -128,7 +128,7 @@ class FIMS_Simulation:
             'pillarRadius': 20.,
             'fieldRatio': 40.,
             'transparencyLimit': 0.98,
-            'numFieldLine': 25,
+            'numFieldLine': 50,
             'numAvalanche': 1000,
             'avalancheLimit': 200,
             'gasCompAr': 70.,
