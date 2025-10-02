@@ -261,12 +261,15 @@ int main(int argc, char * argv[]) {
   double sumSquares = 0.;
 
   double curMean = 0.;
-  double curStdDev = 0.;
-  double variance = 0.;
+  double stdDev = 0.;
+  double var = 0.;
   double stdErrMean = 0.;
-	double convergeThreshold = 0.2;
+	double convergeThreshold = 0.01;
+	const double convergeThresholdAbsolute = 1.;
 
 	int numInBunch = 100;//Always do at least 100 avalanches
+
+	avalancheLimit = 500;//TODO
 
   //Begin simulating electron avalanches until gain is known to convergence threshold
   bool knownGain = false;
@@ -303,9 +306,11 @@ int main(int argc, char * argv[]) {
 		numInBunch = 10;//do bunches of 10
 
     numValid = totalAvalanches - numHitLimit;
-		fractionValid = numValid / totalAvalanches;
-    if(numValid < 2 || fractionValid < .9){
+		fractionValid = 1 - 1.*numHitLimit/totalAvalanches;
+    if(fractionValid < .5){
       std::cerr << "Error: Overflow of avalanche limit." << std::endl;
+			curMean = (gainSum + avalancheLimit*numHitLimit) / totalAvalanches;
+			stdErrMean = -1;
       break;
     }
 
@@ -316,18 +321,19 @@ int main(int argc, char * argv[]) {
       break;
     }
 
-    //find std dev
-    variance = (sumSquares - gainSum*curMean) / (numValid-1);
+		//Find variance and stddev
+		var = (sumSquares-(gainSum*gainSum)/numValid) / (numValid-1);
 
-    if(variance < 0){
-      variance = 0;
+    if(var < 0){
+      var = 0;
     }
-    curStdDev = std::sqrt(variance);
+    stdDev = std::sqrt(var);
 
     //standard error of mean
-    stdErrMean = curStdDev / std::sqrt(numValid);
+    stdErrMean = stdDev / std::sqrt(numValid);
 
 		//Check if gain has stabilized
+		//if(stdErrMean < convergeThresholdAbsolute){
 		if(stdErrMean < convergeThreshold*curMean){
 			knownGain = true;
 		}
@@ -356,18 +362,8 @@ int main(int argc, char * argv[]) {
 	dataFile << "// Run limit: " << runLimit << "\n";
 	dataFile << "// Total valid runs: " << numValid << " (of " << totalAvalanches << ")\n";
 	
-	if(knownGain){	//write gain if converged
-	 	dataFile << curMean << std::endl;
-		dataFile << stdErrMean << std::endl;
-	}
-	else if(totalAvalanches >= runLimit){	//If did not converge, write values as -1
-		dataFile << -1 << std::endl;
-		dataFile << -1 << std::endl;
-  }
-	else{ // write -2 for any other cases
-		dataFile << -2 << std::endl;
-		dataFile << -2 << std::endl;
-	}
+	dataFile << curMean << std::endl;
+	dataFile << stdErrMean << std::endl;
 	dataFile.close();
 
 

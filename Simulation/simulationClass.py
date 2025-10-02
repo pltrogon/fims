@@ -78,6 +78,10 @@ class FIMS_Simulation:
         _runGarfield
         runSimulation
         runForOptimizer         <----- NEW
+        _runGetGain             <----- NEW
+        _readGainFile           <----- NEW
+        _getGainField           <----- NEW
+        runMagboltz             <----- NEW
     """
 
 #***********************************************************************************#
@@ -216,17 +220,18 @@ class FIMS_Simulation:
             bool: True if the setup is successful, False otherwise.
         """
 
-        #Check for log/
+        #Check for file pathways
         if not os.path.exists("log"):
             os.makedirs("log")
             
-        #Check for build/
         if not os.path.exists("build"):
             os.makedirs("build")
 
-        #Check for build/parallelData
         if not os.path.exists("build/parallelData"):
             os.makedirs("build/parallelData")
+
+        if not os.path.exists("../Data/Diffusion"):
+            os.makedirs("../Data/Diffusion")
 
         # Get garfield path into environment
         envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
@@ -825,6 +830,45 @@ class FIMS_Simulation:
         finally:
             os.chdir(originalCWD)
         return True
+    
+
+#***********************************************************************************#
+    def _runGetGain(self):
+        """
+        TODO
+        """
+        originalCWD = os.getcwd()
+        try:
+            os.chdir('./build/')
+
+            # Get garfield path into environment
+            envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
+            envOutput = subprocess.check_output(envCommand, shell=True, universal_newlines=True)
+            newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line)
+            os.environ.update(newEnv)
+
+            with open(os.path.join(originalCWD, 'log/logGarfieldGetGain.txt'), 'w+') as garfieldOutput:
+                startTime = time.monotonic()
+                setupGetGain = (
+                    f'./runGain'
+                )
+                runReturn = subprocess.run(
+                    setupGetGain, 
+                    stdout = garfieldOutput, 
+                    shell = True, 
+                    check = True,
+                    env = os.environ
+                )
+                endTime = time.monotonic()
+                garfieldOutput.write(f'\n\nGarfield run time: {endTime - startTime} s')
+    
+            if runReturn.returncode != 0:
+                    print('Garfield++ execution failed. Check log for details.')
+                    return False
+            
+        finally:
+            os.chdir(originalCWD)
+        return True
 
 #***********************************************************************************#
     def runSimulation(self, changeGeometry=True):
@@ -908,6 +952,174 @@ class FIMS_Simulation:
 # METHODS FOR RUNNING MINIMUM FIELD
 #***********************************************************************************#
 #***********************************************************************************#
+
+#***********************************************************************************#
+    def _readGainFile(self):
+        """
+        TODO
+        """
+
+        gainValues = []
+        try:
+            with open('../Data/gainFile.txt', 'r') as inFile:
+                for line in inFile:
+                    curLine = line.strip()
+
+                    #Skip commented lines
+                    if curLine and not curLine.startswith('//'):
+                        try:
+                            gainValues.append(float(curLine))
+                        except ValueError:
+                            pass #Skip non-number lines
+
+        except FileNotFoundError:
+            print(f"Error: File 'gainFile.txt' not found.")
+
+        return gainValues
+    
+#***********************************************************************************#
+    def _getGainField(self, gains, fields, damping=0.8):
+        """
+        TODO
+
+        Args:
+            gains (np array): Numpy array of the gains. Has form: [currentGain, previousGain, targetGain]
+            fields (np.array): Numpy array of the field strengths. Has form: [currentField, previousField]
+
+        Returns:
+            float: Numerical solution to the field for achieve target gain
+
+        """
+        print(f'Gains: {gains}')
+        print(f'fields: {fields}')
+
+
+        logCurGain, logPrevGain, logTargetGain = np.log(gains)
+        curField, prevField = fields
+
+        fieldDiff = curField - prevField
+        gainDiff = logCurGain - logPrevGain
+
+        targetDiff = logCurGain - logTargetGain
+
+        if abs(gainDiff) < 0.1:
+            print('Warning: Log-gain slope near zero. Using heuristic step.')
+            return curField*1.05 
+
+        newField = curField - damping*targetDiff*fieldDiff/gainDiff
+
+        #Limit step size
+        if abs(newField - curField) > curField*.5:
+            newField = curField*1.5
+            print("Warning: Step size limited for stability.")
+
+        print(f'New field: {newField}')
+        return newField
+
+
+#***********************************************************************************#
+    def findFieldForGain(self, targetGain=60):
+        """
+        TODO
+        """
+        #Ensure all parameters exist and save them
+        if not self._checkParam():
+            return False
+        saveParam = self.param.copy()
+
+        #Write parameters and generate geometry
+        if not self._writeParam():
+            print('Error writing parameters.')
+            return False
+            
+        print('Executing gmsh...')
+        if not self._runGmsh():
+                print('Error executing Gmsh.')
+                return False
+        
+        print('Beginning search for minimum field for gain...')
+        
+        iterNo = 0
+        curField = self._getParam('fieldRatio')
+        print(f'Initial field ratio: {curField}')
+
+        sufficientGain = False
+        curGain = 1
+        curGainErr = 0
+        prevGain = curGain
+        prevField = 0
+        
+        while not sufficientGain:
+
+            iterNo += 1
+
+
+            #Determines the new field ratio
+            if iterNo == 2:
+                prevField = curField
+                newField = prevField+2
+                curField = float(math.ceil(newField))
+
+                self.param['fieldRatio'] = curField
+                if not self._writeParam():
+                    print('Error writing parameters.')
+                    return False
+                print(f'Current field ratio: {curField}')
+
+
+            if iterNo > 2:
+
+                gains = np.array([curGain, prevGain, targetGain])
+                fields = np.array([curField, prevField])
+                
+                prevField = curField
+                newField = self._getGainField(gains, fields)
+                curField = float(math.ceil(newField))
+
+                self.param['fieldRatio'] = curField
+                if not self._writeParam():
+                    print('Error writing parameters.')
+                    return False
+                print(f'Current field ratio: {curField}')
+            
+            #Determine the electric field
+            print('\tExecuting Elmer...')
+            if not self._runElmer():
+                print('Error executing Elmer.')
+                return False
+
+            #Determine the gain
+            print('\tGetting gain...')
+            if not self._runGetGain():
+                print('Error getting gain.')
+                return False
+
+            #Get gain values from file
+            prevGain = curGain
+            gainWithErr = self._readGainFile()
+            curGain = gainWithErr[0]
+            curGainErr = gainWithErr[1]
+
+            #check if current gain is valid, and if agrees with target gain
+            if curGain < 0:
+                raise ValueError('Error occured with convergence of runGain')
+                
+            if (curGain - targetGain)/curGainErr >= 2:
+                sufficientGain = True
+
+        #Print solution
+        finalField = self._getParam('fieldRatio')
+        print(f'\nSolution: Field ratio = {finalField}')
+        
+        #Reset parameters
+        self.resetParam()
+        #load saved parameters back into class. Update field ratio with solution.
+        self.param = saveParam
+        self.param['fieldRatio'] = finalField
+
+        return True
+
+
     def _calcMinField(self):
         """
         Calculates an initial guess for the minimum field ratio to achieve 100%
@@ -1049,6 +1261,59 @@ class FIMS_Simulation:
         self.param['fieldRatio'] = finalField
 
         return True
+    
+
+#***********************************************************************************#
+    def runMagboltz(self, eField=1, gasComp='ArCO2', gasCompAr=0, gasCompCO2=0):
+        """
+        TODO
+        """
+        originalCWD = os.getcwd()
+
+        gasCompOptions = [
+            'ArCO2',
+            'T2K'
+        ]
+
+        if gasComp not in gasCompOptions:
+            raise ValueError(f"Error: Invalid gas composition '{gasComp}'")
+        if gasComp == 'ArCO2' and gasCompAr + gasCompCO2 != 100:
+            raise ValueError('Error: Gas composition of ArCO2 is not 100%.')
+        if eField <= 0:
+            raise ValueError('Error: Invalid electric field.')
+
+        try:
+            os.chdir('./build/')
+
+            # Get garfield path into environment
+            envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
+            envOutput = subprocess.check_output(envCommand, shell=True, universal_newlines=True)
+            newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line)
+            os.environ.update(newEnv)
+
+            with open(os.path.join(originalCWD, 'log/logDiffusion.txt'), 'w+') as garfieldOutput:
+                startTime = time.monotonic()
+                setupDiffusion = (
+                    f'./runDiffusion {eField} {gasComp} {gasCompAr} {gasCompCO2}'
+                )
+                runReturn = subprocess.run(
+                    setupDiffusion, 
+                    stdout = garfieldOutput, 
+                    shell = True, 
+                    check = True,
+                    env = os.environ
+                )
+                endTime = time.monotonic()
+                garfieldOutput.write(f'\n\nGarfield run time: {endTime - startTime} s')
+    
+            if runReturn.returncode != 0:
+                    print('Garfield++ execution failed. Check log for details.')
+                    return False
+            
+        finally:
+            os.chdir(originalCWD)
+        return True
+
 
 #***********************************************************************************#
 #***********************************************************************************#

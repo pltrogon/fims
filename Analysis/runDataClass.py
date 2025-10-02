@@ -1561,12 +1561,18 @@ class runData:
 #********************************************************************************#
     def _calcIBF(self):
         """
-        TODO
+        Calculates the IBF on a per-avalanche basis. Then calculates an overall mean 
+        and standard error of the mean.
+            Note that this ignores any NaN values for the IBF.
+            (occurs when the electron does not avalanche)
+
+        Returns:
+            TODO
         """
         #Calculate IBF on a per-avalanche basis
         IBF = self._calcPerAvalancheIBF()
         meanIBF = IBF.mean()
-        meanIBFErr = IBF.std()/np.sqrt(self.getRunParameter('Number of Avalanches'))
+        meanIBFErr = IBF.std()/np.sqrt(IBF.count())
 
         return IBF, meanIBF, meanIBFErr
         
