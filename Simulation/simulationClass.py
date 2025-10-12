@@ -129,8 +129,8 @@ class FIMS_Simulation:
             'fieldRatio': 40.,
             'transparencyLimit': 0.98,
             'numFieldLine': 50,
-            'numAvalanche': 1000,
-            'avalancheLimit': 200,
+            'numAvalanche': 2000,
+            'avalancheLimit': 10000,
             'gasCompAr': 70.,
             'gasCompCO2': 30.,
         }
@@ -977,6 +977,10 @@ class FIMS_Simulation:
 
         #Calculate initial guess
         initialGuess = self._calcMinField()*margin
+        #TODO: replace if statement with gain check
+        if initialGuess < 45:
+            initialGuess = 45
+            
         self.param['fieldRatio'] = initialGuess
        
         #Adjust the number of field lines to fill only last 20% of the unit cell
