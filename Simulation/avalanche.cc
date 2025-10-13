@@ -773,7 +773,8 @@ int main(int argc, char * argv[]) {
   }//End parallization
 
 
-  //Calculate diffusion coefficients
+  //Calculate diffusion coefficients - TODO: CHeck the units of these outputs
+
   double vx, vy, wv, wr;
   double alpha, eta, riontof, ratttof, lor;
   double vxerr, vyerr, vzerr, wverr, wrerr, dlerr, dterr;
@@ -794,8 +795,10 @@ int main(int argc, char * argv[]) {
     difftens
   );
 
+  //Amplification field
   double ampDiffusionL, ampDiffusionT, ampVelocity;
   double ampField = driftField*fieldRatio;
+
   gasFIMS->RunMagboltz(
     ampField, 0., 0., 1, true,
     vx, vy, ampVelocity, wv, wr, 

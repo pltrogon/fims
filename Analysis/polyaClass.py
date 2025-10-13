@@ -40,10 +40,12 @@ class myPolya:
                           Must be greater than 0.
             theta (float): The shape parameter of the distribution.
                            Must be greater than or equal to 0.
+            errors TODO
         """
 
         self.gain = gain
         self.theta = theta
+        self.errors = None
 
         if gain is not None and theta is not None:
             try:
@@ -333,8 +335,11 @@ class myPolya:
             
             self.gain = popt[0]
             self.theta = popt[1]
+
             perr = np.sqrt(np.diag(pcov))
-            print(f'Fit converged. Gain: {self.gain:.3f} (+/- {perr[0]:.3f}), Theta: {self.theta:.3f} (+/- {perr[1]:.3f})')
+            self.errors = [perr[0], perr[1]]
+
+            #print(f'Fit converged. Gain: {self.gain:.3f} (+/- {perr[0]:.3f}), Theta: {self.theta:.3f} (+/- {perr[1]:.3f})')
 
         except RuntimeError as e:
             raise RuntimeError(f'Error during fitPolya: {e}.')

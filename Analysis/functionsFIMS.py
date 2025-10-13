@@ -3,6 +3,8 @@ import sys
 import numpy as np
 import math
 import matplotlib.pyplot as plt
+import glob
+import pandas as pd
 
 from scipy.special import gammaincc
 
@@ -21,6 +23,7 @@ Functions:
     xyInterpolate
     getSetData
     plotDataSets
+    getDiffusionData            <-----NEW
 """
 
 #********************************************************************************#   
@@ -447,4 +450,61 @@ def plotDataSets(dataSets, xVal, yVal, savePlot=False):
     plt.show()
     return
 
+
+def getDiffusionData(gasComp):
+    """
+    TODO
+    """
+
+    gasCompOptions = [
+            'ArCO2-80-20',
+            'T2K'
+        ]
+
+    if gasComp not in gasCompOptions:
+        raise ValueError(f"Error: Invalid gas composition '{gasComp}'.")
+    
+    gasFilenames = f'diffusion.{gasComp}*.dat'
+    dataPath = os.path.join('../Data/Diffusion', gasFilenames)
+    fileList = glob.glob(dataPath)
+
+    if not fileList:
+        print(f"No files found matching pattern '{dataPath}'.")
+        return None
+
+    dataMagboltz = []
+
+    for inFile in fileList:
+        inData = {"filename": os.path.basename(inFile)}
+        
+        try:
+            with open(inFile, 'r') as file:
+                lines = [line.strip() for line in file.readlines()]
+            
+            if len(lines) < 11:
+                print(f"Error: File {inFile} has unexpected format - Skipping.")
+                continue
+
+            inData['gasComposition'] = lines[2]
+            inData['eField'] = float(lines[4])
+            inData['driftVelocity'] = float(lines[6])
+            inData['diffusionLongitudinal'] = float(lines[8])
+            inData['diffusionTransverse'] = float(lines[10])
+
+            dataMagboltz.append(inData)
+            
+        except IndexError:
+            print(f"Parsing Error: Could not find data at expected line index in {inFile}.")
+        except ValueError:
+            print(f"Parsing Error: Could not convert value to float in {inFile}.")
+        except IOError as e:
+            print(f"Error opening or reading file {inFile}: {e}")
+        except Exception as e:
+            print(f"An unexpected error occurred while processing {inFile}: {e}")
+
+    rawData = pd.DataFrame(dataMagboltz)
+
+    sortedData = rawData.sort_values(by='eField')
+
+    return sortedData
     

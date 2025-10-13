@@ -22,7 +22,7 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  int inputField = std::atoi(argv[1]); //kV/cm
+  float inputField = std::atof(argv[1]); //kV/cm
   double fieldStrength = inputField*1e3;//V/cm
 
   MediumMagboltz* gasFIMS = new MediumMagboltz();
@@ -84,7 +84,7 @@ int main(int argc, char* argv[]) {
   );
 
   /*
-  //Via runMagboltz
+  //Via runMagboltz - can give errors
   double vx, vy, wv, wr;
   double alpha, eta, riontof, ratttof, lor;
   double vxerr, vyerr, vzerr, wverr, wrerr;
@@ -126,16 +126,20 @@ int main(int argc, char* argv[]) {
 
   //write some extra information
   dataFile << "// Diffusion coefficients from Magboltz.\n";
-  dataFile << "//\tGas composition: " << gasComposition << "\n";
-  dataFile << "//\tField strength: " << inputField << " kV/cm\n";
 
-  dataFile << "// Drift velocity (um/ns):\n";
+  dataFile << "//\tGas composition:\n";
+  dataFile << gasComposition << std::endl;
+
+  dataFile << "//\tField strength (kV/cm):\n";
+  dataFile << inputField << std::endl;
+
+  dataFile << "//\tDrift velocity (um/ns):\n";
   dataFile << std::abs(zDriftVelocity)*1e4 << std::endl;
 
-  dataFile << "// Longitudinal diffusion (um/cm**0.5):\n";
+  dataFile << "//\tLongitudinal diffusion (um/cm**0.5):\n";
   dataFile << diffusionL*1e4 << std::endl;
 
-  dataFile << "// Transverse diffusion (um/cm**0.5):\n";
+  dataFile << "//\tTransverse diffusion (um/cm**0.5):\n";
   dataFile << diffusionT*1e4 << std::endl;
 
   dataFile.close();
