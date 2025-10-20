@@ -118,7 +118,7 @@ class FIMS_Simulation:
             dict: Dictionary of default parameters and values.
         """
         defaultParam = {
-            'padLength': 65.,
+            'padLength': 44.,
             'pitch': 225.,
             'gridStandoff': 100.,
             'gridThickness': 1.,
@@ -128,9 +128,9 @@ class FIMS_Simulation:
             'pillarRadius': 20.,
             'fieldRatio': 40.,
             'transparencyLimit': 0.98,
-            'numFieldLine': 50,
-            'numAvalanche': 2000,
-            'avalancheLimit': 10000,
+            'numFieldLine': 10,
+            'numAvalanche': 1000,
+            'avalancheLimit': 400,
             'gasCompAr': 70.,
             'gasCompCO2': 30.,
         }
