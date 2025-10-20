@@ -773,7 +773,8 @@ int main(int argc, char * argv[]) {
   }//End parallization
 
 
-  //Calculate diffusion coefficients
+  //Calculate diffusion coefficients - TODO: CHeck the units of these outputs
+
   double vx, vy, wv, wr;
   double alpha, eta, riontof, ratttof, lor;
   double vxerr, vyerr, vzerr, wverr, wrerr, dlerr, dterr;
@@ -794,11 +795,10 @@ int main(int argc, char * argv[]) {
     difftens
   );
 
-
-/*
-  //TODO - Get the diffusion coefficients for the amplification field
+  //Amplification field
   double ampDiffusionL, ampDiffusionT, ampVelocity;
   double ampField = driftField*fieldRatio;
+
   gasFIMS->RunMagboltz(
     ampField, 0., 0., 1, true,
     vx, vy, ampVelocity, wv, wr, 
@@ -808,7 +808,7 @@ int main(int argc, char * argv[]) {
     alphaerr, etaerr, riontoferr, ratttoferr, lorerr, alphatof,
     difftens
   );
-*/
+
   
   
   delete gasFIMS;
@@ -850,6 +850,11 @@ int main(int argc, char * argv[]) {
   metaDataTree->Branch("Drift Velocity (Drift) ", &driftVelocity, "driftVelocity/D");
   metaDataTree->Branch("Diffusion L (Drift)", &driftDiffusionL, "driftDiffusionL/D");
   metaDataTree->Branch("Diffusion T (Drift)", &driftDiffusionT, "driftDiffusionT/D");
+
+  metaDataTree->Branch("Amplification Field", &ampField, "ampField/D");
+  metaDataTree->Branch("Drift Velocity (Amplify) ", &ampVelocity, "ampVelocity/D");
+  metaDataTree->Branch("Diffusion L (Amplify)", &ampDiffusionL, "ampDiffusionL/D");
+  metaDataTree->Branch("Diffusion T (Amplify)", &ampDiffusionT, "ampDiffusionT/D");
 
   metaDataTree->Fill();
 
