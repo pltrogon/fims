@@ -485,11 +485,14 @@ def getDiffusionData(gasComp):
                 print(f"Error: File {inFile} has unexpected format - Skipping.")
                 continue
 
-            inData['gasComposition'] = lines[2]
-            inData['eField'] = float(lines[4])
-            inData['driftVelocity'] = float(lines[6])
-            inData['diffusionLongitudinal'] = float(lines[8])
-            inData['diffusionTransverse'] = float(lines[10])
+            inData['gasComposition'] = lines[3]
+            inData['eField'] = float(lines[5])
+            inData['driftVelocity'] = float(lines[7])
+            inData['driftVelocityErr'] = float(lines[8])
+            inData['diffusionLongitudinal'] = float(lines[10])
+            inData['diffusionLongitudinalErr'] = float(lines[11])
+            inData['diffusionTransverse'] = float(lines[13])
+            inData['diffusionTransverseErr'] = float(lines[14])
 
             dataMagboltz.append(inData)
             
@@ -504,7 +507,7 @@ def getDiffusionData(gasComp):
 
     rawData = pd.DataFrame(dataMagboltz)
 
-    sortedData = rawData.sort_values(by='eField')
+    sortedData = rawData.sort_values(by='eField').reset_index(drop=True)
 
     return sortedData
     

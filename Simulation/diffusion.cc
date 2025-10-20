@@ -59,6 +59,17 @@ int main(int argc, char* argv[]) {
   gasFIMS->SetMaxElectronEnergy(200);
   gasFIMS->Initialise(true);
 
+  double xDriftVelocity=0., yDriftVelocity=0., zDriftVelocity=0.;
+  double xDriftVelocityErr=0., yDriftVelocityErr=0., zDriftVelocityErr=0.;
+  
+  double diffusionL=0., diffusionT=0.;
+  double diffusionLErr=0., diffusionTErr=0.;
+
+  /*
+  // Direct methods for diffusion parameters
+  //    Requires generating a gas table.
+  //    Does not output errors of values.
+
   std::vector<double> eField = {fieldStrength};
   std::vector<double> bField = {0.};
   std::vector<double> angles = {0.};
@@ -82,30 +93,38 @@ int main(int argc, char* argv[]) {
     diffusionL, 
     diffusionT
   );
+  */
 
-  /*
-  //Via runMagboltz - can give errors
-  double vx, vy, wv, wr;
-  double alpha, eta, riontof, ratttof, lor;
-  double vxerr, vyerr, vzerr, wverr, wrerr;
-  double alphaerr, etaerr, riontoferr, ratttoferr, lorerr, alphatof;
-  std::array<double, 6> difftens;
-
-  // Drift field
-  double diffL, diffT, driftVelocity, diffLErr, diffTErr;
-
+  double bulkFlux, bulkDriftVelocity;
+  double townsend, attatchment;
+  double ionizationRate, attachmentRate, lorentzAngle;
+  double bulkFluxErr, bulkDriftVelocityErr;
+  double townsendErr, attatchmentErr;
+  double ionizationRateErr, attachmentRateErr, lorentzAngleErr;
+  double effectiveTownsend;
+  std::array<double, 6> diffusionTensor;
 
   gasFIMS->RunMagboltz(
-    fieldStrength, 0., 0., 1, true,
-    vx, vy, driftVelocity, wv, wr, 
-    diffL, diffT,
-    alpha, eta, riontof, ratttof, lor, 
-    vxerr, vyerr, vzerr, wverr, wrerr, 
-    diffLErr, diffTErr,
-    alphaerr, etaerr, riontoferr, ratttoferr, lorerr, alphatof,
-    difftens
+    //Input values:
+    fieldStrength, 0., 0., 10, true,
+    //Outputs:
+    xDriftVelocity, yDriftVelocity, zDriftVelocity,
+    bulkFlux, bulkDriftVelocity, 
+    diffusionL, diffusionT,
+    townsend, attatchment,
+    ionizationRate, attachmentRate, lorentzAngle, 
+    xDriftVelocityErr, yDriftVelocityErr, zDriftVelocityErr,
+    bulkFluxErr, bulkDriftVelocityErr, 
+    diffusionLErr, diffusionTErr,
+    townsendErr, attatchmentErr, 
+    ionizationRateErr, attachmentRateErr, lorentzAngleErr, 
+    effectiveTownsend, diffusionTensor
   );
-  */
+
+  if(xDriftVelocity != 0 || yDriftVelocity != 0){
+    std::cerr << "Magboltz error: Non-zero normal drift velocity.";
+  }
+
 
   std::cout << "------------------------------\n";
   std::cout << "Input field: " << inputField << " kV/cm\n";
@@ -117,7 +136,8 @@ int main(int argc, char* argv[]) {
 
   //***** Output gain value *****//	
   //create output file
-  std::string dataFilename = "diffusion."+gasComposition+"."+std::to_string(inputField)+".dat";
+  int fieldStrengthINT = fieldStrength;
+  std::string dataFilename = "diffusion."+gasComposition+"."+std::to_string(fieldStrengthINT)+".dat";
   std::string dataPath = "../../Data/Diffusion/"+dataFilename;
   std::ofstream dataFile;
 
@@ -126,6 +146,7 @@ int main(int argc, char* argv[]) {
 
   //write some extra information
   dataFile << "// Diffusion coefficients from Magboltz.\n";
+  dataFile << "//\tErrors in percentages.\n";
 
   dataFile << "//\tGas composition:\n";
   dataFile << gasComposition << std::endl;
@@ -135,12 +156,15 @@ int main(int argc, char* argv[]) {
 
   dataFile << "//\tDrift velocity (um/ns):\n";
   dataFile << std::abs(zDriftVelocity)*1e4 << std::endl;
+  dataFile << zDriftVelocityErr << std::endl;
 
   dataFile << "//\tLongitudinal diffusion (um/cm**0.5):\n";
   dataFile << diffusionL*1e4 << std::endl;
+  dataFile << diffusionLErr << std::endl;
 
   dataFile << "//\tTransverse diffusion (um/cm**0.5):\n";
   dataFile << diffusionT*1e4 << std::endl;
+  dataFile << diffusionTErr << std::endl;
 
   dataFile.close();
 
