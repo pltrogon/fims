@@ -128,7 +128,7 @@ class FIMS_Simulation:
             'pillarRadius': 20.,
             'fieldRatio': 40.,
             'transparencyLimit': 0.98,
-            'numFieldLine': 10,
+            'numFieldLine': 11,
             'numAvalanche': 1000,
             'avalancheLimit': 400,
             'gasCompAr': 70.,
@@ -941,7 +941,7 @@ class FIMS_Simulation:
         return minField
 
 #***********************************************************************************#
-    def findMinField(self, margin = 1., minStepSize = 1.2):
+    def findMinField(self, margin=1., minStepSize=1.2):
         """
         Runs simulations to determine what the minimum electric field ratio
         needs to be in order to have 100% E-field transparency.
