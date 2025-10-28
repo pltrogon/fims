@@ -26,7 +26,7 @@ transparencyLimit = 0.98;
 //----- Simulation parameters -----
 // Avalanche controls
 numAvalanche = 1000;
-avalancheLimit = 200;
+avalancheLimit = 500;
 
 // Gas composition
 gasCompAr = 70.0;

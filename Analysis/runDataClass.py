@@ -378,6 +378,7 @@ class runData:
             Average IBN
             Average IBF
             IBF error (standard deviation)
+            Efficiency
         """
         #Optical transparency
         self._metaData['Optical Transparency'] = self._calcOpticalTransparency()
@@ -408,6 +409,8 @@ class runData:
             self._metaData['Average IBF Error'] = meanIBFErr
 
             self._metaData['IBF * Raw Gain'] = meanIBF*rawGain
+
+            self._metaData['Efficiency (10e)'] = self.getEfficiency(threshold=10)
             
 
         return
@@ -1658,6 +1661,33 @@ class runData:
 
         return chi2Param
     
+
+#********************************************************************************#
+    def getEfficiency(self, threshold=0):
+        """
+        TODO
+        """
+
+        allAvalancheData = self.getDataFrame('avalancheData')
+
+        avalancheLimit = self.getRunParameter('Avalanche Limit')
+
+        if threshold > avalancheLimit:
+            raise ValueError('Error - Threshold higher than simulation limit.')
+        
+        numSimulated = self.getRunParameter('Number of Avalanches')
+        numAvalanches = len(allAvalancheData)
+
+        if numAvalanches != numSimulated:
+            raise ValueError('Warning - Avalanche numbers disagree.')
+        
+        aboveThresh = allAvalancheData['Total Electrons'] > threshold
+        numAboveThresh = aboveThresh.sum()
+
+        simulatedEfficiency = numAboveThresh / numAvalanches
+
+        return simulatedEfficiency
+
 #********************************************************************************#
     def plotEfficiency(self, binWidth=1, threshold=0):
         """
