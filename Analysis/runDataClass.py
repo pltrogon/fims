@@ -86,6 +86,7 @@ class runData:
         _getAvalancheGain           <--------- New
         plotAvalancheSignal         <--------- New
         plotAverageSignal           <--------- New
+        _getRawEfficiency            <--------- New
     """
 
 #********************************************************************************#
@@ -410,7 +411,9 @@ class runData:
 
             self._metaData['IBF * Raw Gain'] = meanIBF*rawGain
 
-            self._metaData['Efficiency (10e)'] = self.getEfficiency(threshold=10)
+            simEff, simEffErr = self._getRawEfficiency(threshold=10)
+            self._metaData['Raw Efficiency (10e)'] = simEff
+            self._metaData['Raw Efficiency Error'] = simEffErr
             
 
         return
@@ -1663,7 +1666,7 @@ class runData:
     
 
 #********************************************************************************#
-    def getEfficiency(self, threshold=0):
+    def _getRawEfficiency(self, threshold=0):
         """
         TODO
         """
@@ -1679,14 +1682,22 @@ class runData:
         numAvalanches = len(allAvalancheData)
 
         if numAvalanches != numSimulated:
-            raise ValueError('Warning - Avalanche numbers disagree.')
+            raise ValueError('Error - Avalanche numbers disagree.')
         
         aboveThresh = allAvalancheData['Total Electrons'] > threshold
         numAboveThresh = aboveThresh.sum()
 
-        simulatedEfficiency = numAboveThresh / numAvalanches
+        #For Binomial statistics:
+        #simEff = numAboveThresh / numAvalanches
+        #varience = simEff*(1-simEff)/numAvalanches
 
-        return simulatedEfficiency
+        #For Bayesian Statistics:
+        simEff = (numAboveThresh+1)/(numAvalanches+2)
+        varience = ((numAboveThresh+1)*(numAboveThresh+2))/((numAvalanches+2)*(numAvalanches+3)) - simEff*simEff
+
+        simEffErr = math.sqrt(varience)
+
+        return simEff, simEffErr
 
 #********************************************************************************#
     def plotEfficiency(self, binWidth=1, threshold=0):

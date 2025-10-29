@@ -1056,10 +1056,10 @@ class FIMS_Simulation:
             print('Error writing parameters.')
             return False
             
-        print('Skipping gmsh...')
-        '''if not self._runGmsh():
+        print('Running gmsh...')
+        if not self._runGmsh():
                 print('Error executing Gmsh.')
-                return False'''
+                return False
         
         print(f'Beginning search for minimum field to achieve {targetEfficiency*100:.0f}% efficiency...')
         
@@ -1071,12 +1071,15 @@ class FIMS_Simulation:
         efficienciesErr = []
 
         validEfficiency = False
-        self.param['numAvalanche'] = 5000
+        self.param['numAvalanche'] = 3000
         self.param['avalancheLimit'] = 500
         
-        while not validEfficiency and iterNo < iterNoLimit:
+        while not validEfficiency:
 
             iterNo += 1
+            if iterNo > iterNoLimit:
+                print(f'Warning - Iteration limit reached ({iterNoLimit})')
+                break
 
             print(f'Begining iteration: {iterNo}')
             print(f'Fields: {fields}')

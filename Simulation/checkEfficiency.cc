@@ -39,7 +39,7 @@ int main(int argc, char * argv[]) {
   int electronThreshold = std::atoi(argv[2]);
   double targetEfficiency = std::atof(argv[1]);
 
-  double confidenceValue = 2;//NOTE - 1.645 for 95% confidence instead of 2 for 2-sigma
+  const double confidenceValue = 2;//NOTE - 1.645 for 95% confidence instead of 2 for 2-sigma
 
   //Random seed
   std::srand(static_cast<unsigned int>(std::time(nullptr)));
