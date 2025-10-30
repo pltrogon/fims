@@ -701,7 +701,8 @@ Volume(2) = {4002};
 // Gas
 //**********************************************************************
 
-// ***** Cathode Plane ***** //
+/*
+/ ***** Cathode Plane ***** //
 // Points
 Point(119) = {xMax, yMax, cathodeDistance, farElm};
 Point(120) = {xMax, yMin, cathodeDistance, farElm};
@@ -801,7 +802,7 @@ Surface Loop(4003) = {
     3021, 3022, 3023, 3024, 3025, 3026, 3027
 };
 Volume(3) = {4003};
-
+*/
 
 //**********************************************************************
 // PHYSICAL GROUPS

@@ -322,6 +322,7 @@ class App(tk.Tk):
         """
         Matches the currentPlot with the appropriate method. Gets the figure.
         """
+        plt.close(self.currentFig)
         if self.simData:
             match self.currentPlot:
                 case 'Geometry':

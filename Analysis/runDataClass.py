@@ -77,8 +77,9 @@ class runData:
         calcBundleRadius
         _getOutermostLineID
         findStuckElectrons
-        _calcIBN                    
-        _calcPerAvalancheIBF        
+        _calcIBF
+        _calcIBN
+        _calcPerAvalancheIBF
         _calcOpticalTransparency
         _getTransparency
         plotEfficiency              
@@ -215,7 +216,7 @@ class runData:
         """
         Prints all metadata information. Dimensions are in microns.
         """
-        metaData = getattr(self, 'metaData', None) 
+        metaData = self.getMetaData()
         if metaData is None:
             print('Error: Metadata is unavailable.')
             return
@@ -376,6 +377,7 @@ class runData:
             Raw Gain
             Average IBN
             Average IBF
+            IBF error (standard deviation)
         """
         #Check if parameters are zero before attempting calculations
         numLines = self.getRunParameter('Number of Field Lines')
@@ -390,7 +392,7 @@ class runData:
 
             #Field bundle radius
             standoff = self.getRunParameter('Grid Standoff')
-            nominalBundleZ = -standoff/2
+            nominalBundleZ = -.9*standoff
             self._metaData['Field Bundle Radius'] = self.calcBundleRadius(nominalBundleZ)
 
         if numAvalanche > 0:
@@ -403,11 +405,11 @@ class runData:
             self._metaData['Average IBN'] = IBN
 
             #Calculate IBF on a per-avalanche basis
-            IBF = self._calcPerAvalancheIBF()
-            meanIBF = IBF.mean()
-            self._metaData['Average IBF'] = meanIBF
-            ## Add results to avalanche data
+            IBF, meanIBF, meanIBFErr  = self._calcIBF()
+
             self._avalancheData['IBF'] = self._avalancheData['Avalanche ID'].map(IBF)
+            self._metaData['Average IBF'] = meanIBF
+            self._metaData['Average IBF Error'] = meanIBFErr
 
             self._metaData['IBF * Raw Gain'] = meanIBF*rawGain
             
@@ -495,7 +497,7 @@ class runData:
         #Add boundaries of neighboring cells and pads
         for i in range(6):
             ax1.plot(neighborX[i]+cellX, neighborY[i]+cellY,
-                    c='c', ls=':', lw=1)
+                    c='b', ls=':', lw=1)
             ax1.plot(neighborX[i]+padX, neighborY[i]+padY,
                     c='m', ls=':', lw=1)
         
@@ -511,7 +513,7 @@ class runData:
         ax1.plot(0., 0., marker='x', c='r')
         ax1.plot(neighborX, neighborY,
                 marker='.', c='r', ls='')
-
+        '''
         #Add geometry cell
         geoX = 3./2.*outRadius*np.array([0, 1, 1, 0, 0])
         geoY = inRadius*np.array([1, 1, 0, 0, 1])
@@ -525,12 +527,20 @@ class runData:
         simY = pitch*np.array([1, 1, -1, -1, 1])
         ax1.plot(simX, simY,
                 c='g', ls='--', lw=1, label='Simulation Boundary')
-
+        '''
         #Add dimensions
-        ax1.plot([0, neighborX[4]], [0, neighborY[4]],
-                label=f'Pitch ({pitch:.0f} um)', c='r', ls=':', lw=1)
-        ax1.plot([0, padLength], [0, 0],
-                label=f'Pad Length ({padLength:.0f} um)', c='r', ls='-', lw=1)
+        ax1.plot(
+            [0, neighborX[4]], [0, neighborY[4]],
+            label=f'Pitch ({pitch:.0f} um)', c='r', ls=':', lw=1
+        )
+        ax1.plot(
+            [0, padLength], [0, 0],
+            label=f'Pad Length ({padLength:.0f} um)', c='r', ls='-', lw=1
+        )
+        ax1.plot(
+            [0, 0], [0, holeRadius],
+            label=f'Hole Radius', c='r', ls='--', lw=1
+        )
         
         # Set other plot elements
         ax1.grid()
@@ -776,6 +786,27 @@ class runData:
                 fieldLine['Field Line x'], fieldLine['Field Line y'], 
                 lw=1, c=lineColor
             )
+
+        #Add nominal field bundle radius - TODO: This assumes a circle.
+        nominalBundleR = self.getRunParameter('Field Bundle Radius')
+        nominalBundleZ = -0.9*self.getRunParameter('Grid Standoff')
+        
+        nominalFieldBundle = plt.Circle(
+            (0, 0), nominalBundleR, 
+            facecolor='none', edgecolor='c', lw=2
+        )
+
+        axes[0].plot(
+                [-nominalBundleR, nominalBundleR], [nominalBundleZ, nominalBundleZ], 
+                lw=2, c='c'
+            )
+        axes[1].plot(
+                [-nominalBundleR, nominalBundleR], [nominalBundleZ, nominalBundleZ], 
+                lw=2, c='c'
+            )
+        axes[2].add_patch(nominalFieldBundle)
+        
+
 
         return
 
@@ -1270,7 +1301,7 @@ class runData:
         polyaResults = fitResults['fitPolya'].calcPolya(fitResults['xVal'])
         polyaChi2 = self._getChiSquared(fitResults['yVal'], polyaResults)
         
-        fig = plt.figure()
+        fig = plt.figure(figsize=(10, 8))
         fig.suptitle(f'Avalanche Size Distribution: Run {self.runNumber}')
         
         ax = fig.add_subplot(111)
@@ -1284,38 +1315,39 @@ class runData:
 
         ax.plot(fitResults['xVal'], 
                 polyaResults, 
-                'm-', lw=2, 
+                'm-', lw=3, 
                 label=r'Fitted Polya ($\theta$' 
-                    + f" = {fitResults['fitPolya'].theta:.3})")
+                    + f" = {fitResults['fitPolya'].theta:.2})")
         ax.axvline(x=fitResults['fitPolya'].gain, 
-               c='m', ls=':', label=f"Polya Gain = {fitResults['fitPolya'].gain:.1f}e")
+               c='m', ls=':', label=f"Polya Gain = {fitResults['fitPolya'].gain:.0f}e")
         
         '''For plotting an exponential
         ax.plot(fitResults['xVal'], 
                 fitResults['fitExpo'].calcPolya(fitResults['xVal']), 
                 'r', lw=2, label=f'Fitted Exponential')
         ax.axvline(x=fitResults['fitExpo'].gain, 
-               c='r', ls=':', label=f"Expo Gain = {fitResults['fitExpo'].gain:.1f}e")
+               c='r', ls=':', label=f"Expo Gain = {fitResults['fitExpo'].gain:.0f}e")
         '''
 
         ax.axvline(x=self._getRawGain(), 
-               c='g', ls='--', label=f"Raw Gain = {self._getRawGain():.1f}e")
+               c='g', ls='--', label=f"Raw Gain = {self._getRawGain():.0f}e")
         ax.axvline(x=fitResults['dataGain'], 
-               c='g', ls=':', label=f"Trimmed Gain = {fitResults['dataGain']:.1f}e")
+               c='g', ls=':', label=f"Trimmed Gain = {fitResults['dataGain']:.0f}e")
 
 
         polyaStats = f'Polya Fit Statistics\nChi2 = {polyaChi2['chi2']:.4f}\nrChi2 = {polyaChi2['rChi2']:.4f}'
-        
-        ax.text(0.8, 0.75, polyaStats, 
-                fontsize=10, 
-                horizontalalignment='center',
-                verticalalignment='center', 
-                transform=ax.transAxes,
-                bbox=dict(facecolor='none', edgecolor='black', boxstyle='round,pad=1')
-                )
-
-        plt.xlabel('Numer of Electrons in Trimmed Avalanche')
-        plt.ylabel('Probability of Avalanche Size')
+        '''
+        ax.text(
+            0.8, 0.75, polyaStats, 
+            fontsize=10, 
+            horizontalalignment='center',
+            verticalalignment='center', 
+            transform=ax.transAxes,
+            bbox=dict(facecolor='none', edgecolor='black', boxstyle='round,pad=1')
+        )
+        '''
+        plt.xlabel('Numer of Electrons in Avalanche: n')
+        plt.ylabel('Probability of Avalanche Size: P(n)')
         plt.legend()
         plt.grid(True, alpha=0.5)
 
@@ -1531,6 +1563,24 @@ class runData:
         return IBF
 
 #********************************************************************************#
+    def _calcIBF(self):
+        """
+        Calculates the IBF on a per-avalanche basis. Then calculates an overall mean 
+        and standard error of the mean.
+            Note that this ignores any NaN values for the IBF.
+            (occurs when the electron does not avalanche)
+
+        Returns:
+            TODO
+        """
+        #Calculate IBF on a per-avalanche basis
+        IBF = self._calcPerAvalancheIBF()
+        meanIBF = IBF.mean()
+        meanIBFErr = IBF.std()/np.sqrt(IBF.count())
+
+        return IBF, meanIBF, meanIBFErr
+        
+#********************************************************************************#
     def _calcOpticalTransparency(self):
         """
         Determines the optical transparancy of a unit cell.
@@ -1580,6 +1630,7 @@ class runData:
             self.getRunParameter('Pad Length')
             )
 
+        #Check if the last datapoint is above the neighbor pad
         aboveNeighbor = withinNeighborHex(
             outerFieldLine['Field Line x'], 
             outerFieldLine['Field Line y'], 
