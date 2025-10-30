@@ -1237,10 +1237,9 @@ class FIMS_Simulation:
             minStepSize (float): number used as the step size once the calculated step
             size becomes too small.
 
-        Returns:
-            bool: True if a minimum field is successfully found, False otherwise.
-            
-            finalField (float): the minimum field ratio that results in 100% transparency.
+        Returns:            
+            finalField (float): The minimum field ratio that results in 100% transparency.
+                                Retuns -1 on a failure or if an error occurs.
         """
         #Ensure all parameters exist and save them
         if not self._checkParam():
@@ -1325,7 +1324,7 @@ class FIMS_Simulation:
         self.param = saveParam
         self.param['fieldRatio'] = finalField
 
-        return True
+        return finalField
     
 
 #***********************************************************************************#
