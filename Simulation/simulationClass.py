@@ -80,8 +80,9 @@ class FIMS_Simulation:
         runForOptimizer         <----- NEW
         _runGetEfficiency       <----- NEW
         _readEfficiencyFile     <----- NEW
-        _findFieldForEfficiency <----- NEW
+        findFieldForEfficiency <----- NEW
         runMagboltz             <----- NEW
+        findFieldForTransparency <------ Changed from findMinField
     """
 
 #***********************************************************************************#
@@ -1174,7 +1175,7 @@ class FIMS_Simulation:
         return True
 
 
-    def _calcMinField(self):
+    def _calcMinField(self): ## TODO - IS this function depreciated??????????  - We assume to use initial field found from efficiency limit
         """
         Calculates an initial guess for the minimum field ratio to achieve 100%
         field transparency.
@@ -1213,7 +1214,7 @@ class FIMS_Simulation:
         return minField
 
 #***********************************************************************************#
-    def findMinField(self, margin=1., minStepSize=1.2):
+    def findFieldForTransparency(self, margin=1., minStepSize=1.2):
         """
         Runs simulations to determine what the minimum electric field ratio
         needs to be in order to have 100% E-field transparency.
@@ -1246,13 +1247,9 @@ class FIMS_Simulation:
             return -1
         saveParam = self.param.copy()
 
-        #Calculate initial guess
-        initialGuess = self._calcMinField()*margin
-        #TODO: remove if statement after gain check is implemented
-        if initialGuess < 45:
-            initialGuess = 45
-            
-        self.param['fieldRatio'] = initialGuess
+        #Calculate initial guess - I think this is decpreciated?
+        #initialGuess = self._calcMinField()*margin  
+        #self.param['fieldRatio'] = initialGuess
        
         #Adjust the number of field lines to fill only last 20% of the unit cell
         numLines = int(self._getParam('numFieldLine')*.2)

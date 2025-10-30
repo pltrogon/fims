@@ -152,10 +152,14 @@ class FIMS_Optimizer:
             if element in activeParams:
                 print(f'{element}: {value}')
         print('********************************\n')
+
+        # Get the minimum field ratio for at least 95% detection efficiency with current parameters.
+        if self.simFIMS.findFieldForEfficiency(targetEfficiency=.95, threshold=10):
+            raise ValueError('Failed to find minimum field (efficiency).')
         
         # Get the minimum field ratio for 100% field transparency with the current parameters.
-        if self.simFIMS.findMinField() < 0:
-            raise ValueError('Failed to find minimum field.')
+        if self.simFIMS.findFieldForTransparency() < 0:
+            raise ValueError('Failed to find minimum field (transparency).')
             
         #Run full simulation - TODO: This reruns the elmerSolver
         runNumber = self._runSim()
