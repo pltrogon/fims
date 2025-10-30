@@ -27,7 +27,7 @@ class FIMS_Optimizer:
     """
     Class representing the FIMS Optimization.
 
-    Methods defined in FIMS_Simulation:
+    Methods defined in FIMS_Optimizer:
         _checkParameters
         _runSim
         _getIBN
@@ -43,6 +43,7 @@ class FIMS_Optimizer:
         Initializes a FIMS_Optimization object.
         """
         self.params = params
+        self.simFIMS = FIMS_Simulation()
         
         if not self._checkParameters():
             raise TypeError(
@@ -84,12 +85,12 @@ class FIMS_Optimizer:
         
         allowedParams = ['holeRadius', 'gridStandoff', 'padLength', 'pitch']
         
-        if type(self.params) != list:
+        if not isinstance(self.params, list):
             print('Error: Input not a list')
             return False
         
         for element in self.params:
-            if type(element) != list:
+            if not isinstance(element, list):
                 print('Error: input list does not contain lists\n')
                 return False
                 
@@ -108,7 +109,7 @@ class FIMS_Optimizer:
         return True
         
 #***********************************************************************************#
-    def _runSim(self, simFIMS):
+    def _runSim(self):
         """
         Runs the simulation, preserving the parameters.
         
@@ -116,33 +117,32 @@ class FIMS_Optimizer:
         simulation, as the simulation will reset them at the end.
         
         Args:
-            simFIMS (FIMS_Simulation): An instance of the FIMS simulation class.
+            None.
             
         Returns:
             int: The run number of the simulation that was executed.
         """
-        saveParam = simFIMS.param.copy()
-        runNumber = simFIMS.runSimulation(False)
+        saveParam = self.simFIMS.param.copy()
+        runNumber = self.simFIMS.runSimulation(False)
         #Put saved parameters back
-        simFIMS.param = saveParam
+        self.simFIMS.param = saveParam
 
         return runNumber
 
 #***********************************************************************************#    
-    def _getIBN(self, simFIMS):
+    def _getIBN(self):
         """
         Orchestrates the process of running a simulation and calculating
         the Ion Backflow Number (IBN) from the results.
         
         Args:
-            simFIMS (FIMS_Simulation): An instance of the FIMS simulation class
-                                       with its parameters set for a specific run.
+            None.
 
         Returns:
             float: The calculated Ion Backflow Number.
         """
         #Acquire list of parameters and the names of the active parameters
-        saveParam = simFIMS.param.copy()
+        saveParam = self.simFIMS.param.copy()
         activeParams = [line[0] for line in self.params]
         
         print('\n********************************')
@@ -153,11 +153,11 @@ class FIMS_Optimizer:
         print('********************************\n')
         
         # Get the minimum field ratio for 100% field transparency with the current parameters.
-        if simFIMS.findMinField() < 0:
+        if self.simFIMS.findMinField() < 0:
             raise ValueError('Failed to find minimum field.')
             
         #Run full simulation - TODO: This reruns the elmerSolver
-        runNumber = self._runSim(simFIMS)
+        runNumber = self._runSim()
         
         #Get the IBN
         simData = runData(runNumber)
@@ -166,7 +166,7 @@ class FIMS_Optimizer:
         return IBN
 
 #---------------------------------------------------------
-    def _IBNObjective(self, optimizerParam, simFIMS, inputList):
+    def _IBNObjective(self, optimizerParam, inputList):
         """
         Objective function to optimize for minimum IBN.
 
@@ -176,7 +176,6 @@ class FIMS_Optimizer:
         
         Args:
             optimizerParam (np.array): The flat array of parameters from the optimizer.
-            simFIMS (FIMS_Simulation): An instance of the FIMS simulation.
             inputList (list): A list of parameter names, matching the order of optimizerParam.
         
         Returns:
@@ -184,11 +183,11 @@ class FIMS_Optimizer:
         """
         # Unpack the optimizer array into the simulation's parameter dictionary.
         for i, inParam in enumerate(inputList):
-            simFIMS.param[inParam] = optimizerParam[i]
-        simFIMS._writeParam()
+            self.simFIMS.param[inParam] = optimizerParam[i]
+        self.simFIMS._writeParam()
         
         # Get the Ion Backflow Number
-        resultIBN = self._getIBN(simFIMS)
+        resultIBN = self._getIBN()
         
         #Output to monitor convergence
         with open('log/logOptimizer.txt', 'a') as log:
@@ -248,14 +247,14 @@ class FIMS_Optimizer:
         return
 
 #***********************************************************************************#
-    def _testObjective(self, optimizerParam, simFIMS, inputList):
+    def _testObjective(self, optimizerParam, inputList):
         # Unpack the optimizer array into the simulation's parameter dictionary.
         for i, inParam in enumerate(inputList):
-            simFIMS.param[inParam] = optimizerParam[i]
-        radius = simFIMS._getParam('holeRadius')
-        padLength = simFIMS._getParam('padLength')
-        standoff = simFIMS._getParam('gridStandoff')
-        pitch = simFIMS._getParam('pitch')
+            self.simFIMS.param[inParam] = optimizerParam[i]
+        radius = self.simFIMS._getParam('holeRadius')
+        padLength = self.simFIMS._getParam('padLength')
+        standoff = self.simFIMS._getParam('gridStandoff')
+        pitch = self.simFIMS._getParam('pitch')
         
         #Calculate dummy IBN value
         IBN = 100*(((radius-50)/11.25)**2 - (padLength/225)**2 + abs(standoff - 100)/225)*(.95 + random.random()/10)
@@ -288,7 +287,6 @@ class FIMS_Optimizer:
                 - IBNValue: Final minimum IBN value.
                 - success: Boolean representing the success status of minimization.
         """
-        simFIMS = FIMS_Simulation()
         activeParameters = self.params
         
         #Get optimizer parameters and bounds
@@ -300,16 +298,16 @@ class FIMS_Optimizer:
         optimizerBounds = Bounds(minBounds, maxBounds)
 
         #Set initial guess as default values
-        optimizerParams = [simFIMS.param[parameterName] for parameterName in inputList]
+        optimizerParams = [self.simFIMS.param[parameterName] for parameterName in inputList]
         initialGuess = np.array(optimizerParams)
 
         print('Beginning optimization...')
         
         result = minimize(
-            fun=self._IBNObjective,
-            #fun=self._testObjective,
+            #fun=self._IBNObjective,
+            fun=self._testObjective,
             x0=initialGuess,
-            args=(simFIMS, inputList),
+            args=(inputList),
             method='Nelder-Mead',
             callback=self._checkConvergence,
             bounds=optimizerBounds,
@@ -319,17 +317,17 @@ class FIMS_Optimizer:
 
         #Put results into simulation instance
         for i, parameterName in enumerate(inputList):
-            simFIMS.param[parameterName] = result.x[i] 
+            self.simFIMS.param[parameterName] = result.x[i] 
         
         resultVals = {
-            'params': simFIMS.param, 
+            'params': self.simFIMS.param, 
             'ibn_value': result.fun, 
             'success': result.success
         }
         
         print(f"Optimal IBN value = {resultVals['ibn_value']}\n",
         "Parameters for optimal IBN:")
-        print(simFIMS)
+        print(self.simFIMS)
 
         return resultVals
 
