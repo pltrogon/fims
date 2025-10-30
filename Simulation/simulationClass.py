@@ -123,7 +123,7 @@ class FIMS_Simulation:
             dict: Dictionary of default parameters and values.
         """
         defaultParam = {
-            'padLength': 65.,
+            'padLength': 44.,
             'pitch': 225.,
             'gridStandoff': 100.,
             'gridThickness': 1.,
@@ -133,9 +133,9 @@ class FIMS_Simulation:
             'pillarRadius': 20.,
             'fieldRatio': 40.,
             'transparencyLimit': 0.98,
-            'numFieldLine': 25,
+            'numFieldLine': 11,
             'numAvalanche': 1000,
-            'avalancheLimit': 200,
+            'avalancheLimit': 400,
             'gasCompAr': 70.,
             'gasCompCO2': 30.,
         }
@@ -622,11 +622,6 @@ class FIMS_Simulation:
             geoFile = 'FIMS.txt'
             with open(os.path.join(os.getcwd(), 'log/logGmsh.txt'), 'w+') as gmshOutput:
                 startTime = time.monotonic()
-                # TODO: gmsh vs ./gmsh
-                '''For James - This is not an OS issue.
-                It is because your gmsh is not installed globally.
-                A solution if you do not want to change where you have it is to add its location to your system's $PATH
-                You can do this in your .bashrc'''
                 runReturn = subprocess.run(
                     ['gmsh', os.path.join('./Geometry/', geoFile),
                      '-order', '2', '-optimize_ho',
@@ -1159,96 +1154,107 @@ class FIMS_Simulation:
         return minField
 
 #***********************************************************************************#
-    def findMinField(self, numLines=5, margin=1., stepSize=1.2):
+    def findMinField(self, margin=1., minStepSize=1.2):
         """
         Runs simulations to determine what the minimum electric field ratio
-        needs to be in order to have 100% Efield transparency.
+        needs to be in order to have 100% E-field transparency.
 
-        First calculates an initial guess for the ratio based on exponential fits 
-        to simulated data. Then generates a Gmsh FEM of the geometry and solves the
-        E field based on this guess using Elmer. Generates field lines via Garfield
-        and determines a transparency. If the transparency is below the limit, a new
-        field ratio is determined, the resulting field is solved, and new field 
+        First, it calculates an initial guess for the ratio based on exponential fits 
+        to simulated data. Then, it generates a gmsh FEM of the geometry and solves the
+        E-field based on this guess using Elmer FEM. It then generates field lines via 
+        Garfield++ and determines a transparency. If the transparency is below the limit,
+        a new field ratio is determined. The resulting field is solved, and new field 
         lines are generated. This continues until the criteria is reached.
         
         Upon completion, simulation files are reset.
         
-        NOTE: This assumes that the initial guessed field ratio results in a
-              transparency that is below the limit. The ratio thus is always increased.
+        NOTE: This assumes that the initial guessed field ratio results in a transparency
+        that is below the limit. The ratio is therefore always increased.
         
         Args:
-            numLines (int): Number of field lines to use to determine transparency.
-
             margin (float): number multiplied to the predicted value to create a
-                            buffer in case the raw value is too large.
+                            buffer in case the raw value is too large or too small.
+            
+            minStepSize (float): number used as the step size once the calculated step
+            size becomes too small.
 
         Returns:
             bool: True if a minimum field is successfully found, False otherwise.
+            
+            finalField (float): the minimum field ratio that results in 100% transparency.
         """
         #Ensure all parameters exist and save them
         if not self._checkParam():
-            return False
+            return -1
         saveParam = self.param.copy()
 
         #Calculate initial guess
-
         initialGuess = self._calcMinField()*margin
+        #TODO: remove if statement after gain check is implemented
+        if initialGuess < 45:
+            initialGuess = 45
+            
         self.param['fieldRatio'] = initialGuess
+       
+        #Adjust the number of field lines to fill only last 20% of the unit cell
+        numLines = int(self._getParam('numFieldLine')*.2)
+        self.param['numFieldLine'] = numLines
         
         #Write parameters and generate geometry
-        self.param['numFieldLine'] = numLines #TODO - numFieldLine defualts to 5 here. how does this effect when running
         if not self._writeParam():
             print('Error writing parameters.')
-            return False
+            return -1
             
         print('Executing gmsh...')
         if not self._runGmsh():
                 print('Error executing Gmsh.')
-                return False
+                return -1
 
         print('Beginning search for minimum field...')
-        firstRun = True
         isTransparent = False
-        transparencyThreshold = self._getParam('transparencyLimit')
+        stepSize = 1.
+        transLimit = self._getParam('transparencyLimit')
         curField = self._getParam('fieldRatio')
-        print(f'Initial field ratio: {curField}')
         
         while not isTransparent:
-            #Block that determines the new field ratio
-            if not firstRun:
-                #TODO: find better way to determine step size
-                #Determine a step size to change field
-                curField *= stepSize
-                print(f'Current field ratio: {curField}')
-
-                #Write new field ratio
-                self.param['fieldRatio'] = curField
-                if not self._writeParam():
-                    print('Error writing parameters.')
-                    return False
+            #Calculate and write the new field ratio
+            curField *= stepSize
+            self.param['fieldRatio'] = curField
+            if not self._writeParam():
+                print('Error writing parameters.')
+                return -1
+            print(f'Testing field ratio of {curField}')            
             
             #Determine the electric field
             print('\tExecuting Elmer...')
             if not self._runElmer():
                 print('Error executing Elmer.')
-                return False
+                return -1
 
             #Generate field lines
             print('\tGenerating field lines...')
             if not self._runFieldLines():
                 print('Error generating field lines.')
-                return False
+                return  -1
             
             #Get the resulting field transparency
             with open('../Data/fieldTransparency.txt', 'r') as readFile:
                 try:
-                    isTransparent = bool(int(readFile.read()))
+                    transparency = float(readFile.read())
 
                 except (ValueError, FileNotFoundError):
                     print("Error: Could not read or parse transparency file.")
-                    return False
-                    
-            firstRun = False
+                    return -1
+            
+            #Determine new step size
+            if transLimit/transparency < minStepSize:
+                stepSize = minStepSize
+            else:
+                stepSize = transLimit/transparency
+            
+            #Check transparency to terminate loop
+            if transparency >= transLimit:
+                isTransparent = True
 
         #Print solution
         finalField = self._getParam('fieldRatio')
@@ -1259,61 +1265,8 @@ class FIMS_Simulation:
         #load saved parameters back into class. Update field ratio with solution.
         self.param = saveParam
         self.param['fieldRatio'] = finalField
-
-        return True
-    
-
-#***********************************************************************************#
-    def runMagboltz(self, eField=1, gasComp='ArCO2', gasCompAr=0, gasCompCO2=0):
-        """
-        TODO
-        """
-        originalCWD = os.getcwd()
-
-        gasCompOptions = [
-            'ArCO2',
-            'T2K'
-        ]
-
-        if gasComp not in gasCompOptions:
-            raise ValueError(f"Error: Invalid gas composition '{gasComp}'")
-        if gasComp == 'ArCO2' and gasCompAr + gasCompCO2 != 100:
-            raise ValueError('Error: Gas composition of ArCO2 is not 100%.')
-        if eField <= 0:
-            raise ValueError('Error: Invalid electric field.')
-
-        try:
-            os.chdir('./build/')
-
-            # Get garfield path into environment
-            envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
-            envOutput = subprocess.check_output(envCommand, shell=True, universal_newlines=True)
-            newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line)
-            os.environ.update(newEnv)
-
-            with open(os.path.join(originalCWD, 'log/logDiffusion.txt'), 'w+') as garfieldOutput:
-                startTime = time.monotonic()
-                setupDiffusion = (
-                    f'./runDiffusion {eField} {gasComp} {gasCompAr} {gasCompCO2}'
-                )
-                runReturn = subprocess.run(
-                    setupDiffusion, 
-                    stdout = garfieldOutput, 
-                    shell = True, 
-                    check = True,
-                    env = os.environ
-                )
-                endTime = time.monotonic()
-                garfieldOutput.write(f'\n\nGarfield run time: {endTime - startTime} s')
-    
-            if runReturn.returncode != 0:
-                    print('Garfield++ execution failed. Check log for details.')
-                    return False
-            
-        finally:
-            os.chdir(originalCWD)
-        return True
-
+        
+        return finalField
 
 #***********************************************************************************#
 #***********************************************************************************#

@@ -78,14 +78,14 @@ class runData:
         _getOutermostLineID
         findStuckElectrons
         _calcIBF
-        _calcIBN                    <--------- Note for James, changed from _calcIBF
-        _calcPerAvalancheIBF        <--------- New
+        _calcIBN
+        _calcPerAvalancheIBF
         _calcOpticalTransparency
         _getTransparency
-        plotEfficiency              <--------- New
-        _getAvalancheGain           <--------- New
-        plotAvalancheSignal         <--------- New
-        plotAverageSignal           <--------- New
+        plotEfficiency              
+        _getAvalancheGain           
+        plotAvalancheSignal         
+        plotAverageSignal
     """
 
 #********************************************************************************#
@@ -379,10 +379,14 @@ class runData:
             Average IBF
             IBF error (standard deviation)
         """
-        #Optical transparency
-        self._metaData['Optical Transparency'] = self._calcOpticalTransparency()
+        #Check if parameters are zero before attempting calculations
+        numLines = self.getRunParameter('Number of Field Lines')
+        numAvalanche = self.getRunParameter('Number of Avalanches')
+        
+        if numLines > 0:
+            #Optical transparency
+            self._metaData['Optical Transparency'] = self._calcOpticalTransparency()
 
-        if self.getRunParameter('Number of Field Lines') > 0:
             #Field Transparency
             self._metaData['Field Transparency'] = self._getTransparency()
 
@@ -391,7 +395,7 @@ class runData:
             nominalBundleZ = -.9*standoff
             self._metaData['Field Bundle Radius'] = self.calcBundleRadius(nominalBundleZ)
 
-        if self.getRunParameter('Number of Avalanches') > 0:
+        if numAvalanche > 0:
             #Raw Gain
             rawGain = self._getRawGain()
             self._metaData['Raw Gain'] = rawGain
