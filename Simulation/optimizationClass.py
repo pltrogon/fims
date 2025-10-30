@@ -42,6 +42,7 @@ class FIMS_Optimizer:
         """
         Initializes a FIMS_Optimization object.
         """
+        self.debug = False
         self.params = params
         self.simFIMS = FIMS_Simulation()
         
@@ -304,15 +305,24 @@ class FIMS_Optimizer:
 
         print('Beginning optimization...')
         
-        result = minimize(
-            #fun=self._IBNObjective,
-            fun=self._testObjective,
-            x0=initialGuess,
-            args=(inputList),
-            method='Nelder-Mead',
-            callback=self._checkConvergence,
-            bounds=optimizerBounds,
-        )
+        if self.debug:
+            result = minimize(
+                fun=self._testObjective,
+                x0=initialGuess,
+                args=(inputList),
+                method='Nelder-Mead',
+                callback=self._checkConvergence,
+                bounds=optimizerBounds,
+            )
+        else:
+            result = minimize(
+                fun=self._IBNObjective,
+                x0=initialGuess,
+                args=(inputList),
+                method='Nelder-Mead',
+                callback=self._checkConvergence,
+                bounds=optimizerBounds,
+            )
 
         print('\n*************** Optimization Complete ***************')
 
