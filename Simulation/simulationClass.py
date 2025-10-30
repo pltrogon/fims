@@ -972,12 +972,12 @@ class FIMS_Simulation:
         """
         #Ensure all parameters exist and save them
         if not self._checkParam():
-            return False
+            return -1
         saveParam = self.param.copy()
 
         #Calculate initial guess
         initialGuess = self._calcMinField()*margin
-        #TODO: replace if statement with gain check
+        #TODO: remove if statement after gain check is implemented
         if initialGuess < 45:
             initialGuess = 45
             
@@ -990,12 +990,12 @@ class FIMS_Simulation:
         #Write parameters and generate geometry
         if not self._writeParam():
             print('Error writing parameters.')
-            return False
+            return -1
             
         print('Executing gmsh...')
         if not self._runGmsh():
                 print('Error executing Gmsh.')
-                return False
+                return -1
 
         print('Beginning search for minimum field...')
         isTransparent = False
@@ -1009,20 +1009,20 @@ class FIMS_Simulation:
             self.param['fieldRatio'] = curField
             if not self._writeParam():
                 print('Error writing parameters.')
-                return False
+                return -1
             print(f'Testing field ratio of {curField}')            
             
             #Determine the electric field
             print('\tExecuting Elmer...')
             if not self._runElmer():
                 print('Error executing Elmer.')
-                return False
+                return -1
 
             #Generate field lines
             print('\tGenerating field lines...')
             if not self._runFieldLines():
                 print('Error generating field lines.')
-                return False
+                return  -1
             
             #Get the resulting field transparency
             with open('../Data/fieldTransparency.txt', 'r') as readFile:
@@ -1031,7 +1031,7 @@ class FIMS_Simulation:
 
                 except (ValueError, FileNotFoundError):
                     print("Error: Could not read or parse transparency file.")
-                    return False
+                    return -1
             
             #Determine new step size
             if transLimit/transparency < minStepSize:
@@ -1053,7 +1053,7 @@ class FIMS_Simulation:
         self.param = saveParam
         self.param['fieldRatio'] = finalField
         
-        return True, finalField
+        return finalField
 
 #***********************************************************************************#
 #***********************************************************************************#

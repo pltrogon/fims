@@ -153,8 +153,8 @@ class FIMS_Optimizer:
         print('********************************\n')
         
         # Get the minimum field ratio for 100% field transparency with the current parameters.
-        if not simFIMS.findMinField():
-            raise ValueError('Finding minimum field failed.')
+        if simFIMS.findMinField() < 0:
+            raise ValueError('Failed to find minimum field.')
             
         #Run full simulation - TODO: This reruns the elmerSolver
         runNumber = self._runSim(simFIMS)
