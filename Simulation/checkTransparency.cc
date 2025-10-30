@@ -46,7 +46,7 @@ int main(int argc, char * argv[]) {
   const double MICRONTOCM = 1e-4;
   bool DEBUG = false;
   double fieldLineX, fieldLineY, fieldLineZ;
-  double fieldTransparency;
+  double measuredTransparency, fieldTransparency;
   const char* isTransparent;
   double xRandMax = 2*MICRONTOCM;
   double yRandMax = 1*MICRONTOCM; 
@@ -264,9 +264,12 @@ int main(int argc, char * argv[]) {
   std::vector<double> xStart;
   std::vector<double> yStart;
   double rangeScale = 0.99;
+  double fieldCutoff = 0.2;
   double xRange = (xBoundary[1] - xBoundary[0])*rangeScale;
   double yRange = (yBoundary[1] - yBoundary[0])*rangeScale;
-
+  double xWidth = pitch*sqrt(3.)/3.;
+  double yWidth = rangeScale*pitch/2.;
+  
   /*
   //Lines generated radially from the center to edge of geometry
   //The x-direction is the long axis of the geometry. 
@@ -276,6 +279,7 @@ int main(int argc, char * argv[]) {
     }
   */
   
+  /*
   //Lines populated randomly at the corner along the positive x-axis
   for(int i = 0; i < numFieldLine; i++){
     //Get random numbers between 0 and xRandMax/yRandMax
@@ -284,17 +288,23 @@ int main(int argc, char * argv[]) {
     xStart.push_back((2./3.)*xBoundary[1] - randX);
     yStart.push_back(randY);
   }
+  */
   
-
+  //Lines populated along the positive x-axis beyond a given cutoff point
+  for(int i = 0; i < numFieldLine; i++){
+    xStart.push_back(xWidth*((1 - fieldCutoff) + fieldCutoff*i/(numFieldLine-1.)));
+    yStart.push_back(0.);
+    std::cout << "starting points:" << xStart[i] << "," << yStart[i] << std::endl;
+  }
+  
   // ***** Calculate field Lines ***** //
   std::vector<std::array<float, 3> > fieldLines;
   int totalFieldLines = xStart.size();
   int numAtPad = 0;
   int prevDriftLine = 0;
 
-  std::cout << "Computing corner field lines" << std::endl;
+  std::cout << "Computing field lines" << std::endl;
   for(int inFieldLine = 0; inFieldLine < totalFieldLines; inFieldLine++){
-    //Calculate from the corner
     driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], zmax*rangeScale, fieldLines);
     //Get coordinates of every point along field line
     for(int inLine = 0; inLine < fieldLines.size(); inLine++){
@@ -308,7 +318,7 @@ int main(int argc, char * argv[]) {
     //TODO: Find more elegant way to determine where a line terminates
     int lineEnd = fieldLines.size() - 1;
     if(  (abs(fieldLines[lineEnd][0]) <= padLength)
-      && (abs(fieldLines[lineEnd][1]) <= padLength*sqrt(3)/2)
+      && (abs(fieldLines[lineEnd][1]) <= padLength*sqrt(3.)/2.)
       && (fieldLines[lineEnd][2] <= -gridStandoff*rangeScale)){
         numAtPad++;
     }
@@ -326,8 +336,10 @@ int main(int argc, char * argv[]) {
 
   std::cout << "Done " << totalFieldLines << " field lines; Determining transparency." << "\n";
   
-  //Determine transparency of corner
-  fieldTransparency = (1.*numAtPad) / (1.*numFieldLine);
+  //Determine transparency
+  measuredTransparency = (1.*numAtPad) / (1.*numFieldLine);
+  //Note: assumes that the transparency outside of the measured region is 100%
+  fieldTransparency = (1 - fieldCutoff) + measuredTransparency*fieldCutoff;
   std::cout << "Corner transparency is " << fieldTransparency <<  "." << std::endl;
   
   
@@ -342,7 +354,7 @@ int main(int argc, char * argv[]) {
   
   //***** Output transparency value *****//
   dataFile.open(dataPath);
-  dataFile << isTransparent << std::endl;
+  dataFile << fieldTransparency << std::endl;
   dataFile.close();
 
   std::cout << "****************************************\n";
