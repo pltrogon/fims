@@ -22,7 +22,7 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  float inputField = std::atof(argv[1]); //kV/cm
+  double inputField = std::atof(argv[1]); //kV/cm
   double fieldStrength = inputField*1e3;//V/cm
 
   MediumMagboltz* gasFIMS = new MediumMagboltz();

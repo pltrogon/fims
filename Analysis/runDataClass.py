@@ -378,6 +378,7 @@ class runData:
             Average IBN
             Average IBF
             IBF error (standard deviation)
+            Efficiency
         """
         #Check if parameters are zero before attempting calculations
         numLines = self.getRunParameter('Number of Field Lines')
@@ -412,6 +413,10 @@ class runData:
             self._metaData['Average IBF Error'] = meanIBFErr
 
             self._metaData['IBF * Raw Gain'] = meanIBF*rawGain
+
+            simEff, simEffErr = self._getRawEfficiency(threshold=10)
+            self._metaData['Raw Efficiency (10e)'] = simEff
+            self._metaData['Raw Efficiency Error'] = simEffErr
             
 
         return
@@ -1662,6 +1667,41 @@ class runData:
 
         return chi2Param
     
+
+#********************************************************************************#
+    def _getRawEfficiency(self, threshold=0):
+        """
+        TODO
+        """
+
+        allAvalancheData = self.getDataFrame('avalancheData')
+
+        avalancheLimit = self.getRunParameter('Avalanche Limit')
+
+        if threshold > avalancheLimit:
+            raise ValueError('Error - Threshold higher than simulation limit.')
+        
+        numSimulated = self.getRunParameter('Number of Avalanches')
+        numAvalanches = len(allAvalancheData)
+
+        if numAvalanches != numSimulated:
+            raise ValueError('Error - Avalanche numbers disagree.')
+        
+        aboveThresh = allAvalancheData['Total Electrons'] > threshold
+        numAboveThresh = aboveThresh.sum()
+
+        #For Binomial statistics:
+        #simEff = numAboveThresh / numAvalanches
+        #varience = simEff*(1-simEff)/numAvalanches
+
+        #For Bayesian Statistics:
+        simEff = (numAboveThresh+1)/(numAvalanches+2)
+        varience = ((numAboveThresh+1)*(numAboveThresh+2))/((numAvalanches+2)*(numAvalanches+3)) - simEff*simEff
+
+        simEffErr = math.sqrt(varience)
+
+        return simEff, simEffErr
+
 #********************************************************************************#
     def plotEfficiency(self, binWidth=1, threshold=0):
         """

@@ -78,9 +78,9 @@ class FIMS_Simulation:
         _runGarfield
         runSimulation
         runForOptimizer         <----- NEW
-        _runGetGain             <----- NEW
-        _readGainFile           <----- NEW
-        _getGainField           <----- NEW
+        _runGetEfficiency       <----- NEW
+        _readEfficiencyFile     <----- NEW
+        _findFieldForEfficiency <----- NEW
         runMagboltz             <----- NEW
     """
 
@@ -135,7 +135,7 @@ class FIMS_Simulation:
             'transparencyLimit': 0.98,
             'numFieldLine': 11,
             'numAvalanche': 1000,
-            'avalancheLimit': 400,
+            'avalancheLimit': 500,
             'gasCompAr': 70.,
             'gasCompCO2': 30.,
         }
@@ -828,7 +828,7 @@ class FIMS_Simulation:
     
 
 #***********************************************************************************#
-    def _runGetGain(self):
+    def _runGetEfficiency(self, targetEfficiency=.95, threshold=10):
         """
         TODO
         """
@@ -842,13 +842,13 @@ class FIMS_Simulation:
             newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line)
             os.environ.update(newEnv)
 
-            with open(os.path.join(originalCWD, 'log/logGarfieldGetGain.txt'), 'w+') as garfieldOutput:
+            with open(os.path.join(originalCWD, 'log/logGarfieldGetEfficiency.txt'), 'w+') as garfieldOutput:
                 startTime = time.monotonic()
-                setupGetGain = (
-                    f'./runGain'
+                setupGetEfficiency = (
+                    f'./runEfficiency {targetEfficiency} {threshold}'
                 )
                 runReturn = subprocess.run(
-                    setupGetGain, 
+                    setupGetEfficiency, 
                     stdout = garfieldOutput, 
                     shell = True, 
                     check = True,
@@ -949,74 +949,103 @@ class FIMS_Simulation:
 #***********************************************************************************#
 
 #***********************************************************************************#
-    def _readGainFile(self):
+    def _readEfficiencyFile(self):
         """
         TODO
         """
 
-        gainValues = []
         try:
-            with open('../Data/gainFile.txt', 'r') as inFile:
-                for line in inFile:
-                    curLine = line.strip()
-
-                    #Skip commented lines
-                    if curLine and not curLine.startswith('//'):
-                        try:
-                            gainValues.append(float(curLine))
-                        except ValueError:
-                            pass #Skip non-number lines
+            with open('../Data/efficiencyFile.txt', 'r') as inFile:
+                allLines = [inLine.strip() for inLine in inFile.readlines()]
 
         except FileNotFoundError:
-            print(f"Error: File 'gainFile.txt' not found.")
+            print(f"Error: File 'efficiencyFile.txt' not found.")
+            return None
 
-        return gainValues
+
+        if len(allLines) < 7:
+            raise IndexError("Malformed file.")
+        
+        findEffValues = {}
+        try:
+            findEffValues['stopCondition'] = allLines[3].strip()
+
+            findEffValues['efficiency'] = float(allLines[5].strip())
+            findEffValues['efficiencyErr'] = float(allLines[6].strip())
+
+        except (IndexError, ValueError) as e:
+            print(f'Error extracting values - {e}')
+            return None
+                
+
+        return findEffValues
     
 #***********************************************************************************#
-    def _getGainField(self, gains, fields, damping=0.8):
+    def _getEfficiencyField(self, fields, efficiencies, efficienciesErr=None, damping=0.8):
         """
-        TODO
+        Calculates the next field strength using the secant method to approach a target efficiency.
+
+        If efficiency errors are provided, utilizes a step base on the maximum possible slope.
+        Assumes that the efficiency is monotonically increasing.
+        
+        *TODO - Tested for when  current and prevoious effs are LESS than target. Behaviour when bracketing target unknown.*
 
         Args:
-            gains (np array): Numpy array of the gains. Has form: [currentGain, previousGain, targetGain]
-            fields (np.array): Numpy array of the field strengths. Has form: [currentField, previousField]
+            fields (np.array): Numpy array of the field strengths. Has form: [current, previous]
+            efficiencies (np.array): Numpy array of the efficiencies. Has form: [current, previous, target]
+            efficienciesErr (np.array): Optional. Array of errors in the efficiencies. Has form: [currentError, previousError]
+            damping (float): Damping factor for the secant method to avoid too large of steps.
 
         Returns:
-            float: Numerical solution to the field for achieve target gain
-
+            float: Numerical solution to the field in order to achieve target efficiency
         """
-        print(f'Gains: {gains}')
-        print(f'fields: {fields}')
 
-
-        logCurGain, logPrevGain, logTargetGain = np.log(gains)
         curField, prevField = fields
+        curEff, prevEff, targetEff = efficiencies
 
         fieldDiff = curField - prevField
-        gainDiff = logCurGain - logPrevGain
 
-        targetDiff = logCurGain - logTargetGain
+        #If errors exist, use the maximum possible slope
+        if efficienciesErr is not None:
+            curEffErr, prevEffErr = efficienciesErr
+            prevEffMin = prevEff - prevEffErr
+            curEffMax = curEff + curEffErr
 
-        if abs(gainDiff) < 0.1:
-            print('Warning: Log-gain slope near zero. Using heuristic step.')
-            return curField*1.05 
+            effDiff = curEffMax - prevEffMin
+            targetDiff = targetEff - curEffMax
 
-        newField = curField - damping*targetDiff*fieldDiff/gainDiff
+        else:
+            effDiff = curEff - prevEff
+            targetDiff = targetEff - curEff
 
-        #Limit step size
-        if abs(newField - curField) > curField*.5:
-            newField = curField*1.5
-            print("Warning: Step size limited for stability.")
 
-        print(f'New field: {newField}')
+        if abs(effDiff) < 0.001:
+                print(f'Warning: Slope near zero. Using heuristic step of 5%.')
+                return curField*1.05 
+
+        fieldStep = damping*targetDiff*fieldDiff/effDiff
+        print(f'Field Step: {fieldStep:.2f}')
+
+        if fieldStep > 5:
+            print(f'Warning: Step size limited to 5 for stability.')
+            newField = curField+5
+
+        elif fieldStep < 1:
+            print(f'Warning: Field step small. Using heuristic step of 1.')
+            newField = curField+1
+
+        else:
+            newField = curField+fieldStep
+
         return newField
 
 
 #***********************************************************************************#
-    def findFieldForGain(self, targetGain=60):
+    def findFieldForEfficiency(self, targetEfficiency=.95, threshold=10):
         """
         TODO
         """
+
         #Ensure all parameters exist and save them
         if not self._checkParam():
             return False
@@ -1032,50 +1061,68 @@ class FIMS_Simulation:
                 print('Error executing Gmsh.')
                 return False
         
-        print('Beginning search for minimum field for gain...')
+        print(f'Beginning search for minimum field to achieve {targetEfficiency*100:.0f}% efficiency...')
         
         iterNo = 0
-        curField = self._getParam('fieldRatio')
-        print(f'Initial field ratio: {curField}')
+        iterNoLimit = 10
 
-        sufficientGain = False
-        curGain = 1
-        curGainErr = 0
-        prevGain = curGain
-        prevField = 0
+        fields = []
+        efficiencies = []
+        efficienciesErr = []
+
+        validEfficiency = False
+        self.param['numAvalanche'] = 3000
+        self.param['avalancheLimit'] = 500
         
-        while not sufficientGain:
+        while not validEfficiency:
 
             iterNo += 1
+            if iterNo > iterNoLimit:
+                print(f'Warning - Iteration limit reached ({iterNoLimit})')
+                break
 
+            print(f'Begining iteration: {iterNo}')
+            print(f'Fields: {fields}')
+            print(f'Efficiencies: {efficiencies}')
+            print(f'Errors: {efficienciesErr}')
 
-            #Determines the new field ratio
-            if iterNo == 2:
-                prevField = curField
-                newField = prevField+2
-                curField = float(math.ceil(newField))
+            # Determine new field strength
+            newField = None
 
-                self.param['fieldRatio'] = curField
-                if not self._writeParam():
-                    print('Error writing parameters.')
-                    return False
-                print(f'Current field ratio: {curField}')
+            if iterNo == 1:
+                newField = self._getParam('fieldRatio')
 
+            # Take constant 10% step for 2nd iteration
+            elif iterNo == 2:
+                newField = 1.1*fields[0]
 
-            if iterNo > 2:
+            # Use secant method to determine new field
+            else:
+                newField = self._getEfficiencyField( 
+                    fields=np.array([fields[-1], fields[-2]]),
+                    efficiencies=np.array([efficiencies[-1], efficiencies[-2], targetEfficiency]),
+                    efficienciesErr=np.array([efficienciesErr[-1], efficienciesErr[-2]])
+                )
+            
+            if newField is None:
+                raise ValueError('Error: Invalid new field')
+            
+            fields.append(float(math.ceil(newField)))
 
-                gains = np.array([curGain, prevGain, targetGain])
-                fields = np.array([curField, prevField])
+            # Check if parameters havent significantly changed
+            #if iterNo > 2:
+            #        fieldDiff = abs(fields[-1] - fields[-2])
+            #        effDiff = abs(efficiencies[-1] - efficiencies[-2])
+            #        if fieldDiff < 0.1 or effDiff < 0.001:
+            #            print(f'Parameters within tolerance.')
+            #            break
                 
-                prevField = curField
-                newField = self._getGainField(gains, fields)
-                curField = float(math.ceil(newField))
-
-                self.param['fieldRatio'] = curField
-                if not self._writeParam():
-                    print('Error writing parameters.')
-                    return False
-                print(f'Current field ratio: {curField}')
+            print(f'Current field ratio: {fields[-1]}')
+            self.param['fieldRatio'] = fields[-1]
+            
+            if not self._writeParam():
+                print('Error writing parameters.')
+                return False
             
             #Determine the electric field
             print('\tExecuting Elmer...')
@@ -1083,24 +1130,36 @@ class FIMS_Simulation:
                 print('Error executing Elmer.')
                 return False
 
-            #Determine the gain
-            print('\tGetting gain...')
-            if not self._runGetGain():
-                print('Error getting gain.')
+            #Determine the efficiency
+            print('\tGetting efficiency...')
+            if not self._runGetEfficiency(targetEfficiency=targetEfficiency, threshold=threshold):
+                print('Error getting efficiency.')
                 return False
 
-            #Get gain values from file
-            prevGain = curGain
-            gainWithErr = self._readGainFile()
-            curGain = gainWithErr[0]
-            curGainErr = gainWithErr[1]
+            #Get efficiency values from file
+            effResults = self._readEfficiencyFile()
 
-            #check if current gain is valid, and if agrees with target gain
-            if curGain < 0:
-                raise ValueError('Error occured with convergence of runGain')
+            efficiencies.append(effResults['efficiency'])
+            efficienciesErr.append(effResults['efficiencyErr'])
+
+
+            match effResults['stopCondition']:
                 
-            if (curGain - targetGain)/curGainErr >= 2:
-                sufficientGain = True
+                case 'DID NOT CONVERGE':
+                    validEfficiency = False
+                    print(f'Did not converge at {fields[-1]} ({self.param['numAvalanche']} avalanches): {efficiencies[-1]:.3f} +/- {efficienciesErr[-1]:.3f}')
+
+                case 'CONVERGED':
+                    validEfficiency = True
+                    print(f'Converged at {fields[-1]}: {efficiencies[-1]:.3f} +/- {efficienciesErr[-1]:.3f}')
+            
+                case 'EXCLUDED':
+                    validEfficiency = False
+                    print(f'Excluded at {fields[-1]}: {efficiencies[-1]:.3f} +/- {efficienciesErr[-1]:.3f}')
+
+                case _:
+                    raise ValueError('Error - Malformed efficiency file.')      
+        #End of find field for efficiency loop
 
         #Print solution
         finalField = self._getParam('fieldRatio')
@@ -1265,8 +1324,61 @@ class FIMS_Simulation:
         #load saved parameters back into class. Update field ratio with solution.
         self.param = saveParam
         self.param['fieldRatio'] = finalField
-        
-        return finalField
+
+        return True
+    
+
+#***********************************************************************************#
+    def runMagboltz(self, eField=1, gasComp='ArCO2', gasCompAr=0, gasCompCO2=0):
+        """
+        TODO
+        """
+        originalCWD = os.getcwd()
+
+        gasCompOptions = [
+            'ArCO2',
+            'T2K'
+        ]
+
+        if gasComp not in gasCompOptions:
+            raise ValueError(f"Error: Invalid gas composition '{gasComp}'")
+        if gasComp == 'ArCO2' and gasCompAr + gasCompCO2 != 100:
+            raise ValueError('Error: Gas composition of ArCO2 is not 100%.')
+        if eField <= 0:
+            raise ValueError('Error: Invalid electric field.')
+
+        try:
+            os.chdir('./build/')
+
+            # Get garfield path into environment
+            envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
+            envOutput = subprocess.check_output(envCommand, shell=True, universal_newlines=True)
+            newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line)
+            os.environ.update(newEnv)
+
+            with open(os.path.join(originalCWD, 'log/logDiffusion.txt'), 'w+') as garfieldOutput:
+                startTime = time.monotonic()
+                setupDiffusion = (
+                    f'./runDiffusion {eField} {gasComp} {gasCompAr} {gasCompCO2}'
+                )
+                runReturn = subprocess.run(
+                    setupDiffusion, 
+                    stdout = garfieldOutput, 
+                    shell = True, 
+                    check = True,
+                    env = os.environ
+                )
+                endTime = time.monotonic()
+                garfieldOutput.write(f'\n\nGarfield run time: {endTime - startTime} s')
+    
+            if runReturn.returncode != 0:
+                    print('Garfield++ execution failed. Check log for details.')
+                    return False
+            
+        finally:
+            os.chdir(originalCWD)
+        return True
+
 
 #***********************************************************************************#
 #***********************************************************************************#

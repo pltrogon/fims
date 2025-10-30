@@ -80,8 +80,6 @@ int main(int argc, char * argv[]) {
   //Timing variables
   clock_t startSim, stopSim, runTime;
 
-  TApplication app("app", &argc, argv);
-
   //***** Git Hash *****//
   TString gitVersion = "UNKNOWN VERSION";
 
@@ -224,6 +222,11 @@ int main(int argc, char * argv[]) {
   gasCompAr = std::stod(readParam["gasCompAr"]);
   gasCompCO2 = std::stod(readParam["gasCompCO2"]);
 
+
+  // ***** Output data file ***** //  
+  std::string dataFilename = "sim."+std::to_string(runNo)+".root";
+  std::string dataPath = "../../Data/"+dataFilename;
+  TFile *dataFile = new TFile(dataPath.c_str(), "RECREATE");
 
   //***** Field Line Data Tree *****//
   //Create
@@ -500,6 +503,17 @@ int main(int argc, char * argv[]) {
   }//End edge field line loop
   
   std::cout << "Done " << totalFieldLines << " field lines." << std::endl;
+
+  // ***** Deal with fieldline data trees ***** //
+  fieldLineDataTree->Write();
+  delete fieldLineDataTree;
+  gridFieldLineDataTree->Write();
+  delete gridFieldLineDataTree;
+  edgeFieldLineDataTree->Write();
+  delete edgeFieldLineDataTree;
+
+  dataFile->Close();
+  delete dataFile;
   
   //TODO: parallel avalanches crashes if numAvalanche = 0
   
@@ -578,14 +592,14 @@ int main(int argc, char * argv[]) {
         xBoundary[0], yBoundary[0], zBoundary[0], 
         xBoundary[1], yBoundary[1], zBoundary[1]
       );
-      avalancheE->EnablePlotting(viewElectronDrift, 100);
+      avalancheE->EnablePlotting(viewElectronDrift, 500);//TODO - possibly increase this number
 
 
       //Filename
       int threadID = omp_get_thread_num();
       std::string parallelDataPath = "parallelData/";
-      std::string parallelRunNo = "parallelSim." + std::to_string(runNo);
-      std::string parallelThreadNo = ".thread." + std::to_string(threadID);
+      std::string parallelRunNo = "parallelSim.";
+      std::string parallelThreadNo = std::to_string(threadID);
 
       parallelFilename = parallelDataPath + parallelRunNo + parallelThreadNo + ".root";
       parallelFileNames.push_back(parallelFilename);
@@ -773,8 +787,13 @@ int main(int argc, char * argv[]) {
   }//End parallization
 
 
-  //Calculate diffusion coefficients - TODO: CHeck the units of these outputs
+  std::cout << "****************************************\n";
+  std::cout << "Done avalanches for run: " << runNo << "\n";
+  std::cout << "Getting diffusion coefficients...\n";
+  std::cout << "****************************************\n";
 
+
+  //Calculate diffusion coefficients
   double vx, vy, wv, wr;
   double alpha, eta, riontof, ratttof, lor;
   double vxerr, vyerr, vzerr, wverr, wrerr, dlerr, dterr;
@@ -809,8 +828,6 @@ int main(int argc, char * argv[]) {
     difftens
   );
 
-  
-  
   delete gasFIMS;
 
   //Final timing
@@ -857,23 +874,14 @@ int main(int argc, char * argv[]) {
   metaDataTree->Branch("Diffusion T (Amplify)", &ampDiffusionT, "ampDiffusionT/D");
 
   metaDataTree->Fill();
+  
+  // ***** Deal with data ***** //
 
-  // ***** Output data file ***** //  
-  std::string dataFilename = "sim."+std::to_string(runNo)+".root";
-  std::string dataPath = "../../Data/"+dataFilename;
-  TFile *dataFile = new TFile(dataPath.c_str(), "RECREATE");
+  //Reopen file and write metadata
+  dataFile = new TFile(dataPath.c_str(), "UPDATE");
 
-
-  // ***** Data trees ***** //
   metaDataTree->Write();
   delete metaDataTree;
-  fieldLineDataTree->Write();
-  delete fieldLineDataTree;
-  gridFieldLineDataTree->Write();
-  delete gridFieldLineDataTree;
-  edgeFieldLineDataTree->Write();
-  delete edgeFieldLineDataTree;
-  
 
   // Deal with parallel trees
   std::vector<std::string> treeNames = {
