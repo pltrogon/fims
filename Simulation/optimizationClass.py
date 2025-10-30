@@ -43,7 +43,7 @@ class FIMS_Optimizer:
     """
 
 #***********************************************************************************#
-    def __init__(self, params):
+    def __init__(self, params=None):
         """
         Initializes a FIMS_Optimization object.
         """
@@ -54,7 +54,7 @@ class FIMS_Optimizer:
         if not self._checkParameters():
             raise TypeError(
                     '\nParameters must be a list of lists with the following format:\n'
-                    '[parameter name, minimum value, maximum value]\n'
+                    '[\'parameterName\', minimumBound, maximumBound]\n'
                     '\nAvailable parameters include:\n'
                     'holeRadius, gridStandoff, padLength, or pitch\n')
             return
@@ -91,6 +91,9 @@ class FIMS_Optimizer:
         
         allowedParams = ['holeRadius', 'gridStandoff', 'padLength', 'pitch']
         
+        if self.params is None:
+            raise ValueError('Error - No parameters.')
+
         if not isinstance(self.params, list):
             print('Error: Input not a list')
             return False
