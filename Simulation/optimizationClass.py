@@ -25,6 +25,11 @@ class RepeatedInputs(Warning):
 
 class FIMS_Optimizer:
     """
+    ===============================================
+    TODO - THIS CLASS NEEDS A DESCRIPTIVE DOCSTRING
+    ===============================================
+
+
     Class representing the FIMS Optimization.
 
     Methods defined in FIMS_Optimizer:
