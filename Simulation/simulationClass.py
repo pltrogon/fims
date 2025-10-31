@@ -77,6 +77,12 @@ class FIMS_Simulation:
         _runElmerWeighting
         _runGarfield
         runSimulation
+        runForOptimizer         <----- NEW
+        _runGetEfficiency       <----- NEW
+        _readEfficiencyFile     <----- NEW
+        findFieldForEfficiency <----- NEW
+        runMagboltz             <----- NEW
+        findFieldForTransparency <------ Changed from findMinField
     """
 
 #***********************************************************************************#
@@ -118,7 +124,7 @@ class FIMS_Simulation:
             dict: Dictionary of default parameters and values.
         """
         defaultParam = {
-            'padLength': 65.,
+            'padLength': 44.,
             'pitch': 225.,
             'gridStandoff': 100.,
             'gridThickness': 1.,
@@ -128,9 +134,9 @@ class FIMS_Simulation:
             'pillarRadius': 20.,
             'fieldRatio': 40.,
             'transparencyLimit': 0.98,
-            'numFieldLine': 25,
+            'numFieldLine': 11,
             'numAvalanche': 1000,
-            'avalancheLimit': 200,
+            'avalancheLimit': 500,
             'gasCompAr': 70.,
             'gasCompCO2': 30.,
         }
@@ -215,17 +221,18 @@ class FIMS_Simulation:
             bool: True if the setup is successful, False otherwise.
         """
 
-        #Check for log/
+        #Check for file pathways
         if not os.path.exists("log"):
             os.makedirs("log")
             
-        #Check for build/
         if not os.path.exists("build"):
             os.makedirs("build")
 
-        #Check for build/parallelData
         if not os.path.exists("build/parallelData"):
             os.makedirs("build/parallelData")
+
+        if not os.path.exists("../Data/Diffusion"):
+            os.makedirs("../Data/Diffusion")
 
         # Get garfield path into environment
         envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
@@ -819,6 +826,45 @@ class FIMS_Simulation:
         finally:
             os.chdir(originalCWD)
         return True
+    
+
+#***********************************************************************************#
+    def _runGetEfficiency(self, targetEfficiency=.95, threshold=10):
+        """
+        TODO
+        """
+        originalCWD = os.getcwd()
+        try:
+            os.chdir('./build/')
+
+            # Get garfield path into environment
+            envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
+            envOutput = subprocess.check_output(envCommand, shell=True, universal_newlines=True)
+            newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line)
+            os.environ.update(newEnv)
+
+            with open(os.path.join(originalCWD, 'log/logGarfieldGetEfficiency.txt'), 'w+') as garfieldOutput:
+                startTime = time.monotonic()
+                setupGetEfficiency = (
+                    f'./runEfficiency {targetEfficiency} {threshold}'
+                )
+                runReturn = subprocess.run(
+                    setupGetEfficiency, 
+                    stdout = garfieldOutput, 
+                    shell = True, 
+                    check = True,
+                    env = os.environ
+                )
+                endTime = time.monotonic()
+                garfieldOutput.write(f'\n\nGarfield run time: {endTime - startTime} s')
+    
+            if runReturn.returncode != 0:
+                    print('Garfield++ execution failed. Check log for details.')
+                    return False
+            
+        finally:
+            os.chdir(originalCWD)
+        return True
 
 #***********************************************************************************#
     def runSimulation(self, changeGeometry=True):
@@ -902,7 +948,234 @@ class FIMS_Simulation:
 # METHODS FOR RUNNING MINIMUM FIELD
 #***********************************************************************************#
 #***********************************************************************************#
-    def _calcMinField(self):
+
+#***********************************************************************************#
+    def _readEfficiencyFile(self):
+        """
+        TODO
+        """
+
+        try:
+            with open('../Data/efficiencyFile.txt', 'r') as inFile:
+                allLines = [inLine.strip() for inLine in inFile.readlines()]
+
+        except FileNotFoundError:
+            print(f"Error: File 'efficiencyFile.txt' not found.")
+            return None
+
+
+        if len(allLines) < 7:
+            raise IndexError("Malformed file.")
+        
+        findEffValues = {}
+        try:
+            findEffValues['stopCondition'] = allLines[3].strip()
+
+            findEffValues['efficiency'] = float(allLines[5].strip())
+            findEffValues['efficiencyErr'] = float(allLines[6].strip())
+
+        except (IndexError, ValueError) as e:
+            print(f'Error extracting values - {e}')
+            return None
+                
+
+        return findEffValues
+    
+#***********************************************************************************#
+    def _getEfficiencyField(self, fields, efficiencies, efficienciesErr=None, damping=0.8):
+        """
+        Calculates the next field strength using the secant method to approach a target efficiency.
+
+        If efficiency errors are provided, utilizes a step base on the maximum possible slope.
+        Assumes that the efficiency is monotonically increasing.
+        
+        *TODO - Tested for when  current and prevoious effs are LESS than target. Behaviour when bracketing target unknown.*
+
+        Args:
+            fields (np.array): Numpy array of the field strengths. Has form: [current, previous]
+            efficiencies (np.array): Numpy array of the efficiencies. Has form: [current, previous, target]
+            efficienciesErr (np.array): Optional. Array of errors in the efficiencies. Has form: [currentError, previousError]
+            damping (float): Damping factor for the secant method to avoid too large of steps.
+
+        Returns:
+            float: Numerical solution to the field in order to achieve target efficiency
+        """
+
+        curField, prevField = fields
+        curEff, prevEff, targetEff = efficiencies
+
+        fieldDiff = curField - prevField
+
+        #If errors exist, use the maximum possible slope
+        if efficienciesErr is not None:
+            curEffErr, prevEffErr = efficienciesErr
+            prevEffMin = prevEff - prevEffErr
+            curEffMax = curEff + curEffErr
+
+            effDiff = curEffMax - prevEffMin
+            targetDiff = targetEff - curEffMax
+
+        else:
+            effDiff = curEff - prevEff
+            targetDiff = targetEff - curEff
+
+
+        if abs(effDiff) < 0.001:
+                print(f'Warning: Slope near zero. Using heuristic step of 5%.')
+                return curField*1.05 
+
+        fieldStep = damping*targetDiff*fieldDiff/effDiff
+        print(f'Field Step: {fieldStep:.2f}')
+
+        if fieldStep > 5:
+            print(f'Warning: Step size limited to 5 for stability.')
+            newField = curField+5
+
+        elif fieldStep < 1:
+            print(f'Warning: Field step small. Using heuristic step of 1.')
+            newField = curField+1
+
+        else:
+            newField = curField+fieldStep
+
+        return newField
+
+
+#***********************************************************************************#
+    def findFieldForEfficiency(self, targetEfficiency=.95, threshold=10):
+        """
+        TODO
+        """
+
+        #Ensure all parameters exist and save them
+        if not self._checkParam():
+            return False
+        saveParam = self.param.copy()
+
+        #Write parameters and generate geometry
+        if not self._writeParam():
+            print('Error writing parameters.')
+            return False
+            
+        print('Executing gmsh...')
+        if not self._runGmsh():
+                print('Error executing Gmsh.')
+                return False
+        
+        print(f'Beginning search for minimum field to achieve {targetEfficiency*100:.0f}% efficiency...')
+        
+        iterNo = 0
+        iterNoLimit = 10
+
+        fields = []
+        efficiencies = []
+        efficienciesErr = []
+
+        validEfficiency = False
+        self.param['numAvalanche'] = 3000
+        self.param['avalancheLimit'] = 500
+        
+        while not validEfficiency:
+
+            iterNo += 1
+            if iterNo > iterNoLimit:
+                print(f'Warning - Iteration limit reached ({iterNoLimit})')
+                break
+
+            print(f'Begining iteration: {iterNo}')
+            print(f'Fields: {fields}')
+            print(f'Efficiencies: {efficiencies}')
+            print(f'Errors: {efficienciesErr}')
+
+            # Determine new field strength
+            newField = None
+
+            if iterNo == 1:
+                newField = self._getParam('fieldRatio')
+
+            # Take constant 10% step for 2nd iteration
+            elif iterNo == 2:
+                newField = 1.1*fields[0]
+
+            # Use secant method to determine new field
+            else:
+                newField = self._getEfficiencyField( 
+                    fields=np.array([fields[-1], fields[-2]]),
+                    efficiencies=np.array([efficiencies[-1], efficiencies[-2], targetEfficiency]),
+                    efficienciesErr=np.array([efficienciesErr[-1], efficienciesErr[-2]])
+                )
+            
+            if newField is None:
+                raise ValueError('Error: Invalid new field')
+            
+            fields.append(float(math.ceil(newField)))
+
+            # Check if parameters havent significantly changed
+            #if iterNo > 2:
+            #        fieldDiff = abs(fields[-1] - fields[-2])
+            #        effDiff = abs(efficiencies[-1] - efficiencies[-2])
+            #        if fieldDiff < 0.1 or effDiff < 0.001:
+            #            print(f'Parameters within tolerance.')
+            #            break
+                
+            print(f'Current field ratio: {fields[-1]}')
+            self.param['fieldRatio'] = fields[-1]
+            
+            if not self._writeParam():
+                print('Error writing parameters.')
+                return False
+            
+            #Determine the electric field
+            print('\tExecuting Elmer...')
+            if not self._runElmer():
+                print('Error executing Elmer.')
+                return False
+
+            #Determine the efficiency
+            print('\tGetting efficiency...')
+            if not self._runGetEfficiency(targetEfficiency=targetEfficiency, threshold=threshold):
+                print('Error getting efficiency.')
+                return False
+
+            #Get efficiency values from file
+            effResults = self._readEfficiencyFile()
+
+            efficiencies.append(effResults['efficiency'])
+            efficienciesErr.append(effResults['efficiencyErr'])
+
+
+            match effResults['stopCondition']:
+                
+                case 'DID NOT CONVERGE':
+                    validEfficiency = False
+                    print(f'Did not converge at {fields[-1]} ({self.param['numAvalanche']} avalanches): {efficiencies[-1]:.3f} +/- {efficienciesErr[-1]:.3f}')
+
+                case 'CONVERGED':
+                    validEfficiency = True
+                    print(f'Converged at {fields[-1]}: {efficiencies[-1]:.3f} +/- {efficienciesErr[-1]:.3f}')
+            
+                case 'EXCLUDED':
+                    validEfficiency = False
+                    print(f'Excluded at {fields[-1]}: {efficiencies[-1]:.3f} +/- {efficienciesErr[-1]:.3f}')
+
+                case _:
+                    raise ValueError('Error - Malformed efficiency file.')      
+        #End of find field for efficiency loop
+
+        #Print solution
+        finalField = self._getParam('fieldRatio')
+        print(f'\nSolution: Field ratio = {finalField}')
+        
+        #Reset parameters
+        self.resetParam()
+        #load saved parameters back into class. Update field ratio with solution.
+        self.param = saveParam
+        self.param['fieldRatio'] = finalField
+
+        return True
+
+
+    def _calcMinField(self): ## TODO - IS this function depreciated??????????  - We assume to use initial field found from efficiency limit
         """
         Calculates an initial guess for the minimum field ratio to achieve 100%
         field transparency.
@@ -941,96 +1214,102 @@ class FIMS_Simulation:
         return minField
 
 #***********************************************************************************#
-    def findMinField(self, numLines = 5, margin = 1., stepSize = 1.2):
+    def findFieldForTransparency(self, margin=1., minStepSize=1.2):
         """
         Runs simulations to determine what the minimum electric field ratio
-        needs to be in order to have 100% Efield transparency.
+        needs to be in order to have 100% E-field transparency.
 
-        First calculates an initial guess for the ratio based on exponential fits 
-        to simulated data. Then generates a Gmsh FEM of the geometry and solves the
-        E field based on this guess using Elmer. Generates field lines via Garfield
-        and determines a transparency. If the transparency is below the limit, a new
-        field ratio is determined, the resulting field is solved, and new field 
+        First, it calculates an initial guess for the ratio based on exponential fits 
+        to simulated data. Then, it generates a gmsh FEM of the geometry and solves the
+        E-field based on this guess using Elmer FEM. It then generates field lines via 
+        Garfield++ and determines a transparency. If the transparency is below the limit,
+        a new field ratio is determined. The resulting field is solved, and new field 
         lines are generated. This continues until the criteria is reached.
         
         Upon completion, simulation files are reset.
         
-        NOTE: This assumes that the initial guessed field ratio results in a
-              transparency that is below the limit. The ratio thus is always increased.
+        NOTE: This assumes that the initial guessed field ratio results in a transparency
+        that is below the limit. The ratio is therefore always increased.
         
         Args:
-            numLines (int): Number of field lines to use to determine transparency.
-
             margin (float): number multiplied to the predicted value to create a
-                            buffer in case the raw value is too large.
+                            buffer in case the raw value is too large or too small.
+            
+            minStepSize (float): number used as the step size once the calculated step
+            size becomes too small.
 
-        Returns:
-            bool: True if a minimum field is successfully found, False otherwise.
+        Returns:            
+            finalField (float): The minimum field ratio that results in 100% transparency.
+                                Retuns -1 on a failure or if an error occurs.
         """
         #Ensure all parameters exist and save them
         if not self._checkParam():
-            return False
+            return -1
         saveParam = self.param.copy()
 
-        #Calculate initial guess
-
-        initialGuess = self._calcMinField()*margin
-        self.param['fieldRatio'] = initialGuess
+        #Calculate initial guess - I think this is decpreciated?
+        #initialGuess = self._calcMinField()*margin  
+        #self.param['fieldRatio'] = initialGuess
+       
+        #Adjust the number of field lines to fill only last 20% of the unit cell
+        numLines = int(self._getParam('numFieldLine')*.2)
+        self.param['numFieldLine'] = numLines
         
         #Write parameters and generate geometry
-        self.param['numFieldLine'] = numLines #TODO - numFieldLine defualts to 5 here. how does this effect when running
         if not self._writeParam():
             print('Error writing parameters.')
-            return False
+            return -1
             
         print('Executing gmsh...')
         if not self._runGmsh():
                 print('Error executing Gmsh.')
-                return False
+                return -1
 
         print('Beginning search for minimum field...')
-        firstRun = True
         isTransparent = False
-        transparencyThreshold = self._getParam('transparencyLimit')
+        stepSize = 1.
+        transLimit = self._getParam('transparencyLimit')
         curField = self._getParam('fieldRatio')
-        print(f'Initial field ratio: {curField}')
         
         while not isTransparent:
-            #Block that determines the new field ratio
-            if not firstRun:
-                #TODO: find better way to determine step size
-                #Determine a step size to change field
-                curField *= stepSize
-                print(f'Current field ratio: {curField}')
-
-                #Write new field ratio
-                self.param['fieldRatio'] = curField
-                if not self._writeParam():
-                    print('Error writing parameters.')
-                    return False
+            #Calculate and write the new field ratio
+            curField *= stepSize
+            self.param['fieldRatio'] = curField
+            if not self._writeParam():
+                print('Error writing parameters.')
+                return -1
+            print(f'Testing field ratio of {curField}')            
             
             #Determine the electric field
             print('\tExecuting Elmer...')
             if not self._runElmer():
                 print('Error executing Elmer.')
-                return False
+                return -1
 
             #Generate field lines
             print('\tGenerating field lines...')
             if not self._runFieldLines():
                 print('Error generating field lines.')
-                return False
+                return  -1
             
             #Get the resulting field transparency
             with open('../Data/fieldTransparency.txt', 'r') as readFile:
                 try:
-                    isTransparent = bool(int(readFile.read()))
+                    transparency = float(readFile.read())
 
                 except (ValueError, FileNotFoundError):
                     print("Error: Could not read or parse transparency file.")
-                    return False
-                    
-            firstRun = False
+                    return -1
+            
+            #Determine new step size
+            if transLimit/transparency < minStepSize:
+                stepSize = minStepSize
+            else:
+                stepSize = transLimit/transparency
+            
+            #Check transparency to terminate loop
+            if transparency >= transLimit:
+                isTransparent = True
 
         #Print solution
         finalField = self._getParam('fieldRatio')
@@ -1042,7 +1321,60 @@ class FIMS_Simulation:
         self.param = saveParam
         self.param['fieldRatio'] = finalField
 
+        return finalField
+    
+
+#***********************************************************************************#
+    def runMagboltz(self, eField=1, gasComp='ArCO2', gasCompAr=0, gasCompCO2=0):
+        """
+        TODO
+        """
+        originalCWD = os.getcwd()
+
+        gasCompOptions = [
+            'ArCO2',
+            'T2K'
+        ]
+
+        if gasComp not in gasCompOptions:
+            raise ValueError(f"Error: Invalid gas composition '{gasComp}'")
+        if gasComp == 'ArCO2' and gasCompAr + gasCompCO2 != 100:
+            raise ValueError('Error: Gas composition of ArCO2 is not 100%.')
+        if eField <= 0:
+            raise ValueError('Error: Invalid electric field.')
+
+        try:
+            os.chdir('./build/')
+
+            # Get garfield path into environment
+            envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
+            envOutput = subprocess.check_output(envCommand, shell=True, universal_newlines=True)
+            newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line)
+            os.environ.update(newEnv)
+
+            with open(os.path.join(originalCWD, 'log/logDiffusion.txt'), 'w+') as garfieldOutput:
+                startTime = time.monotonic()
+                setupDiffusion = (
+                    f'./runDiffusion {eField} {gasComp} {gasCompAr} {gasCompCO2}'
+                )
+                runReturn = subprocess.run(
+                    setupDiffusion, 
+                    stdout = garfieldOutput, 
+                    shell = True, 
+                    check = True,
+                    env = os.environ
+                )
+                endTime = time.monotonic()
+                garfieldOutput.write(f'\n\nGarfield run time: {endTime - startTime} s')
+    
+            if runReturn.returncode != 0:
+                    print('Garfield++ execution failed. Check log for details.')
+                    return False
+            
+        finally:
+            os.chdir(originalCWD)
         return True
+
 
 #***********************************************************************************#
 #***********************************************************************************#
@@ -1375,3 +1707,49 @@ class FIMS_Simulation:
             'totalCharge': totalElectrons,
         }
         return chargeBuildupSummary
+
+
+#***********************************************************************************#
+    def runForOptimizer(self):
+        """
+        Runs the simulation, preserving the parameters.
+
+        NOTE: This does not run gmsh or elmer to detemine the E Field. 
+              It is assumed that these results exist already.
+            
+        Returns:
+            int: The run number of the simulation that was executed.
+        """
+
+        #Check and save parameters
+        if not self._checkParam():
+            return -1
+        saveParam = self.param.copy()
+
+
+        #get the run number for this simulation
+        runNo = self._getRunNumber()
+        if runNo == -1:
+            print("Error reading 'runNo'")
+            return -1
+        print(f'Running simulation - Run number: {runNo}')
+
+
+        #Solve for the weighting field
+        if not self._runElmerWeighting():
+            print('Error executing Elmer (weighting).')
+            return -1
+        
+        #Run the electron transport simulation
+        if not self._runGarfield():
+            print('Error executing Garfield.')
+            return -1
+        
+        #Reset parameters
+        self.resetParam()
+        #Ensure saved parameters are still maintained
+        self.param = saveParam
+        
+        return runNo
+        
+        
