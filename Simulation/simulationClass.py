@@ -1214,22 +1214,19 @@ class FIMS_Simulation:
         return minField
 
 #***********************************************************************************#
-    def findFieldForTransparency(self, margin=1., minStepSize=1.2):
+    def findFieldForTransparency(self, runGMSH=True, minStepSize=1.2):
         """
         Runs simulations to determine what the minimum electric field ratio
         needs to be in order to have 100% E-field transparency.
 
-        First, it calculates an initial guess for the ratio based on exponential fits 
-        to simulated data. Then, it generates a gmsh FEM of the geometry and solves the
-        E-field based on this guess using Elmer FEM. It then generates field lines via 
-        Garfield++ and determines a transparency. If the transparency is below the limit,
-        a new field ratio is determined. The resulting field is solved, and new field 
-        lines are generated. This continues until the criteria is reached.
+        First, it optionally generates a gmsh FEM of the geometry before solving the
+        E-field based on a preset field strength via Elmer FEM. It then generates
+        field lines via Garfield++ and determines the transparency. If the 
+        transparency is below the limit, a new field ratio is determined. The 
+        resulting field is solved, and new field lines are generated. This continues
+        until the criteria is reached.
         
         Upon completion, simulation files are reset.
-        
-        NOTE: This assumes that the initial guessed field ratio results in a transparency
-        that is below the limit. The ratio is therefore always increased.
         
         Args:
             margin (float): number multiplied to the predicted value to create a
@@ -1246,10 +1243,6 @@ class FIMS_Simulation:
         if not self._checkParam():
             return -1
         saveParam = self.param.copy()
-
-        #Calculate initial guess - I think this is decpreciated?
-        #initialGuess = self._calcMinField()*margin  
-        #self.param['fieldRatio'] = initialGuess
        
         #Adjust the number of field lines to fill only last 20% of the unit cell
         numLines = int(self._getParam('numFieldLine')*.2)
@@ -1259,11 +1252,12 @@ class FIMS_Simulation:
         if not self._writeParam():
             print('Error writing parameters.')
             return -1
-            
-        print('Executing gmsh...')
-        if not self._runGmsh():
-                print('Error executing Gmsh.')
-                return -1
+        
+        if runGMSH:
+            print('Executing gmsh...')
+            if not self._runGmsh():
+                    print('Error executing Gmsh.')
+                    return -1
 
         print('Beginning search for minimum field...')
         isTransparent = False
