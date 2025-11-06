@@ -35,6 +35,8 @@ class FIMS_Optimizer:
     Methods defined in FIMS_Optimizer:
         _checkParameters
         _runSim
+        _checkTransparency  <-----New
+        _getMinField        <-----New
         _getIBN
         _IBNObjective
         _checkConvergence
@@ -135,9 +137,76 @@ class FIMS_Optimizer:
         runNumber = self.simFIMS.runSimulation(False)
         #Put saved parameters back
         self.simFIMS.param = saveParam
+        self.simFIMS._writeParam()
 
         return runNumber
+#***********************************************************************************#
+    def _checkTransparency(self):
+        #Get the relevant data
+        transLimit = self.simFIMS._getParam('transparencyLimit')
+        curField = self.simFIMS._getParam('fieldRatio')
+        
+        #Generate field lines
+        if not self._runFieldLines():
+            print('Error generating field lines.')
+            return  -1
+        
+        #Get the resulting field transparency
+        with open('../Data/fieldTransparency.txt', 'r') as readFile:
+            try:
+                transparency = float(readFile.read())
+                
+            except (ValueError, FileNotFoundError):
+                print("Error: Could not read or parse transparency file.")
+                return -1
+        
+        #Check transparency
+        if transparency >= transLimit:
+            return True
+        
+        print('Current field does not permit 100% transparency.')
+        return False
 
+#***********************************************************************************#    
+    def _getMinField(self):
+        """
+        Wrapper for minField functions
+        """
+        savedParams = self.simFIMS.param.copy()
+        
+        #Calculate an initial guess for the minimum field to use as a baseline
+        estimatedMinField = self.simFIMS._calcMinField()
+        self.simFIMS.param['fieldRatio'] = estimatedMinField
+        
+        # Get the minimum field ratio for at least 95% detection efficiency
+        timeStart = time.time()
+        minField = self.simFIMS.findFieldForEfficiency(targetEfficiency=.95, threshold=10)
+        if minField < 0:
+            raise ValueError('Failed to find minimum field (efficiency).')
+        timeEnd = time.time()
+        
+        print('********************************\n')
+        print('Time to find min field for efficiency: ', timeEnd - timeStart)
+        print('********************************\n')
+
+        # Get the minimum field ratio for 100% field transparency
+        timeStart = time.time()
+        if not self._checkTransparency:
+            minField = self.simFIMS.findFieldForTransparency(False)
+            if minField < 0:
+                raise ValueError('Failed to find minimum field (transparency).')
+        timeEnd = time.time()
+        
+        print('********************************\n')
+        print('Time to find min field for transparency: ', timeEnd - timeStart)
+        print('********************************\n')
+        
+        self.simFIMS.param = savedParams
+        self.simFIMS.param['fieldRatio'] = minField
+        self.simFIMS._writeParam()
+
+        return minField
+    
 #***********************************************************************************#    
     def _getIBN(self):
         """
@@ -161,26 +230,26 @@ class FIMS_Optimizer:
                 print(f'{element}: {value}')
         print('********************************\n')
 
-        # Get the minimum field ratio for at least 95% detection efficiency
-        #with the current parameters.
-        if self.simFIMS.findFieldForEfficiency(targetEfficiency=.95, threshold=10):
-            raise ValueError('Failed to find minimum field (efficiency).')
+        #Find minimum field for 95% efficiency and 100% transparency while
+        #preserving the parameters
+        minField = self._getMinField()
         
-        # Get the minimum field ratio for 100% field transparency with the
-        #current parameters.
-        if self.simFIMS.findFieldForTransparency(False) < 0:
-            raise ValueError('Failed to find minimum field (transparency).')
-            
         #Run full simulation - TODO: This reruns the elmerSolver
+        timeStart = time.time()
         runNumber = self._runSim()
+        timeEnd = time.time()
         
+        print('********************************\n')
+        print('Time to run avalanche sim: ', timeEnd - timeStart)
+        print('********************************\n')
+
         #Get the IBN
         simData = runData(runNumber)
         IBN = simData.getRunParameter('Average IBN')
 
         return IBN
 
-#---------------------------------------------------------
+#***********************************************************************************#
     def _IBNObjective(self, optimizerParam, inputList):
         """
         Objective function to optimize for minimum IBN.
@@ -353,7 +422,9 @@ class FIMS_Optimizer:
         print(f"Optimal IBN value = {resultVals['ibn_value']}\n",
         "Parameters for optimal IBN:")
         print(self.simFIMS)
-
+        
+        self.simFIMS.resetParam()
+        
         return resultVals
 
 #***********************************************************************************#
