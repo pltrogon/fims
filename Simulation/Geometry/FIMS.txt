@@ -15,7 +15,7 @@ holeElm = gridThickness;
 padElm = thicknessSiO2;
 diElm = padLength/6;
 pilElm = pillarRadius/3;
-cathElm = pitch/10;
+cathElm = pitch/12;
 
 // Derived Z-coordinates for different layers
 //     Center of grid: z = 0
