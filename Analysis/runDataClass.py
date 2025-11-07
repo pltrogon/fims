@@ -65,7 +65,7 @@ class runData:
         plotCellGeometry
         _plotAddCellGeometry
         plot2DFieldLines
-        _getRawGain
+        _getGains
         _trimAvalanche
         _histAvalanche
         plotAvalancheSize
@@ -397,9 +397,10 @@ class runData:
             self._metaData['Field Bundle Radius'] = self.calcBundleRadius(nominalBundleZ)
 
         if numAvalanche > 0:
-            #Raw Gain
-            rawGain = self._getRawGain()
+            # Gains
+            rawGain, trimmedGain = self._getGains()
             self._metaData['Raw Gain'] = rawGain
+            self._metaData['Trimmed Gain'] = trimmedGain
             
             #Calculate IBN
             IBN = self._calcIBN()
@@ -414,9 +415,14 @@ class runData:
 
             self._metaData['IBF * Raw Gain'] = meanIBF*rawGain
 
-            simEff, simEffErr = self._getRawEfficiency(threshold=10)
-            self._metaData['Raw Efficiency (10e)'] = simEff
-            self._metaData['Raw Efficiency Error'] = simEffErr
+            # Efficiencies
+            simRawEff, simRawEffErr = self._getRawEfficiency(threshold=10)
+            self._metaData['Raw Efficiency (10e)'] = simRawEff
+            self._metaData['Raw Efficiency Error'] = simRawEffErr
+
+            simEff, simEffErr = self._getEfficiency(threshold=10)
+            self._metaData['Efficiency (10e)'] = simEff
+            self._metaData['Efficiency Error'] = simEffErr
             
 
         return
@@ -866,17 +872,24 @@ class runData:
 
 
 #********************************************************************************#   
-    def _getRawGain(self):
+    def _getGains(self):
         """
         Returns the mean size of the simulated avalanches.
 
         This includes any avalanches that hit the simulation limit, and those where
         some electrons have exitted the simulation boundary.
         """
-        avalancheData = self.getDataFrame('avalancheData')
-        avalancheGain = avalancheData['Total Electrons'] - avalancheData['Attached Electrons']
+        allAvalancheData = self.getDataFrame('avalancheData')
+        trimmedAvalancheData = allAvalancheData[allAvalancheData['Total Electrons'] > 1]
+        
+        allGains = allAvalancheData['Total Electrons'] - allAvalancheData['Attached Electrons']
+        trimmedGains = trimmedAvalancheData['Total Electrons'] - trimmedAvalancheData['Attached Electrons']
+        
 
-        return avalancheGain.mean()
+        rawGain = allGains.mean()
+        trimmedGain = trimmedGains.mean()
+        
+        return rawGain, trimmedGain
 
     
 #********************************************************************************#   
@@ -1334,8 +1347,8 @@ class runData:
                c='r', ls=':', label=f"Expo Gain = {fitResults['fitExpo'].gain:.0f}e")
         '''
 
-        ax.axvline(x=self._getRawGain(), 
-               c='g', ls='--', label=f"Raw Gain = {self._getRawGain():.0f}e")
+        rawGain = self.getRunParameter('Raw Gain')
+        ax.axvline(x=rawGain, c='g', ls='--', label=f"Raw Gain = {rawGain:.0f}e")
         ax.axvline(x=fitResults['dataGain'], 
                c='g', ls=':', label=f"Trimmed Gain = {fitResults['dataGain']:.0f}e")
 
@@ -1701,6 +1714,41 @@ class runData:
         simEffErr = math.sqrt(varience)
 
         return simEff, simEffErr
+    
+#********************************************************************************#
+    def _getEfficiency(self, threshold=0):
+        """
+        TODO
+        """
+
+        allAvalancheData = self.getDataFrame('avalancheData')
+
+        avalancheLimit = self.getRunParameter('Avalanche Limit')
+
+        if threshold > avalancheLimit:
+            raise ValueError('Error - Threshold higher than simulation limit.')
+        
+        numSimulated = self.getRunParameter('Number of Avalanches')
+        totalAvalanches = len(allAvalancheData)
+
+        if totalAvalanches != numSimulated:
+            raise ValueError('Error - Avalanche numbers disagree.')
+        
+        aboveThresh = allAvalancheData['Total Electrons'] > threshold
+        numAboveThresh = aboveThresh.sum()
+
+        noAvalanche = allAvalancheData['Total Electrons'] == 1
+        numNoAvalanche = noAvalanche.sum()
+
+        numAvalanches = totalAvalanches - numNoAvalanche
+
+        #Efficiency Statistics:
+        simEff = (numAboveThresh+1)/(numAvalanches+2)
+        varience = ((numAboveThresh+1)*(numAboveThresh+2))/((numAvalanches+2)*(numAvalanches+3)) - simEff*simEff
+
+        simEffErr = math.sqrt(varience)
+
+        return simEff, simEffErr
 
 #********************************************************************************#
     def plotEfficiency(self, binWidth=1, threshold=0):
@@ -1853,7 +1901,7 @@ class runData:
         averageCharge = averageSignal.values.cumsum()
         averageTotalCharge = averageCharge[-1]
 
-        rawGain = self._getRawGain()
+        rawGain = self.getRunParameter('Raw Gain')
 
         # Create figure
         fig = plt.figure(figsize=(10, 5))

@@ -1073,7 +1073,7 @@ class FIMS_Simulation:
 
         validEfficiency = False
         self.param['numAvalanche'] = 3000
-        self.param['avalancheLimit'] = 500
+        self.param['avalancheLimit'] = 20 #Limit can be low - Check is boolean - above threshold or not
         
         while not validEfficiency:
 
@@ -1093,9 +1093,9 @@ class FIMS_Simulation:
             if iterNo == 1:
                 newField = self._getParam('fieldRatio')
 
-            # Take constant 10% step for 2nd iteration
+            # Take constant step of 2 for 2nd iteration
             elif iterNo == 2:
-                newField = 1.1*fields[0]
+                newField = fields[0] + 2
 
             # Use secant method to determine new field
             else:
