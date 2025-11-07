@@ -161,23 +161,31 @@ int main(int argc, char * argv[]) {
   MediumMagboltz* gasFIMS = new MediumMagboltz();
 
   //Set parameters
-  gasFIMS->SetComposition(
-    "ar", gasCompAr, 
-    "co2", gasCompCO2
-  );
+  if((gasCompAr==0) && (gasCompCO2==0)){
+      gasFIMS->SetComposition(
+        "ar", 95.0,
+        "cf4", 3.0, 
+        "iC4H10", 2.0
+      );
+      gasFIMS->EnablePenningTransfer(0.385, .0, "ar");
+  }
+  else{
+      gasFIMS->SetComposition(
+      "ar", gasCompAr, 
+      "co2", gasCompCO2
+    );
+    gasFIMS->EnablePenningTransfer(0.51, .0, "ar");
+  }
 
   //gas parameters:
   double gasTemperature = 293.15; //K
   double gasPressure = 760.;//torr
   int maxElectronE = 200;
-  double rPenning = 0.51;
 
   gasFIMS->SetTemperature(gasTemperature);
   gasFIMS->SetPressure(gasPressure);
   gasFIMS->SetMaxElectronEnergy(maxElectronE);
   gasFIMS->Initialise(true);
-  // Load the penning transfer and ion mobilities.
-  gasFIMS->EnablePenningTransfer(rPenning, .0, "ar");
 
   const std::string path = std::getenv("GARFIELD_INSTALL");
   const std::string posIonPath = path + "/share/Garfield/Data/IonMobility_Ar+_Ar.txt";
