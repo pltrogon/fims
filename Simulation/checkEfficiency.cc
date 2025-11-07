@@ -246,6 +246,7 @@ int main(int argc, char * argv[]) {
   //Set up variables for simulation
   int totalAvalanches = 0;
   int numAboveThreshold = 0;
+  int numNoAvalanche = 0;
 
   double efficiency = 0.;
   double varience = 0.;
@@ -272,6 +273,9 @@ int main(int argc, char * argv[]) {
       int avalancheElectrons = avalancheE->GetNumberOfElectronEndpoints();
 
       //Increment stats counters
+      if(avalancheElectrons == 1){
+        numNoAvalanche++;
+      }
       if(avalancheElectrons >= electronThreshold){
         numAboveThreshold++;
       }
@@ -282,7 +286,7 @@ int main(int argc, char * argv[]) {
 
     //Efficiency calculations
     double success = numAboveThreshold;
-    double total = totalAvalanches;
+    double total = totalAvalanches - numNoAvalanche;
 
     //Binomial Stats
     //efficiency = success/total;
