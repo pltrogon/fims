@@ -161,23 +161,31 @@ int main(int argc, char * argv[]) {
   MediumMagboltz* gasFIMS = new MediumMagboltz();
 
   //Set parameters
-  gasFIMS->SetComposition(
-    "ar", gasCompAr, 
-    "co2", gasCompCO2
-  );
+  if((gasCompAr==0) && (gasCompCO2==0)){
+      gasFIMS->SetComposition(
+        "ar", 95.0,
+        "cf4", 3.0, 
+        "iC4H10", 2.0
+      );
+      gasFIMS->EnablePenningTransfer(0.385, .0, "ar");
+  }
+  else{
+      gasFIMS->SetComposition(
+      "ar", gasCompAr, 
+      "co2", gasCompCO2
+    );
+    gasFIMS->EnablePenningTransfer(0.51, .0, "ar");
+  }
 
   //gas parameters:
   double gasTemperature = 293.15; //K
   double gasPressure = 760.;//torr
   int maxElectronE = 200;
-  double rPenning = 0.51;
 
   gasFIMS->SetTemperature(gasTemperature);
   gasFIMS->SetPressure(gasPressure);
   gasFIMS->SetMaxElectronEnergy(maxElectronE);
   gasFIMS->Initialise(true);
-  // Load the penning transfer and ion mobilities.
-  gasFIMS->EnablePenningTransfer(rPenning, .0, "ar");
 
   const std::string path = std::getenv("GARFIELD_INSTALL");
   const std::string posIonPath = path + "/share/Garfield/Data/IonMobility_Ar+_Ar.txt";
@@ -246,6 +254,7 @@ int main(int argc, char * argv[]) {
   //Set up variables for simulation
   int totalAvalanches = 0;
   int numAboveThreshold = 0;
+  int numNoAvalanche = 0;
 
   double efficiency = 0.;
   double varience = 0.;
@@ -272,6 +281,9 @@ int main(int argc, char * argv[]) {
       int avalancheElectrons = avalancheE->GetNumberOfElectronEndpoints();
 
       //Increment stats counters
+      if(avalancheElectrons == 1){
+        numNoAvalanche++;
+      }
       if(avalancheElectrons >= electronThreshold){
         numAboveThreshold++;
       }
@@ -282,7 +294,7 @@ int main(int argc, char * argv[]) {
 
     //Efficiency calculations
     double success = numAboveThreshold;
-    double total = totalAvalanches;
+    double total = totalAvalanches - numNoAvalanche;
 
     //Binomial Stats
     //efficiency = success/total;

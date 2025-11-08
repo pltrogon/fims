@@ -11,7 +11,7 @@ pitch = 225.0;
 //Grid
 gridStandoff = 100.0;
 gridThickness = 1.0;
-holeRadius = 55;
+holeRadius = 55.0;
 
 // Other
 cathodeHeight = 200.0;
@@ -20,7 +20,7 @@ pillarRadius = 20.0;
 
 //----- Field Parameters -----
 fieldRatio = 40.0;
-numFieldLine = 10;
+numFieldLine = 11;
 transparencyLimit = 0.98;
 
 //----- Simulation parameters -----

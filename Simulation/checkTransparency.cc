@@ -184,14 +184,28 @@ int main(int argc, char * argv[]) {
   // Define the gas mixture
   MediumMagboltz* gasFIMS = new MediumMagboltz();
 
-  //Set parameters
-  gasFIMS->SetComposition("ar", gasCompAr, "co2", gasCompCO2);
+    //Set parameters
+  if((gasCompAr==0) && (gasCompCO2==0)){
+      gasFIMS->SetComposition(
+        "ar", 95.0,
+        "cf4", 3.0, 
+        "iC4H10", 2.0
+      );
+      gasFIMS->EnablePenningTransfer(0.385, .0, "ar");
+  }
+  else{
+      gasFIMS->SetComposition(
+      "ar", gasCompAr, 
+      "co2", gasCompCO2
+    );
+    gasFIMS->EnablePenningTransfer(0.51, .0, "ar");
+  }
+
   gasFIMS->SetTemperature(293.15); // Room temperature
   gasFIMS->SetPressure(760.);     // Atmospheric pressure
   gasFIMS->SetMaxElectronEnergy(200);
   gasFIMS->Initialise(true);
   // Load the penning transfer and ion mobilities.
-  gasFIMS->EnablePenningTransfer(0.51, .0, "ar");
 
   const std::string path = std::getenv("GARFIELD_INSTALL");
   gasFIMS->LoadIonMobility(path + "/share/Garfield/Data/IonMobility_Ar+_Ar.txt");
@@ -200,12 +214,14 @@ int main(int argc, char * argv[]) {
   // Import elmer-generated field map
   std::string geometryPath = "../Geometry/";
   std::string elmerResultsPath = geometryPath+"elmerResults/";
-  ComponentElmer fieldFIMS(elmerResultsPath+"mesh.header",
-                           elmerResultsPath+"mesh.elements",
-                           elmerResultsPath+"mesh.nodes", 
-                           geometryPath+"dielectrics.dat",
-                           elmerResultsPath+"FIMS.result", 
-                           "mum");
+  ComponentElmer fieldFIMS(
+    elmerResultsPath+"mesh.header",
+    elmerResultsPath+"mesh.elements",
+    elmerResultsPath+"mesh.nodes", 
+    geometryPath+"dielectrics.dat",
+    elmerResultsPath+"FIMS.result", 
+    "mum"
+  );
 
   // Get region of elmer geometry
   double xmin, ymin, zmin, xmax, ymax, zmax;
