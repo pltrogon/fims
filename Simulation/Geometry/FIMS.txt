@@ -4,7 +4,8 @@ Include "../runControl";
 
 // Finite element sizes for different regions
 //gridElm: points on the corner of the grid without a hole (x4)
-//holeElm: points on the hole of the grid (x12)
+//holeElm: points on the central hole of the grid (x6)
+//outHoleElm: points on the outerholes of the grid (x6)
 //padElm: points along the edge and center of the pad (x16)
 //diElm: points on the corner of the SiO2 without a pad (x4)
 //pilElm: points on the pillars (x16)
@@ -12,9 +13,10 @@ Include "../runControl";
 
 gridElm = (pitch - holeRadius)/10;
 holeElm = gridThickness;
+outHoleElm = gridThickness*3
 padElm = thicknessSiO2;
-diElm = padLength/6;
-pilElm = pillarRadius/3;
+diElm = padLength/3;
+pilElm = pillarRadius/2;
 cathElm = pitch/12;
 
 // Derived Z-coordinates for different layers
@@ -131,9 +133,9 @@ Point(1) = {0, 0, gridTop, holeElm};
 Point(2) = {0, holeRadius, gridTop, holeElm};
 Point(3) = {holeRadius, 0, gridTop, holeElm};
 
-Point(4) = {xMax, yMax, gridTop, holeElm};
-Point(5) = {xMax - holeRadius, halfPitch, gridTop, holeElm};
-Point(6) = {xMax, yMax - holeRadius, gridTop, holeElm};
+Point(4) = {xMax, yMax, gridTop, outHoleElm};
+Point(5) = {xMax - holeRadius, halfPitch, gridTop, outHoleElm};
+Point(6) = {xMax, yMax - holeRadius, gridTop, outHoleElm};
 
 Point(7) = {0, yMax, gridTop, holeElm};//gridElm
 Point(8) = {xMax, 0, gridTop, holeElm};//gridElm
@@ -143,9 +145,9 @@ Point(9) = {0, 0, gridBottom, holeElm};
 Point(10) = {0, holeRadius, gridBottom, holeElm};
 Point(11) = {holeRadius, 0, gridBottom, holeElm};
 
-Point(12) = {xMax, yMax, gridBottom, holeElm};
-Point(13) = {xMax - holeRadius, halfPitch, gridBottom, holeElm};
-Point(14) = {xMax, yMax - holeRadius, gridBottom, holeElm};
+Point(12) = {xMax, yMax, gridBottom, outHoleElm};
+Point(13) = {xMax - holeRadius, halfPitch, gridBottom, outHoleElm};
+Point(14) = {xMax, yMax - holeRadius, gridBottom, outHoleElm};
 
 Point(15) = {0, yMax, gridBottom, gridElm};
 Point(16) = {xMax, 0, gridBottom, gridElm};
