@@ -13,7 +13,7 @@ Include "../runControl";
 
 gridElm = (pitch - holeRadius)/10;
 holeElm = gridThickness;
-outHoleElm = gridThickness*3
+outHoleElm = gridThickness*3;
 padElm = thicknessSiO2;
 diElm = padLength/3;
 pilElm = pillarRadius/2;
