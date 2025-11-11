@@ -75,6 +75,8 @@ class runData:
         _fitAvalancheSize
         plotAvalancheFits
         calcBundleRadius
+        getNumIonOutside        <---------New
+        getNumIonsEscapedOutside    <----------New
         _getOutermostLineID
         findStuckElectrons
         _calcIBF
@@ -817,8 +819,6 @@ class runData:
             )
         axes[2].add_patch(nominalFieldBundle)
         
-
-
         return
 
 
@@ -1413,6 +1413,57 @@ class runData:
 
         return targetRadius
 
+#********************************************************************************#
+    def getIonsCapturedInside(self):
+        """
+        Returns:
+            list containing the distance from the edge of the field bundle of 
+            each ion that was captured by the grid despite being inside the field 
+            bundle.
+        """
+        capturedList = []
+        bundleSize = self.getRunParameter('Field Bundle Radius')
+        
+        #Get the radius of the initial position of each ion
+        particleData = self.getDataFrame('ionData')
+        particleData = particleData[particleData['Ion Charge']==1]
+        initialY = particleData['Initial y']
+        initialX = particleData['Initial x']
+        initialR = (initialY**2 + initialX**2)**.5
+        
+        finalZ = particleData['Final z']
+        
+        for ionZ, ionR in zip(finalZ, initialR):
+            if ionZ  < 1 and ionZ > -1 and ionR < bundleSize:
+                capturedList.append(ionR - bundleSize)
+
+        return capturedList
+
+#********************************************************************************#
+    def getIonsEscapedOutside(self):
+        """
+        Returns:
+            list containing the distance from the edge of the field bundle
+            of each ion that escaped the grid despite being outside the field bundle.
+        """
+        escapedList = []
+        bundleSize = self.getRunParameter('Field Bundle Radius')
+        
+        #Get the radius of the initial position of each ion
+        particleData = self.getDataFrame('ionData')
+        particleData = particleData[particleData['Ion Charge']==1]
+        initialY = particleData['Initial y']
+        initialX = particleData['Initial x']
+        initialR = (initialY**2 + initialX**2)**.5
+        
+        finalZ = particleData['Final z']
+        
+        for ionZ, ionR in zip(finalZ, initialR):
+            if ionZ  > 1 and ionR > bundleSize:
+                escapedList.append(ionR - bundleSize)
+        
+        return escapedList
+    
 #********************************************************************************#
     def _getOutermostLineID(self):
         """

@@ -1177,13 +1177,10 @@ class FIMS_Simulation:
         return finalField
 
 #***********************************************************************************#
-    def _calcMinField(self): ## TODO - Is this function depreciated?
-    #No. It has been moved to take place before the efficiency check and acts
-    #as a baseline. Tests will be run to update the fit equations to also account
-    #for efficiency (currently set to 50 based on preliminary radius tests).
+    def _calcMinField(self):
         """
         Calculates an initial guess for the minimum field ratio to achieve 100%
-        field transparency.
+        field transparency and 95% efficiency.
 
         Calculation is based off of exponential fits to simulated data.
 
@@ -1216,8 +1213,8 @@ class FIMS_Simulation:
         minField = radialMinField + standoffMinField + padMinField + 3
         
         #TODO: Replace with minfield for efficiency
-        if minField < 50:
-            minField = 50
+        #if minField < 50:
+        #    minField = 50
         
         return minField
 

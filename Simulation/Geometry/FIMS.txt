@@ -6,17 +6,21 @@ Include "../runControl";
 //gridElm: points on the corner of the grid without a hole (x4)
 //holeElm: points on the central hole of the grid (x6)
 //outHoleElm: points on the outerholes of the grid (x6)
-//padElm: points along the edge and center of the pad (x16)
+//cenPadElm: points along the edge and center of the central pad (x8)
+//outPadElm: points along the edge and center of the outer pads (x8)
 //diElm: points on the corner of the SiO2 without a pad (x4)
-//pilElm: points on the pillars (x16)
+//topPilElm: points on the top of the pillars (x8)
+//botPilElm: points on the base of the pillars (x8)
 //cathElm: points along the cathode far above the grid (x4)
 
 gridElm = (pitch - holeRadius)/10;
 holeElm = gridThickness;
 outHoleElm = gridThickness*3;
-padElm = thicknessSiO2;
-diElm = padLength/3;
-pilElm = pillarRadius/2;
+cenPadElm = thicknessSiO2;
+outPadElm = padLength/2;
+diElm = padLength/2;
+topPilElm = pillarRadius/4;
+botPilElm = pillarRadius;
 cathElm = pitch/12;
 
 // Derived Z-coordinates for different layers
@@ -44,26 +48,26 @@ yMax = halfPitch;
 // Values left in 900s to allow for easier review before being finalized
 
 // Points - base of the pillars
-Point(901) = {2*xMax/3, 0, topSiO2, pilElm};
-Point(902) = {2*xMax/3 + pillarRadius, 0, topSiO2, pilElm};
-Point(903) = {2*xMax/3 - pillarRadius, 0, topSiO2, pilElm};
-Point(904) = {2*xMax/3, pillarRadius, topSiO2, pilElm};
+Point(901) = {2*xMax/3, 0, topSiO2, botPilElm};
+Point(902) = {2*xMax/3 + pillarRadius, 0, topSiO2, botPilElm};
+Point(903) = {2*xMax/3 - pillarRadius, 0, topSiO2, botPilElm};
+Point(904) = {2*xMax/3, pillarRadius, topSiO2, botPilElm};
 
-Point(905) = {xMax/3, yMax, topSiO2, pilElm};
-Point(906) = {xMax/3 + pillarRadius, yMax, topSiO2, pilElm};
-Point(907) = {xMax/3 - pillarRadius, yMax, topSiO2, pilElm};
-Point(908) = {xMax/3, yMax - pillarRadius, topSiO2, pilElm};
+Point(905) = {xMax/3, yMax, topSiO2, botPilElm};
+Point(906) = {xMax/3 + pillarRadius, yMax, topSiO2, botPilElm};
+Point(907) = {xMax/3 - pillarRadius, yMax, topSiO2, botPilElm};
+Point(908) = {xMax/3, yMax - pillarRadius, topSiO2, botPilElm};
 
 // Points - top of the pillars
-Point(909) = {2*xMax/3, 0, gridBottom, pilElm};
-Point(910) = {2*xMax/3 + pillarRadius, 0, gridBottom, pilElm};
-Point(911) = {2*xMax/3 - pillarRadius, 0, gridBottom, pilElm};
-Point(912) = {2*xMax/3, pillarRadius, gridBottom, pilElm};
+Point(909) = {2*xMax/3, 0, gridBottom, topPilElm};
+Point(910) = {2*xMax/3 + pillarRadius, 0, gridBottom, topPilElm};
+Point(911) = {2*xMax/3 - pillarRadius, 0, gridBottom, topPilElm};
+Point(912) = {2*xMax/3, pillarRadius, gridBottom, topPilElm};
 
-Point(913) = {xMax/3, yMax, gridBottom, pilElm};
-Point(914) = {xMax/3 + pillarRadius, yMax, gridBottom, pilElm};
-Point(915) = {xMax/3 - pillarRadius, yMax, gridBottom, pilElm};
-Point(916) = {xMax/3, yMax - pillarRadius, gridBottom, pilElm};
+Point(913) = {xMax/3, yMax, gridBottom, topPilElm};
+Point(914) = {xMax/3 + pillarRadius, yMax, gridBottom, topPilElm};
+Point(915) = {xMax/3 - pillarRadius, yMax, gridBottom, topPilElm};
+Point(916) = {xMax/3, yMax - pillarRadius, gridBottom, topPilElm};
 
 // Lines - base of pillars
 Line(901) = {903, 902};
@@ -215,10 +219,10 @@ Volume(1) = {201};
 // ***** PADS *****
 
 // Points - Central Pad
-Point(101) = {0, 0, padBase, padElm};
-Point(102) = {padLength, 0, padBase, padElm};
-Point(103) = {halfPad, padMath, padBase, padElm};
-Point(104) = {0, padMath, padBase, padElm};
+Point(101) = {0, 0, padBase, cenPadElm};
+Point(102) = {padLength, 0, padBase, cenPadElm};
+Point(103) = {halfPad, padMath, padBase, cenPadElm};
+Point(104) = {0, padMath, padBase, cenPadElm};
 
 // Lines - Central Pad
 Line(101) = {101, 102};
@@ -227,10 +231,10 @@ Line(103) = {103, 104};
 Line(104) = {104, 101};
 
 // Points - Corner Pad
-Point(105) = {xMax, yMax, padBase, padElm};
-Point(106) = {xMax - padLength, yMax, padBase, padElm};
-Point(107) = {xMax - halfPad, yMax - padMath, padBase, padElm};
-Point(108) = {xMax, yMax - padMath, padBase, padElm};
+Point(105) = {xMax, yMax, padBase, outPadElm};
+Point(106) = {xMax - padLength, yMax, padBase, outPadElm};
+Point(107) = {xMax - halfPad, yMax - padMath, padBase, outPadElm};
+Point(108) = {xMax, yMax - padMath, padBase, outPadElm};
 
 // Lines - Corner Pad
 Line(105) = {105, 106};
@@ -258,14 +262,14 @@ Line(111) = {106, 110};
 Line(112) = {110, 104};
 
 // Points - Dielectric Top
-Point(111) = {0, 0, topSiO2, padElm};
-Point(112) = {padLength, 0, topSiO2, padElm};
-Point(113) = {halfPad, padMath, topSiO2, padElm};
-Point(114) = {0, padMath, topSiO2, padElm};
-Point(115) = {xMax, yMax, topSiO2, padElm};
-Point(116) = {xMax - padLength, yMax, topSiO2, padElm};
-Point(117) = {xMax - halfPad, yMax - padMath, topSiO2, padElm};
-Point(118) = {xMax, yMax - padMath, topSiO2, padElm};
+Point(111) = {0, 0, topSiO2, cenPadElm};
+Point(112) = {padLength, 0, topSiO2, cenPadElm};
+Point(113) = {halfPad, padMath, topSiO2, cenPadElm};
+Point(114) = {0, padMath, topSiO2, cenPadElm};
+Point(115) = {xMax, yMax, topSiO2, outPadElm};
+Point(116) = {xMax - padLength, yMax, topSiO2, outPadElm};
+Point(117) = {xMax - halfPad, yMax - padMath, topSiO2, outPadElm};
+Point(118) = {xMax, yMax - padMath, topSiO2, outPadElm};
 Point(119) = {xMax, 0, topSiO2, diElm};
 Point(120) = {0, yMax, topSiO2, diElm};
 
