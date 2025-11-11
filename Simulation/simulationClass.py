@@ -48,8 +48,8 @@ class FIMS_Simulation:
             - cathodeHeight: Distance from the top to the grid to the cathode plane (micron).
             - thicknessSiO2: Thickness of the SiO2 layer (micron).
             - pillarRadius: The radius of the insulating support pillars (micron).
+            - driftField: The strength of the electric field in the drift region (V/cm).
             - fieldRatio: Ratio of the amplification field to the drift field.
-                          Note that the drift field is assumed to be 1 kV/cm.
             - numFieldLine: Number of field lines to calculate for visualization.
             - numAvalanche: Number of electrons (avalanches) to initiate
             - avalancheLimit: Limit of the number of electrons within a single avalanche.
@@ -118,7 +118,10 @@ class FIMS_Simulation:
     def defaultParam(self):
         """
         Default FIMS parameters.
-        Dimensions in microns.
+            Dimensions in microns.
+            Electric field in V/cm.
+
+            When both gas compositions are 0, the simulated gas is T2K.
     
         Returns:
             dict: Dictionary of default parameters and values.
@@ -132,13 +135,14 @@ class FIMS_Simulation:
             'cathodeHeight': 200.,
             'thicknessSiO2': 5.,
             'pillarRadius': 20.,
-            'fieldRatio': 40.,
+            'driftField': 280.,
+            'fieldRatio': 80.,
             'transparencyLimit': 0.98,
             'numFieldLine': 11,
             'numAvalanche': 1000,
             'avalancheLimit': 500,
-            'gasCompAr': 70.,
-            'gasCompCO2': 30.,
+            'gasCompAr': 0.,
+            'gasCompCO2': 0.,
         }
         return defaultParam
 
@@ -414,26 +418,26 @@ class FIMS_Simulation:
         """
         Calculates the required potentials to achieve a desired field ratio.
     
-        Uses the geometry definitions and desired amplification field ratio
-        contained in param. Assumes a drift field of 1 kV/cm.
+        Assumes that the drift field is defined as V/cm and distances are in microns.
     
         Returns:
-            dict: Dictionary containing the potentials for the cathode and grid.
+            dict: Dictionary containing the potentials for the cathode and grid (in V).
                   Empty if necessary parameters are unavailable. 
         """
         if not self._checkParam():
             return {}
             
-        convertEField = 0.1 # 1 kV/cm = 0.1 V/micron
+
+        driftField = float(self._getParam('driftField'))/1e4 #V/micron
+        amplificationField = driftField*float(self._getParam('fieldRatio'))
         
         # Calculate the voltage required to achieve amplification field
         gridDistance = float(self._getParam('gridStandoff')) - float(self._getParam('gridThickness'))/2. #micron
-    
-        gridVoltage = float(self._getParam('fieldRatio'))*convertEField*gridDistance
+        gridVoltage = amplificationField*gridDistance
     
         # Calculate for drift field
         cathodeDistance = float(self._getParam('cathodeHeight')) - float(self._getParam('gridThickness'))/2. #micron
-        cathodeVoltage = convertEField*cathodeDistance + gridVoltage
+        cathodeVoltage = driftField*cathodeDistance + gridVoltage
     
         potentials = {
             'cathodeVoltage': -cathodeVoltage,

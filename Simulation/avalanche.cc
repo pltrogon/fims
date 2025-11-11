@@ -148,7 +148,7 @@ int main(int argc, char * argv[]) {
   double  padLength, pitch;
   double gridStandoff, gridThickness, holeRadius;
   double cathodeHeight, thicknessSiO2, pillarRadius;
-  double fieldRatio, transparencyLimit;
+  double driftField, fieldRatio, transparencyLimit;
   int numFieldLine;
   int numAvalanche, avalancheLimit;
   double gasCompAr, gasCompCO2;
@@ -191,7 +191,7 @@ int main(int argc, char * argv[]) {
   paramFile.close();
 
   //Parse the values from the map
-  if(numKeys != 15){//Number of user-defined simulation parameters in runControl to search for.
+  if(numKeys != 16){//Number of user-defined simulation parameters in runControl to search for.
     std::cerr << "Error: Invalid simulation parameters in 'runControl'." << std::endl;
     return -1;
   }
@@ -210,6 +210,7 @@ int main(int argc, char * argv[]) {
   pillarRadius = std::stod(readParam["pillarRadius"])*MICRONTOCM;
 
   //Field parameters
+  driftField = std::stod(readParam["driftField"]);
   fieldRatio = std::stod(readParam["fieldRatio"]);
   transparencyLimit = std::stod(readParam["transparencyLimit"]);
 
@@ -812,7 +813,6 @@ int main(int argc, char * argv[]) {
 
   // Drift field
   double driftDiffusionL, driftDiffusionT, driftVelocity;
-  double driftField = 1e3;//1kV/cm
 
   gasFIMS->RunMagboltz(
     driftField, 0., 0., 1, true,
@@ -866,19 +866,21 @@ int main(int argc, char * argv[]) {
   metaDataTree->Branch("Pillar Radius", &pillarRadius, "pillarRadius/D");
 
   metaDataTree->Branch("Electric Field Ratio", &fieldRatio, "fieldRatio/D");
+  metaDataTree->Branch("Drift Field", &driftField, "driftField/D");
+  metaDataTree->Branch("Amplification Field", &ampField, "ampField/D");
+
   metaDataTree->Branch("Number of Field Lines", &numFieldLine, "numFieldLine/I");
   metaDataTree->Branch("Transparency Limit", &transparencyLimit, "transparencyLimit/D");
   metaDataTree->Branch("Number of Avalanches", &numAvalanche, "numAvalanche/I");
   metaDataTree->Branch("Avalanche Limit", &avalancheLimit, "avalancheLimit/I");
+  
   metaDataTree->Branch("Gas Comp: Ar", &gasCompAr, "gasCompAr/D");
   metaDataTree->Branch("Gas Comp: CO2", &gasCompCO2, "gasCompCO2/D");
 
-  metaDataTree->Branch("Drift Field", &driftField, "driftField/D");
   metaDataTree->Branch("Drift Velocity (Drift) ", &driftVelocity, "driftVelocity/D");
   metaDataTree->Branch("Diffusion L (Drift)", &driftDiffusionL, "driftDiffusionL/D");
   metaDataTree->Branch("Diffusion T (Drift)", &driftDiffusionT, "driftDiffusionT/D");
-
-  metaDataTree->Branch("Amplification Field", &ampField, "ampField/D");
+  
   metaDataTree->Branch("Drift Velocity (Amplify) ", &ampVelocity, "ampVelocity/D");
   metaDataTree->Branch("Diffusion L (Amplify)", &ampDiffusionL, "ampDiffusionL/D");
   metaDataTree->Branch("Diffusion T (Amplify)", &ampDiffusionT, "ampDiffusionT/D");
