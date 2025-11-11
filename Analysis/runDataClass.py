@@ -1314,10 +1314,12 @@ class runData:
         Args:
             binWidth (int): The width of the histogram bins. 
         """
-        fitResults = self._fitAvalancheSize(binWidth)
+        fitResults = self._fitAvalancheSize(binWidth=1)
 
         polyaResults = fitResults['fitPolya'].calcPolya(fitResults['xVal'])
         polyaChi2 = self._getChiSquared(fitResults['yVal'], polyaResults)
+
+        histData = self._histAvalanche(trim=True, binWidth=binWidth)
         
         fig = plt.figure(figsize=(10, 8))
         fig.suptitle(f'Avalanche Size Distribution: Run {self.runNumber}')
@@ -1325,8 +1327,8 @@ class runData:
         ax = fig.add_subplot(111)
 
         ax.bar(
-            fitResults['xVal'], 
-            fitResults['yVal'],
+            histData['binCenters'], 
+            histData['prob'],
             width=binWidth,
             label='Simulation'
         ) 
@@ -1753,27 +1755,34 @@ class runData:
 #********************************************************************************#
     def plotEfficiency(self, binWidth=1, threshold=0):
         """
+        TODO
         """
 
-        fitResults = self._fitAvalancheSize(binWidth)
+        fitResults = self._fitAvalancheSize(binWidth=1)
 
         xVal = fitResults['xVal']
         yVal = fitResults['yVal']
         fitPolya = fitResults['fitPolya']
 
-        cutMask = xVal <= threshold
+        histData = self._histAvalanche(trim=True, binWidth=binWidth)
+
+        cutMask = histData['binCenters'] <= threshold
+
+        xData = histData['binCenters']
+        yData = histData['prob']
 
         #Separate data that gets cut
-        xDataCut = xVal[cutMask]
-        yDataCut = yVal[cutMask]
+        xDataCut = xData[cutMask]
+        yDataCut = yData[cutMask]
 
         #Separate data that is not cut
-        xData = xVal[~cutMask]
-        yData = yVal[~cutMask]
+        xDataPass = xData[~cutMask]
+        yDataPass = yData[~cutMask]
 
         #Calculate polya - ensure calculated at threshold
-        xPolyaCut = np.append(xDataCut, [threshold])
-        xPolya = np.append([threshold], xData)
+        
+        xPolyaCut = np.arange(0, threshold+1)
+        xPolya = np.arange(threshold, xData[-1]+1)
         polyaCut = fitPolya.calcPolya(xPolyaCut)
         polyaData = fitPolya.calcPolya(xPolya)
 
@@ -1789,8 +1798,8 @@ class runData:
             label='Data Below Threshold', color='r', alpha=0.5
         )
         ax.bar(
-            xData,
-            yData,
+            xDataPass,
+            yDataPass,
             width=binWidth,
             label='Detected Data', color='g', alpha=0.5
         ) 
