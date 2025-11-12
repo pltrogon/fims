@@ -1213,7 +1213,7 @@ class FIMS_Simulation:
         minFieldTrans = radialMinField + standoffMinField + padMinField + 3
         
         #Minimum field for efficiency depends only on the standoff
-        minFieldEff = 53.21*npexp(-1.924*standoffRatio) + 23.47
+        minFieldEff = 53.21*np.exp(-1.924*standoffRatio) + 23.47
         
         #Choose the larger of the two fields so that both conditions are
         #satisfied simultaneously.
