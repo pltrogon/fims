@@ -132,13 +132,13 @@ class FIMS_Simulation:
             'cathodeHeight': 200.,
             'thicknessSiO2': 5.,
             'pillarRadius': 20.,
-            'fieldRatio': 50.,
-            'transparencyLimit': 0.98,
-            'numFieldLine': 101,
-            'numAvalanche': 400,
+            'fieldRatio': 42.,
+            'transparencyLimit': 0.99,
+            'numFieldLine': 25,
+            'numAvalanche': 800,
             'avalancheLimit': 1500,
-            'gasCompAr': 70.,
-            'gasCompCO2': 30.,
+            'gasCompAr': 0.,
+            'gasCompCO2': 0.,
         }
         return defaultParam
 
@@ -1210,12 +1210,15 @@ class FIMS_Simulation:
         standoffMinField = 27.121*np.exp(-15.9*standoffRatio)
         padMinField = 143.84*np.exp(-15.17*padRatio)
         
-        minField = radialMinField + standoffMinField + padMinField + 3
+        minFieldTrans = radialMinField + standoffMinField + padMinField + 3
         
-        #TODO: Replace with minfield for efficiency
-        #if minField < 50:
-        #    minField = 50
+        #Minimum field for efficiency depends only on the standoff
+        minFieldEff = 53.21*npexp(-1.924*standoffRatio) + 23.47
         
+        #Choose the larger of the two fields so that both conditions are
+        #satisfied simultaneously.
+        minField = max(minFieldTrans, minFieldEff)
+
         return minField
 
 #***********************************************************************************#

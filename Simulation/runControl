@@ -5,13 +5,13 @@
 // Dimensions: micron
 
 // Pad
-padLength = 44.0;
+padLength = 44;
 pitch = 225.0;
 
 //Grid
-gridStandoff = 100.0;
+gridStandoff = 20;
 gridThickness = 1.0;
-holeRadius = 55.0;
+holeRadius = 65.0;
 
 // Other
 cathodeHeight = 200.0;
@@ -19,15 +19,15 @@ thicknessSiO2 = 5.0;
 pillarRadius = 20.0;
 
 //----- Field Parameters -----
-fieldRatio = 40.0;
-numFieldLine = 11;
-transparencyLimit = 0.98;
+fieldRatio = 42.0;
+numFieldLine = 25;
+transparencyLimit = 0.99;
 
 //----- Simulation parameters -----
 // Avalanche controls
-numAvalanche = 1000;
-avalancheLimit = 500;
+numAvalanche = 800;
+avalancheLimit = 1500;
 
 // Gas composition
-gasCompAr = 70.0;
-gasCompCO2 = 30.0;
+gasCompAr = 0.0;
+gasCompCO2 = 0.0;
