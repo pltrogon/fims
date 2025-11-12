@@ -1113,14 +1113,6 @@ class FIMS_Simulation:
                 raise ValueError('Error: Invalid new field')
             
             fields.append(float(math.ceil(newField)))
-
-            # Check if parameters havent significantly changed
-            #if iterNo > 2:
-            #        fieldDiff = abs(fields[-1] - fields[-2])
-            #        effDiff = abs(efficiencies[-1] - efficiencies[-2])
-            #        if fieldDiff < 0.1 or effDiff < 0.001:
-            #            print(f'Parameters within tolerance.')
-            #            break
                 
             print(f'Current field ratio: {fields[-1]}')
             self.param['fieldRatio'] = fields[-1]
