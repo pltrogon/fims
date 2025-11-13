@@ -289,14 +289,20 @@ int main(int argc, char * argv[]) {
         "cf4", 3.0, 
         "iC4H10", 2.0
       );
-      gasFIMS->EnablePenningTransfer(0.385, .0, "ar");//TODO - Confirm this rate
+      gasFIMS->EnablePenningTransfer(0.385, 0., "ar");//TODO - Confirm this rate
   }
   else{
       gasFIMS->SetComposition(
       "ar", gasCompAr, 
       "co2", gasCompCO2
     );
-    gasFIMS->EnablePenningTransfer(0.51, .0, "ar");//TODO - Check if this is the proper rate
+    gasFIMS->EnablePenningTransfer(0.51, .0, "ar");
+    /*
+     * From Garfield/Examples/Gem/gem.c:
+     *    Penning rate = 0.51 for 80/20 Ar/CO2 Mix
+     * From Garfield/Examples/Ansys123/triplegem.c:
+     *    Penning rate = 0.55 for 45/15/40 Ar/CO2/CF4 Mix
+     */
   }
 
   //STP gas parameters:
@@ -315,7 +321,7 @@ int main(int argc, char * argv[]) {
   const std::string posIonPath = path + "/share/Garfield/Data/IonMobility_Ar+_Ar.txt";
   const std::string negIonPath = path + "/share/Garfield/Data/IonMobility_CO2+_CO2.txt";
   gasFIMS->LoadIonMobility(posIonPath);
-  gasFIMS->LoadNegativeIonMobility(negIonPath);//TODO - Is this correct for negative ion
+  gasFIMS->LoadNegativeIonMobility(negIonPath);//TODO - Is this correct for negative ion drift? 
 
   // Import elmer-generated field map
   std::string geometryPath = "../Geometry/";
@@ -526,7 +532,6 @@ int main(int argc, char * argv[]) {
   dataFile->Close();
   delete dataFile;
   
-  //TODO: parallel avalanches crashes if numAvalanche = 0
   
   // ***** Prepare Avalanche Electron ***** //
   //Set the Initial electron parameters
@@ -542,6 +547,10 @@ int main(int argc, char * argv[]) {
   //Start timing the sim
   startSim = clock();
 
+  if(numAvalanche == 0){
+    std::cerr << "No avalanches - Defaulting to 100." << std::endl;
+    numAvalanche = 100;
+  }
   std::cout << "****************************************\n";
   std::cout << "Starting simulation: " << runNo << "\n";
   std::cout << "****************************************\n";
@@ -603,7 +612,7 @@ int main(int argc, char * argv[]) {
         xBoundary[0], yBoundary[0], zBoundary[0], 
         xBoundary[1], yBoundary[1], zBoundary[1]
       );
-      avalancheE->EnablePlotting(viewElectronDrift, 500);//TODO - possibly increase this number
+      avalancheE->EnablePlotting(viewElectronDrift, 250);
 
 
       //Filename

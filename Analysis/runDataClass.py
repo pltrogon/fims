@@ -761,7 +761,21 @@ class runData:
 #********************************************************************************#   
     def add2DFieldLines(self, axes, fieldLineData, target):
         """
-        TODO
+        Plots the 2D projections of electric field lines, colored according to 
+        their intiial location relative to grid.
+        It also includes the nominal field bundle radius.
+
+        Args:
+            axes (list of matplotlib Axes): List where projections are to be plotted.
+            fieldLineData (pandas df): Dataframe containing field line data. 
+                                       ('Field Line x', 'Field Line y', and 'Field Line z')
+            target (str): String specifying the coloring scheme.
+                          Supported options:
+                          - 'individual': Uniquie color for each line.
+                          - 'cathodeLines': Sets line color to blue.
+                          - 'aboveGrid': Sets line color to red.
+                          - 'belowGrid': Sets line color to green.
+                          - 'edgeLines': Sets line color to magenta.
         """
 
         #Set color for each field line location
@@ -798,7 +812,7 @@ class runData:
                 lw=1, c=lineColor
             )
 
-        #Add nominal field bundle radius - TODO: This assumes a circle.
+        #Add nominal field bundle radius - this assumes a circle
         nominalBundleR = self.getRunParameter('Field Bundle Radius')
         nominalBundleZ = -0.9*self.getRunParameter('Grid Standoff')
         
@@ -817,8 +831,6 @@ class runData:
             )
         axes[2].add_patch(nominalFieldBundle)
         
-
-
         return
 
 
@@ -1516,7 +1528,7 @@ class runData:
                 stuckElectrons.append(newPoint)
 
             ##TODO - Can add some other calculation here to determine if electron
-            #  hits wall of SiO2 - Is this unlikely????
+            #  hits side-wall of SiO2 - Is this unlikely????
 
         return pd.DataFrame(stuckElectrons)
 
@@ -1591,7 +1603,10 @@ class runData:
             (occurs when the electron does not avalanche)
 
         Returns:
-            TODO
+            Tuple: A tuple containing:
+                   - IBF (pandas.series): The Ion backflow fraction for each simulated avalanche.
+                   - meanIBF (float): The mean IBF for all avalanches.
+                   - meanIBFErr (float): Standard error of the mean IBF
         """
         #Calculate IBF on a per-avalanche basis
         IBF = self._calcPerAvalancheIBF()
@@ -1686,7 +1701,18 @@ class runData:
 #********************************************************************************#
     def _getRawEfficiency(self, threshold=0):
         """
-        TODO
+        Calculates the raw efficiency of all simulated avalanches based on the
+        fraction of total sizes that exceed the given threshold.
+
+        Utilizes baysian statistics to determine the efficiency.
+
+        Args:
+            threshold (int): The minimum avalanche size to be considered a 'success'.
+
+        Returns:
+            tuple: A tuple containing the calculated efficiency and its uncertainty:
+                   - simEff (float): The estimated raw efficiency.
+                   - simEffErr (float): The standard error of the estimated efficiency.
         """
 
         allAvalancheData = self.getDataFrame('avalancheData')
@@ -1720,7 +1746,19 @@ class runData:
 #********************************************************************************#
     def _getEfficiency(self, threshold=0):
         """
-        TODO
+        Calculates the efficiency of the simulated avalanches based on the
+        fraction of total sizes that exceed the given threshold. 
+        Excludes any avalanches where the intial electron does not generate an avalanche.
+
+        Utilizes baysian statistics to determine the efficiency. 
+
+        Args:
+            threshold (int): The minimum avalanche size to be considered a 'success'.
+
+        Returns:
+            tuple: A tuple containing the calculated efficiency and its uncertainty:
+                   - simEff (float): The estimated efficiency.
+                   - simEffErr (float): The standard error of the estimated efficiency.
         """
 
         allAvalancheData = self.getDataFrame('avalancheData')
@@ -1755,13 +1793,20 @@ class runData:
 #********************************************************************************#
     def plotEfficiency(self, binWidth=1, threshold=0):
         """
-        TODO
+        Generates a histogram of the avalanche size distribution; The data is split
+        based on a given threshold, and the resulting efficiency is indicated.
+        Also includes a fitted Polya function, also split to distiguish the PDF both
+        above and below threshold.
+
+        Args:
+            binWidth (int): The histogram bin width. 
+            threshold (int): The minimum number of electrons required be a 'success'.
+
+        Returns:
+            matplotlib.figure.Figure: The generated efficiency plot.
         """
 
         fitResults = self._fitAvalancheSize(binWidth=1)
-
-        xVal = fitResults['xVal']
-        yVal = fitResults['yVal']
         fitPolya = fitResults['fitPolya']
 
         histData = self._histAvalanche(trim=True, binWidth=binWidth)
@@ -1841,7 +1886,18 @@ class runData:
 #********************************************************************************#
     def _getAvalancheGain(self, avalancheID=0):
         """
-        TODO
+        Calculates the net electron gain produced in a single simulated 
+        electron avalanche.
+
+        Gain is defined as: The total number of electrons geneterated minus the 
+        number of electrons that are lost due to attachment.
+        I.e. (Total Electrons - Attached Electrons) 
+
+        Args:
+            avalancheID (int): The unique ID of the simulated avalanche.
+
+        Returns:
+            int: The net electron gain for the specified avalanche.
         """
         allData = self.getDataFrame('avalancheData')
         singleAvalanche = allData[allData['Avalanche ID']==avalancheID]
@@ -1901,7 +1957,7 @@ class runData:
 #********************************************************************************#
     def plotAverageSignal(self):
         """
-        TODO
+        Plots the average induced signal from all simulated electron avalanches.
         """
 
         allSignals = self.getDataFrame('signalData')
@@ -1950,7 +2006,8 @@ class runData:
 #********************************************************************************#
     def plotSignalvsGain(self):
         """
-        TODO
+        Generates a 2D histogram of the induced signal vs the electron gain 
+        for all electron avalanches. 
         """
         allSignals = self.getDataFrame('signalData')
         allAvalanche = self.getDataFrame('avalancheData')
@@ -1971,6 +2028,7 @@ class runData:
             bins=maxGain, cmin=1
         )
 
+        #TODO - Test linear/scaled line for this relationship.
         scale = .25e17
         charge = -1.6e-19
         slope = charge*scale

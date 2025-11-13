@@ -135,7 +135,7 @@ class App(tk.Tk):
 
         self.avalancheID = tk.Spinbox(
             self.avalancheFrame, 
-            from_=0, to=999, ##TODO - make this maximum match the value in metadata. Or alternative just be very large
+            from_=0, to=999, #TODO - number of avalanches can exceed this
             wrap=False, width=5, 
             textvariable=self.curAvalancheID,
             command=self.updateAvalancheID)

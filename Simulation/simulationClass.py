@@ -835,7 +835,15 @@ class FIMS_Simulation:
 #***********************************************************************************#
     def _runGetEfficiency(self, targetEfficiency=.95, threshold=10):
         """
-        TODO
+        Runs a Garfield++ executable the generates electron avalanches until a target
+        efficiency is either excluded or surpassed with a 2-sigma confidence.
+
+        Args:
+            targetEfficiency (float): The target efficiency to compare to.
+            threshold: The minimum number of electrons required to be considered a 'success'.
+
+        Returns:
+            bool: True if program runs successfully, False otherwise.
         """
         originalCWD = os.getcwd()
         try:
@@ -956,7 +964,15 @@ class FIMS_Simulation:
 #***********************************************************************************#
     def _readEfficiencyFile(self):
         """
-        TODO
+        Reads the file containing the simulated efficiency for a given field strength. 
+
+        Returns:
+            dict: Dictionary containing the parsed efficiency data. 
+                  None if unsuccessful. Includes:
+                  - 'stopCondition' (str): The avalanche stop condition (Converged or not).
+                  - 'efficiency' (float): The simulated efficiency.
+                  - 'efficiencyErr'(float): The uncertainty of the simulated efficiency.
+
         """
 
         try:
@@ -993,7 +1009,7 @@ class FIMS_Simulation:
         If efficiency errors are provided, utilizes a step base on the maximum possible slope.
         Assumes that the efficiency is monotonically increasing.
         
-        *TODO - Tested for when  current and prevoious effs are LESS than target. Behaviour when bracketing target unknown.*
+        *TODO - Tested for when  current and prevoious effs are both LESS than target. Behaviour when bracketing target unknown.*
 
         Args:
             fields (np.array): Numpy array of the field strengths. Has form: [current, previous]
@@ -1048,7 +1064,26 @@ class FIMS_Simulation:
 #***********************************************************************************#
     def findFieldForEfficiency(self, targetEfficiency=.95, threshold=10):
         """
-        TODO
+        Performs an iterative search to find the minimum Electric Field Ratio 
+        required to achieve a specified detection efficiency for electron avalanches.
+
+        Process:
+            1 - Generates the geometry by executing Gmsh.
+            2 - Solves an electric field using Elmer. 
+            3 - Executes Garfield++ avalanches to determine a detection efficiency.
+            4 - Repeats steps 2 and 3, increasing the field ration using a modified 
+                secant method until a solution is reached.
+
+        Note that this assumes that the field strength is monotonically increasing.
+
+        Args:
+            targetEfficiency (float): The target electron detection efficiency.
+            threshold (int): The minimum avalanche size required for an event to 
+                             be counted as 'detected'.
+
+        Returns:
+            bool: True if a solution is found or the search process completes.
+                  False if there is a fatal execution error.
         """
 
         #Ensure all parameters exist and save them
@@ -1113,14 +1148,6 @@ class FIMS_Simulation:
                 raise ValueError('Error: Invalid new field')
             
             fields.append(float(math.ceil(newField)))
-
-            # Check if parameters havent significantly changed
-            #if iterNo > 2:
-            #        fieldDiff = abs(fields[-1] - fields[-2])
-            #        effDiff = abs(efficiencies[-1] - efficiencies[-2])
-            #        if fieldDiff < 0.1 or effDiff < 0.001:
-            #            print(f'Parameters within tolerance.')
-            #            break
                 
             print(f'Current field ratio: {fields[-1]}')
             self.param['fieldRatio'] = fields[-1]
@@ -1178,8 +1205,8 @@ class FIMS_Simulation:
 
         return True
 
-
-    def _calcMinField(self): ## TODO - IS this function depreciated??????????  - We assume to use initial field found from efficiency limit
+#***********************************************************************************#
+    def _calcMinField(self): 
         """
         Calculates an initial guess for the minimum field ratio to achieve 100%
         field transparency.
@@ -1325,7 +1352,19 @@ class FIMS_Simulation:
 #***********************************************************************************#
     def runMagboltz(self, eField=1, gasComp='ArCO2', gasCompAr=0, gasCompCO2=0):
         """
-        TODO
+        Executes a C program that utilizes Garfield++ and Magboltz to calculate and save
+        the electron drift and diffusion properties for a specified gas mixture at a given
+        field strength.
+
+        Args:
+            eField (float): The magnitude of the electric field in V/cm.
+            gasComp (str): The identifier for the gas composition type. 
+                            - Must be 'ArCO2' or 'T2K'. 
+            gasCompAr (int): The percentage of Argon mixture.
+            gasCompCO2 (int): The percentage of Carbon Dioxide in the mixture.
+
+        Returns:
+            bool: True if the program executes successfully. False otherwise.
         """
         originalCWD = os.getcwd()
 

@@ -188,10 +188,6 @@ int main(int argc, char * argv[]) {
   gasFIMS->Initialise(true);
 
   const std::string path = std::getenv("GARFIELD_INSTALL");
-  const std::string posIonPath = path + "/share/Garfield/Data/IonMobility_Ar+_Ar.txt";
-  const std::string negIonPath = path + "/share/Garfield/Data/IonMobility_CO2+_CO2.txt";
-  gasFIMS->LoadIonMobility(posIonPath);
-  gasFIMS->LoadNegativeIonMobility(negIonPath);//TODO - Is this correct for negative ion
 
   // Import elmer-generated field map
   std::string geometryPath = "../Geometry/";
