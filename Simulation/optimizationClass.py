@@ -176,7 +176,7 @@ class FIMS_Optimizer:
         
         #Get the IBN
         simData = runData(runNumber)
-        IBN = simData.getRunParameter('Average IBN')
+        IBN = simData.getCalcParameter('Average IBN')
 
         return IBN
 
