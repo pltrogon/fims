@@ -21,13 +21,13 @@ pillarRadius = 20.0;
 //----- Field Parameters -----
 driftField = 280.0;
 fieldRatio = 80.0;
-numFieldLine = 11;
-transparencyLimit = 0.98;
+numFieldLine = 25;
+transparencyLimit = 0.99;
 
 //----- Simulation parameters -----
 // Avalanche controls
-numAvalanche = 1000;
-avalancheLimit = 500;
+numAvalanche = 1500;
+avalancheLimit = 600;
 
 // Gas composition
 gasCompAr = 0.0;
