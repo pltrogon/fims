@@ -19,15 +19,16 @@ thicknessSiO2 = 5.0;
 pillarRadius = 20.0;
 
 //----- Field Parameters -----
-fieldRatio = 40.0;
-numFieldLine = 11;
-transparencyLimit = 0.98;
+driftField = 280.0;
+fieldRatio = 80.0;
+numFieldLine = 25;
+transparencyLimit = 0.99;
 
 //----- Simulation parameters -----
 // Avalanche controls
-numAvalanche = 1000;
-avalancheLimit = 500;
+numAvalanche = 1500;
+avalancheLimit = 600;
 
 // Gas composition
-gasCompAr = 70.0;
-gasCompCO2 = 30.0;
+gasCompAr = 0.0;
+gasCompCO2 = 0.0;

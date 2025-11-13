@@ -120,7 +120,7 @@ int main(int argc, char * argv[]) {
   paramFile.close();
 
   //Parse the values from the map
-  if(numKeys != 15){//Number of user-defined simulation parameters in runControl to search for.
+  if(numKeys != 16){//Number of user-defined simulation parameters in runControl to search for.
     std::cerr << "Error: Invalid simulation parameters in 'runControl'." << std::endl;
     return -1;
   }
@@ -188,10 +188,6 @@ int main(int argc, char * argv[]) {
   gasFIMS->Initialise(true);
 
   const std::string path = std::getenv("GARFIELD_INSTALL");
-  const std::string posIonPath = path + "/share/Garfield/Data/IonMobility_Ar+_Ar.txt";
-  const std::string negIonPath = path + "/share/Garfield/Data/IonMobility_CO2+_CO2.txt";
-  gasFIMS->LoadIonMobility(posIonPath);
-  gasFIMS->LoadNegativeIonMobility(negIonPath);//TODO - Is this correct for negative ion
 
   // Import elmer-generated field map
   std::string geometryPath = "../Geometry/";
@@ -290,7 +286,7 @@ int main(int argc, char * argv[]) {
 
     }//end of avalanche bunch loop
 
-		numInBunch = 10;//do bunches of 10 after first iteration
+		numInBunch = 25;//do bunches of 25 after first iteration
 
     //Efficiency calculations
     double success = numAboveThreshold;

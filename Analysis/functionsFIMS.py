@@ -23,7 +23,7 @@ Functions:
     xyInterpolate
     getSetData
     plotDataSets
-    getDiffusionData            <-----NEW
+    getDiffusionData
 """
 
 #********************************************************************************#   
@@ -453,7 +453,30 @@ def plotDataSets(dataSets, xVal, yVal, savePlot=False):
 
 def getDiffusionData(gasComp):
     """
-    TODO
+    Loads the results for electron drift and diffusion 
+    for a given gas as computed by Magboltz.
+
+    Assumes that the files have been generated, 
+    and parses those of the form 'diffusion.<gasComp>*.dat'.
+
+    Args:
+        gasComp (str): The identifier for the gas composition to load data for.
+                       Must be one of the supported compositions: 
+                       'ArCO2-80-20' or 'T2K'.
+
+    Returns:
+        pandas.DataFrame: A DataFrame containing the parsed diffusion data, sorted by 'eField'.
+                          None if no matching files are found. 
+                          The DataFrame includes:
+                           - 'filename'
+                           - 'gasComposition'
+                           - 'eField'
+                           - 'driftVelocity'
+                           - 'driftVelocityErr'
+                           - 'diffusionLongitudinal'
+                           - 'diffusionLongitudinalErr'
+                           - 'diffusionTransverse'
+                           - 'diffusionTransverseErr'
     """
 
     gasCompOptions = [

@@ -48,8 +48,8 @@ class FIMS_Simulation:
             - cathodeHeight: Distance from the top to the grid to the cathode plane (micron).
             - thicknessSiO2: Thickness of the SiO2 layer (micron).
             - pillarRadius: The radius of the insulating support pillars (micron).
+            - driftField: The strength of the electric field in the drift region (V/cm).
             - fieldRatio: Ratio of the amplification field to the drift field.
-                          Note that the drift field is assumed to be 1 kV/cm.
             - numFieldLine: Number of field lines to calculate for visualization.
             - numAvalanche: Number of electrons (avalanches) to initiate
             - avalancheLimit: Limit of the number of electrons within a single avalanche.
@@ -118,7 +118,10 @@ class FIMS_Simulation:
     def defaultParam(self):
         """
         Default FIMS parameters.
-        Dimensions in microns.
+            Dimensions in microns.
+            Electric field in V/cm.
+
+            When both gas compositions are 0, the simulated gas is T2K.
     
         Returns:
             dict: Dictionary of default parameters and values.
@@ -132,13 +135,14 @@ class FIMS_Simulation:
             'cathodeHeight': 200.,
             'thicknessSiO2': 5.,
             'pillarRadius': 20.,
-            'fieldRatio': 50.,
-            'transparencyLimit': 0.98,
-            'numFieldLine': 101,
-            'numAvalanche': 400,
-            'avalancheLimit': 1500,
-            'gasCompAr': 70.,
-            'gasCompCO2': 30.,
+            'driftField': 280.,
+            'fieldRatio': 80.,
+            'transparencyLimit': 0.99,
+            'numFieldLine': 25,
+            'numAvalanche': 1500,
+            'avalancheLimit': 600,
+            'gasCompAr': 0.,
+            'gasCompCO2': 0.,
         }
         return defaultParam
 
@@ -414,26 +418,26 @@ class FIMS_Simulation:
         """
         Calculates the required potentials to achieve a desired field ratio.
     
-        Uses the geometry definitions and desired amplification field ratio
-        contained in param. Assumes a drift field of 1 kV/cm.
+        Assumes that the drift field is defined as V/cm and distances are in microns.
     
         Returns:
-            dict: Dictionary containing the potentials for the cathode and grid.
+            dict: Dictionary containing the potentials for the cathode and grid (in V).
                   Empty if necessary parameters are unavailable. 
         """
         if not self._checkParam():
             return {}
             
-        convertEField = 0.1 # 1 kV/cm = 0.1 V/micron
+
+        driftField = float(self._getParam('driftField'))/1e4 #V/micron
+        amplificationField = driftField*float(self._getParam('fieldRatio'))
         
         # Calculate the voltage required to achieve amplification field
         gridDistance = float(self._getParam('gridStandoff')) - float(self._getParam('gridThickness'))/2. #micron
-    
-        gridVoltage = float(self._getParam('fieldRatio'))*convertEField*gridDistance
+        gridVoltage = amplificationField*gridDistance
     
         # Calculate for drift field
         cathodeDistance = float(self._getParam('cathodeHeight')) - float(self._getParam('gridThickness'))/2. #micron
-        cathodeVoltage = convertEField*cathodeDistance + gridVoltage
+        cathodeVoltage = driftField*cathodeDistance + gridVoltage
     
         potentials = {
             'cathodeVoltage': -cathodeVoltage,
@@ -831,7 +835,15 @@ class FIMS_Simulation:
 #***********************************************************************************#
     def _runGetEfficiency(self, targetEfficiency=.95, threshold=10):
         """
-        TODO
+        Runs a Garfield++ executable the generates electron avalanches until a target
+        efficiency is either excluded or surpassed with a 2-sigma confidence.
+
+        Args:
+            targetEfficiency (float): The target efficiency to compare to.
+            threshold: The minimum number of electrons required to be considered a 'success'.
+
+        Returns:
+            bool: True if program runs successfully, False otherwise.
         """
         originalCWD = os.getcwd()
         try:
@@ -952,7 +964,15 @@ class FIMS_Simulation:
 #***********************************************************************************#
     def _readEfficiencyFile(self):
         """
-        TODO
+        Reads the file containing the simulated efficiency for a given field strength. 
+
+        Returns:
+            dict: Dictionary containing the parsed efficiency data. 
+                  None if unsuccessful. Includes:
+                  - 'stopCondition' (str): The avalanche stop condition (Converged or not).
+                  - 'efficiency' (float): The simulated efficiency.
+                  - 'efficiencyErr'(float): The uncertainty of the simulated efficiency.
+
         """
 
         try:
@@ -989,7 +1009,7 @@ class FIMS_Simulation:
         If efficiency errors are provided, utilizes a step base on the maximum possible slope.
         Assumes that the efficiency is monotonically increasing.
         
-        *TODO - Tested for when  current and prevoious effs are LESS than target. Behaviour when bracketing target unknown.*
+        *TODO - Tested for when  current and prevoious effs are both LESS than target. Behaviour when bracketing target unknown.*
 
         Args:
             fields (np.array): Numpy array of the field strengths. Has form: [current, previous]
@@ -1044,7 +1064,26 @@ class FIMS_Simulation:
 #***********************************************************************************#
     def findFieldForEfficiency(self, targetEfficiency=.95, threshold=10):
         """
-        TODO
+        Performs an iterative search to find the minimum Electric Field Ratio 
+        required to achieve a specified detection efficiency for electron avalanches.
+
+        Process:
+            1 - Generates the geometry by executing Gmsh.
+            2 - Solves an electric field using Elmer. 
+            3 - Executes Garfield++ avalanches to determine a detection efficiency.
+            4 - Repeats steps 2 and 3, increasing the field ration using a modified 
+                secant method until a solution is reached.
+
+        Note that this assumes that the field strength is monotonically increasing.
+
+        Args:
+            targetEfficiency (float): The target electron detection efficiency.
+            threshold (int): The minimum avalanche size required for an event to 
+                             be counted as 'detected'.
+
+        Returns:
+            bool: True if a solution is found or the search process completes.
+                  False if there is a fatal execution error.
         """
 
         #Ensure all parameters exist and save them
@@ -1110,14 +1149,6 @@ class FIMS_Simulation:
                 raise ValueError('Error: Invalid new field')
             
             fields.append(float(math.ceil(newField)))
-
-            # Check if parameters haven't significantly changed
-            #if iterNo > 2:
-            #        fieldDiff = abs(fields[-1] - fields[-2])
-            #        effDiff = abs(efficiencies[-1] - efficiencies[-2])
-            #        if fieldDiff < 0.1 or effDiff < 0.001:
-            #            print(f'Parameters within tolerance.')
-            #            break
                 
             print(f'Current field ratio: {fields[-1]}')
             self.param['fieldRatio'] = fields[-1]
@@ -1177,7 +1208,7 @@ class FIMS_Simulation:
         return finalField
 
 #***********************************************************************************#
-    def _calcMinField(self):
+    def _calcMinField(self): 
         """
         Calculates an initial guess for the minimum field ratio to achieve 100%
         field transparency and 95% efficiency.
@@ -1327,7 +1358,19 @@ class FIMS_Simulation:
 #***********************************************************************************#
     def runMagboltz(self, eField=1, gasComp='ArCO2', gasCompAr=0, gasCompCO2=0):
         """
-        TODO
+        Executes a C program that utilizes Garfield++ and Magboltz to calculate and save
+        the electron drift and diffusion properties for a specified gas mixture at a given
+        field strength.
+
+        Args:
+            eField (float): The magnitude of the electric field in V/cm.
+            gasComp (str): The identifier for the gas composition type. 
+                            - Must be 'ArCO2' or 'T2K'. 
+            gasCompAr (int): The percentage of Argon mixture.
+            gasCompCO2 (int): The percentage of Carbon Dioxide in the mixture.
+
+        Returns:
+            bool: True if the program executes successfully. False otherwise.
         """
         originalCWD = os.getcwd()
 

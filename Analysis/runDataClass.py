@@ -40,8 +40,8 @@ class runData:
             method to retrieve a copy of the dataframe.
             This is to preserve data integrity.
         *****
-            _metaData: Metadata information, including geometry parameters, 
-                       simulation limits, git version, etc.
+            _metaData: Metadata information from running the simulation, including 
+                       geometry parameters, simulation limits, git version, etc.
             _fieldLineData: Information for field lines generated at the cathode.
             _gridFieldLineData: Field line information for those generated 
                                 above and below the grid.
@@ -51,6 +51,8 @@ class runData:
             _ionData: Information for each individual simulated ion.
             _avalancheData: Information for each simulated avalanche.
             _electronTrackData: Information for the full tracks of each electron.
+            _calculatedData: Information calculated from simulation resutls, including
+                             gain, IBN, IBF, etc.
             
     The following methods are defined in this class:
         _readRootTrees
@@ -58,9 +60,11 @@ class runData:
         getTreeNames
         printMetaData
         getMetaData
+        getCalculatedData        <----- NEW
         printColumns
         getDataFrame
         getRunParameter
+        getCalcParameter        <----- NEW
         getRunNumber
         plotCellGeometry
         _plotAddCellGeometry
@@ -121,9 +125,13 @@ class runData:
         #Unpack into private dataframes
         for treeName in self.dataTrees:
             setattr(self, f'_{treeName}', allData.get(treeName))
+        
+        del allData
 
-        #Calculate some other parameters
-        self._calcOtherMetaData()
+        #Add dataframe containing calculated values
+        self._calculatedData = pd.DataFrame(index=[0])
+        self._fillCalculatedData()
+
 
 #********************************************************************************#
     #String representation
@@ -211,6 +219,21 @@ class runData:
             metaDataDict[inParam] = self.getRunParameter(inParam)
 
         return metaDataDict
+    
+#********************************************************************************#
+    def getCalculatedData(self):
+        """
+        Returns dictionary of all calculated data information. Dimensions are in microns.
+        """
+        calcDataDF = getattr(self, '_calculatedData', None)
+
+        # Initialize an empty dictionary to store the results
+        calcDataDict = {}
+    
+        for inParam in calcDataDF.columns:
+            calcDataDict[inParam] = self.getCalcParameter(inParam)
+
+        return calcDataDict
     
 
 #********************************************************************************#
@@ -367,12 +390,44 @@ class runData:
         except Exception as e:
             print(f"An unexpected error occurred retrieving '{paramName}': {e}")
             return None
+        
+
+#********************************************************************************#
+    def getCalcParameter(self, paramName):
+        """
+        Retrieves a given parameter from the calculated information.
+
+        Args:
+            paramName (str): Name of the parameter to be retrieved.
+
+        Returns:
+            Any: The value of the given parameter. None if an error occurs.
+        """
+        
+        calcData = getattr(self, '_calculatedData', None)
+        if calcData is None:
+            print("Error: 'calculatedData' unavailable.")
+            return None
+        
+        if paramName not in calcData.columns:
+            print(f"Error: '{paramName}' not in 'calculatedData'.")
+            return None
+            
+        try:
+            return calcData[paramName].iloc[0]
+        
+        except IndexError:
+            print(f"Error: 'calculatedData' DataFrame is empty.")
+            return None
+        except Exception as e:
+            print(f"An unexpected error occurred retrieving '{paramName}': {e}")
+            return None
 
 
 #********************************************************************************#   
-    def _calcOtherMetaData(self):
+    def _fillCalculatedData(self):
         """
-        Calculate some other useful information and append them to metaData.
+        Calculate useful information from simulation results.
         Including:
             Optical Transparency
             Field Bundle Radius
@@ -387,45 +442,47 @@ class runData:
         numAvalanche = self.getRunParameter('Number of Avalanches')
         
         if numLines > 0:
-            #Optical transparency
-            self._metaData['Optical Transparency'] = self._calcOpticalTransparency()
+            #Optical and field transparency
+            opticalTransparency = self._calcOpticalTransparency()
+            fieldTransparency = self._getTransparency()
 
-            #Field Transparency
-            self._metaData['Field Transparency'] = self._getTransparency()
+            self._calculatedData['Optical Transparency'] = opticalTransparency
+            self._calculatedData['Field Transparency'] = fieldTransparency
 
             #Field bundle radius
             standoff = self.getRunParameter('Grid Standoff')
             nominalBundleZ = -.9*standoff
-            self._metaData['Field Bundle Radius'] = self.calcBundleRadius(nominalBundleZ)
+            self._calculatedData['Bundle z'] = nominalBundleZ
+            self._calculatedData['Field Bundle Radius'] = self.calcBundleRadius(nominalBundleZ)
 
         if numAvalanche > 0:
             # Gains
             rawGain, trimmedGain = self._getGains()
-            self._metaData['Raw Gain'] = rawGain
-            self._metaData['Trimmed Gain'] = trimmedGain
+            self._calculatedData['Raw Gain'] = rawGain
+            self._calculatedData['Trimmed Gain'] = trimmedGain
             
             #Calculate IBN
             IBN = self._calcIBN()
-            self._metaData['Average IBN'] = IBN
+            self._calculatedData['Average IBN'] = IBN
 
             #Calculate IBF on a per-avalanche basis
             IBF, meanIBF, meanIBFErr  = self._calcIBF()
 
             self._avalancheData['IBF'] = self._avalancheData['Avalanche ID'].map(IBF)
-            self._metaData['Average IBF'] = meanIBF
-            self._metaData['Average IBF Error'] = meanIBFErr
+            self._calculatedData['Average IBF'] = meanIBF
+            self._calculatedData['Average IBF Error'] = meanIBFErr
 
-            self._metaData['IBF * Raw Gain'] = meanIBF*rawGain
+            self._calculatedData['IBF * Raw Gain'] = meanIBF*rawGain
+            self._calculatedData['IBF * Trimmed Gain'] = meanIBF*trimmedGain
 
             # Efficiencies
             simRawEff, simRawEffErr = self._getRawEfficiency(threshold=10)
-            self._metaData['Raw Efficiency (10e)'] = simRawEff
-            self._metaData['Raw Efficiency Error'] = simRawEffErr
+            self._calculatedData['Raw Efficiency (10e)'] = simRawEff
+            self._calculatedData['Raw Efficiency Error'] = simRawEffErr
 
             simEff, simEffErr = self._getEfficiency(threshold=10)
-            self._metaData['Efficiency (10e)'] = simEff
-            self._metaData['Efficiency Error'] = simEffErr
-            
+            self._calculatedData['Efficiency (10e)'] = simEff
+            self._calculatedData['Efficiency Error'] = simEffErr
 
         return
 
@@ -690,6 +747,43 @@ class runData:
         axis.grid()
 
         return
+    
+#********************************************************************************#   
+    def _plotAddFieldBundle(self, axis, axes):
+        """
+        Adds field bundle to 2D plots
+
+        Args:
+            axis (matplotlib subplot): Axes object where field bunlde is to be added 
+            axes (str): String defining the cartesian dimensions of 'axes'.
+        """
+
+        #Add nominal field bundle radius - this assumes a circle
+        nominalBundleR = self.getCalcParameter('Field Bundle Radius')
+        nominalBundleZ = self.getCalcParameter('Bundle z')
+        
+        nominalFieldBundle = plt.Circle(
+            (0, 0), nominalBundleR, 
+            facecolor='none', edgecolor='c', lw=2
+        )
+
+        match axes:
+            case 'xy':
+                axis.add_patch(nominalFieldBundle)
+            case 'xz':
+                axis.plot(
+                    [-nominalBundleR, nominalBundleR], [nominalBundleZ, nominalBundleZ], 
+                    lw=2, c='c'
+                )
+            case 'yz':
+                axis.plot(
+                    [-nominalBundleR, nominalBundleR], [nominalBundleZ, nominalBundleZ], 
+                    lw=2, c='c'
+                )
+            case _:
+                print(f'Invalid form of plot axes: {axes}')
+
+        return
 
 
 #********************************************************************************#   
@@ -755,6 +849,9 @@ class runData:
         self._plotAddCellGeometry(ax11, 'xz')
         self._plotAddCellGeometry(ax12, 'yz')
         self._plotAddCellGeometry(ax13, 'xy')
+        self._plotAddFieldBundle(ax11, 'xz')
+        self._plotAddFieldBundle(ax12, 'yz')
+        self._plotAddFieldBundle(ax13, 'xy')
         plt.tight_layout()   
         
         return fig2D
@@ -763,7 +860,20 @@ class runData:
 #********************************************************************************#   
     def add2DFieldLines(self, axes, fieldLineData, target):
         """
-        TODO
+        Plots the 2D projections of electric field lines, colored according to 
+        their intiial location relative to grid.
+
+        Args:
+            axes (list of matplotlib Axes): List where projections are to be plotted.
+            fieldLineData (pandas df): Dataframe containing field line data. 
+                                       ('Field Line x', 'Field Line y', and 'Field Line z')
+            target (str): String specifying the coloring scheme.
+                          Supported options:
+                          - 'individual': Uniquie color for each line.
+                          - 'cathodeLines': Sets line color to blue.
+                          - 'aboveGrid': Sets line color to red.
+                          - 'belowGrid': Sets line color to green.
+                          - 'edgeLines': Sets line color to magenta.
         """
 
         #Set color for each field line location
@@ -800,24 +910,9 @@ class runData:
                 lw=1, c=lineColor
             )
 
-        #Add nominal field bundle radius - TODO: This assumes a circle.
-        nominalBundleR = self.getRunParameter('Field Bundle Radius')
-        nominalBundleZ = -0.9*self.getRunParameter('Grid Standoff')
-        
-        nominalFieldBundle = plt.Circle(
-            (0, 0), nominalBundleR, 
-            facecolor='none', edgecolor='c', lw=2
-        )
-
-        axes[0].plot(
-                [-nominalBundleR, nominalBundleR], [nominalBundleZ, nominalBundleZ], 
-                lw=2, c='c'
-            )
-        axes[1].plot(
-                [-nominalBundleR, nominalBundleR], [nominalBundleZ, nominalBundleZ], 
-                lw=2, c='c'
-            )
-        axes[2].add_patch(nominalFieldBundle)
+        self._plotAddFieldBundle(axes[0], 'xz')
+        self._plotAddFieldBundle(axes[1], 'yz')
+        self._plotAddFieldBundle(axes[2], 'xy')
         
         return
 
@@ -1078,6 +1173,9 @@ class runData:
         self._plotAddCellGeometry(ax11, 'xz')
         self._plotAddCellGeometry(ax12, 'yz')
         self._plotAddCellGeometry(ax13, 'xy')
+        self._plotAddFieldBundle(ax11, 'xz')
+        self._plotAddFieldBundle(ax12, 'yz')
+        self._plotAddFieldBundle(ax13, 'xy')
         plt.tight_layout()   
         
         return fig2D
@@ -1237,6 +1335,11 @@ class runData:
         self._plotAddCellGeometry(ax2, 'xy')
         self._plotAddCellGeometry(ax3, 'xz')
         self._plotAddCellGeometry(ax4, 'xz')
+
+        self._plotAddFieldBundle(ax1, 'xy')
+        self._plotAddFieldBundle(ax2, 'xy')
+        self._plotAddFieldBundle(ax3, 'xz')
+        self._plotAddFieldBundle(ax4, 'xz')
     
         ax1.set_title('Initial Position')
         ax2.set_title('Final Position')
@@ -1314,10 +1417,12 @@ class runData:
         Args:
             binWidth (int): The width of the histogram bins. 
         """
-        fitResults = self._fitAvalancheSize(binWidth)
+        fitResults = self._fitAvalancheSize(binWidth=1)
 
         polyaResults = fitResults['fitPolya'].calcPolya(fitResults['xVal'])
         polyaChi2 = self._getChiSquared(fitResults['yVal'], polyaResults)
+
+        histData = self._histAvalanche(trim=True, binWidth=binWidth)
         
         fig = plt.figure(figsize=(10, 8))
         fig.suptitle(f'Avalanche Size Distribution: Run {self.runNumber}')
@@ -1325,8 +1430,8 @@ class runData:
         ax = fig.add_subplot(111)
 
         ax.bar(
-            fitResults['xVal'], 
-            fitResults['yVal'],
+            histData['binCenters'], 
+            histData['prob'],
             width=binWidth,
             label='Simulation'
         ) 
@@ -1347,7 +1452,7 @@ class runData:
                c='r', ls=':', label=f"Expo Gain = {fitResults['fitExpo'].gain:.0f}e")
         '''
 
-        rawGain = self.getRunParameter('Raw Gain')
+        rawGain = self.getCalcParameter('Raw Gain')
         ax.axvline(x=rawGain, c='g', ls='--', label=f"Raw Gain = {rawGain:.0f}e")
         ax.axvline(x=fitResults['dataGain'], 
                c='g', ls=':', label=f"Trimmed Gain = {fitResults['dataGain']:.0f}e")
@@ -1565,7 +1670,7 @@ class runData:
                 stuckElectrons.append(newPoint)
 
             ##TODO - Can add some other calculation here to determine if electron
-            #  hits wall of SiO2 - Is this unlikely????
+            #  hits side-wall of SiO2 - Is this unlikely????
 
         return pd.DataFrame(stuckElectrons)
 
@@ -1640,7 +1745,10 @@ class runData:
             (occurs when the electron does not avalanche)
 
         Returns:
-            TODO
+            Tuple: A tuple containing:
+                   - IBF (pandas.series): The Ion backflow fraction for each simulated avalanche.
+                   - meanIBF (float): The mean IBF for all avalanches.
+                   - meanIBFErr (float): Standard error of the mean IBF
         """
         #Calculate IBF on a per-avalanche basis
         IBF = self._calcPerAvalancheIBF()
@@ -1735,7 +1843,18 @@ class runData:
 #********************************************************************************#
     def _getRawEfficiency(self, threshold=0):
         """
-        TODO
+        Calculates the raw efficiency of all simulated avalanches based on the
+        fraction of total sizes that exceed the given threshold.
+
+        Utilizes baysian statistics to determine the efficiency.
+
+        Args:
+            threshold (int): The minimum avalanche size to be considered a 'success'.
+
+        Returns:
+            tuple: A tuple containing the calculated efficiency and its uncertainty:
+                   - simEff (float): The estimated raw efficiency.
+                   - simEffErr (float): The standard error of the estimated efficiency.
         """
 
         allAvalancheData = self.getDataFrame('avalancheData')
@@ -1769,7 +1888,19 @@ class runData:
 #********************************************************************************#
     def _getEfficiency(self, threshold=0):
         """
-        TODO
+        Calculates the efficiency of the simulated avalanches based on the
+        fraction of total sizes that exceed the given threshold. 
+        Excludes any avalanches where the intial electron does not generate an avalanche.
+
+        Utilizes baysian statistics to determine the efficiency. 
+
+        Args:
+            threshold (int): The minimum avalanche size to be considered a 'success'.
+
+        Returns:
+            tuple: A tuple containing the calculated efficiency and its uncertainty:
+                   - simEff (float): The estimated efficiency.
+                   - simEffErr (float): The standard error of the estimated efficiency.
         """
 
         allAvalancheData = self.getDataFrame('avalancheData')
@@ -1804,27 +1935,41 @@ class runData:
 #********************************************************************************#
     def plotEfficiency(self, binWidth=1, threshold=0):
         """
+        Generates a histogram of the avalanche size distribution; The data is split
+        based on a given threshold, and the resulting efficiency is indicated.
+        Also includes a fitted Polya function, also split to distiguish the PDF both
+        above and below threshold.
+
+        Args:
+            binWidth (int): The histogram bin width. 
+            threshold (int): The minimum number of electrons required be a 'success'.
+
+        Returns:
+            matplotlib.figure.Figure: The generated efficiency plot.
         """
 
-        fitResults = self._fitAvalancheSize(binWidth)
-
-        xVal = fitResults['xVal']
-        yVal = fitResults['yVal']
+        fitResults = self._fitAvalancheSize(binWidth=1)
         fitPolya = fitResults['fitPolya']
 
-        cutMask = xVal <= threshold
+        histData = self._histAvalanche(trim=True, binWidth=binWidth)
+
+        cutMask = histData['binCenters'] <= threshold
+
+        xData = histData['binCenters']
+        yData = histData['prob']
 
         #Separate data that gets cut
-        xDataCut = xVal[cutMask]
-        yDataCut = yVal[cutMask]
+        xDataCut = xData[cutMask]
+        yDataCut = yData[cutMask]
 
         #Separate data that is not cut
-        xData = xVal[~cutMask]
-        yData = yVal[~cutMask]
+        xDataPass = xData[~cutMask]
+        yDataPass = yData[~cutMask]
 
         #Calculate polya - ensure calculated at threshold
-        xPolyaCut = np.append(xDataCut, [threshold])
-        xPolya = np.append([threshold], xData)
+        
+        xPolyaCut = np.arange(0, threshold+1)
+        xPolya = np.arange(threshold, xData[-1]+1)
         polyaCut = fitPolya.calcPolya(xPolyaCut)
         polyaData = fitPolya.calcPolya(xPolya)
 
@@ -1840,8 +1985,8 @@ class runData:
             label='Data Below Threshold', color='r', alpha=0.5
         )
         ax.bar(
-            xData,
-            yData,
+            xDataPass,
+            yDataPass,
             width=binWidth,
             label='Detected Data', color='g', alpha=0.5
         ) 
@@ -1883,7 +2028,18 @@ class runData:
 #********************************************************************************#
     def _getAvalancheGain(self, avalancheID=0):
         """
-        TODO
+        Calculates the net electron gain produced in a single simulated 
+        electron avalanche.
+
+        Gain is defined as: The total number of electrons geneterated minus the 
+        number of electrons that are lost due to attachment.
+        I.e. (Total Electrons - Attached Electrons) 
+
+        Args:
+            avalancheID (int): The unique ID of the simulated avalanche.
+
+        Returns:
+            int: The net electron gain for the specified avalanche.
         """
         allData = self.getDataFrame('avalancheData')
         singleAvalanche = allData[allData['Avalanche ID']==avalancheID]
@@ -1943,7 +2099,7 @@ class runData:
 #********************************************************************************#
     def plotAverageSignal(self):
         """
-        TODO
+        Plots the average induced signal from all simulated electron avalanches.
         """
 
         allSignals = self.getDataFrame('signalData')
@@ -1952,7 +2108,7 @@ class runData:
         averageCharge = averageSignal.values.cumsum()
         averageTotalCharge = averageCharge[-1]
 
-        rawGain = self.getRunParameter('Raw Gain')
+        rawGain = self.getCalcParameter('Raw Gain')
 
         # Create figure
         fig = plt.figure(figsize=(10, 5))
@@ -1992,7 +2148,8 @@ class runData:
 #********************************************************************************#
     def plotSignalvsGain(self):
         """
-        TODO
+        Generates a 2D histogram of the induced signal vs the electron gain 
+        for all electron avalanches. 
         """
         allSignals = self.getDataFrame('signalData')
         allAvalanche = self.getDataFrame('avalancheData')
@@ -2013,6 +2170,7 @@ class runData:
             bins=maxGain, cmin=1
         )
 
+        #TODO - Test linear/scaled line for this relationship.
         scale = .25e17
         charge = -1.6e-19
         slope = charge*scale
