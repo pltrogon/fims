@@ -286,7 +286,7 @@ int main(int argc, char * argv[]) {
 
     }//end of avalanche bunch loop
 
-		numInBunch = 10;//do bunches of 10 after first iteration
+		numInBunch = 25;//do bunches of 25 after first iteration
 
     //Efficiency calculations
     double success = numAboveThreshold;
