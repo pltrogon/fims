@@ -40,7 +40,6 @@ class myPolya:
                           Must be greater than 0.
             theta (float): The shape parameter of the distribution.
                            Must be greater than or equal to 0.
-            errors TODO
         """
 
         self.gain = gain
@@ -316,7 +315,7 @@ class myPolya:
                 [2*gain, 0.0001]
             )
         else:
-            initial = [gain, 0.5] #TODO - 0, 0.5, or 1 - whats best here
+            initial = [gain, 0.5]
             bounds = (
                 [1, 0],
                 [2*gain, 2]
