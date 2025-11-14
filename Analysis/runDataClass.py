@@ -1527,7 +1527,7 @@ class runData:
             bundle.
         """
         capturedList = []
-        bundleSize = self.getRunParameter('Field Bundle Radius')
+        bundleSize = self.getCalcParameter('Field Bundle Radius')
         
         #Get the radius of the initial position of each ion
         particleData = self.getDataFrame('ionData')
@@ -1552,7 +1552,7 @@ class runData:
             of each ion that escaped the grid despite being outside the field bundle.
         """
         escapedList = []
-        bundleSize = self.getRunParameter('Field Bundle Radius')
+        bundleSize = self.getCalcParameter('Field Bundle Radius')
         
         #Get the radius of the initial position of each ion
         particleData = self.getDataFrame('ionData')
