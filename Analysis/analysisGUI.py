@@ -19,7 +19,7 @@ class App(tk.Tk):
         self.currentPlot = None
         self.currentFig = None
         self.binWidthValue = 1
-        self.thresholdValue = 0
+        self.thresholdValue = 10
         self.curAvalancheID = tk.IntVar(value=0)
         self.curParticle = tk.StringVar(self)
         self.curParticle.set('-- Select --')
