@@ -1229,7 +1229,7 @@ class FIMS_Simulation:
         holeArea = math.pi*radius**2
         optTrans = holeArea/gridArea
         
-        standoffRatio = standoff/pitch
+        standoffRatio = standoff/pad
         padRatio = pad/pitch
         
         #Do calculation using values from fits
@@ -1237,14 +1237,16 @@ class FIMS_Simulation:
             grid standoff ratio, pad length ratio, and 
             optical transparency vs minField.
           Results are then added together.'''
+        #TODO: Update these results
         radialMinField = 570.580*np.exp(-12.670*optTrans)
-        standoffMinField = 27.121*np.exp(-15.9*standoffRatio)
+        standoffMinField = 26.85*np.exp(-4.46*standoffRatio)
         padMinField = 143.84*np.exp(-15.17*padRatio)
         
         minFieldTrans = radialMinField + standoffMinField + padMinField + 3
         
         #Minimum field for efficiency depends only on the standoff
-        minFieldEff = 53.21*np.exp(-1.924*standoffRatio) + 23.47
+        #minFieldEff = 53.21*np.exp(-0.38*standoffRatio) + 23.47  #Ar+Co2
+        minFieldEff = 190.6*np.exp(-0.81*standoffRatio) + 50.48    #T2K
         
         #Choose the larger of the two fields so that both conditions are
         #satisfied simultaneously.
