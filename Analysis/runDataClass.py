@@ -462,8 +462,9 @@ class runData:
             self._calculatedData['Trimmed Gain'] = trimmedGain
             
             #Calculate IBN
-            IBN = self._calcIBN()
+            IBN, IBNErr = self._calcIBN()
             self._calculatedData['Average IBN'] = IBN
+            self._calculatedData['Average IBN Error'] = IBNErr
 
             #Calculate IBF on a per-avalanche basis
             IBF, meanIBF, meanIBFErr  = self._calcIBF()
@@ -1683,7 +1684,9 @@ class runData:
         drift volume will not return to the grid. 
 
         Returns:
-            float: The average number of backflowing ions
+            Tuple containing:
+                - IBN (float): The average number of backflowing ions
+                - IBNErr (float): The error in the average number of backflowing ions
         """
         
         allIons = self.getDataFrame('ionData')
@@ -1696,9 +1699,11 @@ class runData:
         if numAvalanche == 0:
             raise ValueError('Error: Number of avalanches cannot be 0.')
     
-        IBN = numCathode/numAvalanche -1 #Correct for initial ion
+        IBN = numCathode/numAvalanche - 1 #Correct for initial ions for each avalanche
 
-        return IBN
+        IBNErr = np.sqrt(IBN/numAvalanche)
+
+        return IBN, IBNErr
     
 #********************************************************************************#
     def _calcPerAvalancheIBF(self):
@@ -1928,6 +1933,12 @@ class runData:
         simEff = (numAboveThresh+1)/(numAvalanches+2)
         varience = ((numAboveThresh+1)*(numAboveThresh+2))/((numAvalanches+2)*(numAvalanches+3)) - simEff*simEff
 
+
+
+        print('************************')#TODO
+        print(f'Number of events:\n\tAbove: {numAboveThresh}\n\tTotal: {numAvalanches}')
+        print('************************')
+
         simEffErr = math.sqrt(varience)
 
         return simEff, simEffErr
@@ -1954,7 +1965,7 @@ class runData:
         histData = self._histAvalanche(trim=True, binWidth=binWidth)
 
         cutMask = histData['binCenters'] <= threshold
-
+       
         xData = histData['binCenters']
         yData = histData['prob']
 
@@ -2003,10 +2014,8 @@ class runData:
             label='Remaining Polya', c='m', ls='-'
         )
 
-        simulatedEff = yData.sum()/(yData.sum()+yDataCut.sum())
         polyaEff = fitPolya.calcEfficiency(threshold)
-
-        efficiencyText = f'Efficiency:\nSimulated = {simulatedEff:.4f}\nPolya = {polyaEff:.4f}'
+        efficiencyText = f'Polya Efficiency = {polyaEff:.4f}'
 
         ax.text(
             0.8, 0.5, efficiencyText, 
