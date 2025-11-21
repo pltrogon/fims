@@ -358,7 +358,7 @@ def xyInterpolate(point1, point2, zTarget):
     return (x, y, zTarget)
 
 #********************************************************************************#
-def getSetData(runList, xVal, yVal):
+def getSetData(runList, xVal, yVal):#TODO account for calcData vs runData here
     """
     Retrieves and organizes parameter data from a list of runs.
 

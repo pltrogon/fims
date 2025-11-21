@@ -449,27 +449,31 @@ class runData:
 
             #Field bundle radius
             standoff = self.getRunParameter('Grid Standoff')
-            nominalBundleZ = -.9*standoff
+            nominalBundleZ = -.9*standoff                       #TODO - Nominal bundle Z defined here
             self._calculatedData['Bundle z'] = nominalBundleZ
             self._calculatedData['Field Bundle Radius'] = self.calcBundleRadius(nominalBundleZ)
 
         if numAvalanche > 0:
             # Gains
-            rawGain, trimmedGain = self._getGains()
+            rawGain, trimmedGain, gainErr, gainStdDev = self._getGains()
             self._calculatedData['Raw Gain'] = rawGain
             self._calculatedData['Trimmed Gain'] = trimmedGain
+            self._calculatedData['Gain Error'] = gainErr
+            self._calculatedData['Gain StdDev'] = gainStdDev
             
-            #Calculate IBN
-            IBN, IBNErr = self._calcIBN()
-            self._calculatedData['Average IBN'] = IBN
-            self._calculatedData['Average IBN Error'] = IBNErr
+            #Calculate IBN - Includes initial Ion
+            IBN, meanIBN, meanIBNErr, meanIBNStdDev = self._calcIBN()
+            self._avalancheData['IBN'] = self._avalancheData['Avalanche ID'].map(IBN)
+            self._calculatedData['Average IBN'] = meanIBN
+            self._calculatedData['IBN Error'] = meanIBNErr
+            self._calculatedData['IBN StdDev'] = meanIBNStdDev
 
-            #Calculate IBF on a per-avalanche basis
-            IBF, meanIBF, meanIBFErr  = self._calcIBF()
-
+            #Calculate IBF
+            IBF, meanIBF, meanIBFErr, meanIBFStdDev  = self._calcIBF()
             self._avalancheData['IBF'] = self._avalancheData['Avalanche ID'].map(IBF)
             self._calculatedData['Average IBF'] = meanIBF
-            self._calculatedData['Average IBF Error'] = meanIBFErr
+            self._calculatedData['IBF Error'] = meanIBFErr
+            self._calculatedData['IBF StdDev'] = meanIBFStdDev
 
             self._calculatedData['IBF * Raw Gain'] = meanIBF*rawGain
             self._calculatedData['IBF * Trimmed Gain'] = meanIBF*trimmedGain
@@ -973,17 +977,24 @@ class runData:
         This includes any avalanches that hit the simulation limit, and those where
         some electrons have exitted the simulation boundary.
         """
+
+        numAvalanche = self.getRunParameter('Number of Avalanches')
+        if numAvalanche == 0:
+            raise ValueError('Error: Number of avalanches cannot be 0.')
+        
         allAvalancheData = self.getDataFrame('avalancheData')
         trimmedAvalancheData = allAvalancheData[allAvalancheData['Total Electrons'] > 1]
         
         allGains = allAvalancheData['Total Electrons'] - allAvalancheData['Attached Electrons']
         trimmedGains = trimmedAvalancheData['Total Electrons'] - trimmedAvalancheData['Attached Electrons']
         
-
         rawGain = allGains.mean()
         trimmedGain = trimmedGains.mean()
         
-        return rawGain, trimmedGain
+        gainStdDev = trimmedGains.std(ddof=1)
+        gainErr = gainStdDev / np.sqrt(len(trimmedGains))
+        
+        return rawGain, trimmedGain, gainErr, gainStdDev
 
     
 #********************************************************************************#   
@@ -1623,39 +1634,63 @@ class runData:
         return pd.DataFrame(stuckElectrons)
 
 #********************************************************************************#
-    def _calcIBN(self):
+    def _calcPerAvalancheIBN(self):
         """
-        Determines the average number of positive ions that terminate above the grid.
+        Calculates the Ion Backflow Number (IBN) for each individual electron avalanche.
+            NOTE: This result INCLUDES the initial ion.
 
-        Note that this assumes that any ion that the exits the sides of the 
-        drift volume will not return to the grid. 
+        IBN - Number of ions that drift to the cathode.
+        Assumes the following for any ions that exit the simulation volume:
+            above the grid - backflow to cathode
+            below the grid - captured by the grid
 
         Returns:
-            Tuple containing:
-                - IBN (float): The average number of backflowing ions
-                - IBNErr (float): The error in the average number of backflowing ions
+            pandas series: IBN for each avalanche, indexed by 'Avalanche ID'.
         """
-        
+
+        #Get positive ions
         allIons = self.getDataFrame('ionData')
         posIons = allIons[allIons['Ion Charge'] == 1]
         cathIons = posIons[posIons['Final z'] > self.getRunParameter('Grid Thickness')]
 
-        numCathode = len(cathIons)
-        numAvalanche = self.getRunParameter('Number of Avalanches')
+        IBN = cathIons.groupby('Avalanche ID').size()
 
+        return IBN.sort_index()
+
+#********************************************************************************#
+    def _calcIBN(self):
+        """
+        Calculates the IBN on a per-avalanche basis. Then calculates other statistics.
+            NOTE: This result INCLUDES the initial ion.
+
+        Returns:
+            Tuple: A tuple containing:
+                   - IBN (pandas.series): The Ion Backflow Number for each simulated avalanche.
+                   - meanIBN (float): The mean IBN for all avalanches.
+                   - meanIBNErr (float): Standard error of the mean IBN
+                   - meanIBNStdDev (float): Standard deviation of the mean IBN
+        """
+        #Calculate IBN on a per-avalanche basis
+        IBN = self._calcPerAvalancheIBN()
+
+        numAvalanche = self.getRunParameter('Number of Avalanches')
         if numAvalanche == 0:
             raise ValueError('Error: Number of avalanches cannot be 0.')
-    
-        IBN = numCathode/numAvalanche - 1 #Correct for initial ions for each avalanche
+        #if IBN.count() != numAvalanche:
+        #    raise ValueError(f'Error: IBN number does not match avalanches ({IBN.count()}, {numAvalanche}). Run: {self.runNumber}.')
 
-        IBNErr = np.sqrt(IBN/numAvalanche)
+        meanIBN = IBN.mean()
+        meanIBNStdDev = IBN.std(ddof=1)
+        meanIBNErr = meanIBNStdDev / np.sqrt(numAvalanche)
 
-        return IBN, IBNErr
+        return IBN, meanIBN, meanIBNErr, meanIBNStdDev
     
 #********************************************************************************#
     def _calcPerAvalancheIBF(self):
         """
         Calculates the Ion Backflow Fraction (IBF) for each individual electron avalanche.
+            NOTE: This result EXCLUDES the initial ion.
+            If no gain occured, then IBF is NaN.
 
         IBF - Fraction of total ions that drift to the cathode.
         Assumes the following for any ions that exit the simulation volume:
@@ -1670,44 +1705,41 @@ class runData:
         posIons = allIons[allIons['Ion Charge'] == 1]
 
         #separate based on final z location
-        ## Note that top of grid is actually thickness/2
-        gridThick = self.getRunParameter('Grid Thickness')
-        atGrid = posIons[posIons['Final z'] <= gridThick]
-        atCathode = posIons[posIons['Final z'] > gridThick]
+        cathIons = posIons[posIons['Final z'] > self.getRunParameter('Grid Thickness')]
 
-        numAtGrid = atGrid.groupby(posIons['Avalanche ID']).size()
-        numAtCathode = atCathode.groupby(posIons['Avalanche ID']).size()
+        rawTotalIons = posIons.groupby('Avalanche ID').size()
+        rawNumAtCathode = cathIons.groupby('Avalanche ID').size()
 
-        numTotal = numAtCathode.add(numAtGrid, fill_value=0)
+        #Correct for the inital ion - It is not considered backflowing
+        avalancheIons = rawTotalIons.sub(1, fill_value=0)
+        avalancheIons[avalancheIons < 0] = 0
+        backflowIons = rawNumAtCathode.sub(1, fill_value=0)
+        backflowIons[backflowIons < 0] = 0
 
-        #Correct for Ion from intial electron - it is not backflowing
-        trueCathode = numAtCathode.sub(1, fill_value=0)
-        trueTotal = numTotal.sub(1, fill_value=0)
+        IBF = backflowIons.div(avalancheIons, fill_value=0)
 
-        IBF = trueCathode.div(trueTotal, fill_value=0)
-
-        return IBF
+        return IBF.sort_index()
 
 #********************************************************************************#
     def _calcIBF(self):
         """
-        Calculates the IBF on a per-avalanche basis. Then calculates an overall mean 
-        and standard error of the mean.
-            Note that this ignores any NaN values for the IBF.
-            (occurs when the electron does not avalanche)
+        Calculates the IBF on a per-avalanche basis. Then calculates some other stats.
+            NOTE: This result EXCLUDES the initial ion.
 
         Returns:
             Tuple: A tuple containing:
                    - IBF (pandas.series): The Ion backflow fraction for each simulated avalanche.
                    - meanIBF (float): The mean IBF for all avalanches.
                    - meanIBFErr (float): Standard error of the mean IBF
+                   - meanIBFStdDev (float): Standard deviation of the mean IBF
         """
         #Calculate IBF on a per-avalanche basis
         IBF = self._calcPerAvalancheIBF()
         meanIBF = IBF.mean()
-        meanIBFErr = IBF.std()/np.sqrt(IBF.count())
+        meanIBFStdDev = IBF.std(ddof=1)
+        meanIBFErr = meanIBFStdDev / np.sqrt(IBF.count())
 
-        return IBF, meanIBF, meanIBFErr
+        return IBF, meanIBF, meanIBFErr, meanIBFStdDev
         
 #********************************************************************************#
     def _calcOpticalTransparency(self):
@@ -1880,12 +1912,6 @@ class runData:
         simEff = (numAboveThresh+1)/(numAvalanches+2)
         varience = ((numAboveThresh+1)*(numAboveThresh+2))/((numAvalanches+2)*(numAvalanches+3)) - simEff*simEff
 
-
-
-        print('************************')#TODO
-        print(f'Number of events:\n\tAbove: {numAboveThresh}\n\tTotal: {numAvalanches}')
-        print('************************')
-
         simEffErr = math.sqrt(varience)
 
         return simEff, simEffErr
@@ -1950,7 +1976,7 @@ class runData:
         ) 
         ax.axvline(
             x=threshold, 
-            c='r', ls='--', label=f"Threshold = {threshold}e"
+            c='r', ls='--', label=f'{threshold}-electron Threshold'
         )
         ax.plot(
             xPolyaCut, polyaCut, 
@@ -1959,6 +1985,12 @@ class runData:
         ax.plot(
             xPolya, polyaData, 
             label='Remaining Polya', c='m', ls='-'
+        )
+
+        gain = self.getCalcParameter('Trimmed Gain')
+        ax.axvline(
+            x=gain,
+            c='g', ls='--', label=f'Mean Avalanche Size (Gain) = {gain:.1f}'
         )
 
         polyaEff = fitPolya.calcEfficiency(threshold)

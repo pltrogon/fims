@@ -134,7 +134,7 @@ class App(tk.Tk):
             command=self.updateBinWidth)
         self.binWidth.pack(side=tk.LEFT)
         self.binWidth.delete(0, "end")
-        self.binWidth.insert(0, 1)    
+        self.binWidth.insert(0, self.binWidthValue)    
 
         # --- Threshold ---
         threshLabel = tk.Label(self.threshFrame, text='Threshold:')
@@ -147,7 +147,7 @@ class App(tk.Tk):
             command=self.updateThreshold)
         self.threshold.pack(side=tk.LEFT)
         self.threshold.delete(0, "end")
-        self.threshold.insert(0, 0) 
+        self.threshold.insert(0, self.thresholdValue) 
 
         # --- Avalanche number ---
         avalancheLabel = tk.Label(self.avalancheFrame, text='Avalanche ID:')
