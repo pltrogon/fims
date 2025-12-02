@@ -487,6 +487,10 @@ class runData:
             self._calculatedData['Efficiency (10e)'] = simEff
             self._calculatedData['Efficiency Error'] = simEffErr
 
+            #Fits
+            self._calculatedData['Fano Factor'] = gainStdDev**2/trimmedGain
+            self._calculatedData['Theta'] = trimmedGain/(self._calculatedData['Fano Factor']-1) - 1
+
         return
 
 #********************************************************************************#   
@@ -1240,8 +1244,8 @@ class runData:
         ax1 = fig.add_subplot(121)
         ax2 = fig.add_subplot(122)
 
-        ax1.hist(abs(driftZ))
-        ax2.hist(driftR)
+        ax1.hist(abs(driftZ), bins=100)
+        ax2.hist(driftR, bins=100)
 
         ax1.axvline(
             abs(driftZ.iloc[0]), 
@@ -1359,6 +1363,50 @@ class runData:
         plt.tight_layout()   
     
         return fig
+    
+#********************************************************************************#   
+    def plotElectronEnergy(self):
+        """
+        TODO
+        """
+
+        electronData = self.getDataFrame('electronData')
+        lessInitial = electronData[electronData['Electron ID'] != 0]
+
+        fig = plt.figure(figsize=(12, 4))
+        fig.suptitle(f'Electron Energy Distributions')
+
+        ax1 = fig.add_subplot(121)
+        ax2 = fig.add_subplot(122)
+
+        ax1.hist(lessInitial['Initial Energy'], bins=100)
+        ax2.hist(electronData['Final Energy'], bins=100)
+
+        aveInit = lessInitial['Initial Energy'].mean()
+        aveFinal = electronData['Final Energy'].mean()
+
+        ax1.axvline(
+            x=aveInit, 
+            c='r', ls='--', label=f'Average = {aveInit:.1f}'
+        )
+        ax2.axvline(
+            x=aveFinal, 
+            c='r', ls='--', label=f'Average = {aveFinal:.1f}'
+        )
+
+        ax1.set_title('Initial (Excluding Primary)')
+        ax2.set_title('Final (Including Primary)')
+
+        ax1.set_xlabel('Electron Energy (eV)')
+        ax2.set_xlabel('Electron Energy (eV)')
+
+        ax1.legend()
+        ax2.legend()
+
+        plt.tight_layout()  
+
+        return fig
+
 
 #********************************************************************************#   
     def _fitAvalancheSize(self, binWidth):
@@ -1648,7 +1696,7 @@ class runData:
             pandas series: IBN for each avalanche, indexed by 'Avalanche ID'.
         """
 
-        #Get positive ions
+        #Get positive ions that reach cathode
         allIons = self.getDataFrame('ionData')
         posIons = allIons[allIons['Ion Charge'] == 1]
         cathIons = posIons[posIons['Final z'] > self.getRunParameter('Grid Thickness')]
