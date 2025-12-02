@@ -11,38 +11,58 @@
 #include <sstream>
 #include <cstdio>
 #include <vector>
+#include <array>
 
 
-using namespace Garfield;
+using namespace Garfield;Magboltz
 
 int main(int argc, char* argv[]) {
 
-  if((argc != 3) && (argc != 5)){
-    std::cerr << "Format: " << argv[0] << "<InputField (kV/cm)> <GasComposition> (Optional: <ArComp> <CO2Comp>)" << std::endl;
+  if(argc != 5 && argc != 6){
+    std::cerr << "Error - Invalid inputs." << std::endl;
     return 1;
   }
 
-  double inputField = std::atof(argv[1]); //kV/cm
-  double fieldStrength = inputField*1e3;//V/cm
+  double inputField = std::atof(argv[1]); // kV/cm
+  double fieldStrength = inputField*1e3; // V/cm
 
   MediumMagboltz* gasFIMS = new MediumMagboltz();
 
   std::string gasComp = argv[2];
   std::string gasComposition;
+
   //Gas composition
-  if(gasComp == "T2K"){
-    gasComposition = gasComp;
+  if((gasComp == "T2K") || (gasComp == "myT2K")){
+    if(argc != 6){
+      std::cerr << "Error - Invalid T2K inputs." << std::endl;
+      return 1;
+    }
+    int gasCompAr = std::atoi(argv[3]);
+    int gasCompCF4 = std::atoi(argv[4]);
+    int gasCompIsobutane = std::atoi(argv[5]);
+    int gasSum = gasCompAr + gasCompCF4 + gasCompIsobutane;
+    if(abs(gasSum -100) > 1e-3){
+      std::cerr << "Error: Gas composition is not 100%." << std::endl;
+      return 1;
+    }
+    gasComposition = gasComp+"-"+std::to_string(gasCompAr)+"-"+std::to_string(gasCompCF4)+"-"+std::to_string(gasCompIsobutane);
     gasFIMS->SetComposition(
-      "ar", 95.0,
-      "cf4", 3.0, 
-      "iC4H10", 2.0
-  );
+      "ar", gasCompAr,
+      "cf4", gasCompCF4, 
+      "iC4H10", gasCompIsobutane
+    );
   }
+
   else if(gasComp == "ArCO2"){
+    if(argc != 5){
+      std::cerr << "Error - Invalid ArCO2 inputs." << std::endl;
+      return 1;
+    }
     int gasCompAr = std::atoi(argv[3]);
     int gasCompCO2 = std::atoi(argv[4]);
-    if(gasCompAr + gasCompCO2 != 100){
-      std::cerr << "Error: Gas composition of ArCO2 is not 100%." << std::endl;
+    int gasSum = gasCompAr + gasCompCO2;
+    if(abs(gasSum -100) > 1e-3){
+      std::cerr << "Error: Gas composition is not 100%." << std::endl;
       return 1;
     }
 
@@ -51,6 +71,11 @@ int main(int argc, char* argv[]) {
       "ar", gasCompAr, 
       "co2", gasCompCO2
     );
+  }
+  
+  else{
+    std::cerr << "Error - Invalid Gas Composition. Options are: T2K, ArCO2, myT2K" << std::endl;
+    return 1;
   }
 
   //gas parameters:
@@ -134,11 +159,11 @@ int main(int argc, char* argv[]) {
   std::cout << "ElectronVelocity: " << xDriftVelocity << ", " << yDriftVelocity << ", " << std::abs(zDriftVelocity) << "\n";
   std::cout << "ElectronDiffusion: " << diffusionL << ", " << diffusionT << "\n";
 
-  //***** Output gain value *****//	
+  //***** Output value *****//	
   //create output file
   int fieldStrengthINT = fieldStrength;
-  std::string dataFilename = "diffusion."+gasComposition+"."+std::to_string(fieldStrengthINT)+".dat";
-  std::string dataPath = "../../Data/Diffusion/"+dataFilename;
+  std::string dataFilename = "magboltz."+gasComposition+"."+std::to_string(fieldStrengthINT)+".dat";
+  std::string dataPath = "../../Data/Magboltz/"+dataFilename;
   std::ofstream dataFile;
 
   //Write results to file

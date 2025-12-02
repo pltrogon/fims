@@ -81,7 +81,7 @@ class FIMS_Simulation:
         _runGetEfficiency       <----- NEW
         _readEfficiencyFile     <----- NEW
         findFieldForEfficiency <----- NEW
-        runMagboltz             <----- NEW
+        runMagboltz             <----- NEW, changed fromm runDiffusion
         findFieldForTransparency <------ Changed from findMinField
     """
 
@@ -235,8 +235,8 @@ class FIMS_Simulation:
         if not os.path.exists("build/parallelData"):
             os.makedirs("build/parallelData")
 
-        if not os.path.exists("../Data/Diffusion"):
-            os.makedirs("../Data/Diffusion")
+        if not os.path.exists("../Data/Magboltz"):
+            os.makedirs("../Data/Magboltz")
 
         # Get garfield path into environment
         envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
@@ -1350,35 +1350,47 @@ class FIMS_Simulation:
     
 
 #***********************************************************************************#
-    def runMagboltz(self, eField=1, gasComp='ArCO2', gasCompAr=0, gasCompCO2=0):
+    def runMagboltz(self, eField, gasComp, gasFraction=()):
         """
         Executes a C program that utilizes Garfield++ and Magboltz to calculate and save
         the electron drift and diffusion properties for a specified gas mixture at a given
         field strength.
 
         Args:
-            eField (float): The magnitude of the electric field in V/cm.
+            eField (float): The magnitude of the electric field in kV/cm.
             gasComp (str): The identifier for the gas composition type. 
-                            - Must be 'ArCO2' or 'T2K'. 
-            gasCompAr (int): The percentage of Argon mixture.
-            gasCompCO2 (int): The percentage of Carbon Dioxide in the mixture.
+                            - Must be 'ArCO2', 'T2K', or 'myT2K'. 
+            gasFraction (list): Gas composition fractions.
+                                - For ArCO2: [Ar, CO2]
+                                - For myT2K: [Ar, CF4, Isobutane]
 
         Returns:
             bool: True if the program executes successfully. False otherwise.
         """
         originalCWD = os.getcwd()
 
-        gasCompOptions = [
-            'ArCO2',
-            'T2K'
-        ]
+        gasCompositionOptions = {
+            'ArCO2': {'numElements': 2, 'gasAmounts': gasFraction},
+            'T2K': {'numElements': 3, 'gasAmounts': [95.0, 3.0, 2.0]},
+            'myT2K': {'numElements': 3, 'gasAmounts': gasFraction}
+        }
 
-        if gasComp not in gasCompOptions:
-            raise ValueError(f"Error: Invalid gas composition '{gasComp}'")
-        if gasComp == 'ArCO2' and gasCompAr + gasCompCO2 != 100:
-            raise ValueError('Error: Gas composition of ArCO2 is not 100%.')
+        #Validate inputs
+        if gasComp not in gasCompositionOptions:
+            raise ValueError(f"Error: Unknown gas compostion '{gasComp}'")
         if eField <= 0:
             raise ValueError('Error: Invalid electric field.')
+        
+        gasToRun = gasCompositionOptions[gasComp]
+        if len(gasToRun['gasAmounts']) != gasToRun['numElements']:
+            raise ValueError(f"Error: Invalid gas fractions '{gasFraction}'")
+        
+        gasSum = sum(gasToRun['gasAmounts'])
+        if abs(gasSum - 100) > 1e-3:
+            raise ValueError(f"Error: Gas fraction not 100%")
+        
+        runGasFractions = list(gasToRun['gasAmounts'])
+        runGasArgs = " ".join(map(str, runGasFractions))
 
         try:
             os.chdir('./build/')
@@ -1389,13 +1401,13 @@ class FIMS_Simulation:
             newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line)
             os.environ.update(newEnv)
 
-            with open(os.path.join(originalCWD, 'log/logDiffusion.txt'), 'w+') as garfieldOutput:
+            with open(os.path.join(originalCWD, 'log/logMagboltz.txt'), 'w+') as garfieldOutput:
                 startTime = time.monotonic()
-                setupDiffusion = (
-                    f'./runDiffusion {eField} {gasComp} {gasCompAr} {gasCompCO2}'
+                setupMagboltz = (
+                    f'./runMagboltz {eField} {gasComp} {runGasArgs}'
                 )
-                runReturn = subprocess.run(
-                    setupDiffusion, 
+                subprocess.run(
+                    setupMagboltz, 
                     stdout = garfieldOutput, 
                     shell = True, 
                     check = True,
@@ -1403,10 +1415,13 @@ class FIMS_Simulation:
                 )
                 endTime = time.monotonic()
                 garfieldOutput.write(f'\n\nGarfield run time: {endTime - startTime} s')
-    
-            if runReturn.returncode != 0:
-                    print('Garfield++ execution failed. Check log for details.')
-                    return False
+
+        except subprocess.CalledProcessError:
+            print('Garfield++ execution failed. Check log for details.')
+            return False
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
+            return False
             
         finally:
             os.chdir(originalCWD)

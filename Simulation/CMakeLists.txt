@@ -16,7 +16,7 @@ find_package(OpenMP REQUIRED)
 add_executable(runAvalanche avalanche.cc)
 add_executable(runFieldLines checkTransparency.cc)
 add_executable(runEfficiency checkEfficiency.cc)
-add_executable(runDiffusion diffusion.cc)
+add_executable(runMagboltz magboltz.cc)
 
 
 # Link libraries and include directories
@@ -66,13 +66,13 @@ target_link_libraries(runEfficiency
 	OpenMP::OpenMP_CXX
 )
 
-target_include_directories(runDiffusion PRIVATE
+target_include_directories(runMagboltz PRIVATE
     $<TARGET_PROPERTY:GSL::gsl,INTERFACE_INCLUDE_DIRECTORIES>
     $<TARGET_PROPERTY:Garfield::Garfield,INTERFACE_INCLUDE_DIRECTORIES>
     $<TARGET_PROPERTY:ROOT::Hist,INTERFACE_INCLUDE_DIRECTORIES>
 )
 
-target_link_libraries(runDiffusion
+target_link_libraries(runMagboltz
     PRIVATE
         GSL::gsl
         GSL::gslcblas
