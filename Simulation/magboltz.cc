@@ -14,7 +14,7 @@
 #include <array>
 
 
-using namespace Garfield;Magboltz
+using namespace Garfield;
 
 int main(int argc, char* argv[]) {
 

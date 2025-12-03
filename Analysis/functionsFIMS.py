@@ -451,7 +451,7 @@ def plotDataSets(dataSets, xVal, yVal, savePlot=False):
     return
 
 
-def getDiffusionData(gasComp):
+def getMagboltzData(gasComp):
     """
     Loads the results for electron drift and diffusion 
     for a given gas as computed by Magboltz.
@@ -461,8 +461,6 @@ def getDiffusionData(gasComp):
 
     Args:
         gasComp (str): The identifier for the gas composition to load data for.
-                       Must be one of the supported compositions: 
-                       'ArCO2-80-20' or 'T2K'.
 
     Returns:
         pandas.DataFrame: A DataFrame containing the parsed diffusion data, sorted by 'eField'.
@@ -478,17 +476,9 @@ def getDiffusionData(gasComp):
                            - 'diffusionTransverse'
                            - 'diffusionTransverseErr'
     """
-
-    gasCompOptions = [
-            'ArCO2-80-20',
-            'T2K'
-        ]
-
-    if gasComp not in gasCompOptions:
-        raise ValueError(f"Error: Invalid gas composition '{gasComp}'.")
     
-    gasFilenames = f'diffusion.{gasComp}*.dat'
-    dataPath = os.path.join('../Data/Diffusion', gasFilenames)
+    gasFilenames = f'magboltz.{gasComp}*.dat'
+    dataPath = os.path.join('../Data/Magboltz', gasFilenames)
     fileList = glob.glob(dataPath)
 
     if not fileList:
