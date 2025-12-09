@@ -17,6 +17,7 @@ add_executable(runAvalanche avalanche.cc)
 add_executable(runFieldLines checkTransparency.cc)
 add_executable(runEfficiency checkEfficiency.cc)
 add_executable(runMagboltz magboltz.cc)
+add_executable(runParallelPlate parallelPlate.cc)
 
 
 # Link libraries and include directories
@@ -79,3 +80,5 @@ target_link_libraries(runMagboltz
         Garfield::Garfield
 	OpenMP::OpenMP_CXX
 )
+
+target_link_libraries(runParallelPlate Garfield::Garfield)

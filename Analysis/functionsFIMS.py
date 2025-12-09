@@ -379,7 +379,7 @@ def getSetData(runList, xVal, yVal):#TODO account for calcData vs runData here
         simData = runData(inRun)
 
         xData.append(simData.getRunParameter(xVal))
-        yData.append(simData.getRunParameter(yVal))
+        yData.append(simData.getCalcParameter(yVal))
 
     return xData, yData
 
@@ -399,16 +399,9 @@ def plotDataSets(dataSets, xVal, yVal, savePlot=False):
         yVal (str): Parameter name for the y-axis.
         savePlot (bool): Saves plot as a PNG file if True.
     """
-    from simulationClass import FIMS_Simulation
 
     if savePlot and not os.path.exists('./Plots'):
         os.makedirs('./Plots')
-
-    #Check if valid parameters
-    simulation = FIMS_Simulation()
-    allParams = simulation.defaultParam()
-    if xVal not in allParams or yVal not in allParams:
-        raise ValueError(f'Error: Invalid parameter specified.')
 
     #Add units to axis labels if dimensional
     dimensionalParam = [
