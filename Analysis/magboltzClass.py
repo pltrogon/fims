@@ -143,13 +143,13 @@ def _getDriftFieldData(self, maxDriftField=10):
     return optimalField
 
 #********************************************************************************#
-def _getDriftDiffusion(self):
+def _getDriftDiffusion(self, maxDriftField=1):
     """
     TODO
     """
     
-    maxDriftVelocity = magboltzData['driftVelocity'][magboltzData['eField'] <= maxDriftField].max()    
-    optimalDriftField = magboltzData['eField'][magboltzData['driftVelocity']==maxDriftVelocity].iloc[0]
+    maxDriftVelocity = self.gasData['driftVelocity'][self.gasData['eField'] <= maxDriftField].max()    
+    optimalDriftField = self.gasData['eField'][self.gasData['driftVelocity']==maxDriftVelocity].iloc[0]
 
     return optimalDriftField
 

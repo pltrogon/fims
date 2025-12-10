@@ -877,6 +877,53 @@ class FIMS_Simulation:
         finally:
             os.chdir(originalCWD)
         return True
+    
+    #***********************************************************************************#
+    def _runParallelPlate(self, gasComp, gasFraction=(), fieldStrength=0):
+        """
+        TODO
+        """
+        if fieldStrength == 0:
+            raise ValueError(f'Error: Cannot run with field of {fieldStrength}')
+        
+        gasToRun = self._checkGas(gasComp, gasFraction)
+        runGasFractions = list(gasToRun['gasAmounts'])
+        runGasArgs = " ".join(map(str, runGasFractions))
+        
+        originalCWD = os.getcwd()
+        try:
+            os.chdir('./build/')
+
+            # Get garfield path into environment
+            envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
+            envOutput = subprocess.check_output(envCommand, shell=True, universal_newlines=True)
+            newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line)
+            os.environ.update(newEnv)
+
+            with open(os.path.join(originalCWD, 'log/logParallelPlate.txt'), 'w+') as garfieldOutput:
+                startTime = time.monotonic()
+                setupGetEfficiency = (
+                    f'./runParallelPlate {self._getParam('gridStandoff')} {fieldStrength} {gasComp} {runGasArgs}'
+                )
+                runReturn = subprocess.run(
+                    setupGetEfficiency, 
+                    stdout = garfieldOutput, 
+                    shell = True, 
+                    check = True,
+                    env = os.environ
+                )
+                endTime = time.monotonic()
+                garfieldOutput.write(f'\n\nGarfield run time: {endTime - startTime} s')
+    
+            if runReturn.returncode != 0:
+                    print('Garfield++ execution failed. Check log for details.')
+                    return False
+            
+        finally:
+            os.chdir(originalCWD)
+        return True
+
+
 
 #***********************************************************************************#
     def runSimulation(self, changeGeometry=True):
@@ -1059,7 +1106,35 @@ class FIMS_Simulation:
             newField = curField+fieldStep
 
         return newField
+    
 
+#***********************************************************************************#
+    def _getNextField(self, iterNo, efficiencyAtField, targetEfficiency):
+        """
+        TODO
+        """
+        # Determine new field strength
+        newField = None
+
+        if iterNo == 1:
+            newField = self._getParam('fieldRatio')
+
+        # Take constant step of 2 for 2nd iteration
+        elif iterNo == 2:
+            newField = efficiencyAtField['field'][0] + 2
+
+        # Use secant method to determine new field
+        else:
+            newField = self._getEfficiencyField( 
+                fields=np.array([efficiencyAtField['field'][-1], efficiencyAtField['field'][-2]]),
+                efficiencies=np.array([efficiencyAtField['efficiency'][-1], efficiencyAtField['efficiency'][-2], targetEfficiency]),
+                efficienciesErr=np.array([efficiencyAtField['efficiencyErr'][-1], efficiencyAtField['efficiencyErr'][-2]])
+            )
+        
+        if newField is None:
+            raise ValueError('Error: Invalid new field')
+        
+        return newField
 
 #***********************************************************************************#
     def findFieldForEfficiency(self, targetEfficiency=.95, threshold=10):
@@ -1106,9 +1181,11 @@ class FIMS_Simulation:
         iterNo = 0
         iterNoLimit = 10
 
-        fields = []
-        efficiencies = []
-        efficienciesErr = []
+        efficiencyAtField = {
+            'field': [],
+            'efficiency': [],
+            'efficiencyErr': []
+        }        
 
         validEfficiency = False
         self.param['numAvalanche'] = 3000
@@ -1122,35 +1199,15 @@ class FIMS_Simulation:
                 break
 
             print(f'Begining iteration: {iterNo}')
-            print(f'Fields: {fields}')
-            print(f'Efficiencies: {efficiencies}')
-            print(f'Errors: {efficienciesErr}')
+            print(efficiencyAtField)
 
-            # Determine new field strength
-            newField = None
+            newField = self._getNextField(iterNo, efficiencyAtField, targetEfficiency)
+            newFieldRounded = float(math.ceil(newField))
 
-            if iterNo == 1:
-                newField = self._getParam('fieldRatio')
-
-            # Take constant step of 2 for 2nd iteration
-            elif iterNo == 2:
-                newField = fields[0] + 2
-
-            # Use secant method to determine new field
-            else:
-                newField = self._getEfficiencyField( 
-                    fields=np.array([fields[-1], fields[-2]]),
-                    efficiencies=np.array([efficiencies[-1], efficiencies[-2], targetEfficiency]),
-                    efficienciesErr=np.array([efficienciesErr[-1], efficienciesErr[-2]])
-                )
-            
-            if newField is None:
-                raise ValueError('Error: Invalid new field')
-            
-            fields.append(float(math.ceil(newField)))
+            efficiencyAtField['field'].append(newFieldRounded)
                 
-            print(f'Current field ratio: {fields[-1]}')
-            self.param['fieldRatio'] = fields[-1]
+            print(f'Current field ratio: {newFieldRounded}')
+            self.param['fieldRatio'] = newFieldRounded
             
             if not self._writeParam():
                 print('Error writing parameters.')
@@ -1171,23 +1228,23 @@ class FIMS_Simulation:
             #Get efficiency values from file
             effResults = self._readEfficiencyFile()
 
-            efficiencies.append(effResults['efficiency'])
-            efficienciesErr.append(effResults['efficiencyErr'])
+            efficiencyAtField['efficiency'].append(effResults['efficiency'])
+            efficiencyAtField['efficiencyErr'].append(effResults['efficiencyErr'])
 
 
             match effResults['stopCondition']:
                 
                 case 'DID NOT CONVERGE':
                     validEfficiency = False
-                    print(f'Did not converge at {fields[-1]} ({self.param['numAvalanche']} avalanches): {efficiencies[-1]:.3f} +/- {efficienciesErr[-1]:.3f}')
+                    print(f'Did not converge at {efficiencyAtField['field'][-1]} ({self.param['numAvalanche']} avalanches): {efficiencyAtField['efficiency'][-1]:.3f} +/- {efficiencyAtField['efficiencyErr'][-1]:.3f}')
 
                 case 'CONVERGED':
                     validEfficiency = True
-                    print(f'Converged at {fields[-1]}: {efficiencies[-1]:.3f} +/- {efficienciesErr[-1]:.3f}')
+                    print(f'Converged at {efficiencyAtField['field'][-1]}: {efficiencyAtField['efficiency'][-1]:.3f} +/- {efficiencyAtField['efficiencyErr'][-1]:.3f}')
             
                 case 'EXCLUDED':
                     validEfficiency = False
-                    print(f'Excluded at {fields[-1]}: {efficiencies[-1]:.3f} +/- {efficienciesErr[-1]:.3f}')
+                    print(f'Excluded at {efficiencyAtField['field'][-1]}: {efficiencyAtField['efficiency'][-1]:.3f} +/- {efficiencyAtField['efficiencyErr'][-1]:.3f}')
 
                 case _:
                     raise ValueError('Error - Malformed efficiency file.')      
@@ -1350,9 +1407,33 @@ class FIMS_Simulation:
     
 
 #***********************************************************************************#
+    def _checkGas(self, gasComp, gasFraction):
+        """
+        """
+        gasCompositionOptions = {
+            'ArCO2': {'numElements': 2, 'gasAmounts': gasFraction},
+            'T2K': {'numElements': 3, 'gasAmounts': [95.0, 3.0, 2.0]},
+            'myT2K': {'numElements': 3, 'gasAmounts': gasFraction}
+        }
+
+        #Validate inputs
+        if gasComp not in gasCompositionOptions:
+            raise ValueError(f"Error: Unknown gas compostion '{gasComp}'")
+        
+        gasToRun = gasCompositionOptions[gasComp]
+        if len(gasToRun['gasAmounts']) != gasToRun['numElements']:
+            raise ValueError(f"Error: Invalid gas fractions '{gasFraction}'")
+        
+        gasSum = sum(gasToRun['gasAmounts'])
+        if abs(gasSum - 100) > 1e-3:
+            raise ValueError(f"Error: Gas fraction not 100%")
+        
+        return gasToRun
+
+#***********************************************************************************#
     def runMagboltz(self, eField, gasComp, gasFraction=()):
         """
-        Executes a C program that utilizes Garfield++ and Magboltz to calculate and save
+        Executes a C++ program that utilizes Garfield++ and Magboltz to calculate and save
         the electron drift and diffusion properties for a specified gas mixture at a given
         field strength.
 
@@ -1369,25 +1450,10 @@ class FIMS_Simulation:
         """
         originalCWD = os.getcwd()
 
-        gasCompositionOptions = {
-            'ArCO2': {'numElements': 2, 'gasAmounts': gasFraction},
-            'T2K': {'numElements': 3, 'gasAmounts': [95.0, 3.0, 2.0]},
-            'myT2K': {'numElements': 3, 'gasAmounts': gasFraction}
-        }
-
-        #Validate inputs
-        if gasComp not in gasCompositionOptions:
-            raise ValueError(f"Error: Unknown gas compostion '{gasComp}'")
         if eField <= 0:
             raise ValueError('Error: Invalid electric field.')
-        
-        gasToRun = gasCompositionOptions[gasComp]
-        if len(gasToRun['gasAmounts']) != gasToRun['numElements']:
-            raise ValueError(f"Error: Invalid gas fractions '{gasFraction}'")
-        
-        gasSum = sum(gasToRun['gasAmounts'])
-        if abs(gasSum - 100) > 1e-3:
-            raise ValueError(f"Error: Gas fraction not 100%")
+
+        gasToRun = self._checkGas(gasComp, gasFraction)
         
         runGasFractions = list(gasToRun['gasAmounts'])
         runGasArgs = " ".join(map(str, runGasFractions))
@@ -1426,6 +1492,69 @@ class FIMS_Simulation:
         finally:
             os.chdir(originalCWD)
         return True
+    
+#***********************************************************************************#
+    def findParallePlateField(self, eField, gasComp, gasFraction=(), targetEfficiency=.95, threshold=10):
+        """
+        TODO
+        """
+
+        if eField <= 0:
+            raise ValueError('Error: Invalid electric field.')
+
+        gasToRun = self._checkGas(gasComp, gasFraction)
+
+        fields = []
+        efficiencies = []
+        efficienciesErr = []
+
+        iterNo = 0
+        iterNoLimit = 10
+        validEfficiency = False
+
+        while not validEfficiency:
+            
+            iterNo += 1
+            if iterNo > iterNoLimit:
+                print(f'Warning - Iteration limit reached ({iterNoLimit})')
+                break
+
+
+            # Determine new field strength
+            newField = None
+
+            if iterNo == 1:
+                newField = self._getParam('fieldRatio')
+
+            # Take constant step of 2 for 2nd iteration
+            elif iterNo == 2:
+                newField = fields[0] + 2
+
+            # Use secant method to determine new field
+            else:
+                newField = self._getEfficiencyField( 
+                    fields=np.array([fields[-1], fields[-2]]),
+                    efficiencies=np.array([efficiencies[-1], efficiencies[-2], targetEfficiency]),
+                    efficienciesErr=np.array([efficienciesErr[-1], efficienciesErr[-2]])
+                )
+            
+            if newField is None:
+                raise ValueError('Error: Invalid new field')
+            
+            self.param['fieldRatio'] = newField
+
+            #Determine the efficiency
+            if not self._runGetEfficiency(targetEfficiency=targetEfficiency, threshold=threshold):
+                print('Error getting efficiency.')
+                return False
+
+            #Get efficiency values from file
+            effResults = self._readEfficiencyFile()
+
+            efficiencies.append(effResults['efficiency'])
+            efficienciesErr.append(effResults['efficiencyErr'])
+
+
 
 
 #***********************************************************************************#
