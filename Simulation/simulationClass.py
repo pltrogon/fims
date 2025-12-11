@@ -237,6 +237,9 @@ class FIMS_Simulation:
 
         if not os.path.exists("../Data/Magboltz"):
             os.makedirs("../Data/Magboltz")
+        
+        if not os.path.exists("../Data/ParallelPlate"):
+            os.makedirs("../Data/ParallelPlate")
 
         # Get garfield path into environment
         envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
@@ -1494,65 +1497,145 @@ class FIMS_Simulation:
         return True
     
 #***********************************************************************************#
-    def findParallePlateField(self, eField, gasComp, gasFraction=(), targetEfficiency=.95, threshold=10):
+    def _readParallelPlateGainFile(self):
         """
         TODO
         """
 
-        if eField <= 0:
-            raise ValueError('Error: Invalid electric field.')
+        gainFilePath = '../Data/parallelPlateGain.dat'
+        avalancheData = np.loadtxt(gainFilePath, comments='#')
 
-        gasToRun = self._checkGas(gasComp, gasFraction)
+        numAvalanche = len(avalancheData)
+        numNonZero = np.count_nonzero(avalancheData)
 
-        fields = []
-        efficiencies = []
-        efficienciesErr = []
+        meanGain = avalancheData.mean()
+        gainStdDev = np.std(avalancheData, ddof=1)
+        gainErr = gainStdDev/np.sqrt(len(avalancheData))
 
-        iterNo = 0
-        iterNoLimit = 10
-        validEfficiency = False
+        quantileData = self._bootstrapQuantile(avalancheData)
+        n_95 = quantileData['quantile']
+        n_95Err = quantileData['quantileErr']
+        gainVariability = 1 - n_95/meanGain
 
-        while not validEfficiency:
+        avalancheStats = {
+            'meanGain': meanGain,
+            'gainErr': gainErr,
+            'gainStdDev': gainStdDev,
+            'numAvalanche': numAvalanche,
+            'n_95': n_95,
+            'n_95Err': n_95Err,
+            'gainVariability': gainVariability,
+            'numNonZero': numNonZero,
+        }
+
+        return avalancheStats
+    
+#***********************************************************************************#
+    def _bootstrapQuantile(self, data, numIterations=1000, quantile=0.05):
+        """
+        TODO
+        """
+
+        trueQuantile = np.quantile(data, quantile)
+        numData = len(data)
+        quantileEstimates = []
+
+        for inIteration in range(numIterations):
+
+            bootstrapSample = np.random.choice(data, size=numData, replace=True)
+            sampleQuantile = np.quantile(bootstrapSample, quantile)
+            quantileEstimates.append(sampleQuantile)
+
+        quantileEstimates = np.array(quantileEstimates)
+        quantileEstimateStdDev = np.std(quantileEstimates, ddof=1)
+
+        lowBound = np.quantile(quantileEstimates, 0.025)
+        highBound = np.quantile(quantileEstimates, 0.975)
+
+        quantileStats = {
+            'quantile': trueQuantile,
+            'quantileErr': quantileEstimateStdDev,
+            'lowBound': lowBound,
+            'highBound': highBound
+        }
+
+        return quantileStats
+    
+#***********************************************************************************#
+    def scanIsobutane(self, fieldStrength, plateSeparation, compCF4):
+        """
+        TODO
+        """
+        gasComp = 'myT2K'
+        self.param['gridStandoff'] = plateSeparation
+
+        if compCF4 > 90:
+            raise ValueError('Error - CF4 fraction too high.')
+        
+        parallelPlateData = []
+        
+        for compIsobutane in range(3):
+            compAr = 100 - compCF4 - compIsobutane
+            gasFraction = [compAr, compCF4, compIsobutane]
+            gasToRun = self._checkGas(gasComp, gasFraction)
+
+            self._runParallelPlate(gasComp, gasToRun['gasAmounts'], fieldStrength)
+
+            runResults = self._readParallelPlateGainFile()
             
-            iterNo += 1
-            if iterNo > iterNoLimit:
-                print(f'Warning - Iteration limit reached ({iterNoLimit})')
-                break
-
-
-            # Determine new field strength
-            newField = None
-
-            if iterNo == 1:
-                newField = self._getParam('fieldRatio')
-
-            # Take constant step of 2 for 2nd iteration
-            elif iterNo == 2:
-                newField = fields[0] + 2
-
-            # Use secant method to determine new field
-            else:
-                newField = self._getEfficiencyField( 
-                    fields=np.array([fields[-1], fields[-2]]),
-                    efficiencies=np.array([efficiencies[-1], efficiencies[-2], targetEfficiency]),
-                    efficienciesErr=np.array([efficienciesErr[-1], efficienciesErr[-2]])
-                )
+            runResults['E Field'] = fieldStrength
+            runResults['gasComp'] = gasComp
+            runResults['Ar'] = compAr
+            runResults['CF4'] = compCF4
+            runResults['Isobutane'] = compIsobutane
             
-            if newField is None:
-                raise ValueError('Error: Invalid new field')
-            
-            self.param['fieldRatio'] = newField
 
-            #Determine the efficiency
-            if not self._runGetEfficiency(targetEfficiency=targetEfficiency, threshold=threshold):
-                print('Error getting efficiency.')
-                return False
+            parallelPlateData.append(runResults)
 
-            #Get efficiency values from file
-            effResults = self._readEfficiencyFile()
+        parallelPlateData = pd.DataFrame(parallelPlateData)
 
-            efficiencies.append(effResults['efficiency'])
-            efficienciesErr.append(effResults['efficiencyErr'])
+        self._writeGasScan(parallelPlateData, scannedGas='isobutane')
+
+        return 
+        
+#***********************************************************************************#
+    def _writeGasScan(self, data, scannedGas=None):
+        """
+        TODO
+        """
+        gasScans = [
+            'isobutane',
+            'CF4'
+        ]
+
+        if scannedGas not in gasScans:
+            raise ValueError('Error - Invalid gas scan.')
+        
+        if scannedGas == 'isobutane':
+            scanGas = '.scanIsobutane'
+            constantGas = f'.with{data['CF4'].iloc[0]}CF4'
+        if scannedGas == 'CF4':
+            scanGas = '.ScanCF4'
+            constantGas = f'.with{data['isobutane'].iloc[0]}isobutane'
+        
+        gasComposition = data['gasComp'].iloc[0]+scanGas+constantGas
+
+        filePath = '../Data/ParallelPlate'
+        fileName = gasComposition+'.pkl'
+        filename = os.path.join(filePath, fileName)
+
+        data.to_pickle(filename)
+
+        return
+
+
+
+
+        
+
+
+
+ 
 
 
 

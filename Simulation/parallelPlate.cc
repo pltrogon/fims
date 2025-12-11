@@ -132,7 +132,7 @@ int main(int argc, char* argv[]) {
 	double e0 = 0.1;//eV (Garfield is weird when this is 0.)
 	double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
 	
-	int numAvalanche = 2000;
+	int numAvalanche = 5000;
 	std::vector<int> avalancheElectrons(numAvalanche);
 	std::vector<int> avalancheGain(numAvalanche);
 
@@ -177,6 +177,11 @@ int main(int argc, char* argv[]) {
 		avalancheElectrons[inAvalanche] = numElectrons;
 		avalancheGain[inAvalanche] = numElectrons - attachedElectrons;
 
+
+		//Occasionally print out status
+		if(inAvalanche % (numAvalanche/10) == 0){
+			std::cout << "Done " << inAvalanche+1 << " of " << numAvalanche << " avalanches.\n"; 
+		}
 	}//End avalanche loop
 
 	delete avalancheE;
@@ -184,7 +189,7 @@ int main(int argc, char* argv[]) {
 
 	//***** Output avalanche values *****//	
 	//create output file
-  std::string dataFilename = "parallelPlateGainFile.txt";
+  std::string dataFilename = "parallelPlateGain.dat";
   std::string dataPath = "../../Data/"+dataFilename;
 	std::ofstream dataFile;
 
