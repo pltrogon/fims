@@ -1574,7 +1574,7 @@ class FIMS_Simulation:
         
         parallelPlateData = []
         
-        for compIsobutane in range(3):
+        for compIsobutane in range(11):
             compAr = 100 - compCF4 - compIsobutane
             gasFraction = [compAr, compCF4, compIsobutane]
             gasToRun = self._checkGas(gasComp, gasFraction)
@@ -1618,10 +1618,12 @@ class FIMS_Simulation:
             scanGas = '.ScanCF4'
             constantGas = f'.with{data['isobutane'].iloc[0]}isobutane'
         
-        gasComposition = data['gasComp'].iloc[0]+scanGas+constantGas
+        
+        gasComposition = f'{data['gasComp'].iloc[0]}{scanGas}{constantGas}'
+        fieldStrength = f'.at{data['E Field'].iloc[0]}kVcm'
 
         filePath = '../Data/ParallelPlate'
-        fileName = gasComposition+'.pkl'
+        fileName = f'{gasComposition}{fieldStrength}.pkl'
         filename = os.path.join(filePath, fileName)
 
         data.to_pickle(filename)
