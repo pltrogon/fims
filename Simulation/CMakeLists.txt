@@ -18,6 +18,7 @@ add_executable(runFieldLines checkTransparency.cc)
 add_executable(runEfficiency checkEfficiency.cc)
 add_executable(runMagboltz magboltz.cc)
 add_executable(runParallelPlate parallelPlate.cc)
+add_executable(runParallelPlateEfficiency parallelPlateEfficiency.cc)
 
 
 # Link libraries and include directories
@@ -82,3 +83,4 @@ target_link_libraries(runMagboltz
 )
 
 target_link_libraries(runParallelPlate Garfield::Garfield)
+target_link_libraries(runParallelPlateEfficiency Garfield::Garfield)
