@@ -243,7 +243,7 @@ class gasSimulation:
     
 
 #***********************************************************************************#
-    def _runParallelPlate(self, fieldStrength=0, plateSeparation=0):
+    def _runParallelPlateAvalanches(self, fieldStrength=0, plateSeparation=0):
         """
         TODO
         """
@@ -264,12 +264,55 @@ class gasSimulation:
 
             with open(os.path.join(originalCWD, 'log/logParallelPlate.txt'), 'w+') as garfieldOutput:
                 startTime = time.monotonic()
-                setupGetEfficiency = (
+                setupParallelPlate = (
                     f'./runParallelPlate {plateSeparation} {fieldStrength} {self.gasID} {self.gasArgs}'
                 )
                 print(f'Running parallel plate with field strength {fieldStrength}kV/cm and gap {plateSeparation}um...')
                 subprocess.run(
-                    setupGetEfficiency, 
+                    setupParallelPlate, 
+                    stdout = garfieldOutput, 
+                    shell = True, 
+                    check = True,
+                    env = os.environ
+                )
+                endTime = time.monotonic()
+                garfieldOutput.write(f'\n\nGarfield run time: {endTime - startTime} s')
+            
+        finally:
+            os.chdir(originalCWD)
+        return
+    
+#***********************************************************************************#
+    def _runParallelPlateEfficiency(self, fieldStrength=0, plateSeparation=0, verbose=True):
+        """
+        TODO
+        """
+        if fieldStrength == 0:
+            raise ValueError(f'Error: Field strength is 0.')
+        if plateSeparation == 0:
+            raise ValueError(f'Error: Plate separation is 0.')
+        
+        originalCWD = os.getcwd()
+        try:
+            os.chdir('./build/')
+
+            # Get garfield path into environment
+            envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
+            envOutput = subprocess.check_output(envCommand, shell=True, universal_newlines=True)
+            newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line)
+            os.environ.update(newEnv)
+
+            with open(os.path.join(originalCWD, 'log/logParallelPlate.txt'), 'w+') as garfieldOutput:
+                startTime = time.monotonic()
+                setupParallelPlateEfficiency = (
+                    f'./runParallelPlateEfficiency {plateSeparation} {fieldStrength} {self.gasID} {self.gasArgs}'
+                )
+                
+                if verbose:
+                    print(f'Running parallel plate efficiency with field strength {fieldStrength}kV/cm...')
+
+                subprocess.run(
+                    setupParallelPlateEfficiency, 
                     stdout = garfieldOutput, 
                     shell = True, 
                     check = True,
@@ -356,7 +399,9 @@ class gasSimulation:
             gasFraction = [compAr, compCF4, compIsobutane]
             self.setGasComposition('myT2K', gasFraction)
 
-            self._runParallelPlate(fieldStrength, plateSeparation)
+            print(f'Running simulation for: {self.gasID} {self.gasArgs}')
+
+            self._runParallelPlateAvalanches(fieldStrength, plateSeparation)
 
             runResults = self._readGainFile()
             
@@ -395,7 +440,7 @@ class gasSimulation:
             constantGas = f'.with{data['isobutane'].iloc[0]}isobutane'
         
         
-        gasComposition = f'{data['gasComp'].iloc[0]}{scanGas}{constantGas}'
+        gasComposition = f'{data['gasID'].iloc[0]}{scanGas}{constantGas}'
         fieldStrength = f'.at{data['E Field'].iloc[0]}kVcm'
 
         filePath = '../Data/ParallelPlate'
@@ -407,15 +452,178 @@ class gasSimulation:
         return
     
 #***********************************************************************************#
-    def _findIsobutaneEfficiency(self, plateSeparation=0):
+    def _readEfficiencyFile(self):
         """
         TODO
         """
 
-        return 
+        try:
+            with open('../Data/parallelPlateEfficiency.dat', 'r') as inFile:
+                allLines = [inLine.strip() for inLine in inFile.readlines()]
+
+        except FileNotFoundError:
+            print(f"Error: File 'efficiencyFile.txt' not found.")
+            return None
+
+
+        if len(allLines) < 11:
+            raise IndexError("Malformed file.")
+        
+        findEffValues = {}
+        try:
+            findEffValues['stopCondition'] = allLines[7].strip()
+
+            findEffValues['efficiency'] = float(allLines[9].strip())
+            findEffValues['efficiencyErr'] = float(allLines[10].strip())
+
+        except (IndexError, ValueError) as e:
+            print(f'Error extracting values - {e}')
+            return None
+                
+
+        return findEffValues
     
 #***********************************************************************************#
-    def _scanIsobutaneEfficiency(self, plateSeparation, compCF4):
+    def _findIsobutaneEfficiency(self, plateSeparation=0, verbose=True):
+        """
+        TODO
+        """
+
+        iterNo = 0
+        iterNoLimit = 25 #TODO - 
+
+        efficiencyAtField = {
+            'field': [],
+            'efficiency': [],
+            'efficiencyErr': []
+        }        
+
+        validEfficiency = False
+        while not validEfficiency:
+
+            iterNo += 1
+            if iterNo > iterNoLimit:
+                print(f'Warning - Iteration limit reached ({iterNoLimit})')
+                break
+
+            if verbose:
+                print(f'Begining iteration: {iterNo}')
+
+            newField = self._getNextField(iterNo, efficiencyAtField, verbose=verbose)
+            newFieldRounded = float(math.ceil(newField))
+
+            efficiencyAtField['field'].append(newFieldRounded)
+            
+            self._runParallelPlateEfficiency(newFieldRounded, plateSeparation, verbose=verbose)
+
+            #Get efficiency values from file
+            effResults = self._readEfficiencyFile()
+            efficiencyAtField['efficiency'].append(effResults['efficiency'])
+            efficiencyAtField['efficiencyErr'].append(effResults['efficiencyErr'])
+
+            #Determine stopping condition
+            match effResults['stopCondition']:
+                
+                case 'DID NOT CONVERGE':
+                    validEfficiency = False
+                    if verbose:
+                        print(f'Did not converge at {efficiencyAtField['field'][-1]}')
+
+                case 'CONVERGED':
+                    validEfficiency = True
+                    if verbose:
+                        print(f'Converged at {efficiencyAtField['field'][-1]}')
+            
+                case 'EXCLUDED':
+                    validEfficiency = False
+                    if verbose:
+                        print(f'Excluded at {efficiencyAtField['field'][-1]}')
+
+                case _:
+                    raise ValueError('Error - Malformed stop condition.')      
+        #End of find field for efficiency loop
+
+        finalField = efficiencyAtField['field'][-1]
+
+        print(f'At field {finalField}kV/cm: Efficiency = {efficiencyAtField['efficiency'][-1]} +/- {efficiencyAtField['efficiencyErr'][-1]}')
+
+        self._plotEfficiencyConvergence(efficiencyAtField)
+
+        return finalField
+    
+#***********************************************************************************#
+    def _getNextField(self, iterNo, efficiencyAtField, verbose=True):
+        """
+        TODO
+        """
+        # Determine new field strength
+        newField = None
+
+        initialField = 15
+
+        if iterNo == 1:
+            newField = initialField
+
+        # Take constant step of 2 for 2nd iteration
+        elif iterNo == 2:
+            newField = initialField + 2
+
+        # Use secant method to determine new field
+        else:
+            newField = self._getSecantField(efficiencyAtField, verbose=verbose)
+        
+        if newField is None:
+            raise ValueError('Error: Invalid new field')
+        
+        return newField
+    
+#***********************************************************************************#
+    def _getSecantField(self, efficiencyAtField, verbose=True):
+        """
+        TODO
+        """
+
+        curField = efficiencyAtField['field'][-1]
+        prevField = efficiencyAtField['field'][-1]
+        fieldDiff = curField - prevField
+
+        curEff = efficiencyAtField['efficiency'][-1]
+        prevEff = efficiencyAtField['efficiency'][-2]
+
+        curEffMax = curEff + efficiencyAtField['efficiencyErr'][-1]
+        prevEffMin = prevEff - efficiencyAtField['efficiencyErr'][-2]
+
+        effDiff = curEffMax - prevEffMin
+        targetDiff = .95 - curEff
+
+        if abs(effDiff) < 0.001:
+            if verbose:
+                print(f'Warning: Slope near zero. Using heuristic step of 5%.')
+            return curField*1.05 
+        
+        damping = 0.8
+        fieldStep = damping*targetDiff*fieldDiff/effDiff
+        if verbose:
+                print(f'Field Step: {fieldStep:.2f}')
+
+        if fieldStep > 5:
+            if verbose:
+                print(f'Warning: Step size limited to 5 for stability.')
+            newField = curField+5
+
+        elif fieldStep < 1:
+            if verbose:
+                print(f'Warning: Field step small. Using heuristic step of 1.')
+            newField = curField+1
+
+        else:
+            newField = curField+fieldStep
+
+        return newField
+
+    
+#***********************************************************************************#
+    def scanIsobutaneEfficiency(self, plateSeparation, compCF4):
         """
         TODO
         """
@@ -431,9 +639,11 @@ class gasSimulation:
             gasFraction = [compAr, compCF4, compIsobutane]
             self.setGasComposition('myT2K', gasFraction)
 
-            fieldStrength = self._findIsobutaneEfficiency(plateSeparation)
+            print(f'Finding efficiency for: {self.gasID} {self.gasArgs}')
 
-            self._runParallelPlate(fieldStrength, plateSeparation)
+            fieldStrength = self._findIsobutaneEfficiency(plateSeparation, verbose=False)
+
+            self._runParallelPlateAvalanches(fieldStrength, plateSeparation)
 
             runResults = self._readGainFile()
             runResults['E Field'] = fieldStrength
@@ -471,12 +681,31 @@ class gasSimulation:
             constantGas = f'.with{data['isobutane'].iloc[0]}isobutane'
         
         
-        gasComposition = f'{data['gasComp'].iloc[0]}{scanGas}{constantGas}'
+        gasComposition = f'{data['gasID'].iloc[0]}{scanGas}{constantGas}'
 
         filePath = '../Data/ParallelPlate'
         fileName = f'{gasComposition}.Efficiency.pkl'
         filename = os.path.join(filePath, fileName)
 
         data.to_pickle(filename)
+
+        return
+    
+#***********************************************************************************#
+    def _plotEfficiencyConvergence(self, efficiencyAtField):
+        """
+        Docstring for plotEfficiencyComvergence
+        """
+        plt.errorbar(
+            efficiencyAtField['field'], efficiencyAtField['efficiency'], 
+            yerr=efficiencyAtField['efficiencyErr'],
+            ls='', marker='x'
+        )
+        plt.axhline(y=.95, ls=':', c='r')
+        plt.title(f'Efficiency Convergence - {self.gasID} {self.gasArgs}')
+        plt.xlabel('Electic Field Strength (kV/cm)')
+        plt.ylabel('Detector Efficiency')
+        plt.grid()
+        plt.show()
 
         return
