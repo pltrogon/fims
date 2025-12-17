@@ -976,11 +976,11 @@ class FIMS_Simulation:
         """
 
         try:
-            with open('../Data/efficiencyFile.txt', 'r') as inFile:
+            with open('../Data/efficiencyFile.dat', 'r') as inFile:
                 allLines = [inLine.strip() for inLine in inFile.readlines()]
 
         except FileNotFoundError:
-            print(f"Error: File 'efficiencyFile.txt' not found.")
+            print(f"Error: File 'efficiencyFile.dat' not found.")
             return None
 
 

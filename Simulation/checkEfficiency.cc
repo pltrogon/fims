@@ -1,8 +1,17 @@
 /*
  * checkEfficiency.cc
  *
- * TODO
  * 
+ * Garfield++ simulation of single-electron avalanches in a FIMS geometry.
+ * 
+ * Repeats avalanches until an efficiency of 95% with a 10-electron threshold 
+ * is met or excluded with a 2-signma confidence.
+ * 
+ * Input parameters are:
+ * <Target Efficiency>
+ * <Efficiency Threshold>
+ * 
+ * Results are written to a file: "efficiencyFile.dat"
  * Tanner Polischuk & James Harrison IV
  */
 
@@ -329,7 +338,7 @@ int main(int argc, char * argv[]) {
 
 	//***** Output efficiency value *****//	
 	//create output file
-  std::string dataFilename = "efficiencyFile.txt";
+  std::string dataFilename = "efficiencyFile.dat";
   std::string dataPath = "../../Data/"+dataFilename;
 	std::ofstream dataFile;
 
