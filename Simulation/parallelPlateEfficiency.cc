@@ -1,9 +1,21 @@
 /*
  * parallelplateEfficiency.cc
  * 
- * Garfield++ simulation of a single-electron avalanche.
+ * Garfield++ simulation of single-electron avalanches in a parallel plate geometry.
  * 
- * In a parallel-plate geometry
+ * Repeats avalanches until an efficiency of 95% with a 10-electron threshold 
+ * is met or excluded with a 2-signma confidence.
+ * 
+ * Input parameters are:
+ * <Plate separation> - In microns
+ * <Electric field strength> - In kV/cm
+ * <Gas composition> - "T2K", "ArCO2", or "myT2K"
+ * <Gas component fractions> - As needed based on gas composition
+ * 
+ * Results are written to a file: "parallelPlateEfficiency.dat"
+ * 
+ * Tanner Polischuk
+ * December 2025
  */
 
 //Garfield includes
@@ -101,16 +113,13 @@ int main(int argc, char* argv[]) {
 	gasFIMS->SetMaxElectronEnergy(200);
 	gasFIMS->Initialise(true);
 
+	//Create geometry and field
 	ComponentAnalyticField parallePlate;
 	parallePlate.SetMedium(gasFIMS);
-
-
 	double voltage = eField*gap*1000;
 	parallePlate.AddPlaneY(0., 0.);
 	parallePlate.AddPlaneY(gap, -voltage);
-	
 	parallePlate.PrintCell();
-
 
 	//Create a sensor
 	Sensor* sensorFIMS = new Sensor();
@@ -120,19 +129,18 @@ int main(int argc, char* argv[]) {
 		gap, gap, gap
 	);
 
+	//Avalanche properties
 	const int avalancheLimit = 20;
 	AvalancheMicroscopic* avalancheE = new AvalancheMicroscopic;
 	avalancheE->SetSensor(sensorFIMS);
 	avalancheE->EnableAvalancheSizeLimit(avalancheLimit);
 			
-	// ***** Prepare Avalanche Electron ***** //
 	//Set the Initial electron parameters
 	double x0 = 0., y0 = .99*gap, z0 = 0.;
 	double t0 = 0.;//ns
 	double e0 = 0.1;//eV (Garfield is weird when this is 0.)
 	double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
 	
-
 	//Set up variables for simulation
 	int totalAvalanches = 0;
 	int numAboveThreshold = 0;

@@ -432,12 +432,15 @@ class gasSimulation:
         if scannedGas not in gasScans:
             raise ValueError('Error - Invalid gas scan.')
         
-        if scannedGas == 'isobutane':
-            scanGas = '.scanIsobutane'
-            constantGas = f'.with{data['CF4'].iloc[0]}CF4'
-        if scannedGas == 'CF4':
-            scanGas = '.ScanCF4'
-            constantGas = f'.with{data['isobutane'].iloc[0]}isobutane'
+        match scannedGas:
+            case 'isobutane':
+                scanGas = '.scanIsobutane'
+                constantGas = f'.with{data['CF4'].iloc[0]}CF4'
+            case 'CF4':
+                scanGas = '.ScanCF4'
+                constantGas = f'.with{data['isobutane'].iloc[0]}isobutane'
+            case _:
+                raise ValueError('Error - Gas scan error.')
         
         
         gasComposition = f'{data['gasID'].iloc[0]}{scanGas}{constantGas}'
@@ -673,12 +676,15 @@ class gasSimulation:
         if scannedGas not in gasScans:
             raise ValueError('Error - Invalid gas scan.')
         
-        if scannedGas == 'isobutane':
-            scanGas = '.scanIsobutane'
-            constantGas = f'.with{data['CF4'].iloc[0]}CF4'
-        if scannedGas == 'CF4':
-            scanGas = '.ScanCF4'
-            constantGas = f'.with{data['isobutane'].iloc[0]}isobutane'
+        match scannedGas:
+            case 'isobutane':
+                scanGas = '.scanIsobutane'
+                constantGas = f'.with{data['CF4'].iloc[0]}CF4'
+            case 'CF4':
+                scanGas = '.scanCF4'
+                constantGas = f'.with{data['isobutane'].iloc[0]}isobutane'
+            case _:
+                raise ValueError('Error - Scanned gas incorrect.')
         
         
         gasComposition = f'{data['gasID'].iloc[0]}{scanGas}{constantGas}'
