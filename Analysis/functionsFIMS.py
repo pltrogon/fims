@@ -379,7 +379,7 @@ def getSetData(runList, xVal, yVal):#TODO account for calcData vs runData here
         simData = runData(inRun)
 
         xData.append(simData.getRunParameter(xVal))
-        yData.append(simData.getRunParameter(yVal))
+        yData.append(simData.getCalcParameter(yVal))
 
     return xData, yData
 
@@ -399,16 +399,9 @@ def plotDataSets(dataSets, xVal, yVal, savePlot=False):
         yVal (str): Parameter name for the y-axis.
         savePlot (bool): Saves plot as a PNG file if True.
     """
-    from simulationClass import FIMS_Simulation
 
     if savePlot and not os.path.exists('./Plots'):
         os.makedirs('./Plots')
-
-    #Check if valid parameters
-    simulation = FIMS_Simulation()
-    allParams = simulation.defaultParam()
-    if xVal not in allParams or yVal not in allParams:
-        raise ValueError(f'Error: Invalid parameter specified.')
 
     #Add units to axis labels if dimensional
     dimensionalParam = [
@@ -449,88 +442,3 @@ def plotDataSets(dataSets, xVal, yVal, savePlot=False):
         
     plt.show()
     return
-
-
-def getDiffusionData(gasComp):
-    """
-    Loads the results for electron drift and diffusion 
-    for a given gas as computed by Magboltz.
-
-    Assumes that the files have been generated, 
-    and parses those of the form 'diffusion.<gasComp>*.dat'.
-
-    Args:
-        gasComp (str): The identifier for the gas composition to load data for.
-                       Must be one of the supported compositions: 
-                       'ArCO2-80-20' or 'T2K'.
-
-    Returns:
-        pandas.DataFrame: A DataFrame containing the parsed diffusion data, sorted by 'eField'.
-                          None if no matching files are found. 
-                          The DataFrame includes:
-                           - 'filename'
-                           - 'gasComposition'
-                           - 'eField'
-                           - 'driftVelocity'
-                           - 'driftVelocityErr'
-                           - 'diffusionLongitudinal'
-                           - 'diffusionLongitudinalErr'
-                           - 'diffusionTransverse'
-                           - 'diffusionTransverseErr'
-    """
-
-    gasCompOptions = [
-            'ArCO2-80-20',
-            'T2K'
-        ]
-
-    if gasComp not in gasCompOptions:
-        raise ValueError(f"Error: Invalid gas composition '{gasComp}'.")
-    
-    gasFilenames = f'diffusion.{gasComp}*.dat'
-    dataPath = os.path.join('../Data/Diffusion', gasFilenames)
-    fileList = glob.glob(dataPath)
-
-    if not fileList:
-        print(f"No files found matching pattern '{dataPath}'.")
-        return None
-
-    dataMagboltz = []
-
-    for inFile in fileList:
-        inData = {"filename": os.path.basename(inFile)}
-        
-        try:
-            with open(inFile, 'r') as file:
-                lines = [line.strip() for line in file.readlines()]
-            
-            if len(lines) < 11:
-                print(f"Error: File {inFile} has unexpected format - Skipping.")
-                continue
-
-            inData['gasComposition'] = lines[3]
-            inData['eField'] = float(lines[5])
-            inData['driftVelocity'] = float(lines[7])
-            inData['driftVelocityErr'] = float(lines[8])
-            inData['diffusionLongitudinal'] = float(lines[10])
-            inData['diffusionLongitudinalErr'] = float(lines[11])
-            inData['diffusionTransverse'] = float(lines[13])
-            inData['diffusionTransverseErr'] = float(lines[14])
-
-            dataMagboltz.append(inData)
-            
-        except IndexError:
-            print(f"Parsing Error: Could not find data at expected line index in {inFile}.")
-        except ValueError:
-            print(f"Parsing Error: Could not convert value to float in {inFile}.")
-        except IOError as e:
-            print(f"Error opening or reading file {inFile}: {e}")
-        except Exception as e:
-            print(f"An unexpected error occurred while processing {inFile}: {e}")
-
-    rawData = pd.DataFrame(dataMagboltz)
-
-    sortedData = rawData.sort_values(by='eField').reset_index(drop=True)
-
-    return sortedData
-    
