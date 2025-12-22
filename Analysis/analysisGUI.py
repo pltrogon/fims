@@ -241,6 +241,12 @@ class App(tk.Tk):
             )
         self.showEfficiency.pack(side=tk.LEFT)
 
+        self.showEnergy = tk.Button(
+            self.buttonFrame, text='Electron Energy', 
+            command=lambda: self.plotButton('Electron Energy')
+            )
+        self.showEnergy.pack(side=tk.TOP)
+
         self.showAvalancheTrack = tk.Button(
             self.buttonFrame, text='Avalanche Tracks', 
             command=lambda: self.plotButton('AvalancheTracks')
@@ -379,6 +385,9 @@ class App(tk.Tk):
                 
                 case 'Efficiency':
                     self.currentFig = self.simData.plotEfficiency(binWidth=self.binWidthValue, threshold=self.thresholdValue)
+                
+                case 'Electron Energy':
+                    self.currentFig = self.simData.plotElectronEnergy()
 
                 case 'FieldLines':
                     self.currentFig = self.simData.plotAllFieldLines()
