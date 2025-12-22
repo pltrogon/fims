@@ -1064,7 +1064,19 @@ class FIMS_Simulation:
 #***********************************************************************************#
     def _getNextField(self, iterNo, efficiencyAtField, targetEfficiency):
         """
-        TODO
+        Determines the next field ratio for achieving a target efficiency. 
+        Utilizes the iteration number to choreograph a secant-based root-finding method.
+        
+        Args:
+            iterNo (int): Iteration number.
+            efficiencyAtField (dict): Dictionary containing field and efficiency information:
+                - 'field': Array of previous field strengths.
+                - 'efficiency': Array of previous efficiencies.
+                - 'efficiencyErr': Array of previous efficiency errors.
+            verbose (bool): Optional parameter for displaying the intermediate results
+
+        Returns:
+            float: Calculated field ratio for target efficiency
         """
         # Determine new field strength
         newField = None

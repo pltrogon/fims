@@ -24,16 +24,58 @@ from scipy.stats import shapiro
 #********************************************************************************#
 class gasData:
     """
-    TODO
+    Class representing simulation data from scanning through a specified gas.
+
+    Handles data from parallel plate simulations where one gas 
+    component is scanned while another remains constant.
+
+    Attributes:
+        gasID (str): Identifier for the specific simulation run.
+        scannedGas (str): The name of the gas being varied.
+        constGasFraction (int): Percentage of the non-scanned gas component.
+        gasEfficiencyData (pd.DataFrame): Data filtered for 95% efficiency criteria.
+        fields (list[int]): Sorted list of available field strengths (kV/cm).
+        gasFieldData (dict): Dictionary mapping field strengths to DataFrames 
+            containing scan results.
     """
 
 
 #********************************************************************************#
     # Initialize
-    def __init__(self, gasID, scannedGas, constGasFraction):
+    def __init__(self):
+        """
+        Initializes a scanned gas data object.
+        """
 
+        self.gasID = None
+        self.scannedGas = ""
+        self.constGasFraction = None
+
+        self._gasComposition = ""
+
+        self.gasEfficiencyData = None
+        self.fields = None
+        self.gasFieldData = None
         
 
+
+#********************************************************************************#
+    def loadGasScans(self, gasID=None, scannedGas=None, constGasFraction=None):
+        """        
+        Loads all simulated data from scanning a given gas and given constant gas. 
+
+        Assumes simulations are available at both a constant field strength
+        and with fields necessary for 95% effieincy.
+
+        Args:
+            gasID (str): Identifier of the gas mixture.
+            scannedGas (str): Name of the scanned gas.
+            constGasFraction (int): Amount for the constant, non-scanned gas.
+        """
+
+        if gasID is None or scannedGas is None or constGasFraction is None:
+            raise ValueError("Error - No inputs.")
+        
         self.gasID = gasID
         self.scannedGas = scannedGas
         self.constGasFraction = constGasFraction
@@ -42,18 +84,19 @@ class gasData:
         self._checkGas()
         self._gasComposition = self._getGasString()
 
+        #Get results from efficiency scans
         self.gasEfficiencyData = self._readEfficiencyScans()
 
-
+        #Get results from all constant-field scans avalable
         self.fields = self._getFieldStrengths()
         self.gasFieldData = self._readGasScans()
 
-
+        return
 
 #********************************************************************************#
     def _checkGas(self):
         """
-        TODO
+        Checks if the gas scan string is valid.
         """
 
         gasScans = [
@@ -69,6 +112,12 @@ class gasData:
 
 #********************************************************************************#
     def _getGasString(self):
+        """
+        Gets the gas composition string based on the scanned gas.
+
+        Returns:
+            str: Gas composition identifier string.
+        """
 
         self._checkGas()
 
@@ -88,7 +137,10 @@ class gasData:
 #********************************************************************************#
     def _readEfficiencyScans(self):
         """
-        TODO
+        Reads all efficiency scan data from a .pkl file.
+
+        Returns:
+            pd.Dataframe: Datframe witht the efficiency scan results.
         """
 
         filePath = '../Data/ParallelPlate'
@@ -103,7 +155,14 @@ class gasData:
 #********************************************************************************#
     def _calcVariability(self, gasData):
         """
-        TODO
+        Calculate the gain variability, defined as 1 - n_95 / nbar.
+        Appends these results to the input dataframe.
+
+        Args:
+            gasData (pd.dataframe): Dataframe containing the gas-scan data
+
+        Returns:
+            pd.dataframe: Dataframe containing the updated gas-scan data
         """
 
         gasData['variability'] = 1 - gasData['n_95']/gasData['meanGain']
@@ -117,7 +176,10 @@ class gasData:
 #********************************************************************************#
     def _getFieldStrengths(self):
         """
-        TODO
+        Gets all field strengths with scans associated with the given gas.
+
+        Returns:
+            list: List of field strengths.
         """
 
         try:
@@ -154,7 +216,11 @@ class gasData:
 #********************************************************************************#
     def _readGasScans(self):
         """
-        TODO
+        Reads all scan data from avaialble .pkl files into a dictionary.
+        The keys are the field strengths.
+
+        Returns:
+            dict: Dictionary containing pandas dataframes with the scan results.
         """
         gasData = {}
         filePath = '../Data/ParallelPlate'
@@ -179,8 +245,17 @@ class gasData:
 #********************************************************************************#
     def plotGasScan(self, fieldStrength):
         """
-        TODO
+        Plots the Isobutane scan data at a particular field strength.
+
+        Incldues plots for the gain, threshold for 95% efficiency, and gain variability
+        as functions of isobutane concentration.
+
+        Args:
+            fieldStrength (int): Field strength in kV/cm
         """
+
+        if fieldStrength not in self.fields:
+            raise ValueError('Error - Invalid field strength.')
 
         plotData = self.gasFieldData[fieldStrength]
 
@@ -235,7 +310,10 @@ class gasData:
 #********************************************************************************#
     def plotGasEfficiencyScan(self):
         """
-        TODO
+        Plots the Isobutane scan data with a 95% efficiency at 10e threshold requirement
+
+        Incldues plots for the fieldm gain, threshold for 95% efficiency, and gain variability
+        as functions of isobutane concentration.
         """
         plotData = self.gasEfficiencyData
 
@@ -306,7 +384,14 @@ class gasData:
 #********************************************************************************#
     def variabilitySWtest(self):
         """
-        TODO
+        Performs a Shapiro-Wilk test on the gain variability.
+
+        The null hypothesis of this test is that the data is normally distributed.
+
+        Returns:
+            shapiroW (float): W value result of the SW test
+            shapiroPval (flaot): P value result of the SW test
+            meanVariability (float): Mean value of the gain variability
         """
         meanGain = self.gasEfficiencyData['meanGain'].mean()
         meanThreshold = self.gasEfficiencyData['n_95'].mean()
@@ -330,14 +415,32 @@ class gasData:
 
 class magboltzSimulation:
     """
-    TODO
+    A class representing Magboltz simulation data for electron transport properties
+    within a gas.
+
+    Indlues the drift velocity, transverse diffusion, and longitudinal diffusion.
+
+    Attributes:
+        gasID (str): The unique identifier for the gas mixture being analyzed.
+        fields (list[int]): A list of electric field strengths available for 
+            the specified gasID.
+        magboltzData (pandas.DataFrame): A collection of transport properties 
+            including drift velocity and diffusion (longitudinal/transverse) 
+            with associated error margins.
+        optimalDriftField (float): The electric field value (kV/cm) where the 
+            maximum drift velocity occurs within a defined range.
+        plotParam (dict): Aesthetic settings (name and color) used for 
+            generating consistent plots.
     """
 
 
 #********************************************************************************#
     def __init__(self, gasID):
         """
-        TODO
+        Initializes the Magboltz data handler for a specific gas mixture.
+
+        Args:
+            gasID (str): The identifier string for the gas mixture
         """
 
         self.gasID = gasID
@@ -353,7 +456,10 @@ class magboltzSimulation:
 #********************************************************************************#
     def _checkGasID(self):
         """
-        TODO
+        Validates that the gasID exists within the Magboltz data directory.
+
+        Returns:
+            list[int]: A sorted list of available electric field strengths for the gas.
         """
 
         gasOptions = self._getGasIDandFields()
@@ -367,7 +473,13 @@ class magboltzSimulation:
 #********************************************************************************#
     def _getGasIDandFields(self):
         """
-        TODO
+        Scans the data directory to map available gas types to their field strengths.
+
+        Expected filename format: 'magboltz.gasName.fieldStrength.dat'
+
+        Returns:
+            dict: A dictionary where keys are gas identifiers (str) and values 
+                are lists of associated electric field strengths (int).
         """
 
         try:
@@ -471,7 +583,13 @@ class magboltzSimulation:
 #********************************************************************************#
     def _getOptimalDriftField(self, maxDriftField=10):
         """
-        TODO
+        Calculates the electric field value that produces the maximum drift velocity.
+
+        Args:
+            maxDriftField (float): The upper bound of the electric field to search. (in kV/cm)
+
+        Returns:
+            float: The electric field strength corresponding to the maximum drift velocity.
         """
         
         maxDriftVelocity = self.magboltzData['driftVelocity'][self.magboltzData['eField'] <= maxDriftField].max()    
@@ -481,6 +599,14 @@ class magboltzSimulation:
 
 #********************************************************************************#
     def setPlotParams(self, gasName, color):
+        """
+        Sets parameters for data visualization. 
+
+        Args:
+            gasName (str): The label to be used in the plot legend.
+            color (str): The color to be used for lines and error bands.
+        """
+
         self.plotParam['gasName'] = gasName
         self.plotParam['c'] = color
 
@@ -489,10 +615,21 @@ class magboltzSimulation:
 #********************************************************************************#
     def plotMagboltz(self, fig=None, axes=None):
         """
-        TODO
+        Generates or updates a two-panel plot of Magboltz gas properties.
+
+        Includes plots for the electron drift velocity and the diffusion coefficiencts.
+        If fig and axes are provided, they are updated. 
+        If not provided then a new plot is created. 
+
+        Args:
+            fig (matplotlib.figure.Figure): An existing figure object. 
+            axes (list of matplotlib.axes.Axes): A list/array of two axes.
+
+        Returns:
+            tuple: (fig, axes) The Matplotlib figure and axes objects used.
         """
 
-        if fig is None or axes is None:
+        if fig is None and axes is None:
             newPlot = True
             fig, axes = plt.subplots(1, 2, figsize=(16, 8))
             fig.suptitle(f'Magboltz Calculations')
@@ -551,6 +688,7 @@ class magboltzSimulation:
             c=self.plotParam['c'], ls=':'
         )
 
+
         if newPlot:
             for inax in axes:
                 inax.axvline(
@@ -567,6 +705,7 @@ class magboltzSimulation:
             diffusion.set_title('Diffusion Coefficients')
             diffusion.set_ylabel('Diffusion (um/sqrt(cm))')
 
+        #Update legends
         for inax in axes:
             inax.legend()
         

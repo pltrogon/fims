@@ -1367,7 +1367,10 @@ class runData:
 #********************************************************************************#   
     def plotElectronEnergy(self):
         """
-        TODO
+        Histogram of the initial and final energy distributions for all simulated 
+        electrons except for the initial.
+
+        Indicates the mean energy. 
         """
 
         electronData = self.getDataFrame('electronData')

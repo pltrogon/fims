@@ -1,9 +1,20 @@
 /*
  * parallelplate.cc
  * 
- * Garfield++ simulation of a single-electron avalanche.
+ * Garfield++ simulation of single-electron avalanches in a parallel-plate geometry.
  * 
- * In a parallel-plate geometry
+ * 
+ * Input parameters are:
+ * <Plate Separation> - In micron
+ * <Electric Field Strength> - in kV/cm
+ * <Gas ID string> - Options are "T2K", "ArCO2", "myT2K"
+ * <Gas component fractions> - As needed
+ * 
+ * Data is written to the file: "parallelPlateGain.dat"
+ * 
+ * Tanner Polischuk
+ * December 2025
+ * 
  */
 
 //Garfield includes

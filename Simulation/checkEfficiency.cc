@@ -12,7 +12,9 @@
  * <Efficiency Threshold>
  * 
  * Results are written to a file: "efficiencyFile.dat"
+ * 
  * Tanner Polischuk & James Harrison IV
+ * December 2025
  */
 
 //Garfield includes

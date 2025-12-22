@@ -19,7 +19,14 @@ import re
 
 class gasSimulation:
     """
-    TODO
+    Class representing an Electron Avalanche in Gas Simulation.
+
+    This is with a user-defined gas mixture in a parallel plate geometry.
+
+    Attributes:
+        gadID (str): Idetntifier of the user-defined gas mixture.
+        gasFractions (list): List of the fractional gas components.
+        gasArgs (str): String of the gas fractions, for use in calling the C++ executable.
     """
 
 
@@ -81,7 +88,7 @@ class gasSimulation:
         Reads the Garfiled++ source path, and ensures a log and build directory.
         Compiles the executables using cmake and make.
     
-        Note: If a degmentation fault occurs, it is most likely that the
+        Note: If a segmentation fault occurs, it is most likely that the
               Garfield++ library is not sourced correctly.
         """
 
@@ -137,10 +144,22 @@ class gasSimulation:
 #***********************************************************************************#
     def setGasComposition(self, gasID=None, gasFractions=None):
         """
-        TODO
+        Sets the gas ID and component composition fractions.
+
+        Args:
+            gasID (str): ID of the gas composition.
+            gasFractions (float): Fractional components of the gas.
+
+
         """
-        if gasID == 'T2K':
+
+        if gasID is None:
+            raise ValueError('Error - No gas.')
+        elif gasID == 'T2K':
             gasFractions = [95.0, 3.0, 2.0]
+
+        if gasFractions is None:
+            raise ValueError('Error - Invalid gas composition')
 
         self._checkGas(gasID, gasFractions)
 
@@ -153,11 +172,21 @@ class gasSimulation:
 #***********************************************************************************#
     def _checkGas(self, gasID, gasFractions):
         """
+        Checks that the input gas is valid.
+        
+        This includes checking:  
+            - Valid ID string
+            - Appropriate number of components
+            - Fractional amounts sum to 100%
+
+        Args:
+            gasID (str): ID of the gas composition.
+            gasFractions (float): Fractional components of the gas.
         """
         gasOptions = {
-            'T2K': 3,
-            'ArCO2': 2,
-            'myT2K': 3
+            'T2K': 3, # Note components are Ar/CF4/Isobutane
+            'ArCO2': 2, # Note components are Ar/CO2
+            'myT2K': 3 # Note components are Ar/CF4/Isobutane
         }
 
         if gasID not in gasOptions:
@@ -207,7 +236,7 @@ class gasSimulation:
                 setupMagboltz = (
                     f'./runMagboltz {eField} {self.gasID} {self.gasArgs}'
                 )
-                print(f'Running Magboltz for field of {eField:.3} kV/cm...')
+                print(f'Running Magboltz for field of {eField:.3f} kV/cm...')
                 subprocess.run(
                     setupMagboltz, 
                     stdout = garfieldOutput, 
@@ -230,14 +259,15 @@ class gasSimulation:
 #***********************************************************************************#
     def scanMagboltz(self):
         """
-        TODO
+        Executes the Magboltz program to get the electron drift velocity and 
+        diffusion coefficiencts for a range of fields between 0.1 kV/cm and 100 kV/cm.
         """
         eFields = np.logspace(-1, 2, 31)
 
         print(f'Scanning {len(eFields)} fields...')
         for inField in eFields:
-            
             self.runMagboltz(inField)
+        print(f'Done {len(eFields)} fields...')
 
         return
     
@@ -245,7 +275,15 @@ class gasSimulation:
 #***********************************************************************************#
     def _runParallelPlateAvalanches(self, fieldStrength=0, plateSeparation=0):
         """
-        TODO
+        Executes a Garfield++ program to simulate electron avalanches in a parallel 
+        plate geometry at a given plate separation and field strength.
+
+        5000 single-electron avalanches are simulated, with a maximum size of 1000.
+        Results are saved in the file: "Data/parallelPlateGain.dat"
+
+        Args:
+            fieldStrength (float): The field strength in kV/cm
+            plateSeparation (int): Then separation between the plates in microns
         """
         if fieldStrength == 0:
             raise ValueError(f'Error: Field strength is 0.')
@@ -285,7 +323,19 @@ class gasSimulation:
 #***********************************************************************************#
     def _runParallelPlateEfficiency(self, fieldStrength=0, plateSeparation=0, verbose=True):
         """
-        TODO
+        Executes a Garfield++ program to simulate electron avalanches in a parallel 
+        plate geometry at a given plate separation and field strength.
+
+        Using Bayesyian statistics, the efficiency is determined with a 10-electron threshold.
+        At least 100 avalanches are ran, with a size limitted to 20.
+        The stopping conditions are as follows:
+            - 95% detetction efficiency is excluded with 2-sigma confidence.
+            - Efficiency is greater than 95% with 2-sigma confidence
+            - A total of 2000 avalanches are simulated.
+
+        Args:
+            fieldStrength (float): The field strength in kV/cm
+            plateSeparation (int): Then separation between the plates in microns
         """
         if fieldStrength == 0:
             raise ValueError(f'Error: Field strength is 0.')
@@ -302,7 +352,7 @@ class gasSimulation:
             newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line)
             os.environ.update(newEnv)
 
-            with open(os.path.join(originalCWD, 'log/logParallelPlate.txt'), 'w+') as garfieldOutput:
+            with open(os.path.join(originalCWD, 'log/logParallelPlateEff.txt'), 'w+') as garfieldOutput:
                 startTime = time.monotonic()
                 setupParallelPlateEfficiency = (
                     f'./runParallelPlateEfficiency {plateSeparation} {fieldStrength} {self.gasID} {self.gasArgs}'
@@ -328,7 +378,10 @@ class gasSimulation:
 #***********************************************************************************#
     def _readGainFile(self):
         """
-        TODO
+        Reads the simulated avalanches results in "Data/parallelPlateGain.dat".
+
+        Returns;
+            pd.DataFrame: Dataframe containing the simulated avalanche statistics.
         """
 
         gainFilePath = '../Data/parallelPlateGain.dat'
@@ -362,7 +415,18 @@ class gasSimulation:
 #***********************************************************************************#
     def _bootstrapQuantile(self, data, numIterations=1000, quantile=0.05):
         """
-        TODO
+        Estimate the confidence interval and standard error of a quantile using bootstrapping.
+
+        This method performs a non-parametric bootstrap by resampling the input data 
+        with replacement to calculate the variability of the specified quantile.
+
+        Args:
+            data (array): Array of simulated avalanche sizes.
+            numIterations (int): Numer of bootstrapping iterations to generate.
+            quantile (float): The quantile to estimate.
+
+        Returns:
+            Dict: Dictionary containing the quantile information.
         """
 
         trueQuantile = np.quantile(data, quantile)
@@ -389,7 +453,16 @@ class gasSimulation:
 #***********************************************************************************#
     def scanIsobutane(self, fieldStrength, plateSeparation, compCF4):
         """
-        TODO
+        Iterates through Isobutane concentrations of 0 to 10%, performing
+        avalanches simulations in a parallel plate geometry for each gas. 
+        The field strength is held constant.
+
+        The results of all of these simulations are combined and written to a .pkl file.
+
+        Args:
+            fieldStrength (float): The field strength in kV/cm
+            plateSeparation (int): The separation between the parallel plates in microns
+            compCF4 (int): The percent concentration of CF4 in the gas
         """
         
         avalancheData = []
@@ -422,8 +495,14 @@ class gasSimulation:
 #***********************************************************************************#
     def _writeGasScan(self, data, scannedGas=None):
         """
-        TODO
+        Writes a pandas dataframe of avalanche simulations from a gas scan to a .pkl file.
+        These results are with a constant electric field strength.
+
+        Args:
+            data (pd.dataframe): The avalanche data from the simulation scans.
+            scannedGas (str): The name of the gas that was iterated through.
         """
+
         gasScans = [
             'isobutane',
             'CF4'
@@ -432,6 +511,7 @@ class gasSimulation:
         if scannedGas not in gasScans:
             raise ValueError('Error - Invalid gas scan.')
         
+        #Choose appropriate name based on scanned gas
         match scannedGas:
             case 'isobutane':
                 scanGas = '.scanIsobutane'
@@ -457,7 +537,10 @@ class gasSimulation:
 #***********************************************************************************#
     def _readEfficiencyFile(self):
         """
-        TODO
+        Reads the simulated avalanches results in "Data/parallelPlateEfficiency.dat".
+
+        Returns;
+            pd.DataFrame: Dataframe containing the simulated avalanche statistics.
         """
 
         try:
@@ -465,7 +548,7 @@ class gasSimulation:
                 allLines = [inLine.strip() for inLine in inFile.readlines()]
 
         except FileNotFoundError:
-            print(f"Error: File 'efficiencyFile.txt' not found.")
+            print(f"Error: File 'parallelPlateEfficiency.dat' not found.")
             return None
 
 
@@ -489,11 +572,20 @@ class gasSimulation:
 #***********************************************************************************#
     def _findIsobutaneEfficiency(self, plateSeparation=0, verbose=True):
         """
-        TODO
+        Performs an iterative search to find the minimum Electric Field strength 
+        required to achieve a 95% detection efficiency with a 10-e threshold for 
+        single-electron avalanches in a parallel-plate geometry with 2-sigma confidence.
+
+        Args:
+            plateSeparation (float): The parallel plate separation distance in microns
+            verbose (bool): Optional parameter for displaying the finder's intermediate results
+
+        Returns:
+            float: The final field that results in a 95% efficiency.
         """
 
         iterNo = 0
-        iterNoLimit = 25 #TODO - 
+        iterNoLimit = 25 # Max number of iterations for finder
 
         efficiencyAtField = {
             'field': [],
@@ -557,7 +649,19 @@ class gasSimulation:
 #***********************************************************************************#
     def _getNextField(self, iterNo, efficiencyAtField, verbose=True):
         """
-        TODO
+        Determines the next field for achieving a target efficiency. Utilizes the iteration
+        number to choreograph a secant-based root-finding method.
+        
+        Args:
+            iterNo (int): Iteration number.
+            efficiencyAtField (dict): Dictionary containing field and efficiency information:
+                - 'field': Array of previous field strengths.
+                - 'efficiency': Array of previous efficiencies.
+                - 'efficiencyErr': Array of previous efficiency errors.
+            verbose (bool): Optional parameter for displaying the intermediate results
+
+        Returns:
+            float: Calculated field stregnth for target efficiency
         """
         # Determine new field strength
         newField = None
@@ -583,7 +687,20 @@ class gasSimulation:
 #***********************************************************************************#
     def _getSecantField(self, efficiencyAtField, verbose=True):
         """
-        TODO
+        Utilizes a modified secant method to determine a target electric field strength.
+
+        Makes a step base on the maximum possible slope, amd assumes that the 
+        efficiency is monotonically increasing.
+
+        Args:
+            efficiencyAtField (dict): Dictionary containing field and efficiency information:
+                - 'field': Array of previous field strengths.
+                - 'efficiency': Array of previous efficiencies.
+                - 'efficiencyErr': Array of previous efficiency errors.
+            verbose (bool): Optional parameter for displaying the intermediate results
+
+        Returns:
+            float: Calculated field strength for target efficiency
         """
 
         curField = efficiencyAtField['field'][-1]
@@ -628,7 +745,15 @@ class gasSimulation:
 #***********************************************************************************#
     def scanIsobutaneEfficiency(self, plateSeparation, compCF4):
         """
-        TODO
+        Scans through an Isobutane concentration from 0 to 10% in integer amounts,
+        holding the CF4 concentration at a constant value. Ensures a 95% detection
+        efficiency with an electron threshold of 10.
+
+        Combines the results of all simulations and writes to a .pkl file.
+
+        Args:
+            plateSeparation (int): Parallel plate separation distance in microns.
+            compCF4 (int): Constant CF4 concentration.
         """
 
         if compCF4 > 90:
@@ -666,7 +791,12 @@ class gasSimulation:
 #***********************************************************************************#
     def _writeGasEfficiencyScan(self, data, scannedGas=None):
         """
-        TODO
+        Writes a pandas dataframe of avalanche simulations from a gas scan to a .pkl file.
+        These simulations have field strengths necessary to achive 95% efficiency.
+
+        Args:
+            data (pd.dataframe): The avalanche data from the simulation scans.
+            scannedGas (str): The name of the gas that was iterated through.
         """
         gasScans = [
             'isobutane',
@@ -700,17 +830,30 @@ class gasSimulation:
 #***********************************************************************************#
     def _plotEfficiencyConvergence(self, efficiencyAtField):
         """
-        Docstring for plotEfficiencyComvergence
+        Plots the efficiency convergence results of electron avalanches in a parallel 
+        plate geometry with a defined gas.
+        
+        The target efficiency of 95% is shown with each iteration's results.
+
+        Args:
+            efficiencyAtField (dict): Dictionary containing field and efficiency information:
+                    - 'field': Array of field strengths.
+                    - 'efficiency': Array of efficiencies.
+                    - 'efficiencyErr': Array of efficiency errors.
+
         """
         plt.errorbar(
             efficiencyAtField['field'], efficiencyAtField['efficiency'], 
             yerr=efficiencyAtField['efficiencyErr'],
             ls='', marker='x'
         )
+
         plt.axhline(y=.95, ls=':', c='r')
+        
         plt.title(f'Efficiency Convergence - {self.gasID} {self.gasArgs}')
         plt.xlabel('Electic Field Strength (kV/cm)')
         plt.ylabel('Detector Efficiency')
+
         plt.grid()
         plt.show()
 
