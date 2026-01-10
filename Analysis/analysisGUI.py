@@ -19,7 +19,7 @@ class App(tk.Tk):
         self.currentPlot = None
         self.currentFig = None
         self.binWidthValue = 1
-        self.thresholdValue = 0
+        self.thresholdValue = 10
         self.curAvalancheID = tk.IntVar(value=0)
         self.curParticle = tk.StringVar(self)
         self.curParticle.set('-- Select --')
@@ -134,7 +134,7 @@ class App(tk.Tk):
             command=self.updateBinWidth)
         self.binWidth.pack(side=tk.LEFT)
         self.binWidth.delete(0, "end")
-        self.binWidth.insert(0, 1)    
+        self.binWidth.insert(0, self.binWidthValue)    
 
         # --- Threshold ---
         threshLabel = tk.Label(self.threshFrame, text='Threshold:')
@@ -147,7 +147,7 @@ class App(tk.Tk):
             command=self.updateThreshold)
         self.threshold.pack(side=tk.LEFT)
         self.threshold.delete(0, "end")
-        self.threshold.insert(0, 0) 
+        self.threshold.insert(0, self.thresholdValue) 
 
         # --- Avalanche number ---
         avalancheLabel = tk.Label(self.avalancheFrame, text='Avalanche ID:')
@@ -240,6 +240,12 @@ class App(tk.Tk):
             command=lambda: self.plotButton('Efficiency')
             )
         self.showEfficiency.pack(side=tk.LEFT)
+
+        self.showEnergy = tk.Button(
+            self.buttonFrame, text='Electron Energy', 
+            command=lambda: self.plotButton('Electron Energy')
+            )
+        self.showEnergy.pack(side=tk.TOP)
 
         self.showAvalancheTrack = tk.Button(
             self.buttonFrame, text='Avalanche Tracks', 
@@ -379,6 +385,9 @@ class App(tk.Tk):
                 
                 case 'Efficiency':
                     self.currentFig = self.simData.plotEfficiency(binWidth=self.binWidthValue, threshold=self.thresholdValue)
+                
+                case 'Electron Energy':
+                    self.currentFig = self.simData.plotElectronEnergy()
 
                 case 'FieldLines':
                     self.currentFig = self.simData.plotAllFieldLines()
