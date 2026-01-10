@@ -285,11 +285,11 @@ int main(int argc, char * argv[]) {
   //Set parameters
   if((gasCompAr==0) && (gasCompCO2==0)){
       gasFIMS->SetComposition(
-        "ar", 95.0,
-        "cf4", 3.0, 
-        "iC4H10", 2.0
+        "ar", 95.0,//95
+        "cf4", 3.0,//3
+        "iC4H10", 2.0//2
       );
-      gasFIMS->EnablePenningTransfer(0.385, 0., "ar");//TODO - Confirm this rate
+      gasFIMS->EnablePenningTransfer(0.385, 0., "ar");//TODO - Confirm this rate of .385
   }
   else{
       gasFIMS->SetComposition(
