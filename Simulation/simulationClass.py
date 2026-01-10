@@ -136,11 +136,11 @@ class FIMS_Simulation:
             'thicknessSiO2': 5.,
             'pillarRadius': 20.,
             'driftField': 280.,
-            'fieldRatio': 80.,
+            'fieldRatio': 88.,
             'transparencyLimit': 0.99,
             'numFieldLine': 25,
             'numAvalanche': 1500,
-            'avalancheLimit': 600,
+            'avalancheLimit': 1500,
             'gasCompAr': 0.,
             'gasCompCO2': 0.,
         }
@@ -1009,7 +1009,7 @@ class FIMS_Simulation:
         If efficiency errors are provided, utilizes a step base on the maximum possible slope.
         Assumes that the efficiency is monotonically increasing.
         
-        *TODO - Tested for when  current and prevoious effs are both LESS than target. Behaviour when bracketing target unknown.*
+        *TODO - Tested for when  current and previous effs are both LESS than target. Behaviour when bracketing target unknown.*
 
         Args:
             fields (np.array): Numpy array of the field strengths. Has form: [current, previous]
@@ -1046,14 +1046,14 @@ class FIMS_Simulation:
 
         fieldStep = damping*targetDiff*fieldDiff/effDiff
         print(f'Field Step: {fieldStep:.2f}')
+        
+        if fieldStep > 20:
+            print(f'Warning: Step size limited to 20 for stability.')
+            newField = curField+20
 
-        if fieldStep > 5:
-            print(f'Warning: Step size limited to 5 for stability.')
-            newField = curField+5
-
-        elif fieldStep < 1:
+        elif fieldStep < 2:
             print(f'Warning: Field step small. Using heuristic step of 1.')
-            newField = curField+1
+            newField = curField+2
 
         else:
             newField = curField+fieldStep
@@ -1104,7 +1104,7 @@ class FIMS_Simulation:
         print(f'Beginning search for minimum field to achieve {targetEfficiency*100:.0f}% efficiency...')
         
         iterNo = 0
-        iterNoLimit = 10
+        iterNoLimit = 30 #TODO: revisit this value later
 
         fields = []
         efficiencies = []
@@ -1237,21 +1237,29 @@ class FIMS_Simulation:
             grid standoff ratio, pad length ratio, and 
             optical transparency vs minField.
           Results are then added together.'''
+        
+        #Minimum field for 100% transparency
         #TODO: Update these results
         radialMinField = 570.580*np.exp(-12.670*optTrans)
         standoffMinField = 26.85*np.exp(-4.46*standoffRatio)
         padMinField = 143.84*np.exp(-15.17*padRatio)
-        
+        #TODO: investigate if this is the proper way to combine these
         minFieldTrans = radialMinField + standoffMinField + padMinField + 3
         
-        #Minimum field for efficiency depends only on the standoff
+        #Minimum field for 95% efficiency
+        #Ar+CO2 (depreciated?)
         #minFieldEff = 53.21*np.exp(-0.38*standoffRatio) + 23.47  #Ar+Co2
-        minFieldEff = 190.6*np.exp(-0.81*standoffRatio) + 50.48    #T2K
+        
+        #T2K gas
+        padEffField = 371.4*np.exp(-0.16*pad)
+        standEffField = 190.6*np.exp(-0.02*standoff)
+        #TODO: investigate if this is the proper way to combine these
+        minFieldEff = padEffField + standEffField + 50
         
         #Choose the larger of the two fields so that both conditions are
         #satisfied simultaneously.
         minField = max(minFieldTrans, minFieldEff)
-
+        
         return minField
 
 #***********************************************************************************#

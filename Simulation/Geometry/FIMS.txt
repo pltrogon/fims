@@ -38,9 +38,9 @@ topSiO2 = padBase + thicknessSiO2;
 //  Primary region of interest is central hole/pad,
 //  so elements at corner can be larger.
 gridElm = (halfPitch - holeRadius)/10;
-centerHoleElm = gridThickness;
+centerHoleElm = gridThickness/2;
 cornerHoleElm = holeRadius/5;
-centerPadElm = thicknessSiO2/2;
+centerPadElm = thicknessSiO2/5;
 cornerPadElm = padLength/4;
 dielectricElm = padLength/2;
 pillarElm = pillarRadius/2;
