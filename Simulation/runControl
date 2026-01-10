@@ -5,11 +5,11 @@
 // Dimensions: micron
 
 // Pad
-padLength = 44;
+padLength = 44.0;
 pitch = 225.0;
 
 //Grid
-gridStandoff = 20;
+gridStandoff = 100.0;
 gridThickness = 1.0;
 holeRadius = 65.0;
 
@@ -20,14 +20,14 @@ pillarRadius = 20.0;
 
 //----- Field Parameters -----
 driftField = 280.0;
-fieldRatio = 80.0;
+fieldRatio = 88.0;
 numFieldLine = 25;
 transparencyLimit = 0.99;
 
 //----- Simulation parameters -----
 // Avalanche controls
 numAvalanche = 1500;
-avalancheLimit = 600;
+avalancheLimit = 1500;
 
 // Gas composition
 gasCompAr = 0.0;
