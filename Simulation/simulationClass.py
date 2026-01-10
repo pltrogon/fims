@@ -77,12 +77,12 @@ class FIMS_Simulation:
         _runElmerWeighting
         _runGarfield
         runSimulation
-        runForOptimizer         <----- NEW
-        _runGetEfficiency       <----- NEW
-        _readEfficiencyFile     <----- NEW
-        findFieldForEfficiency <----- NEW
-        runMagboltz             <----- NEW, changed fromm runDiffusion
-        findFieldForTransparency <------ Changed from findMinField
+        runForOptimizer
+        _runGetEfficiency
+        _readEfficiencyFile
+        findFieldForEfficiency
+        runMagboltz
+        findFieldForTransparency
     """
 
 #***********************************************************************************#
@@ -1245,23 +1245,22 @@ class FIMS_Simulation:
         standoff = self._getParam('gridStandoff')
         pad = self._getParam('padLength')
         pitch = self._getParam('pitch')
-    
-        #Calculate what the minimum field ratio should be
+
         gridArea = pitch**2*math.sqrt(3)/2
         holeArea = math.pi*radius**2
-        optTrans = holeArea/gridArea
         
+        #Convert to dimensionless variables
+        optTrans = holeArea/gridArea
         standoffRatio = standoff/pad
         padRatio = pad/pitch
         
-        #Do calculation using values from fits
+        #Input parameters into exponential fit equations
         '''Values come from exponential fits to data - 
             grid standoff ratio, pad length ratio, and 
             optical transparency vs minField.
           Results are then added together.'''
         
         #Minimum field for 100% transparency
-        #TODO: Update these results
         radialMinField = 570.580*np.exp(-12.670*optTrans)
         standoffMinField = 26.85*np.exp(-4.46*standoffRatio)
         padMinField = 143.84*np.exp(-15.17*padRatio)
@@ -1269,7 +1268,7 @@ class FIMS_Simulation:
         minFieldTrans = radialMinField + standoffMinField + padMinField + 3
         
         #Minimum field for 95% efficiency
-        #Ar+CO2 (depreciated?)
+        #Ar+CO2 (TODO: depreciated?)
         #minFieldEff = 53.21*np.exp(-0.38*standoffRatio) + 23.47  #Ar+Co2
         
         #T2K gas
