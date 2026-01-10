@@ -80,8 +80,6 @@ int main(int argc, char * argv[]) {
   //Timing variables
   clock_t startSim, stopSim, runTime;
 
-  TApplication app("app", &argc, argv);
-
   //***** Git Hash *****//
   TString gitVersion = "UNKNOWN VERSION";
 
@@ -150,7 +148,7 @@ int main(int argc, char * argv[]) {
   double  padLength, pitch;
   double gridStandoff, gridThickness, holeRadius;
   double cathodeHeight, thicknessSiO2, pillarRadius;
-  double fieldRatio, transparencyLimit;
+  double driftField, fieldRatio, transparencyLimit;
   int numFieldLine;
   int numAvalanche, avalancheLimit;
   double gasCompAr, gasCompCO2;
@@ -193,7 +191,7 @@ int main(int argc, char * argv[]) {
   paramFile.close();
 
   //Parse the values from the map
-  if(numKeys != 15){//Number of user-defined simulation parameters in runControl to search for.
+  if(numKeys != 16){//Number of user-defined simulation parameters in runControl to search for.
     std::cerr << "Error: Invalid simulation parameters in 'runControl'." << std::endl;
     return -1;
   }
@@ -212,6 +210,7 @@ int main(int argc, char * argv[]) {
   pillarRadius = std::stod(readParam["pillarRadius"])*MICRONTOCM;
 
   //Field parameters
+  driftField = std::stod(readParam["driftField"]);
   fieldRatio = std::stod(readParam["fieldRatio"]);
   transparencyLimit = std::stod(readParam["transparencyLimit"]);
 
@@ -224,6 +223,11 @@ int main(int argc, char * argv[]) {
   gasCompAr = std::stod(readParam["gasCompAr"]);
   gasCompCO2 = std::stod(readParam["gasCompCO2"]);
 
+
+  // ***** Output data file ***** //  
+  std::string dataFilename = "sim."+std::to_string(runNo)+".root";
+  std::string dataPath = "../../Data/"+dataFilename;
+  TFile *dataFile = new TFile(dataPath.c_str(), "RECREATE");
 
   //***** Field Line Data Tree *****//
   //Create
@@ -279,29 +283,45 @@ int main(int argc, char * argv[]) {
   MediumMagboltz* gasFIMS = new MediumMagboltz();
 
   //Set parameters
-  gasFIMS->SetComposition(
-    "ar", gasCompAr, 
-    "co2", gasCompCO2
-  );
+  if((gasCompAr==0) && (gasCompCO2==0)){
+      gasFIMS->SetComposition(
+        "ar", 95.0,
+        "cf4", 3.0, 
+        "iC4H10", 2.0
+      );
+      gasFIMS->EnablePenningTransfer(0.385, 0., "ar");//TODO - Confirm this rate
+  }
+  else{
+      gasFIMS->SetComposition(
+      "ar", gasCompAr, 
+      "co2", gasCompCO2
+    );
+    gasFIMS->EnablePenningTransfer(0.51, .0, "ar");
+    /*
+     * From Garfield/Examples/Gem/gem.c:
+     *    Penning rate = 0.51 for 80/20 Ar/CO2 Mix
+     * From Garfield/Examples/Ansys123/triplegem.c:
+     *    Penning rate = 0.55 for 45/15/40 Ar/CO2/CF4 Mix
+     */
+  }
 
-  //gas parameters:
+  //STP gas parameters:
   double gasTemperature = 293.15; //K
   double gasPressure = 760.;//torr
   int maxElectronE = 200;
-  double rPenning = 0.51;
 
   gasFIMS->SetTemperature(gasTemperature);
   gasFIMS->SetPressure(gasPressure);
   gasFIMS->SetMaxElectronEnergy(maxElectronE);
   gasFIMS->Initialise(true);
-  // Load the penning transfer and ion mobilities.
-  gasFIMS->EnablePenningTransfer(rPenning, .0, "ar");
+
+  // Load ion mobilities. 
 
   const std::string path = std::getenv("GARFIELD_INSTALL");
   const std::string posIonPath = path + "/share/Garfield/Data/IonMobility_Ar+_Ar.txt";
   const std::string negIonPath = path + "/share/Garfield/Data/IonMobility_CO2+_CO2.txt";
   gasFIMS->LoadIonMobility(posIonPath);
-  gasFIMS->LoadNegativeIonMobility(negIonPath);//TODO - Is this correct for negative ion
+  gasFIMS->LoadNegativeIonMobility(negIonPath);//TODO - Is this correct for negative ion drift? 
 
   // Import elmer-generated field map
   std::string geometryPath = "../Geometry/";
@@ -500,8 +520,18 @@ int main(int argc, char * argv[]) {
   }//End edge field line loop
   
   std::cout << "Done " << totalFieldLines << " field lines." << std::endl;
+
+  // ***** Deal with fieldline data trees ***** //
+  fieldLineDataTree->Write();
+  delete fieldLineDataTree;
+  gridFieldLineDataTree->Write();
+  delete gridFieldLineDataTree;
+  edgeFieldLineDataTree->Write();
+  delete edgeFieldLineDataTree;
+
+  dataFile->Close();
+  delete dataFile;
   
-  //TODO: parallel avalanches crashes if numAvalanche = 0
   
   // ***** Prepare Avalanche Electron ***** //
   //Set the Initial electron parameters
@@ -517,6 +547,10 @@ int main(int argc, char * argv[]) {
   //Start timing the sim
   startSim = clock();
 
+  if(numAvalanche == 0){
+    std::cerr << "No avalanches - Defaulting to 100." << std::endl;
+    numAvalanche = 100;
+  }
   std::cout << "****************************************\n";
   std::cout << "Starting simulation: " << runNo << "\n";
   std::cout << "****************************************\n";
@@ -578,14 +612,14 @@ int main(int argc, char * argv[]) {
         xBoundary[0], yBoundary[0], zBoundary[0], 
         xBoundary[1], yBoundary[1], zBoundary[1]
       );
-      avalancheE->EnablePlotting(viewElectronDrift, 100);
+      avalancheE->EnablePlotting(viewElectronDrift, 250);
 
 
       //Filename
       int threadID = omp_get_thread_num();
       std::string parallelDataPath = "parallelData/";
-      std::string parallelRunNo = "parallelSim." + std::to_string(runNo);
-      std::string parallelThreadNo = ".thread." + std::to_string(threadID);
+      std::string parallelRunNo = "parallelSim.";
+      std::string parallelThreadNo = std::to_string(threadID);
 
       parallelFilename = parallelDataPath + parallelRunNo + parallelThreadNo + ".root";
       parallelFileNames.push_back(parallelFilename);
@@ -773,6 +807,12 @@ int main(int argc, char * argv[]) {
   }//End parallization
 
 
+  std::cout << "****************************************\n";
+  std::cout << "Done avalanches for run: " << runNo << "\n";
+  std::cout << "Getting diffusion coefficients...\n";
+  std::cout << "****************************************\n";
+
+
   //Calculate diffusion coefficients
   double vx, vy, wv, wr;
   double alpha, eta, riontof, ratttof, lor;
@@ -782,7 +822,6 @@ int main(int argc, char * argv[]) {
 
   // Drift field
   double driftDiffusionL, driftDiffusionT, driftVelocity;
-  double driftField = 1e3;//1kV/cm
 
   gasFIMS->RunMagboltz(
     driftField, 0., 0., 1, true,
@@ -794,11 +833,10 @@ int main(int argc, char * argv[]) {
     difftens
   );
 
-
-/*
-  //TODO - Get the diffusion coefficients for the amplification field
+  //Amplification field
   double ampDiffusionL, ampDiffusionT, ampVelocity;
   double ampField = driftField*fieldRatio;
+
   gasFIMS->RunMagboltz(
     ampField, 0., 0., 1, true,
     vx, vy, ampVelocity, wv, wr, 
@@ -808,9 +846,7 @@ int main(int argc, char * argv[]) {
     alphaerr, etaerr, riontoferr, ratttoferr, lorerr, alphatof,
     difftens
   );
-*/
-  
-  
+
   delete gasFIMS;
 
   //Final timing
@@ -839,36 +875,34 @@ int main(int argc, char * argv[]) {
   metaDataTree->Branch("Pillar Radius", &pillarRadius, "pillarRadius/D");
 
   metaDataTree->Branch("Electric Field Ratio", &fieldRatio, "fieldRatio/D");
+  metaDataTree->Branch("Drift Field", &driftField, "driftField/D");
+  metaDataTree->Branch("Amplification Field", &ampField, "ampField/D");
+
   metaDataTree->Branch("Number of Field Lines", &numFieldLine, "numFieldLine/I");
   metaDataTree->Branch("Transparency Limit", &transparencyLimit, "transparencyLimit/D");
   metaDataTree->Branch("Number of Avalanches", &numAvalanche, "numAvalanche/I");
   metaDataTree->Branch("Avalanche Limit", &avalancheLimit, "avalancheLimit/I");
+  
   metaDataTree->Branch("Gas Comp: Ar", &gasCompAr, "gasCompAr/D");
   metaDataTree->Branch("Gas Comp: CO2", &gasCompCO2, "gasCompCO2/D");
 
-  metaDataTree->Branch("Drift Field", &driftField, "driftField/D");
   metaDataTree->Branch("Drift Velocity (Drift) ", &driftVelocity, "driftVelocity/D");
   metaDataTree->Branch("Diffusion L (Drift)", &driftDiffusionL, "driftDiffusionL/D");
   metaDataTree->Branch("Diffusion T (Drift)", &driftDiffusionT, "driftDiffusionT/D");
+  
+  metaDataTree->Branch("Drift Velocity (Amplify) ", &ampVelocity, "ampVelocity/D");
+  metaDataTree->Branch("Diffusion L (Amplify)", &ampDiffusionL, "ampDiffusionL/D");
+  metaDataTree->Branch("Diffusion T (Amplify)", &ampDiffusionT, "ampDiffusionT/D");
 
   metaDataTree->Fill();
+  
+  // ***** Deal with data ***** //
 
-  // ***** Output data file ***** //  
-  std::string dataFilename = "sim."+std::to_string(runNo)+".root";
-  std::string dataPath = "../../Data/"+dataFilename;
-  TFile *dataFile = new TFile(dataPath.c_str(), "RECREATE");
+  //Reopen file and write metadata
+  dataFile = new TFile(dataPath.c_str(), "UPDATE");
 
-
-  // ***** Data trees ***** //
   metaDataTree->Write();
   delete metaDataTree;
-  fieldLineDataTree->Write();
-  delete fieldLineDataTree;
-  gridFieldLineDataTree->Write();
-  delete gridFieldLineDataTree;
-  edgeFieldLineDataTree->Write();
-  delete edgeFieldLineDataTree;
-  
 
   // Deal with parallel trees
   std::vector<std::string> treeNames = {

@@ -5,7 +5,7 @@
  *    Requires an input electric field solved by elmer and geometry from gmsh.
  *    Reads simulation parameters from runControl.
  * 
- * Tanner Polischuk & James E. Harrison IV
+ * Tanner Polischuk & James Harrison IV
  */
 
 //Garfield includes
@@ -46,7 +46,7 @@ int main(int argc, char * argv[]) {
   const double MICRONTOCM = 1e-4;
   bool DEBUG = false;
   double fieldLineX, fieldLineY, fieldLineZ;
-  double measuredTransparency, fieldTransparency;
+  double fieldTransparency;
   const char* isTransparent;
   double xRandMax = 2*MICRONTOCM;
   double yRandMax = 1*MICRONTOCM; 
@@ -58,34 +58,6 @@ int main(int argc, char * argv[]) {
 
   TApplication app("app", &argc, argv);
 
-  //***** Git Hash *****//
-  TString gitVersion = "UNKNOWN VERSION";
-
-  const char * getGitCommand = "git describe --tags --always --dirty 2>/dev/null";
-
-  FILE * pipe = popen(getGitCommand, "r");
-  if(!pipe){
-    std::cerr << "Error: Could not open pipe to 'getGitCommand'." << std::endl;
-  }
-  else{ 
-    char gitBuffer[128];
-    std::string gitOutput = "";
-    while(fgets(gitBuffer, sizeof(gitBuffer), pipe) != NULL){
-      gitOutput += gitBuffer;
-    }
-    int gitStatus = pclose(pipe);
-
-    if(!gitOutput.empty() && gitOutput.back() == '\n'){
-      gitOutput.pop_back();
-    }
-
-    if(gitStatus == 0){
-      gitVersion = gitOutput;
-    }
-    else{
-      std::cerr << "Error: 'getGitCommand' failed with status " << gitStatus << std::endl;
-    }
-  }
 
   std::cout << "****************************************\n";
   std::cout << "Building field line simulation: " << "\n";
@@ -105,7 +77,7 @@ int main(int argc, char * argv[]) {
 
   double  padLength, pitch;
   double gridStandoff, gridThickness, holeRadius;
-  double cathodeHeight, thicknessSiO2, pillarRadius;
+  double cathodeHeight, thicknessSiO2;
   double fieldRatio, transparencyLimit;
   int numFieldLine;
   double gasCompAr, gasCompCO2;
@@ -148,7 +120,7 @@ int main(int argc, char * argv[]) {
   paramFile.close();
 
   //Parse the values from the map
-  if(numKeys != 16){//Number of user-defined simulation parameters in runControl to search for.
+  if(numKeys != 14){//Number of user-defined simulation parameters in runControl to search for.
     std::cerr << "Error: Invalid simulation parameters in 'runControl'." << std::endl;
     return -1;
   }
@@ -164,7 +136,6 @@ int main(int argc, char * argv[]) {
 
   cathodeHeight = std::stod(readParam["cathodeHeight"])*MICRONTOCM;
   thicknessSiO2 = std::stod(readParam["thicknessSiO2"])*MICRONTOCM;
-  pillarRadius = std::stod(readParam["pillarRadius"])*MICRONTOCM;
 
   //Field parameters
   fieldRatio = std::stod(readParam["fieldRatio"]);
@@ -184,28 +155,14 @@ int main(int argc, char * argv[]) {
   // Define the gas mixture
   MediumMagboltz* gasFIMS = new MediumMagboltz();
 
-    //Set parameters
-  if((gasCompAr==0) && (gasCompCO2==0)){
-      gasFIMS->SetComposition(
-        "ar", 95.0,
-        "cf4", 3.0, 
-        "iC4H10", 2.0
-      );
-      gasFIMS->EnablePenningTransfer(0.385, .0, "ar");
-  }
-  else{
-      gasFIMS->SetComposition(
-      "ar", gasCompAr, 
-      "co2", gasCompCO2
-    );
-    gasFIMS->EnablePenningTransfer(0.51, .0, "ar");
-  }
-
+  //Set parameters
+  gasFIMS->SetComposition("ar", gasCompAr, "co2", gasCompCO2);
   gasFIMS->SetTemperature(293.15); // Room temperature
   gasFIMS->SetPressure(760.);     // Atmospheric pressure
   gasFIMS->SetMaxElectronEnergy(200);
   gasFIMS->Initialise(true);
   // Load the penning transfer and ion mobilities.
+  gasFIMS->EnablePenningTransfer(0.51, .0, "ar");
 
   const std::string path = std::getenv("GARFIELD_INSTALL");
   gasFIMS->LoadIonMobility(path + "/share/Garfield/Data/IonMobility_Ar+_Ar.txt");
@@ -229,37 +186,26 @@ int main(int argc, char * argv[]) {
 
   //Define boundary region for simulation
   double xBoundary[2], yBoundary[2], zBoundary[2];
-
-  //Simple criteria for if 1/4 geometry or full
-  //   x=y=0 should be the min if 1/4
-  if(xmin == 0 && ymin == 0){
-    xBoundary[0] = -xmax;
-    xBoundary[1] = xmax;
-    yBoundary[0] = -ymax;
-    yBoundary[1] = ymax;
-  }
-  else{
-    xBoundary[0] = xmin;
-    xBoundary[1] = xmax;
-    yBoundary[0] = ymin;
-    yBoundary[1] = ymax;
-  }
   zBoundary[0] = zmin;
   zBoundary[1] = zmax;
+  //Extend simulation boundary to +/- pitch in x and y
+  xBoundary[0] = -pitch;
+  xBoundary[1] = pitch;
+  yBoundary[0] = -pitch;
+  yBoundary[1] = pitch;
 
   //Enable periodicity and set components
   fieldFIMS.EnableMirrorPeriodicityX();
   fieldFIMS.EnableMirrorPeriodicityY();
   fieldFIMS.SetGas(gasFIMS);
 
-  // Import the weighting field for the readout electrode.
-  fieldFIMS.SetWeightingField(elmerResultsPath+"FIMSWeighting.result", "wtlel");
-
   //Create a sensor
   Sensor* sensorFIMS = new Sensor();
   sensorFIMS->AddComponent(&fieldFIMS);
-  sensorFIMS->SetArea(xBoundary[0], yBoundary[0], zBoundary[0], xBoundary[1], yBoundary[1], zBoundary[1]);
-  sensorFIMS->AddElectrode(&fieldFIMS, "wtlel");
+  sensorFIMS->SetArea(
+    xBoundary[0], yBoundary[0], zBoundary[0], 
+    xBoundary[1], yBoundary[1], zBoundary[1]
+  );
 
   // ***** Find field transparency ***** //
   std::cout << "****************************************\n";
@@ -280,47 +226,29 @@ int main(int argc, char * argv[]) {
   std::vector<double> xStart;
   std::vector<double> yStart;
   double rangeScale = 0.99;
-  double fieldCutoff = 0.2;
   double xRange = (xBoundary[1] - xBoundary[0])*rangeScale;
   double yRange = (yBoundary[1] - yBoundary[0])*rangeScale;
-  double xWidth = pitch*sqrt(3.)/3.;
-  double yWidth = rangeScale*pitch/2.;
+
   
-  /*
-  //Lines generated radially from the center to edge of geometry
-  //The x-direction is the long axis of the geometry. 
-  for(int i = 0; i < numFieldLine; i++){
-    xStart.push_back((2./3.)*xBoundary[1]*i/(numFieldLine-1));
-    yStart.push_back(0.);
-    }
-  */
-  
-  /*
   //Lines populated randomly at the corner along the positive x-axis
   for(int i = 0; i < numFieldLine; i++){
     //Get random numbers between 0 and xRandMax/yRandMax
     double randX = 1.0*rand()/RAND_MAX*(xRandMax);
     double randY = (0.5 - 1.0*rand()/RAND_MAX)*(yRandMax);
-    xStart.push_back((2./3.)*xBoundary[1] - randX);
+    xStart.push_back(pitch/sqrt(3) - randX);
     yStart.push_back(randY);
   }
-  */
   
-  //Lines populated along the positive x-axis beyond a given cutoff point
-  for(int i = 0; i < numFieldLine; i++){
-    xStart.push_back(xWidth*((1 - fieldCutoff) + fieldCutoff*i/(numFieldLine-1.)));
-    yStart.push_back(0.);
-    std::cout << "starting points:" << xStart[i] << "," << yStart[i] << std::endl;
-  }
-  
+
   // ***** Calculate field Lines ***** //
   std::vector<std::array<float, 3> > fieldLines;
   int totalFieldLines = xStart.size();
   int numAtPad = 0;
   int prevDriftLine = 0;
 
-  std::cout << "Computing field lines" << std::endl;
+  std::cout << "Computing corner field lines" << std::endl;
   for(int inFieldLine = 0; inFieldLine < totalFieldLines; inFieldLine++){
+    //Calculate from the corner
     driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], zmax*rangeScale, fieldLines);
     //Get coordinates of every point along field line
     for(int inLine = 0; inLine < fieldLines.size(); inLine++){
@@ -333,10 +261,15 @@ int main(int argc, char * argv[]) {
     //Find if termination point is at pad
     //TODO: Find more elegant way to determine where a line terminates
     int lineEnd = fieldLines.size() - 1;
+    /*
     if(  (abs(fieldLines[lineEnd][0]) <= padLength)
-      && (abs(fieldLines[lineEnd][1]) <= padLength*sqrt(3.)/2.)
+      && (abs(fieldLines[lineEnd][1]) <= padLength*sqrt(3)/2)
       && (fieldLines[lineEnd][2] <= -gridStandoff*rangeScale)){
         numAtPad++;
+    }
+    */
+    if(fieldLines[lineEnd][2]<= -gridThickness){
+      numAtPad++;
     }
     
     //Print a progress update every 10%
@@ -352,10 +285,8 @@ int main(int argc, char * argv[]) {
 
   std::cout << "Done " << totalFieldLines << " field lines; Determining transparency." << "\n";
   
-  //Determine transparency
-  measuredTransparency = (1.*numAtPad) / (1.*numFieldLine);
-  //Note: assumes that the transparency outside of the measured region is 100%
-  fieldTransparency = (1 - fieldCutoff) + measuredTransparency*fieldCutoff;
+  //Determine transparency of corner
+  fieldTransparency = (1.*numAtPad) / (1.*numFieldLine);
   std::cout << "Corner transparency is " << fieldTransparency <<  "." << std::endl;
   
   
@@ -370,7 +301,7 @@ int main(int argc, char * argv[]) {
   
   //***** Output transparency value *****//
   dataFile.open(dataPath);
-  dataFile << fieldTransparency << std::endl;
+  dataFile << isTransparent << std::endl;
   dataFile.close();
 
   std::cout << "****************************************\n";

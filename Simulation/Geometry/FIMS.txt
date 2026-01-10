@@ -1,432 +1,566 @@
-// Import values from run control file.
+//**********************************************************************
+// DEFINING THE FIMS GEOMETRY AS MINIMUM CELL
+//     Requires mirroring in x and y
+//**********************************************************************
+
+// ***** Import values from run control file. ***** //
 // Parameters in micrometers
 Include "../runControl";
 
-// Finite element sizes for different regions
-//gridElm: points on the corner of the grid without a hole (x4)
-//holeElm: points on the hole of the grid (x12)
-//padElm: points along the edge and center of the pad (x16)
-//diElm: points on the corner of the SiO2 without a pad (x4)
-//pilElm: points on the pillars (x16)
-//cathElm: points along the cathode far above the grid (x4)
+// ***** Global Coordinates ***** //
+sqrt3 = 3^(.5);
 
-gridElm = (pitch - holeRadius)/5;
-holeElm = gridThickness;
-padElm = thicknessSiO2;
-diElm = padLength/6;
-pilElm = pillarRadius/3;
-cathElm = pitch/10;
-
-// Derived Z-coordinates for different layers
-//     Center of grid: z = 0
+//Cell limits
 halfPitch = pitch/2;
-cathodeDistance = gridThickness/2 + cathodeHeight;
-gridTop = gridThickness/2;
-gridBottom = -gridThickness/2;
-topSiO2 = - gridThickness/2 - gridStandoff + thicknessSiO2;
-padBase = -gridThickness/2 - gridStandoff;
-
-//Some pad parameters
-halfPad = padLength/2;
-padMath = (3^.5)*halfPad;
-
-// Global coordinate limits
 xMin = 0;
-xMax = (3^.5)*halfPitch;
+xMax = sqrt3*halfPitch;
 yMin = 0;
 yMax = halfPitch;
 
-//**********************************************************************
-// PILLAR STRUCTURE
-//**********************************************************************
-// Values left in 900s to allow for easier review before being finalized
+//Pad parameters
+halfPad = padLength/2;
+padInRadius = sqrt3*halfPad;
 
-// Points - base of the pillars
-Point(901) = {2*xMax/3, 0, topSiO2, pilElm};
-Point(902) = {2*xMax/3 + pillarRadius, 0, topSiO2, pilElm};
-Point(903) = {2*xMax/3 - pillarRadius, 0, topSiO2, pilElm};
-Point(904) = {2*xMax/3, pillarRadius, topSiO2, pilElm};
+//Pillars
+xPillarDist = 2*xMax/3;
+yPillarDist = xMax/3;
 
-Point(905) = {xMax/3, yMax, topSiO2, pilElm};
-Point(906) = {xMax/3 + pillarRadius, yMax, topSiO2, pilElm};
-Point(907) = {xMax/3 - pillarRadius, yMax, topSiO2, pilElm};
-Point(908) = {xMax/3, yMax - pillarRadius, topSiO2, pilElm};
+// Derived Z-coordinates for different layers
+//  Center of grid: z = 0
+gridTop = gridThickness/2;
+gridBottom = -gridThickness/2;
+cathodeDistance = gridTop + cathodeHeight;
+padBase = gridBottom - gridStandoff;
+topSiO2 = padBase + thicknessSiO2;
 
-// Points - top of the pillars
-Point(909) = {2*xMax/3, 0, gridBottom, pilElm};
-Point(910) = {2*xMax/3 + pillarRadius, 0, gridBottom, pilElm};
-Point(911) = {2*xMax/3 - pillarRadius, 0, gridBottom, pilElm};
-Point(912) = {2*xMax/3, pillarRadius, gridBottom, pilElm};
 
-Point(913) = {xMax/3, yMax, gridBottom, pilElm};
-Point(914) = {xMax/3 + pillarRadius, yMax, gridBottom, pilElm};
-Point(915) = {xMax/3 - pillarRadius, yMax, gridBottom, pilElm};
-Point(916) = {xMax/3, yMax - pillarRadius, gridBottom, pilElm};
-
-// Lines - base of pillars
-Line(901) = {903, 902};
-Circle(902) = {902, 901, 904};
-Circle(903) = {904, 901, 903};
-
-Line(904) = {906, 907};
-Circle(905) = {907, 905, 908};
-Circle(906) = {908, 905, 906};
-
-// Lines - top of pillars
-Line(907) = {911, 910};
-Circle(908) = {910, 909, 912};
-Circle(909) = {912, 909, 911};
-
-Line(910) = {914, 915};
-Circle(911) = {915, 913, 916};
-Circle(912) = {916, 913, 914};
-
-// Lines - connecting top to base of pillars
-Line(913) = {910, 902};
-Line(914) = {911, 903};
-Line(915) = {912, 904};
-
-Line(916) = {914, 906};
-Line(917) = {916, 908};
-Line(918) = {915, 907};
-
-// Surfaces - base of pillars
-Curve Loop(901) = {901, 902, 903};
-Plane Surface(901) = {901};
-Curve Loop(902) = {904, 905, 906};
-Plane Surface(902) = {902};
-
-// Surfaces - top of pillars
-Curve Loop(903) = {907, 908, 909};
-Plane Surface(903) = {903};
-Curve Loop(904) = {910, 911, 912};
-Plane Surface(904) = {904};
-
-// Curves - connecting top to base of pillars
-Curve Loop(905) = {907, 913, -901, -914};
-Plane Surface(905) = {905};
-Curve Loop(906) = {908, 915, -902, -913};
-Surface(906) = {906};
-Curve Loop(907) = {909, 914, -903, -915};
-Surface(907) = {907};
-
-Curve Loop(908) = {910, 918, -904, -916};
-Plane Surface(908) = {908};
-Curve Loop(909) = {911, 917, -905, -918};
-Surface(909) = {909};
-Curve Loop(910) = {912, 916, -906, -917};
-Surface(910) = {910};
-
-// Volume - pillars
-Surface Loop(901) = {901, 903, 905, 906, 907};
-Surface Loop(902) = {902, 904, 908, 909, 910};
-Volume(2001) = {901};
-Volume(2002) = {902};
+// ***** Finite element sizes ***** //
+//  Primary region of interest is central hole/pad,
+//  so elements at corner can be larger.
+gridElm = (halfPitch - holeRadius)/10;
+centerHoleElm = gridThickness/2;
+cornerHoleElm = holeRadius/5;
+centerPadElm = thicknessSiO2/5;
+cornerPadElm = padLength/4;
+dielectricElm = padLength/2;
+pillarElm = pillarRadius/2;
+cathodeElm = pitch/10;
 
 //**********************************************************************
-// GRID STRUCTURE
-//**********************************************************************
-// Points - top of the grid
-Point(1) = {0, 0, gridTop, holeElm};
-Point(2) = {0, holeRadius, gridTop, holeElm};
-Point(3) = {holeRadius, 0, gridTop, holeElm};
-
-Point(4) = {xMax, yMax, gridTop, holeElm};
-Point(5) = {xMax - holeRadius, halfPitch, gridTop, holeElm};
-Point(6) = {xMax, yMax - holeRadius, gridTop, holeElm};
-
-Point(7) = {0, yMax, gridTop, gridElm};
-Point(8) = {xMax, 0, gridTop, gridElm};
-
-// Points - bottom of the grid
-Point(9) = {0, 0, gridBottom, holeElm};
-Point(10) = {0, holeRadius, gridBottom, holeElm};
-Point(11) = {holeRadius, 0, gridBottom, holeElm};
-
-Point(12) = {xMax, yMax, gridBottom, holeElm};
-Point(13) = {xMax - holeRadius, halfPitch, gridBottom, holeElm};
-Point(14) = {xMax, yMax - holeRadius, gridBottom, holeElm};
-
-Point(15) = {0, yMax, gridBottom, gridElm};
-Point(16) = {xMax, 0, gridBottom, gridElm};
-
-// Curves - top of grid
-Circle(1) = {2, 1, 3};
-Line(2) = {3, 8};
-Line(3) = {8, 6};
-Circle(4) = {6, 4, 5};
-Line(5) = {5, 7};
-Line(6) = {7, 2};
-
-// Curves - bottom of grid
-Circle(7) = {10, 9, 11};
-Line(8) = {11, 911};
-Line(921) = {910, 16};
-Line(9) = {16, 14};
-Circle(10) = {14, 12, 13};
-Line(11) = {13, 914};
-Line(922) = {915, 15};
-Line(12) = {15, 10};
-
-// Connect - top and bottom of grid
-Line(13) = {1, 9};
-Line(14) = {2, 10};
-Line(15) = {3, 11};
-Line(16) = {4, 12};
-Line(17) = {5, 13};
-Line(18) = {6, 14};
-Line(19) = {7, 15};
-Line(20) = {8, 16};
-
-// Surface - top of grid
-Curve Loop(21) = {1, 2, 3, 4, 5, 6};
-Plane Surface(21) = {21};
-
-// Surface - bottom of grid
-Curve Loop(22) = {7, 8, -909, -908, 921, 9, 10, 11, -912, -911, 922, 12};
-Plane Surface(22) = {22};
-
-// Surface - Sides of holes in grid
-Curve Loop(23) = {1, 15, -7, -14};
-Surface(23) = {23};
-Curve Loop(24) = {4, 17, -10, -18};
-Surface(24) = {24};
-
-// Surface - Sides of grid
-Curve Loop(25) = {2, 20, -921, -907, -8, -15};
-Plane Surface(25) = {25};
-Curve Loop(26) = {3, 18, -9, -20};
-Plane Surface(26) = {26};
-Curve Loop(27) = {5, 19, -922, -910, -11, -17};
-Plane Surface(27) = {27};
-Curve Loop(28) = {6, 14, -12, -19};
-Plane Surface(28) = {28};
-
-// Volume - Grid
-Surface Loop(201) = {21, 22, 23, 24, 25, 26, 27, 28, 903, 904};
-Volume(1) = {201};
-
-//**********************************************************************
-// PADS & DIELECTRIC
+// DEFINE THE GEOMETRY
+//      Grid
+//      Cathode
+//      Pads
+//      Dielectric
+//      Pillars
+//      Gas
 //**********************************************************************
 
-// ***** PADS *****
+// *************** GRID *************** //
 
-// Points - Central Pad
-Point(101) = {0, 0, padBase, padElm};
-Point(102) = {padLength, 0, padBase, padElm};
-Point(103) = {halfPad, padMath, padBase, padElm};
-Point(104) = {0, padMath, padBase, padElm};
+// ***** Points ***** //
+//Top of the grid
+centerHoleT0 = newp; Point(centerHoleT0) = {0, 0, gridTop, centerHoleElm};
+centerHoleTx = newp; Point(centerHoleTx) = {holeRadius, 0, gridTop, centerHoleElm};
+centerHoleTy = newp; Point(centerHoleTy) = {0, holeRadius, gridTop, centerHoleElm};
 
-// Lines - Central Pad
-Line(101) = {101, 102};
-Line(102) = {102, 103};
-Line(103) = {103, 104};
-Line(104) = {104, 101};
+cornerHoleT0 = newp; Point(cornerHoleT0) = {xMax, yMax, gridTop, cornerHoleElm};
+cornerHoleTx = newp; Point(cornerHoleTx) = {xMax - holeRadius, halfPitch, gridTop, cornerHoleElm};
+cornerHoleTy = newp; Point(cornerHoleTy) = {xMax, yMax - holeRadius, gridTop, cornerHoleElm};
 
-// Points - Corner Pad
-Point(105) = {xMax, yMax, padBase, padElm};
-Point(106) = {xMax - padLength, yMax, padBase, padElm};
-Point(107) = {xMax - halfPad, yMax - padMath, padBase, padElm};
-Point(108) = {xMax, yMax - padMath, padBase, padElm};
+gridCornerTx = newp; Point(gridCornerTx) = {xMax, 0, gridTop, gridElm};
+gridCornerTy = newp; Point(gridCornerTy) = {0, yMax, gridTop, gridElm};
 
-// Lines - Corner Pad
-Line(105) = {105, 106};
-Line(106) = {106, 107};
-Line(107) = {107, 108};
-Line(108) = {108, 105};
+//Bottom of the grid
+centerHoleB0 = newp; Point(centerHoleB0) = {0, 0, gridBottom, centerHoleElm};
+centerHoleBx = newp; Point(centerHoleBx) = {holeRadius, 0, gridBottom, centerHoleElm};
+centerHoleBy = newp; Point(centerHoleBy) = {0, holeRadius, gridBottom, centerHoleElm};
 
-// Surfaces - Pads
-Curve Loop(121) = {101, 102, 103, 104};
-Plane Surface(121) = {121};
-Curve Loop(122) = {105, 106, 107, 108};
-Plane Surface(122) = {122};
+cornerHoleB0 = newp; Point(cornerHoleB0) = {xMax, yMax, gridBottom, cornerHoleElm};
+cornerHoleBx = newp; Point(cornerHoleBx) = {xMax - holeRadius, halfPitch, gridBottom, cornerHoleElm};
+cornerHoleBy = newp; Point(cornerHoleBy) = {xMax, yMax - holeRadius, gridBottom, cornerHoleElm};
 
+gridCornerBx = newp; Point(gridCornerBx) = {xMax, 0, gridBottom, gridElm};
+gridCornerBy = newp; Point(gridCornerBy) = {0, yMax, gridBottom, gridElm};
 
-// ***** Dielectric *****
+//Pillar sections
+gridPillarX0 = newp; Point(gridPillarX0) = {xPillarDist, 0, gridBottom, pillarElm};
+gridPillarX1 = newp; Point(gridPillarX1) = {xPillarDist - pillarRadius, 0, gridBottom, pillarElm};
+gridPillarX2 = newp; Point(gridPillarX2) = {xPillarDist, pillarRadius, gridBottom, pillarElm};
+gridPillarX3 = newp; Point(gridPillarX3) = {xPillarDist + pillarRadius, 0, gridBottom, pillarElm};
 
-// Points - Dielectric Bottom
-Point(109) = {xMax, 0, padBase, diElm};
-Point(110) = {0, yMax, padBase, diElm};
+gridPillarY0 = newp; Point(gridPillarY0) = {yPillarDist, yMax, gridBottom, pillarElm};
+gridPillarY1 = newp; Point(gridPillarY1) = {yPillarDist - pillarRadius, yMax, gridBottom, pillarElm};
+gridPillarY2 = newp; Point(gridPillarY2) = {yPillarDist, yMax - pillarRadius, gridBottom, pillarElm};
+gridPillarY3 = newp; Point(gridPillarY3) = {yPillarDist + pillarRadius, yMax, gridBottom, pillarElm};
 
-// Lines - Dielectric Bottom
-Line(109) = {102, 109};
-Line(110) = {109, 108};
-Line(111) = {106, 110};
-Line(112) = {110, 104};
+// ***** Lines ***** //
+//Top of the grid
+centerHoleLineT = newc; Circle(centerHoleLineT) = {centerHoleTx, centerHoleT0, centerHoleTy};
+cornerHoleLineT = newc; Circle(cornerHoleLineT) = {cornerHoleTx, cornerHoleT0, cornerHoleTy};
+gridLineT0 = newc; Line(gridLineT0) = {centerHoleTx, gridCornerTx};
+gridLineT1 = newc; Line(gridLineT1) = {centerHoleTy, gridCornerTy};
+gridLineT2 = newc; Line(gridLineT2) = {gridCornerTx, cornerHoleTy};
+gridLineT3 = newc; Line(gridLineT3) = {gridCornerTy, cornerHoleTx};
 
-// Points - Dielectric Top
-Point(111) = {0, 0, topSiO2, padElm};
-Point(112) = {padLength, 0, topSiO2, padElm};
-Point(113) = {halfPad, padMath, topSiO2, padElm};
-Point(114) = {0, padMath, topSiO2, padElm};
-Point(115) = {xMax, yMax, topSiO2, padElm};
-Point(116) = {xMax - padLength, yMax, topSiO2, padElm};
-Point(117) = {xMax - halfPad, yMax - padMath, topSiO2, padElm};
-Point(118) = {xMax, yMax - padMath, topSiO2, padElm};
-Point(119) = {xMax, 0, topSiO2, diElm};
-Point(120) = {0, yMax, topSiO2, diElm};
+//Bottom of the grid
+centerHoleLineB = newc; Circle(centerHoleLineB) = {centerHoleBx, centerHoleB0, centerHoleBy};
+cornerHoleLineB = newc; Circle(cornerHoleLineB) = {cornerHoleBx, cornerHoleB0, cornerHoleBy};
+gridLineB0 = newc; Line(gridLineB0) = {centerHoleBx, gridPillarX1};
+gridLineB1 = newc; Line(gridLineB1) = {centerHoleBy, gridCornerBy};
+gridLineB2 = newc; Line(gridLineB2) = {cornerHoleBx, gridPillarY3};
+gridLineB3 = newc; Line(gridLineB3) = {cornerHoleBy, gridCornerBx};
+gridLineB4 = newc; Line(gridLineB4) = {gridCornerBx, gridPillarX3};
+gridLineB5 = newc; Line(gridLineB5) = {gridCornerBy, gridPillarY1};
 
-// Lines - Dielectric Top
-Line(113) = {112, 903};
-Line(919) = {902, 119};
-Line(114) = {119, 118};
-Line(115) = {118, 117};
-Line(116) = {117, 116};
-Line(117) = {116, 906};
-Line(920) = {907, 120};
-Line(118) = {120, 114};
-Line(119) = {114, 113};
-Line(120) = {113, 112};
+//Pillar sections
+gridPillarXLine0 = newc; Circle(gridPillarXLine0) = {gridPillarX1, gridPillarX0, gridPillarX2};
+gridPillarXLine1 = newc; Circle(gridPillarXLine1) = {gridPillarX3, gridPillarX0, gridPillarX2};
+gridPillarXLine2 = newc; Line(gridPillarXLine2) = {gridPillarX1, gridPillarX3};
+gridPillarYLine0 = newc; Circle(gridPillarYLine0) = {gridPillarY1, gridPillarY0, gridPillarY2};
+gridPillarYLine1 = newc; Circle(gridPillarYLine1) = {gridPillarY3, gridPillarY0, gridPillarY2};
+gridPillarYLine2 = newc; Line(gridPillarYLine2) = {gridPillarY1, gridPillarY3};
 
-// Connect - Top and Bottom of Dielectric
-Line(121) = {112, 102};
-Line(122) = {113, 103};
-Line(123) = {114, 104};
-Line(124) = {116, 106};
-Line(125) = {117, 107};
-Line(126) = {118, 108};
-Line(127) = {119, 109};
-Line(128) = {120, 110};
+//Connect the top and bottom
+gridLineC0 = newc; Line(gridLineC0) = {centerHoleTx, centerHoleBx};
+gridLineC1 = newc; Line(gridLineC1) = {centerHoleTy, centerHoleBy};
+gridLineC2 = newc; Line(gridLineC2) = {cornerHoleTx, cornerHoleBx};
+gridLineC3 = newc; Line(gridLineC3) = {cornerHoleTy, cornerHoleBy};
+gridLineC4 = newc; Line(gridLineC4) = {gridCornerTx, gridCornerBx};
+gridLineC5 = newc; Line(gridLineC5) = {gridCornerTy, gridCornerBy};
 
-Line(129) = {111, 101};
-Line(130) = {115, 105};
-
-//Surface - top of dielectric
-Curve Loop(123) = {113, -903, -902, 919, 114, 115, 116, 117, -906, -905, 920, 118, 119, 120};
-Plane Surface(123) = {123};
-
-//Surface - bottom of dielectric
-Curve Loop(124) = {109, 110, -107, -106, 111, 112, -103, -102};
-Plane Surface(124) = {124};
-
-//Surface - Sides of dielectric
-Curve Loop(125) = {113, 901, 919, 127, -109, -121};
-Plane Surface(125) = {125};
-Curve Loop(126) = {114, 126, -110, -127};
-Plane Surface(126) = {126};
-Curve Loop(127) = {115, 125, 107, -126};
-Plane Surface(127) = {127};
-Curve Loop(128) = {116, 124, 106, -125};
-Plane Surface(128) = {128};
-Curve Loop(129) = {117, 904, 920, 128, -111, -124};
-Plane Surface(129) = {129};
-Curve Loop(130) = {118, 123, -112, -128};
-Plane Surface(130) = {130};
-Curve Loop(131) = {119, 122, 103, -123};
-Plane Surface(131) = {131};
-Curve Loop(132) = {120, 121, 102, -122};
-Plane Surface(132) = {132};
-
-// Volume - Dielectric
-Surface Loop(202) = {123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 901, 902};
-Volume(101) = {202};
-
-
-//**********************************************************************
-// GAS VOLUME
-//**********************************************************************
-
-// Points - Cathode Plane
-Point(301) = {0, 0, cathodeDistance, cathElm};
-Point(302) = {xMax, 0, cathodeDistance, cathElm};
-Point(303) = {xMax, halfPitch, cathodeDistance, cathElm};
-Point(304) = {0, halfPitch, cathodeDistance, cathElm};
-
-// Lines - Cathode Plane
-Line(301) = {301, 302};
-Line(302) = {302, 303};
-Line(303) = {303, 304};
-Line(304) = {304, 301};
-
-// Vertical lines - Gas Corner through holes
-Line(305) = {301, 1};
-Line(306) = {9, 111};
-Line(307) = {303, 4};
-Line(308) = {12, 115};
-
-// Vertical lines - Gas Corner with grid
-Line(309) = {302, 8};
-Line(310) = {16, 119};
-Line(311) = {304, 7};
-Line(312) = {15, 120};
-
-// Surface - Top Gas (Cathode)
-Curve Loop(321) = {301, 302, 303, 304};
-Plane Surface(321) = {321};
-
-// Surfaces - Gas Sides
-Curve Loop(322) = {301, 309, -2, 15, 8, 914, -113, 121, -101, -129, -306, -13, -305};
-Plane Surface(322) = {322};
-Curve Loop(323) = {302, 307, 16, 308, 130, -108, -126, -114, -310, 9, -18, -3, -309};
-Plane Surface(323) = {323};
-Curve Loop(324) = {303, 311, -5, 17, 11, 916,-117, 124, -105, -130, -308, -16, -307};
-Plane Surface(324) = {324};
-Curve Loop(325) = {304, 305, 13, 306, 129, -104, -123, -118, -312, 12, -14, -6, -311};
-Plane Surface(325) = {325};
-Curve Loop(911) = {921, 310, -919, -913};
-Plane Surface(911) = {911};
-Curve Loop(912) = {922, 312, -920, -918};
-Plane Surface(912) = {912};
-
-// Volume - Gas
-Surface Loop(203) = {
-    321, //Cathode
-    322, 323, 324, 325, 911, 912, //Sides of volume
-    906, 907, 909, 910, //Pillar elements
-    21, 22, 23, 24, //Grid elements
-    123, 127, 128, 131, 132, //dielectric
-    121, 122 // Pad elements
+// ***** Curve Loops ***** //
+//Top and bottom
+gridTopLoop = newcl; Curve Loop(gridTopLoop) = {
+    centerHoleLineT, gridLineT1, gridLineT3, 
+    cornerHoleLineT, -gridLineT2, -gridLineT0
 };
-Volume(1001) = {203};
+gridBottomLoop = newcl; Curve Loop(gridBottomLoop) = {
+    -centerHoleLineB, 
+    gridLineB0, gridPillarXLine0, -gridPillarXLine1, -gridLineB4, 
+    -gridLineB3, -cornerHoleLineB, 
+    gridLineB2, gridPillarYLine1, -gridPillarYLine0, -gridLineB5, 
+    -gridLineB1
+};
+//Holes
+gridCenterHoleLoop = newcl; Curve Loop(gridCenterHoleLoop) = {
+    centerHoleLineT, gridLineC1, -centerHoleLineB, -gridLineC0
+};
+gridCornerHoleLoop = newcl; Curve Loop(gridCornerHoleLoop) = {
+    cornerHoleLineT, gridLineC3, -cornerHoleLineB, -gridLineC2
+};
+//Pillar-Grid interface
+gridPillarXLoop = newcl; Curve Loop(gridPillarXLoop) = {
+    gridPillarXLine0, -gridPillarXLine1, -gridPillarXLine2
+};
+gridPillarYLoop = newcl; Curve Loop(gridPillarYLoop) = {
+    gridPillarYLine0, -gridPillarYLine1, -gridPillarYLine2
+};
+//Sides
+gridSideLoop0 = newcl; Curve Loop(gridSideLoop0) = {
+    gridLineT0, gridLineC4, 
+    gridLineB4, -gridPillarXLine2, -gridLineB0,
+    -gridLineC0
+};
+gridSideLoop1 = newcl; Curve Loop(gridSideLoop1) = {
+    gridLineT3, gridLineC2, 
+    gridLineB2, -gridPillarYLine2, -gridLineB5,
+    -gridLineC5
+};
+gridSideLoop2 = newcl; Curve Loop(gridSideLoop2) = {
+    gridLineT1, gridLineC5, -gridLineB1, -gridLineC1
+};
+gridSideLoop3 = newcl; Curve Loop(gridSideLoop3) = {
+    gridLineT2, gridLineC3, gridLineB3, -gridLineC4
+};
+
+// ***** Surfaces ***** //
+gridSurfaceT = news; Plane Surface(gridSurfaceT) = {gridTopLoop};
+gridSurfaceB = news; Plane Surface(gridSurfaceB) = {gridBottomLoop};
+gridCenterHole = news; Surface(gridCenterHole) = {gridCenterHoleLoop};
+gridCornerHole = news; Surface(gridCornerHole) = {gridCornerHoleLoop};
+gridPillarX = news; Plane Surface(gridPillarX) = {gridPillarXLoop};
+gridPillarY = news; Plane Surface(gridPillarY) = {gridPillarYLoop};
+gridSide0 = news; Plane Surface(gridSide0) = {gridSideLoop0};
+gridSide1 = news; Plane Surface(gridSide1) = {gridSideLoop1};
+gridSide2 = news; Plane Surface(gridSide2) = {gridSideLoop2};
+gridSide3 = news; Plane Surface(gridSide3) = {gridSideLoop3};
+
+
+// ***** Volume ***** //
+gridVolumeLoop = newsl; Surface Loop(gridVolumeLoop) = {
+    gridSurfaceT, gridSurfaceB,
+    gridPillarX, gridPillarY,
+    gridCenterHole, gridCornerHole,
+    gridSide0, gridSide1, gridSide2, gridSide3
+};
+gridVolume = newv; Volume(gridVolume) = {gridVolumeLoop};
+
+
+// *************** Cathode *************** //
+
+// ***** Points ***** //
+cathode0 = newp; Point(cathode0) = {0, 0, cathodeDistance, cathodeElm};
+cathode1 = newp; Point(cathode1) = {xMax, 0, cathodeDistance, cathodeElm};
+cathode2 = newp; Point(cathode2) = {xMax, halfPitch, cathodeDistance, cathodeElm};
+cathode3 = newp; Point(cathode3) = {0, halfPitch, cathodeDistance, cathodeElm};
+
+// ***** Lines ***** //
+cathodeLine0 = newc; Line(cathodeLine0) = {cathode0, cathode1};
+cathodeLine1 = newc; Line(cathodeLine1) = {cathode1, cathode2};
+cathodeLine2 = newc; Line(cathodeLine2) = {cathode2, cathode3};
+cathodeLine3 = newc; Line(cathodeLine3) = {cathode3, cathode0};
+
+// ***** Curve Loops ***** //
+cathodeLoop = newcl; Curve Loop(cathodeLoop) = {
+    cathodeLine0, cathodeLine1, cathodeLine2, cathodeLine3
+};
+
+// ***** Surfaces ***** //
+cathodeSurface = news; Plane Surface(cathodeSurface) = {cathodeLoop};
+
+
+// *************** PADS ************** //
+
+// ***** Points ***** //
+centralPad0 = newp; Point(centralPad0) = {0, 0, padBase, centerPadElm};
+centralPad1 = newp; Point(centralPad1) = {padLength, 0, padBase, centerPadElm};
+centralPad2 = newp; Point(centralPad2) = {halfPad, padInRadius, padBase, centerPadElm};
+centralPad3 = newp; Point(centralPad3) = {0, padInRadius, padBase, centerPadElm};
+
+cornerPad0 = newp; Point(cornerPad0) = {xMax, yMax, padBase, cornerPadElm};
+cornerPad1 = newp; Point(cornerPad1) = {xMax - padLength, yMax, padBase, cornerPadElm};
+cornerPad2 = newp; Point(cornerPad2) = {xMax - halfPad, yMax - padInRadius, padBase, cornerPadElm};
+cornerPad3 = newp; Point(cornerPad3) = {xMax, yMax - padInRadius, padBase, cornerPadElm};
+
+// ***** Lines ***** //
+centralPadLine0 = newc; Line(centralPadLine0) = {centralPad0, centralPad1};
+centralPadLine1 = newc; Line(centralPadLine1) = {centralPad1, centralPad2};
+centralPadLine2 = newc; Line(centralPadLine2) = {centralPad2, centralPad3};
+centralPadLine3 = newc; Line(centralPadLine3) = {centralPad3, centralPad0};
+
+cornerPadLine0 = newc; Line(cornerPadLine0) = {cornerPad0, cornerPad1};
+cornerPadLine1 = newc; Line(cornerPadLine1) = {cornerPad1, cornerPad2};
+cornerPadLine2 = newc; Line(cornerPadLine2) = {cornerPad2, cornerPad3};
+cornerPadLine3 = newc; Line(cornerPadLine3) = {cornerPad3, cornerPad0};
+
+// ***** Curve Loops ***** //
+centralPadLoop = newcl; Curve Loop(centralPadLoop) = {
+    centralPadLine0, centralPadLine1, centralPadLine2, centralPadLine3
+};
+cornerPadLoop = newcl; Curve Loop(cornerPadLoop) = {
+    cornerPadLine0, cornerPadLine1, cornerPadLine2, cornerPadLine3
+};
+
+// ***** Surfaces ***** //
+centralPadSurface = news; Plane Surface(centralPadSurface) = {centralPadLoop};
+cornerPadSurface = news; Plane Surface(cornerPadSurface) = {cornerPadLoop};
+
+
+// *************** DIELECTRIC ************** //
+
+// ***** Points ***** //
+//Bottom of dielectric
+dielectricBx = newp; Point(dielectricBx) = {xMax, 0, padBase, dielectricElm};
+dielectricBy = newp; Point(dielectricBy) = {0, yMax, padBase, dielectricElm};
+
+//Top of dielectric
+dielectricTx = newp; Point(dielectricTx) = {xMax, 0, topSiO2, dielectricElm};
+dielectricTy = newp; Point(dielectricTy) = {0, yMax, topSiO2, dielectricElm};
+
+dielectricTCentral0 = newp; Point(dielectricTCentral0) = {padLength, 0, topSiO2, centerPadElm};
+dielectricTCentral1 = newp; Point(dielectricTCentral1) = {halfPad, padInRadius, topSiO2, centerPadElm};
+dielectricTCentral2 = newp; Point(dielectricTCentral2) = {0, padInRadius, topSiO2, centerPadElm};
+
+dielectricTCorner0 = newp; Point(dielectricTCorner0) = {xMax - padLength, yMax, topSiO2, cornerPadElm};
+dielectricTCorner1 = newp; Point(dielectricTCorner1) = {xMax - halfPad, yMax - padInRadius, topSiO2, cornerPadElm};
+dielectricTCorner2 = newp; Point(dielectricTCorner2) = {xMax, yMax - padInRadius, topSiO2, cornerPadElm};
+
+//Pillar sections
+dielectricPillarX0 = newp; Point(dielectricPillarX0) = {xPillarDist, 0, topSiO2, pillarElm};
+dielectricPillarX1 = newp; Point(dielectricPillarX1) = {xPillarDist - pillarRadius, 0, topSiO2, pillarElm};
+dielectricPillarX2 = newp; Point(dielectricPillarX2) = {xPillarDist, pillarRadius, topSiO2, pillarElm};
+dielectricPillarX3 = newp; Point(dielectricPillarX3) = {xPillarDist + pillarRadius, 0, topSiO2, pillarElm};
+
+dielectricPillarY0 = newp; Point(dielectricPillarY0) = {yPillarDist, yMax, topSiO2, pillarElm};
+dielectricPillarY1 = newp; Point(dielectricPillarY1) = {yPillarDist - pillarRadius, yMax, topSiO2, pillarElm};
+dielectricPillarY2 = newp; Point(dielectricPillarY2) = {yPillarDist, yMax - pillarRadius, topSiO2, pillarElm};
+dielectricPillarY3 = newp; Point(dielectricPillarY3) = {yPillarDist + pillarRadius, yMax, topSiO2, pillarElm};
+
+// ***** Lines ***** //
+//Bottom of Dielectric
+dielectricLineB0 = newc; Line(dielectricLineB0) = {dielectricBx, centralPad1};
+dielectricLineB1 = newc; Line(dielectricLineB1) = {dielectricBx, cornerPad3};
+dielectricLineB2 = newc; Line(dielectricLineB2) = {dielectricBy, centralPad3};
+dielectricLineB3 = newc; Line(dielectricLineB3) = {dielectricBy, cornerPad1};
+
+//Top of Dielectic
+dielectricLineT0 = newc; Line(dielectricLineT0) = {dielectricTx, dielectricPillarX3};
+dielectricLineT1 = newc; Line(dielectricLineT1) = {dielectricTx, dielectricTCorner2};
+dielectricLineT2 = newc; Line(dielectricLineT2) = {dielectricTy, dielectricTCentral2};
+dielectricLineT3 = newc; Line(dielectricLineT3) = {dielectricTy, dielectricPillarY1};
+dielectricLineT4 = newc; Line(dielectricLineT4) = {dielectricPillarX1, dielectricTCentral0};
+dielectricLineT5 = newc; Line(dielectricLineT5) = {dielectricTCentral0, dielectricTCentral1};
+dielectricLineT6 = newc; Line(dielectricLineT6) = {dielectricTCentral1, dielectricTCentral2};
+dielectricLineT7 = newc; Line(dielectricLineT7) = {dielectricPillarY3, dielectricTCorner0};
+dielectricLineT8 = newc; Line(dielectricLineT8) = {dielectricTCorner0, dielectricTCorner1};
+dielectricLineT9 = newc; Line(dielectricLineT9) = {dielectricTCorner1, dielectricTCorner2};
+
+//Pillar sections
+dielectricPillarXLine0 = newc; Circle(dielectricPillarXLine0) = {dielectricPillarX1, dielectricPillarX0, dielectricPillarX2};
+dielectricPillarXLine1 = newc; Circle(dielectricPillarXLine1) = {dielectricPillarX3, dielectricPillarX0, dielectricPillarX2};
+dielectricPillarXLine2 = newc; Line(dielectricPillarXLine2) = {dielectricPillarX1, dielectricPillarX3};
+dielectricPillarYLine0 = newc; Circle(dielectricPillarYLine0) = {dielectricPillarY1, dielectricPillarY0, dielectricPillarY2};
+dielectricPillarYLine1 = newc; Circle(dielectricPillarYLine1) = {dielectricPillarY3, dielectricPillarY0, dielectricPillarY2};
+dielectricPillarYLine2 = newc; Line(dielectricPillarYLine2) = {dielectricPillarY1, dielectricPillarY3};
+
+//Connect top to bottom
+dielectricLineC0 = newc; Line(dielectricLineC0) = {dielectricTx, dielectricBx};
+dielectricLineC1 = newc; Line(dielectricLineC1) = {dielectricTy, dielectricBy};
+dielectricLineC2 = newc; Line(dielectricLineC2) = {dielectricTCentral0, centralPad1};
+dielectricLineC3 = newc; Line(dielectricLineC3) = {dielectricTCentral1, centralPad2};//Line 90
+dielectricLineC4 = newc; Line(dielectricLineC4) = {dielectricTCentral2, centralPad3};
+dielectricLineC5 = newc; Line(dielectricLineC5) = {dielectricTCorner0, cornerPad1};
+dielectricLineC6 = newc; Line(dielectricLineC6) = {dielectricTCorner1, cornerPad2};
+dielectricLineC7 = newc; Line(dielectricLineC7) = {dielectricTCorner2, cornerPad3};
+
+// ***** Curve Loops ***** //
+//Top and Bottom
+dielectricTopLoop = newcl; Curve Loop(dielectricTopLoop) = {
+    dielectricLineT0, dielectricPillarXLine1, -dielectricPillarXLine0, dielectricLineT4,
+    dielectricLineT5, dielectricLineT6, -dielectricLineT2,
+    dielectricLineT3, dielectricPillarYLine0, -dielectricPillarYLine1, dielectricLineT7,
+    dielectricLineT8, dielectricLineT9, -dielectricLineT1
+};
+dielectricBottomLoop = newcl; Curve Loop(dielectricBottomLoop) = {
+    dielectricLineB0, centralPadLine1, centralPadLine2,
+    -dielectricLineB2,
+    dielectricLineB3, cornerPadLine1, cornerPadLine2,
+    -dielectricLineB1
+};
+//Pillar-dielectric Interface
+dielectricPillarXLoop = newcl; Curve Loop(dielectricPillarXLoop) = {
+    dielectricPillarXLine0, -dielectricPillarXLine1, -dielectricPillarXLine2
+};
+dielectricPillarYLoop = newcl; Curve Loop(dielectricPillarYLoop) = {
+    dielectricPillarYLine0, -dielectricPillarYLine1, -dielectricPillarYLine2
+};
+//Dielectric side facing pads
+dielectricCentralLoop0 = newcl; Curve Loop(dielectricCentralLoop0) = {
+    dielectricLineT5, dielectricLineC3, -centralPadLine1, -dielectricLineC2
+};
+dielectricCentralLoop1 = newcl; Curve Loop(dielectricCentralLoop1) = {//Line 100
+    dielectricLineT6, dielectricLineC4, -centralPadLine2, -dielectricLineC3
+};
+dielectricCornerLoop0 = newcl; Curve Loop(dielectricCornerLoop0) = {
+    dielectricLineT8, dielectricLineC6, -cornerPadLine1, -dielectricLineC5
+};
+dielectricCornerLoop1 = newcl; Curve Loop(dielectricCornerLoop1) = {
+    dielectricLineT9, dielectricLineC7, -cornerPadLine2, -dielectricLineC6
+};
+//Sides
+dielectricSideLoop0 = newcl; Curve Loop(dielectricSideLoop0) = {
+    dielectricLineT0, -dielectricPillarXLine2, dielectricLineT4,
+    dielectricLineC2, -dielectricLineB0, -dielectricLineC0
+};
+dielectricSideLoop1 = newcl; Curve Loop(dielectricSideLoop1) = {
+    dielectricLineT3, dielectricPillarYLine2, dielectricLineT7,
+    dielectricLineC5, -dielectricLineB3, -dielectricLineC1
+};
+dielectricSideLoop2 = newcl; Curve Loop(dielectricSideLoop2) = {
+    dielectricLineT1, dielectricLineC7, -dielectricLineB1, -dielectricLineC0
+};
+dielectricSideLoop3 = newcl; Curve Loop(dielectricSideLoop3) = {
+    dielectricLineT2, dielectricLineC4, -dielectricLineB2, -dielectricLineC1
+};
+
+// ***** Surfaces ***** //
+dielectricTopSurface = news; Plane Surface(dielectricTopSurface) = {dielectricTopLoop};
+dielectricBottomSurface = news; Plane Surface(dielectricBottomSurface) = {dielectricBottomLoop};
+dielectricPillarX = news; Plane Surface(dielectricPillarX) = {dielectricPillarXLoop};
+dielectricPillarY = news; Plane Surface(dielectricPillarY) = {dielectricPillarYLoop};
+dielectricSide0 = news; Plane Surface(dielectricSide0) = {dielectricSideLoop0};
+dielectricSide1 = news; Plane Surface(dielectricSide1) = {dielectricSideLoop1};
+dielectricSide2 = news; Plane Surface(dielectricSide2) = {dielectricSideLoop2};
+dielectricSide3 = news; Plane Surface(dielectricSide3) = {dielectricSideLoop3};
+dielectricPad0 = news; Plane Surface(dielectricPad0) = {dielectricCentralLoop0};
+dielectricPad1 = news; Plane Surface(dielectricPad1) = {dielectricCentralLoop1};
+dielectricPad2 = news; Plane Surface(dielectricPad2) = {dielectricCornerLoop0};
+dielectricPad3 = news; Plane Surface(dielectricPad3) = {dielectricCornerLoop1};
+
+
+// ***** Volume ***** //
+dielectricVolumeLoop = newsl; Surface Loop(dielectricVolumeLoop) = {
+    dielectricTopSurface, dielectricPillarX, dielectricPillarY,
+    dielectricBottomSurface,
+    dielectricSide0, dielectricSide1, dielectricSide2, dielectricSide3, 
+    dielectricPad0, dielectricPad1, dielectricPad2, dielectricPad3
+};
+dielectricVolume = newv; Volume(dielectricVolume) = {dielectricVolumeLoop};
+
+
+// *************** PILLARS *************** //
+
+// ***** Lines ***** //
+pillarXLine0 = newc; Line(pillarXLine0) = {gridPillarX1, dielectricPillarX1};
+pillarXLine1 = newc; Line(pillarXLine1) = {gridPillarX2, dielectricPillarX2};
+pillarXLine2 = newc; Line(pillarXLine2) = {gridPillarX3, dielectricPillarX3};
+
+pillarYLine0 = newc; Line(pillarYLine0) = {gridPillarY1, dielectricPillarY1};
+pillarYLine1 = newc; Line(pillarYLine1) = {gridPillarY2, dielectricPillarY2};
+pillarYLine2 = newc; Line(pillarYLine2) = {gridPillarY3, dielectricPillarY3};
+
+// ***** Curve Loops ***** //
+pillarXLoop0 = newcl; Curve Loop(pillarXLoop0) = {
+    gridPillarXLine2, pillarXLine2, -dielectricPillarXLine2, -pillarXLine0
+};
+pillarXLoop1 = newcl; Curve Loop(pillarXLoop1) = {
+    gridPillarXLine0, pillarXLine1, -dielectricPillarXLine0, -pillarXLine0
+};
+pillarXLoop2 = newcl; Curve Loop(pillarXLoop2) = {
+    gridPillarXLine1, pillarXLine1, -dielectricPillarXLine1, -pillarXLine2
+};
+pillarYLoop0 = newcl; Curve Loop(pillarYLoop0) = {
+    gridPillarYLine2, pillarYLine2, -dielectricPillarYLine2, -pillarYLine0
+};
+pillarYLoop1 = newcl; Curve Loop(pillarYLoop1) = {
+    gridPillarYLine0, pillarYLine1, -dielectricPillarYLine0, -pillarYLine0
+};
+pillarYLoop2 = newcl; Curve Loop(pillarYLoop2) = {
+    gridPillarYLine1, pillarYLine1, -dielectricPillarYLine1, -pillarYLine2
+};
+
+// ***** Surfaces ***** //
+pillarXSurface0 = news; Plane Surface(pillarXSurface0) = {pillarXLoop0};
+pillarXSurface1 = news; Surface(pillarXSurface1) = {pillarXLoop1};
+pillarXSurface2 = news; Surface(pillarXSurface2) = {pillarXLoop2};
+pillarYSurface0 = news; Plane Surface(pillarYSurface0) = {pillarYLoop0};
+pillarYSurface1 = news; Surface(pillarYSurface1) = {pillarYLoop1};
+pillarYSurface2 = news; Surface(pillarYSurface2) = {pillarYLoop2};
+
+// ***** Volumes ***** //
+pillarXVolumeLoop = newsl; Surface Loop(pillarXVolumeLoop) = {
+    pillarXSurface0, pillarXSurface1, pillarXSurface2,
+    gridPillarX, dielectricPillarX
+};
+pillarXVolume = newv; Volume(pillarXVolume) = {pillarXVolumeLoop};
+pillarYVolumeLoop = newsl; Surface Loop(pillarYVolumeLoop) = {
+    pillarYSurface0, pillarYSurface1, pillarYSurface2,
+    gridPillarY, dielectricPillarY
+};
+pillarYVolume = newv; Volume(pillarYVolume) = {pillarYVolumeLoop};
+
+
+// *************** GAS *************** //
+
+// ***** Lines ***** //
+gasLine0 = newc; Line(gasLine0) = {cathode0, centralPad0};
+gasLine1 = newc; Line(gasLine1) = {cathode2, cornerPad0};
+gasLine2 = newc; Line(gasLine2) = {cathode1, gridCornerTx};
+gasLine3 = newc; Line(gasLine3) = {gridCornerBx, dielectricTx};
+gasLine4 = newc; Line(gasLine4) = {cathode3, gridCornerTy};
+gasLine5 = newc; Line(gasLine5) = {gridCornerBy, dielectricTy};
+
+// ***** Curve Loops ***** //
+gasLoop0 = newcl; Curve Loop(gasLoop0) = {
+    cathodeLine0, gasLine2, 
+    -gridLineT0, gridLineC0, gridLineB0,
+    pillarXLine0, dielectricLineT4, 
+    dielectricLineC2, -centralPadLine0, -gasLine0
+};
+gasLoop1 = newcl; Curve Loop(gasLoop1) = {
+    -gridLineB4, gasLine3, dielectricLineT0, -pillarXLine2
+};
+gasLoop2 = newcl; Curve Loop(gasLoop2) = {
+    cathodeLine2, gasLine4,
+    gridLineT3, gridLineC2, gridLineB2,
+    pillarYLine2, dielectricLineT7, 
+    dielectricLineC5, -cornerPadLine0, -gasLine1
+};
+gasLoop3 = newcl; Curve Loop(gasLoop3) = {
+    -gridLineB5, gasLine5, dielectricLineT3, -pillarYLine0
+};
+gasLoop4 = newcl; Curve Loop(gasLoop4) = {
+    cathodeLine1, gasLine1,
+    -cornerPadLine3, -dielectricLineC7, -dielectricLineT1,
+    -gasLine3, -gridLineB3, -gridLineC3, -gridLineT2, -gasLine2
+};
+gasLoop5 = newcl; Curve Loop(gasLoop5) = {
+    cathodeLine3, gasLine0, 
+    -centralPadLine3, -dielectricLineC4, -dielectricLineT2,
+    -gasLine5, -gridLineB1, -gridLineC1, gridLineT1, -gasLine4
+};
+
+// ***** Surfaces ***** //
+gasSurface0 = news; Plane Surface(gasSurface0) = {gasLoop0};
+gasSurface1 = news; Plane Surface(gasSurface1) = {gasLoop1};
+gasSurface2 = news; Plane Surface(gasSurface2) = {gasLoop2};
+gasSurface3 = news; Plane Surface(gasSurface3) = {gasLoop3};
+gasSurface4 = news; Plane Surface(gasSurface4) = {gasLoop4};
+gasSurface5 = news; Plane Surface(gasSurface5) = {gasLoop5};
+
+// ***** Volume ***** //
+gasVolumeLoop = newsl; Surface Loop(gasVolumeLoop) = {
+    gasSurface0, gasSurface1, 
+    gasSurface2, gasSurface3, 
+    gasSurface4, gasSurface5,
+    gridSurfaceT, gridSurfaceB,
+    gridCenterHole, gridCornerHole,
+    cathodeSurface,
+    centralPadSurface, cornerPadSurface,
+    dielectricTopSurface,
+    dielectricPad0, dielectricPad1, dielectricPad2, dielectricPad3,
+    pillarXSurface1, pillarXSurface2,
+    pillarYSurface1, pillarYSurface2
+};
+gasVolume = newv; Volume(gasVolume) = {gasVolumeLoop};
 
 
 //**********************************************************************
-// PHYSICAL GROUPS
+// DEFINE PHYSICAL GROUPS
 //**********************************************************************
 
-// Physical Volumes
-Physical Volume("Grid") = {1};
-Physical Volume("Dielectric") = {101};
-Physical Volume("Gas") = {1001};
-Physical Volume("Pillars") = {2001, 2002};
+// *************** PHYSICAL VOLUMES *************** //
+Physical Volume("Grid") = {gridVolume};
+Physical Volume("Dielectric") = {dielectricVolume};
+Physical Volume("Gas") = {gasVolume};
+Physical Volume("Pillars") = {pillarXVolume, pillarYVolume};
 
+// *************** PHYSICAL SURFACES *************** //
 
-// ***** Physical Surfaces ***** //
-
-// *** Constant Elements *** //
+// ***** Constant Elements ***** //
 
 Physical Surface("Cathode") = {
-    321
+    cathodeSurface
 };
 
 Physical Surface("Grid") = {
-    21, // Top
-    22, // Bottom
-    //Sides 
-    23, 24, // Hole
-    25, 26, 27, 28, //Outer
-    903, 904 //Pillar tops
+    gridSurfaceT, gridSurfaceB,
+    gridPillarX, gridPillarY,
+    gridCenterHole, gridCornerHole,
+    gridSide0, gridSide1, gridSide2, gridSide3
 };
 
 Physical Surface("CentralPad") = {
-    121
+    centralPadSurface
 };
 
 Physical Surface("CornerPad") = {
-    122
+    cornerPadSurface
 };
 
 Physical Surface("DielectricTop") = {
-    123, // Top
-    901, 902 //Pillar bottoms
+    dielectricTopSurface, 
+    dielectricPillarX, dielectricPillarY
 };
 
 Physical Surface("Boundaries") = {
-    25, 26, 27, 28, //Grid
-    322, 323, 324, 325, 911, 912, //Gas
-    125, 126, 129, 130, // Dielectric
-    905, 908 //Pillars
+    gridSide0, gridSide1, gridSide2, gridSide3,
+    gasSurface0, gasSurface1, 
+    gasSurface2, gasSurface2, 
+    gasSurface4, gasSurface5,
+    dielectricSide0, dielectricSide1, dielectricSide2, dielectricSide3, 
+    pillarXSurface0, pillarYSurface0
 };
 
 Coherence;

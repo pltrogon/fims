@@ -19,7 +19,7 @@ class App(tk.Tk):
         self.currentPlot = None
         self.currentFig = None
         self.binWidthValue = 1
-        self.thresholdValue = 0
+        self.thresholdValue = 10
         self.curAvalancheID = tk.IntVar(value=0)
         self.curParticle = tk.StringVar(self)
         self.curParticle.set('-- Select --')
@@ -52,8 +52,8 @@ class App(tk.Tk):
         self.buttonFrame = tk.Frame(self.optionsFrame)
         self.buttonFrame.pack(side=tk.TOP, fill=tk.Y, padx=10)
 
-        self.metaDataFrame = tk.Frame(self.mainFrame)
-        self.metaDataFrame.pack(side=tk.RIGHT, fill=tk.Y, padx=10)
+        self.showDataFrame = tk.Frame(self.mainFrame)
+        self.showDataFrame.pack(side=tk.RIGHT, fill=tk.Y, padx=10)
 
         self.plottingFrame = tk.Frame(self.mainFrame)
         self.plottingFrame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
@@ -76,6 +76,11 @@ class App(tk.Tk):
         self.loadRun.pack(side=tk.LEFT)
         self.runEntry.bind("<Return>", self.loadData)
 
+        #Regions for displaying metadata and calculated data
+        self.metaDataFrame = tk.Frame(self.showDataFrame)
+        self.metaDataFrame.pack(side=tk.TOP, fill=tk.Y, padx=2)
+        self.calcDataFrame = tk.Frame(self.showDataFrame)
+        self.calcDataFrame.pack(side=tk.TOP, fill=tk.Y, padx=2)
 
         # --- Treeview for metaData ---
         metaDataLabel = tk.Label(
@@ -84,13 +89,28 @@ class App(tk.Tk):
             font=("Arial", 20, "bold"))
         metaDataLabel.pack(side=tk.TOP, pady=5)
 
-        self.metaDataTree = ttk.Treeview(self.metaDataFrame, columns=('Value'), show='tree headings')
+        self.metaDataTree = ttk.Treeview(self.metaDataFrame, columns=('Value'), show='tree headings', height=20)
         self.metaDataTree.heading('#0', text='Parameter')
         self.metaDataTree.heading('Value', text='Value')
         self.metaDataTree.column('#0', width=150)
         self.metaDataTree.column('Value', width=200)
 
         self.metaDataTree.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+        # --- Treeview for calculatedData ---
+        calcDataLabel = tk.Label(
+            self.calcDataFrame, 
+            text="Calculated Data:", 
+            font=("Arial", 20, "bold"))
+        calcDataLabel.pack(side=tk.TOP, pady=5)
+
+        self.calcDataTree = ttk.Treeview(self.calcDataFrame, columns=('Value'), show='tree headings', height=20)
+        self.calcDataTree.heading('#0', text='Parameter')
+        self.calcDataTree.heading('Value', text='Value')
+        self.calcDataTree.column('#0', width=150)
+        self.calcDataTree.column('Value', width=200)
+
+        self.calcDataTree.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
         # --- Listbox for DataFrames ---
         dataLabel = tk.Label(
@@ -135,7 +155,7 @@ class App(tk.Tk):
 
         self.avalancheID = tk.Spinbox(
             self.avalancheFrame, 
-            from_=0, to=999, ##TODO - make this maximum match the value in metadata. Or alternative just be very large
+            from_=0, to=999, #TODO - number of avalanches can exceed this
             wrap=False, width=5, 
             textvariable=self.curAvalancheID,
             command=self.updateAvalancheID)
@@ -261,6 +281,10 @@ class App(tk.Tk):
         self.showSignalvsGain.pack(side=tk.TOP)
 
 
+
+        self.protocol("WM_DELETE_WINDOW", self.onClosing)
+
+
     def loadData(self, *args):
         """
         Loads data and updates the GUI.
@@ -295,6 +319,8 @@ class App(tk.Tk):
         # Clear existing widgets
         for item in self.metaDataTree.get_children():
             self.metaDataTree.delete(item)
+        for item in self.calcDataTree.get_children():
+            self.calcDataTree.delete(item)
         self.dataList.delete(0, tk.END)
         for widget in self.plottingFrame.winfo_children():
             widget.destroy()
@@ -309,7 +335,27 @@ class App(tk.Tk):
         if self.simData and hasattr(self.simData, 'getMetaData'):
             metaDataDict = self.simData.getMetaData()
             for key, value in metaDataDict.items():
-                self.metaDataTree.insert('', tk.END, text=key, values=(value,))
+                if isinstance(value, (int, float)):
+                    # Format to 6 decimal places and convert to string
+                    formVal = f"{value:.6f}"
+                else:
+                    # Use the value as is (for strings, etc.)
+                    formVal = value
+
+                self.metaDataTree.insert('', tk.END, text=key, values=(formVal,))
+
+        # Populate the Treeview with calculated data values
+        if self.simData and hasattr(self.simData, 'getCalculatedData'):
+            calcDataDict = self.simData.getCalculatedData()
+            for key, value in calcDataDict.items():
+                if isinstance(value, (int, float)):
+                    # Format to 6 decimal places and convert to string
+                    formVal = f"{value:.6f}"
+                else:
+                    # Use the value as is (for strings, etc.)
+                    formVal = value
+
+                self.calcDataTree.insert('', tk.END, text=key, values=(formVal,))
 
         if self.simData and self.currentFig:
             canvas = FigureCanvasTkAgg(self.currentFig, master=self.plottingFrame)
@@ -322,6 +368,7 @@ class App(tk.Tk):
         """
         Matches the currentPlot with the appropriate method. Gets the figure.
         """
+        plt.close(self.currentFig)
         if self.simData:
             match self.currentPlot:
                 case 'Geometry':
@@ -473,6 +520,22 @@ class App(tk.Tk):
         self.currentPlot = plotToGet
         self.getPlot()
         self.updateGUI()
+
+
+    def onClosing(self):
+            """
+            Handles the closing of the main window to ensure all processes stop.
+            """
+            try:
+                # Explicitly close the current plot figure
+                if self.currentFig:
+                    plt.close(self.currentFig)
+            except Exception:
+                pass
+                
+            # Destroy the Tkinter root window and exit the mainloop
+            self.destroy()
+            self.quit()
 
 if __name__ == "__main__":
     app = App()

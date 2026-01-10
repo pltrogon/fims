@@ -13,10 +13,10 @@ Simulation
   Steady State Max Iterations = 5
   Output Intervals(1) = 1
   Coordinate Scaling = 1e-6
-  Solver Input File = FIMS.sif
-  Post File = FIMS.ep !Output for Garfield
-  Post File = FIMS.vtu !Output for ParaView
-  Output file = "elmerResults/FIMS.result"
+  Solver Input File = GridPix.sif
+  Post File = GridPix.ep !Output for Garfield
+  Post File = GridPix.vtu !Output for ParaView
+  Output file = "elmerResults/GridPix.result"
 End
 
 Constants
@@ -91,11 +91,6 @@ Material 3
   Relative Permittivity = 3.9
 End
 
-Material 4
-  Name = "Pillars"
-  Relative Permittivity = 3
-End
-
 ! Assigning materials to the Gmsh physical volumes
 
 Body 1
@@ -119,25 +114,18 @@ Body 3
   Material = 3
 End
 
-Body 4
-  Target Bodies(1) = 4
-  Name = "Pillars"
-  Equation = 1
-  Material = 4
-End
-
 ! Boundary conditions
 
 Boundary Condition 1
   Target Boundaries(1) = 1
   Name = "Cathode"
-	Potential = -228.46600000000004
+	Potential = -365.6
 End
 
 Boundary Condition 2
   Target Boundaries(1) = 2
   Name = "Grid"
-	Potential = -222.88000000000002
+	Potential = -360.0
 End
 
 Boundary Condition 3
@@ -148,19 +136,13 @@ End
 
 Boundary Condition 4
   Target Boundaries(1) = 4
-  Name = "CornerPad"
-  Potential = 0.0
-End
-
-Boundary Condition 5
-  Target Boundaries(1) = 5
   Name = "DielectricSurfaceCharge"
   Charge Density = Variable Coordinate 1, Coordinate 2, Coordinate 3
   File "chargeBuildup.dat"
 End
 
-Boundary Condition 6
-  Target Boundaries(1) = 6
-  Name = "MirrorBoundaries"
+Boundary Condition 5
+  Target Boundaries(1) = 5
+  Name = "MirrorBoundary"
   Electric Flux = 0.0
 End

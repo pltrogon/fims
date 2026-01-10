@@ -48,8 +48,8 @@ class FIMS_Simulation:
             - cathodeHeight: Distance from the top to the grid to the cathode plane (micron).
             - thicknessSiO2: Thickness of the SiO2 layer (micron).
             - pillarRadius: The radius of the insulating support pillars (micron).
+            - driftField: The strength of the electric field in the drift region (V/cm).
             - fieldRatio: Ratio of the amplification field to the drift field.
-                          Note that the drift field is assumed to be 1 kV/cm.
             - numFieldLine: Number of field lines to calculate for visualization.
             - numAvalanche: Number of electrons (avalanches) to initiate
             - avalancheLimit: Limit of the number of electrons within a single avalanche.
@@ -77,6 +77,12 @@ class FIMS_Simulation:
         _runElmerWeighting
         _runGarfield
         runSimulation
+        runForOptimizer
+        _runGetEfficiency
+        _readEfficiencyFile
+        findFieldForEfficiency
+        runMagboltz
+        findFieldForTransparency
     """
 
 #***********************************************************************************#
@@ -112,7 +118,10 @@ class FIMS_Simulation:
     def defaultParam(self):
         """
         Default FIMS parameters.
-        Dimensions in microns.
+            Dimensions in microns.
+            Electric field in V/cm.
+
+            When both gas compositions are 0, the simulated gas is T2K.
     
         Returns:
             dict: Dictionary of default parameters and values.
@@ -122,17 +131,18 @@ class FIMS_Simulation:
             'pitch': 225.,
             'gridStandoff': 100.,
             'gridThickness': 1.,
-            'holeRadius': 55.,
+            'holeRadius': 65.,
             'cathodeHeight': 200.,
             'thicknessSiO2': 5.,
             'pillarRadius': 20.,
-            'fieldRatio': 40.,
-            'transparencyLimit': 0.98,
-            'numFieldLine': 11,
-            'numAvalanche': 1000,
-            'avalancheLimit': 400,
-            'gasCompAr': 70.,
-            'gasCompCO2': 30.,
+            'driftField': 280.,
+            'fieldRatio': 88.,
+            'transparencyLimit': 0.99,
+            'numFieldLine': 25,
+            'numAvalanche': 1500,
+            'avalancheLimit': 1500,
+            'gasCompAr': 0.,
+            'gasCompCO2': 0.,
         }
         return defaultParam
 
@@ -215,17 +225,18 @@ class FIMS_Simulation:
             bool: True if the setup is successful, False otherwise.
         """
 
-        #Check for log/
+        #Check for file pathways
         if not os.path.exists("log"):
             os.makedirs("log")
             
-        #Check for build/
         if not os.path.exists("build"):
             os.makedirs("build")
 
-        #Check for build/parallelData
         if not os.path.exists("build/parallelData"):
             os.makedirs("build/parallelData")
+
+        if not os.path.exists("../Data/Diffusion"):
+            os.makedirs("../Data/Diffusion")
 
         # Get garfield path into environment
         envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
@@ -407,26 +418,26 @@ class FIMS_Simulation:
         """
         Calculates the required potentials to achieve a desired field ratio.
     
-        Uses the geometry definitions and desired amplification field ratio
-        contained in param. Assumes a drift field of 1 kV/cm.
+        Assumes that the drift field is defined as V/cm and distances are in microns.
     
         Returns:
-            dict: Dictionary containing the potentials for the cathode and grid.
+            dict: Dictionary containing the potentials for the cathode and grid (in V).
                   Empty if necessary parameters are unavailable. 
         """
         if not self._checkParam():
             return {}
             
-        convertEField = 0.1 # 1 kV/cm = 0.1 V/micron
+
+        driftField = float(self._getParam('driftField'))/1e4 #V/micron
+        amplificationField = driftField*float(self._getParam('fieldRatio'))
         
         # Calculate the voltage required to achieve amplification field
         gridDistance = float(self._getParam('gridStandoff')) - float(self._getParam('gridThickness'))/2. #micron
-    
-        gridVoltage = float(self._getParam('fieldRatio'))*convertEField*gridDistance
+        gridVoltage = amplificationField*gridDistance
     
         # Calculate for drift field
         cathodeDistance = float(self._getParam('cathodeHeight')) - float(self._getParam('gridThickness'))/2. #micron
-        cathodeVoltage = convertEField*cathodeDistance + gridVoltage
+        cathodeVoltage = driftField*cathodeDistance + gridVoltage
     
         potentials = {
             'cathodeVoltage': -cathodeVoltage,
@@ -819,6 +830,53 @@ class FIMS_Simulation:
         finally:
             os.chdir(originalCWD)
         return True
+    
+
+#***********************************************************************************#
+    def _runGetEfficiency(self, targetEfficiency=.95, threshold=10):
+        """
+        Runs a Garfield++ executable the generates electron avalanches until a target
+        efficiency is either excluded or surpassed with a 2-sigma confidence.
+
+        Args:
+            targetEfficiency (float): The target efficiency to compare to.
+            threshold: The minimum number of electrons required to be considered a 'success'.
+
+        Returns:
+            bool: True if program runs successfully, False otherwise.
+        """
+        originalCWD = os.getcwd()
+        try:
+            os.chdir('./build/')
+
+            # Get garfield path into environment
+            envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
+            envOutput = subprocess.check_output(envCommand, shell=True, universal_newlines=True)
+            newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line)
+            os.environ.update(newEnv)
+
+            with open(os.path.join(originalCWD, 'log/logGarfieldGetEfficiency.txt'), 'w+') as garfieldOutput:
+                startTime = time.monotonic()
+                setupGetEfficiency = (
+                    f'./runEfficiency {targetEfficiency} {threshold}'
+                )
+                runReturn = subprocess.run(
+                    setupGetEfficiency, 
+                    stdout = garfieldOutput, 
+                    shell = True, 
+                    check = True,
+                    env = os.environ
+                )
+                endTime = time.monotonic()
+                garfieldOutput.write(f'\n\nGarfield run time: {endTime - startTime} s')
+    
+            if runReturn.returncode != 0:
+                    print('Garfield++ execution failed. Check log for details.')
+                    return False
+            
+        finally:
+            os.chdir(originalCWD)
+        return True
 
 #***********************************************************************************#
     def runSimulation(self, changeGeometry=True):
@@ -902,10 +960,258 @@ class FIMS_Simulation:
 # METHODS FOR RUNNING MINIMUM FIELD
 #***********************************************************************************#
 #***********************************************************************************#
-    def _calcMinField(self):
+
+#***********************************************************************************#
+    def _readEfficiencyFile(self):
+        """
+        Reads the file containing the simulated efficiency for a given field strength. 
+
+        Returns:
+            dict: Dictionary containing the parsed efficiency data. 
+                  None if unsuccessful. Includes:
+                  - 'stopCondition' (str): The avalanche stop condition (Converged or not).
+                  - 'efficiency' (float): The simulated efficiency.
+                  - 'efficiencyErr'(float): The uncertainty of the simulated efficiency.
+
+        """
+
+        try:
+            with open('../Data/efficiencyFile.txt', 'r') as inFile:
+                allLines = [inLine.strip() for inLine in inFile.readlines()]
+
+        except FileNotFoundError:
+            print(f"Error: File 'efficiencyFile.txt' not found.")
+            return None
+
+
+        if len(allLines) < 7:
+            raise IndexError("Malformed file.")
+        
+        findEffValues = {}
+        try:
+            findEffValues['stopCondition'] = allLines[3].strip()
+
+            findEffValues['efficiency'] = float(allLines[5].strip())
+            findEffValues['efficiencyErr'] = float(allLines[6].strip())
+
+        except (IndexError, ValueError) as e:
+            print(f'Error extracting values - {e}')
+            return None
+                
+
+        return findEffValues
+    
+#***********************************************************************************#
+    def _getEfficiencyField(self, fields, efficiencies, efficienciesErr=None, damping=0.8):
+        """
+        Calculates the next field strength using the secant method to approach a target efficiency.
+
+        If efficiency errors are provided, utilizes a step base on the maximum possible slope.
+        Assumes that the efficiency is monotonically increasing.
+        
+        *TODO - Tested for when  current and previous effs are both LESS than target. Behaviour when bracketing target unknown.*
+
+        Args:
+            fields (np.array): Numpy array of the field strengths. Has form: [current, previous]
+            efficiencies (np.array): Numpy array of the efficiencies. Has form: [current, previous, target]
+            efficienciesErr (np.array): Optional. Array of errors in the efficiencies. Has form: [currentError, previousError]
+            damping (float): Damping factor for the secant method to avoid too large of steps.
+
+        Returns:
+            float: Numerical solution to the field in order to achieve target efficiency
+        """
+
+        curField, prevField = fields
+        curEff, prevEff, targetEff = efficiencies
+
+        fieldDiff = curField - prevField
+
+        #If errors exist, use the maximum possible slope
+        if efficienciesErr is not None:
+            curEffErr, prevEffErr = efficienciesErr
+            prevEffMin = prevEff - prevEffErr
+            curEffMax = curEff + curEffErr
+
+            effDiff = curEffMax - prevEffMin
+            targetDiff = targetEff - curEffMax
+
+        else:
+            effDiff = curEff - prevEff
+            targetDiff = targetEff - curEff
+
+
+        if abs(effDiff) < 0.001:
+                print(f'Warning: Slope near zero. Using heuristic step of 5%.')
+                return curField*1.05 
+
+        fieldStep = damping*targetDiff*fieldDiff/effDiff
+        print(f'Field Step: {fieldStep:.2f}')
+        
+        if fieldStep > 20:
+            print(f'Warning: Step size limited to 20 for stability.')
+            newField = curField+20
+
+        elif fieldStep < 2:
+            print(f'Warning: Field step small. Using heuristic step of 1.')
+            newField = curField+2
+
+        else:
+            newField = curField+fieldStep
+
+        return newField
+
+
+#***********************************************************************************#
+    def findFieldForEfficiency(self, targetEfficiency=.95, threshold=10):
+        """
+        Performs an iterative search to find the minimum Electric Field Ratio 
+        required to achieve a specified detection efficiency for electron avalanches.
+
+        Process:
+            1 - Generates the geometry by executing Gmsh.
+            2 - Solves an electric field using Elmer. 
+            3 - Executes Garfield++ avalanches to determine a detection efficiency.
+            4 - Repeats steps 2 and 3, increasing the field ration using a modified 
+                secant method until a solution is reached.
+
+        Note that this assumes that the field strength is monotonically increasing.
+
+        Args:
+            targetEfficiency (float): The target electron detection efficiency.
+            threshold (int): The minimum avalanche size required for an event to 
+                             be counted as 'detected'.
+
+        Returns:
+            bool: True if a solution is found or the search process completes.
+                  False if there is a fatal execution error.
+        """
+
+        #Ensure all parameters exist and save them
+        if not self._checkParam():
+            return -1
+        saveParam = self.param.copy()
+
+        #Write parameters and generate geometry
+        if not self._writeParam():
+            print('Error writing parameters.')
+            return -1
+        
+        print('Executing gmsh...')
+        if not self._runGmsh():
+                print('Error executing Gmsh.')
+                return -1
+        
+        print(f'Beginning search for minimum field to achieve {targetEfficiency*100:.0f}% efficiency...')
+        
+        iterNo = 0
+        iterNoLimit = 30 #TODO: revisit this value later
+
+        fields = []
+        efficiencies = []
+        efficienciesErr = []
+
+        validEfficiency = False
+
+        self.param['numAvalanche'] = 3000
+        self.param['avalancheLimit'] = 20 #Limit can be low - Check is boolean - above threshold or not
+        
+        while not validEfficiency:
+
+            iterNo += 1
+            if iterNo > iterNoLimit:
+                print(f'Warning - Iteration limit reached ({iterNoLimit})')
+                break
+
+            print(f'Begining iteration: {iterNo}')
+            print(f'Fields: {fields}')
+            print(f'Efficiencies: {efficiencies}')
+            print(f'Errors: {efficienciesErr}')
+
+            # Determine new field strength
+            newField = None
+
+            if iterNo == 1:
+                newField = self._getParam('fieldRatio')
+
+            # Take constant step of 2 for 2nd iteration
+            elif iterNo == 2:
+                newField = fields[0] + 2
+
+            # Use secant method to determine new field
+            else:
+                newField = self._getEfficiencyField( 
+                    fields=np.array([fields[-1], fields[-2]]),
+                    efficiencies=np.array([efficiencies[-1], efficiencies[-2], targetEfficiency]),
+                    efficienciesErr=np.array([efficienciesErr[-1], efficienciesErr[-2]])
+                )
+            
+            if newField is None:
+                raise ValueError('Error: Invalid new field')
+            
+            fields.append(float(math.ceil(newField)))
+                
+            print(f'Current field ratio: {fields[-1]}')
+            self.param['fieldRatio'] = fields[-1]
+            
+            if not self._writeParam():
+                print('Error writing parameters.')
+                return -1
+            
+            #Determine the electric field
+            print('\tExecuting Elmer...')
+            if not self._runElmer():
+                print('Error executing Elmer.')
+                return -1
+
+            #Determine the efficiency
+            print('\tGetting efficiency...')
+            if not self._runGetEfficiency(targetEfficiency=targetEfficiency, threshold=threshold):
+                print('Error getting efficiency.')
+                return -1
+
+            #Get efficiency values from file
+            effResults = self._readEfficiencyFile()
+
+            efficiencies.append(effResults['efficiency'])
+            efficienciesErr.append(effResults['efficiencyErr'])
+
+
+            match effResults['stopCondition']:
+                
+                case 'DID NOT CONVERGE':
+                    validEfficiency = False
+                    print(f'Did not converge at {fields[-1]} ({self.param['numAvalanche']} avalanches): {efficiencies[-1]:.3f} +/- {efficienciesErr[-1]:.3f}')
+
+                case 'CONVERGED':
+                    validEfficiency = True
+                    print(f'Converged at {fields[-1]}: {efficiencies[-1]:.3f} +/- {efficienciesErr[-1]:.3f}')
+            
+                case 'EXCLUDED':
+                    validEfficiency = False
+                    print(f'Excluded at {fields[-1]}: {efficiencies[-1]:.3f} +/- {efficienciesErr[-1]:.3f}')
+
+                case _:
+                    raise ValueError('Error - Malformed efficiency file.')      
+        #End of find field for efficiency loop
+
+        #Print solution
+        finalField = self._getParam('fieldRatio')
+        print(f'\nSolution: Field ratio = {finalField}')
+        
+        #Reset parameters
+        self.resetParam()
+        #load saved parameters back into class. Update field ratio with solution.
+        self.param = saveParam
+        self.param['fieldRatio'] = finalField
+        self._writeParam()
+
+        return finalField
+
+#***********************************************************************************#
+    def _calcMinField(self): 
         """
         Calculates an initial guess for the minimum field ratio to achieve 100%
-        field transparency.
+        field transparency and 95% efficiency.
 
         Calculation is based off of exponential fits to simulated data.
 
@@ -923,7 +1229,7 @@ class FIMS_Simulation:
         holeArea = math.pi*radius**2
         optTrans = holeArea/gridArea
         
-        standoffRatio = standoff/pitch
+        standoffRatio = standoff/pad
         padRatio = pad/pitch
         
         #Do calculation using values from fits
@@ -931,32 +1237,45 @@ class FIMS_Simulation:
             grid standoff ratio, pad length ratio, and 
             optical transparency vs minField.
           Results are then added together.'''
-          #TODO - should this not be max(minFields)?
-        radialMinField = 570.580*np.exp(-12.670*optTrans)
-        standoffMinField = 27.121*np.exp(-15.9*standoffRatio)
-        padMinField = 143.84*np.exp(-15.17*padRatio)
         
-        minField = radialMinField + standoffMinField + padMinField + 3
+        #Minimum field for 100% transparency
+        #TODO: Update these results
+        radialMinField = 570.580*np.exp(-12.670*optTrans)
+        standoffMinField = 26.85*np.exp(-4.46*standoffRatio)
+        padMinField = 143.84*np.exp(-15.17*padRatio)
+        #TODO: investigate if this is the proper way to combine these
+        minFieldTrans = radialMinField + standoffMinField + padMinField + 3
+        
+        #Minimum field for 95% efficiency
+        #Ar+CO2 (depreciated?)
+        #minFieldEff = 53.21*np.exp(-0.38*standoffRatio) + 23.47  #Ar+Co2
+        
+        #T2K gas
+        padEffField = 371.4*np.exp(-0.16*pad)
+        standEffField = 190.6*np.exp(-0.02*standoff)
+        #TODO: investigate if this is the proper way to combine these
+        minFieldEff = padEffField + standEffField + 50
+        
+        #Choose the larger of the two fields so that both conditions are
+        #satisfied simultaneously.
+        minField = max(minFieldTrans, minFieldEff)
         
         return minField
 
 #***********************************************************************************#
-    def findMinField(self, margin=1., minStepSize=1.2):
+    def findFieldForTransparency(self, runGMSH=True, minStepSize=1.1):
         """
         Runs simulations to determine what the minimum electric field ratio
         needs to be in order to have 100% E-field transparency.
 
-        First, it calculates an initial guess for the ratio based on exponential fits 
-        to simulated data. Then, it generates a gmsh FEM of the geometry and solves the
-        E-field based on this guess using Elmer FEM. It then generates field lines via 
-        Garfield++ and determines a transparency. If the transparency is below the limit,
-        a new field ratio is determined. The resulting field is solved, and new field 
-        lines are generated. This continues until the criteria is reached.
+        First, it optionally generates a gmsh FEM of the geometry before solving the
+        E-field based on a preset field strength via Elmer FEM. It then generates
+        field lines via Garfield++ and determines the transparency. If the 
+        transparency is below the limit, a new field ratio is determined. The 
+        resulting field is solved, and new field lines are generated. This continues
+        until the criteria is reached.
         
         Upon completion, simulation files are reset.
-        
-        NOTE: This assumes that the initial guessed field ratio results in a transparency
-        that is below the limit. The ratio is therefore always increased.
         
         Args:
             margin (float): number multiplied to the predicted value to create a
@@ -965,23 +1284,14 @@ class FIMS_Simulation:
             minStepSize (float): number used as the step size once the calculated step
             size becomes too small.
 
-        Returns:
-            bool: True if a minimum field is successfully found, False otherwise.
-            
-            finalField (float): the minimum field ratio that results in 100% transparency.
+        Returns:            
+            finalField (float): The minimum field ratio that results in 100% transparency.
+                                Retuns -1 on a failure or if an error occurs.
         """
         #Ensure all parameters exist and save them
         if not self._checkParam():
             return -1
         saveParam = self.param.copy()
-
-        #Calculate initial guess
-        initialGuess = self._calcMinField()*margin
-        #TODO: remove if statement after gain check is implemented
-        if initialGuess < 45:
-            initialGuess = 45
-            
-        self.param['fieldRatio'] = initialGuess
        
         #Adjust the number of field lines to fill only last 20% of the unit cell
         numLines = int(self._getParam('numFieldLine')*.2)
@@ -991,12 +1301,13 @@ class FIMS_Simulation:
         if not self._writeParam():
             print('Error writing parameters.')
             return -1
-            
-        print('Executing gmsh...')
-        if not self._runGmsh():
+        
+        if runGMSH:
+            print('Executing gmsh...')
+            if not self._runGmsh():
                 print('Error executing Gmsh.')
                 return -1
-
+        
         print('Beginning search for minimum field...')
         isTransparent = False
         stepSize = 1.
@@ -1052,8 +1363,74 @@ class FIMS_Simulation:
         #load saved parameters back into class. Update field ratio with solution.
         self.param = saveParam
         self.param['fieldRatio'] = finalField
-        
+        self._writeParam()
+
         return finalField
+    
+
+#***********************************************************************************#
+    def runMagboltz(self, eField=1, gasComp='ArCO2', gasCompAr=0, gasCompCO2=0):
+        """
+        Executes a C program that utilizes Garfield++ and Magboltz to calculate and save
+        the electron drift and diffusion properties for a specified gas mixture at a given
+        field strength.
+
+        Args:
+            eField (float): The magnitude of the electric field in V/cm.
+            gasComp (str): The identifier for the gas composition type. 
+                            - Must be 'ArCO2' or 'T2K'. 
+            gasCompAr (int): The percentage of Argon mixture.
+            gasCompCO2 (int): The percentage of Carbon Dioxide in the mixture.
+
+        Returns:
+            bool: True if the program executes successfully. False otherwise.
+        """
+        originalCWD = os.getcwd()
+
+        gasCompOptions = [
+            'ArCO2',
+            'T2K'
+        ]
+
+        if gasComp not in gasCompOptions:
+            raise ValueError(f"Error: Invalid gas composition '{gasComp}'")
+        if gasComp == 'ArCO2' and gasCompAr + gasCompCO2 != 100:
+            raise ValueError('Error: Gas composition of ArCO2 is not 100%.')
+        if eField <= 0:
+            raise ValueError('Error: Invalid electric field.')
+
+        try:
+            os.chdir('./build/')
+
+            # Get garfield path into environment
+            envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
+            envOutput = subprocess.check_output(envCommand, shell=True, universal_newlines=True)
+            newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line)
+            os.environ.update(newEnv)
+
+            with open(os.path.join(originalCWD, 'log/logDiffusion.txt'), 'w+') as garfieldOutput:
+                startTime = time.monotonic()
+                setupDiffusion = (
+                    f'./runDiffusion {eField} {gasComp} {gasCompAr} {gasCompCO2}'
+                )
+                runReturn = subprocess.run(
+                    setupDiffusion, 
+                    stdout = garfieldOutput, 
+                    shell = True, 
+                    check = True,
+                    env = os.environ
+                )
+                endTime = time.monotonic()
+                garfieldOutput.write(f'\n\nGarfield run time: {endTime - startTime} s')
+    
+            if runReturn.returncode != 0:
+                    print('Garfield++ execution failed. Check log for details.')
+                    return False
+            
+        finally:
+            os.chdir(originalCWD)
+        return True
+
 
 #***********************************************************************************#
 #***********************************************************************************#
@@ -1357,8 +1734,9 @@ class FIMS_Simulation:
             saveParam = self.param.copy()
             doneRun = self.runSimulation(changeGeometry=initialRun)
             self.param = saveParam
+            self._writeParam()
             
-            #rGet the simulation data
+            #Get the simulation data
             simData = runData(doneRun)
 
             #find locations of stuck electrons
@@ -1386,3 +1764,50 @@ class FIMS_Simulation:
             'totalCharge': totalElectrons,
         }
         return chargeBuildupSummary
+
+
+#***********************************************************************************#
+    def runForOptimizer(self):
+        """
+        Runs the simulation, preserving the parameters.
+
+        NOTE: This does not run gmsh or elmer to detemine the E Field. 
+              It is assumed that these results exist already.
+            
+        Returns:
+            int: The run number of the simulation that was executed.
+        """
+
+        #Check and save parameters
+        if not self._checkParam():
+            return -1
+        saveParam = self.param.copy()
+
+
+        #get the run number for this simulation
+        runNo = self._getRunNumber()
+        if runNo == -1:
+            print("Error reading 'runNo'")
+            return -1
+        print(f'Running simulation - Run number: {runNo}')
+
+
+        #Solve for the weighting field
+        if not self._runElmerWeighting():
+            print('Error executing Elmer (weighting).')
+            return -1
+        
+        #Run the electron transport simulation
+        if not self._runGarfield():
+            print('Error executing Garfield.')
+            return -1
+        
+        #Reset parameters
+        self.resetParam()
+        #Ensure saved parameters are still maintained
+        self.param = saveParam
+        self._writeParam()
+        
+        return runNo
+        
+        

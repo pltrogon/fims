@@ -3,6 +3,8 @@ import sys
 import numpy as np
 import math
 import matplotlib.pyplot as plt
+import glob
+import pandas as pd
 
 from scipy.special import gammaincc
 
@@ -21,6 +23,7 @@ Functions:
     xyInterpolate
     getSetData
     plotDataSets
+    getDiffusionData
 """
 
 #********************************************************************************#   
@@ -167,9 +170,9 @@ def plotPolyaEfficiency(theta):
     plt.axhline(y=targetEfficiency,
                 c='r', ls='--', label=f'{targetEfficiency*100:.0f}% Efficiency')
     plt.axvline(x=-np.log(targetEfficiency),
-                c='r', ls=':', label=r'$\theta = 0$ Max: '+f'{-np.log(targetEfficiency):.3f}')
+                c='r', ls=':', label=r'$\theta = 0$ Limit: '+f'{-np.log(targetEfficiency):.3f}')
 
-    plt.title(f"Efficiency of Polya: "
+    plt.title(f"Parameterized Efficiency: "
               +r"$\eta = \frac{\Gamma\left(\theta+1, (\theta+1)*n_{t}/\bar{n}\right)}{\Gamma\left(\theta+1\right)}$")
     plt.xlabel("Threshold / Gain Fraction: "
                +r"$n_{t} / \bar{n}$")
@@ -201,7 +204,7 @@ def plotThreshold():
     for i, eff in enumerate(efficiency):
         gain = -threshold/np.log(eff)
         plt.plot(threshold, gain,
-                 c=colors[i], label=f'Target Efficiency = {eff*100:.0f}%')
+                 c=colors[i], label=r'$\theta$ = 0.0 '+f'(Efficiency = {eff*100:.0f}%)')
 
         polya5 = myPolya(1, 0.5)
         polya5.solveForGain(targetEff=eff, threshold=1)
@@ -213,13 +216,13 @@ def plotThreshold():
         polya1.solveForGain(targetEff=eff, threshold=1)
         theta1 = threshold*polya1.gain
         plt.plot(threshold, theta1,
-                 c=colors[i], ls='--', label=r'$\theta$ = 1')
+                 c=colors[i], ls='--', label=r'$\theta$ = 1.0')
 
         polya2 = myPolya(1, 2)
         polya2.solveForGain(targetEff=eff, threshold=1)
         theta2 = threshold*polya2.gain
         plt.plot(threshold, theta2,
-                 c=colors[i], ls='-.', label=r'$\theta$ = 2')
+                 c=colors[i], ls='-.', label=r'$\theta$ = 2.0')
                  
 
     plt.title(f'Minimum Gain Required to Achieve Efficiency')
@@ -447,4 +450,87 @@ def plotDataSets(dataSets, xVal, yVal, savePlot=False):
     plt.show()
     return
 
+
+def getDiffusionData(gasComp):
+    """
+    Loads the results for electron drift and diffusion 
+    for a given gas as computed by Magboltz.
+
+    Assumes that the files have been generated, 
+    and parses those of the form 'diffusion.<gasComp>*.dat'.
+
+    Args:
+        gasComp (str): The identifier for the gas composition to load data for.
+                       Must be one of the supported compositions: 
+                       'ArCO2-80-20' or 'T2K'.
+
+    Returns:
+        pandas.DataFrame: A DataFrame containing the parsed diffusion data, sorted by 'eField'.
+                          None if no matching files are found. 
+                          The DataFrame includes:
+                           - 'filename'
+                           - 'gasComposition'
+                           - 'eField'
+                           - 'driftVelocity'
+                           - 'driftVelocityErr'
+                           - 'diffusionLongitudinal'
+                           - 'diffusionLongitudinalErr'
+                           - 'diffusionTransverse'
+                           - 'diffusionTransverseErr'
+    """
+
+    gasCompOptions = [
+            'ArCO2-80-20',
+            'T2K'
+        ]
+
+    if gasComp not in gasCompOptions:
+        raise ValueError(f"Error: Invalid gas composition '{gasComp}'.")
+    
+    gasFilenames = f'diffusion.{gasComp}*.dat'
+    dataPath = os.path.join('../Data/Diffusion', gasFilenames)
+    fileList = glob.glob(dataPath)
+
+    if not fileList:
+        print(f"No files found matching pattern '{dataPath}'.")
+        return None
+
+    dataMagboltz = []
+
+    for inFile in fileList:
+        inData = {"filename": os.path.basename(inFile)}
+        
+        try:
+            with open(inFile, 'r') as file:
+                lines = [line.strip() for line in file.readlines()]
+            
+            if len(lines) < 11:
+                print(f"Error: File {inFile} has unexpected format - Skipping.")
+                continue
+
+            inData['gasComposition'] = lines[3]
+            inData['eField'] = float(lines[5])
+            inData['driftVelocity'] = float(lines[7])
+            inData['driftVelocityErr'] = float(lines[8])
+            inData['diffusionLongitudinal'] = float(lines[10])
+            inData['diffusionLongitudinalErr'] = float(lines[11])
+            inData['diffusionTransverse'] = float(lines[13])
+            inData['diffusionTransverseErr'] = float(lines[14])
+
+            dataMagboltz.append(inData)
+            
+        except IndexError:
+            print(f"Parsing Error: Could not find data at expected line index in {inFile}.")
+        except ValueError:
+            print(f"Parsing Error: Could not convert value to float in {inFile}.")
+        except IOError as e:
+            print(f"Error opening or reading file {inFile}: {e}")
+        except Exception as e:
+            print(f"An unexpected error occurred while processing {inFile}: {e}")
+
+    rawData = pd.DataFrame(dataMagboltz)
+
+    sortedData = rawData.sort_values(by='eField').reset_index(drop=True)
+
+    return sortedData
     
