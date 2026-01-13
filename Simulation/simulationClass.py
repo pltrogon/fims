@@ -127,20 +127,20 @@ class FIMS_Simulation:
             dict: Dictionary of default parameters and values.
         """
         defaultParam = {
-            'padLength': 44.,
-            'pitch': 225.,
-            'gridStandoff': 100.,
+            'padLength': 15.,
+            'pitch': 30.,
+            'gridStandoff': 30.,
             'gridThickness': 1.,
-            'holeRadius': 65.,
-            'cathodeHeight': 200.,
+            'holeRadius': 6.,
+            'cathodeHeight': 150.,
             'thicknessSiO2': 5.,
-            'pillarRadius': 20.,
+            'pillarRadius': 2.,
             'driftField': 280.,
             'fieldRatio': 88.,
             'transparencyLimit': 0.99,
             'numFieldLine': 25,
             'numAvalanche': 1500,
-            'avalancheLimit': 1500,
+            'avalancheLimit': 700,
             'gasCompAr': 0.,
             'gasCompCO2': 0.,
         }
@@ -1144,7 +1144,7 @@ class FIMS_Simulation:
         print(f'Beginning search for minimum field to achieve {targetEfficiency*100:.0f}% efficiency...')
         
         iterNo = 0
-        iterNoLimit = 30 #TODO: revisit this value later
+        iterNoLimit = 25
 
         efficiencyAtField = {
             'field': [],
@@ -1264,7 +1264,10 @@ class FIMS_Simulation:
         radialMinField = 570.580*np.exp(-12.670*optTrans)
         standoffMinField = 26.85*np.exp(-4.46*standoffRatio)
         padMinField = 143.84*np.exp(-15.17*padRatio)
-        #TODO: investigate if this is the proper way to combine these
+        
+        #Note: this combination assumes complete independence of all three parameters,
+        #which is not strictly true. However, it is sufficient for the purposes of
+        #an initial guess.
         minFieldTrans = radialMinField + standoffMinField + padMinField + 3
         
         #Minimum field for 95% efficiency
@@ -1274,7 +1277,7 @@ class FIMS_Simulation:
         #T2K gas
         padEffField = 371.4*np.exp(-0.16*pad)
         standEffField = 190.6*np.exp(-0.02*standoff)
-        #TODO: investigate if this is the proper way to combine these
+
         minFieldEff = padEffField + standEffField + 50
         
         #Choose the larger of the two fields so that both conditions are
