@@ -435,7 +435,7 @@ class magboltzSimulation:
 
 
 #********************************************************************************#
-    def __init__(self, gasID):
+    def __init__(self, gasID=None):
         """
         Initializes the Magboltz data handler for a specific gas mixture.
 
@@ -443,13 +443,14 @@ class magboltzSimulation:
             gasID (str): The identifier string for the gas mixture
         """
 
-        self.gasID = gasID
-        self.fields = self._checkGasID()
+        if gasID is not None:
+            self.gasID = gasID
+            self.fields = self._checkGasID()
 
-        self.magboltzData = self._getMagboltzData()
-        self.optimalDriftField = self._getOptimalDriftField()
+            self.magboltzData = self._getMagboltzData()
+            self.optimalDriftField = self._getOptimalDriftField()
 
-        self.plotParam = {}
+            self.plotParam = {}
 
 
 
@@ -500,10 +501,6 @@ class magboltzSimulation:
                 fieldString = parts[2]
 
                 gasOptions[gasString].append(int(fieldString)) 
-            else:
-                if not inFile.startswith('.'):
-                    print(f'Error - Non-conforming filename: {inFile}')
-
         
         return gasOptions
 
@@ -712,3 +709,66 @@ class magboltzSimulation:
         plt.tight_layout()
 
         return fig, axes
+    
+
+#********************************************************************************#
+    def loadOptimalDrift(self, gasID=None):
+        """
+        TODO
+        """
+
+        if gasID is None:
+            raise ValueError("Error - No gasID input.")
+        
+        self.gasID = gasID
+
+        filePath = '../Data/Magboltz'
+        fileName = f'OptimalDriftFields.{self.gasID}.pkl'
+        filename = os.path.join(filePath, fileName)
+
+        self.optimalFieldData = pd.read_pickle(filename)  
+
+        return
+    
+
+#********************************************************************************#
+    def plotOptimalParam(self):
+        """
+        TODO
+        """
+        
+        if not hasattr(self, 'optimalFieldData'):
+            raise ValueError("Error - No optimal field data loaded.")
+        
+        fig, axes = plt.subplots(2, 2, figsize=(14, 12), constrained_layout=True)
+        fig.suptitle(f'Electron Dynamics in Ar/CF4/Isobutane Mixtures', fontweight='bold', fontsize=16)
+        
+        plotParams = {
+            'optimalField': ('Electric Field', 'kV/cm'),
+            'driftVelocity': ('Drift Velocity', 'um/ns'),
+            'diffusionTransverse': ('Transverse Diffusion', 'um/sqrt(cm)'),
+            'diffusionLongitudinal': ('Longitudinal Diffusion', 'um/sqrt(cm)')
+        }
+
+        for ax, (key, (title, unit)) in zip(axes.flat, plotParams.items()):
+            plotData = self.optimalFieldData.pivot(index='CF4', columns='Isobutane', values=key)
+
+            mesh = ax.pcolormesh(
+                plotData.columns, 
+                plotData.index, 
+                plotData.values, 
+                shading='nearest', 
+                cmap='viridis',
+                norm='log' if key == 'optimalField' else None
+            )
+
+            ax.scatter(2, 3, marker='$T2K$', color='r', s=1000, label='T2K Gas')
+            ax.scatter(0, 0, marker='$Pure~Ar$', color='r', s=1000, label='Pure Ar')
+            
+            ax.set_title(f'{title} at Optimal Drift Field', fontweight='bold')
+            ax.set_xlabel('Isobutane Concentration (%)')
+            ax.set_ylabel('CF4 Concentration (%)')
+
+            fig.colorbar(mesh, ax=ax, label=f'{title} ({unit})')
+
+        return fig

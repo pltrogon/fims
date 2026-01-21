@@ -81,7 +81,6 @@ class FIMS_Simulation:
         _runGetEfficiency       <----- NEW
         _readEfficiencyFile     <----- NEW
         findFieldForEfficiency <----- NEW
-        runMagboltz             <----- NEW, changed fromm runDiffusion
         findFieldForTransparency <------ Changed from findMinField
     """
 
@@ -94,16 +93,19 @@ class FIMS_Simulation:
         sys.path.insert(1, '../Analysis')
         from runDataClass import runData
 
-        self.param = self.defaultParam()
-        if not self._checkParam():
+        try:
+            self.param = self.defaultParam()
+            self._checkParam()
+        except KeyError:
             raise ValueError('Error initializing parameters.')
 
         self._GARFIELDPATH = self._getGarfieldPath()
         if self._GARFIELDPATH is None:
             raise RuntimeError('Error getting Garfield++ path.')
 
-        if not self._setupSimulation():
-            raise RuntimeError('Error setting up simulation.')
+        self._setupSimulation()
+
+        return
 
 #***********************************************************************************#
     #String definition
@@ -153,17 +155,15 @@ class FIMS_Simulation:
         """
         #Check that any parameters exist
         if self.param is None or not self.param:
-            print(f'No parameters.')
-            return False
+            raise(KeyError('Parameter dictionary is empty.'))
 
         #Check that all parameters are present
         allParam = self.defaultParam()
         for inParam in allParam:
             if inParam not in self.param:
-                print(f"Missing parameter: '{inParam}'")
-                return False
+                raise KeyError(f"Parameter '{inParam}' missing from parameter dictionary.")
                 
-        return True
+        return 
 
 #***********************************************************************************#
     def _getParam(self, parameter):
@@ -171,8 +171,7 @@ class FIMS_Simulation:
         Gets and returns desired parameter.
         """
         if parameter not in self.param:
-            print(f'Invalid parameter: {parameter}.')
-            return None
+            raise KeyError(f'Error - Invalid parameter: {parameter}.')
             
         return self.param[parameter]
 
@@ -565,19 +564,14 @@ class FIMS_Simulation:
     
         Args:
             verbose (bool): Option available to supress reset notification.
-    
-        Returns:
-            bool: True if reset successful, False otherwise.
         """
         self.param = self.defaultParam()
-        if not self._writeParam():
-            print('Error resetting parameters.')
-            return False
+        self._writeParam()
     
         if verbose:
             print('Parameters have been reset.')
         
-        return True
+        return
 
 #***********************************************************************************#
     def _getRunNumber(self):
@@ -669,8 +663,10 @@ class FIMS_Simulation:
         os.chdir('./Geometry')
     
         os.makedirs("elmerResults", exist_ok=True)
+
             
         try:
+            print('\tExecuting Elmer...')
             with open(os.path.join(originalCWD, 'log/logElmerGrid.txt'), 'w+') as elmerOutput:
                 startTime = time.monotonic()
                 runReturn = subprocess.run(
@@ -801,6 +797,7 @@ class FIMS_Simulation:
         """
         originalCWD = os.getcwd()
         try:
+            print('\tGenerating field lines...')
             os.chdir('./build/')
 
             # Get garfield path into environment
@@ -847,6 +844,7 @@ class FIMS_Simulation:
         """
         originalCWD = os.getcwd()
         try:
+            print('\tGetting efficiency...')
             os.chdir('./build/')
 
             # Get garfield path into environment
@@ -902,8 +900,7 @@ class FIMS_Simulation:
                  Returns -1 if any errors occur.
         """
     
-        if not self._checkParam():
-            return -1
+        self._checkParam()
     
         #If geometry does not change, gmsh and weighting do not need to be done.
         #However, check that the mesh and weighting field files exist.
@@ -924,9 +921,7 @@ class FIMS_Simulation:
         print(f'Running simulation - Run number: {runNo}')
         
         #write parameters for sim
-        if not self._writeParam():
-            print('Error writing parameters.')
-            return -1
+        self._writeParam()
     
         #Allow for skipping gmsh if geometry has not changed.
         if changeGeometry:
@@ -1102,16 +1097,15 @@ class FIMS_Simulation:
         return newField
 
 #***********************************************************************************#
-    def findFieldForEfficiency(self, targetEfficiency=.95, threshold=10):
+    def _findFieldForEfficiency(self, targetEfficiency=.95, threshold=10):
         """
         Performs an iterative search to find the minimum Electric Field Ratio 
         required to achieve a specified detection efficiency for electron avalanches.
 
         Process:
-            1 - Generates the geometry by executing Gmsh.
-            2 - Solves an electric field using Elmer. 
-            3 - Executes Garfield++ avalanches to determine a detection efficiency.
-            4 - Repeats steps 2 and 3, increasing the field ration using a modified 
+            1 - Solves an electric field using Elmer. 
+            2 - Executes Garfield++ avalanches to determine a detection efficiency.
+            3 - Repeats steps 1 and 2, increasing the field ratio using a modified 
                 secant method until a solution is reached.
 
         Note that this assumes that the field strength is monotonically increasing.
@@ -1122,24 +1116,13 @@ class FIMS_Simulation:
                              be counted as 'detected'.
 
         Returns:
-            bool: True if a solution is found or the search process completes.
-                  False if there is a fatal execution error.
+            float: The minimum field ratio required to achieve the target efficiency.
+                   This value is also loaded into the class parameters upon completion.
         """
 
         #Ensure all parameters exist and save them
-        if not self._checkParam():
-            return False
+        self._checkParam()
         saveParam = self.param.copy()
-
-        #Write parameters and generate geometry
-        if not self._writeParam():
-            print('Error writing parameters.')
-            return False
-            
-        print('Executing gmsh...')
-        if not self._runGmsh():
-                print('Error executing Gmsh.')
-                return False
         
         print(f'Beginning search for minimum field to achieve {targetEfficiency*100:.0f}% efficiency...')
         
@@ -1154,7 +1137,7 @@ class FIMS_Simulation:
 
         validEfficiency = False
         self.param['numAvalanche'] = 3000
-        self.param['avalancheLimit'] = 20 #Limit can be low - Check is boolean - above threshold or not
+        self.param['avalancheLimit'] = 20 #Limit can be low. Check is boolean - above threshold or not
         
         while not validEfficiency:
 
@@ -1174,23 +1157,12 @@ class FIMS_Simulation:
             print(f'Current field ratio: {newFieldRounded}')
             self.param['fieldRatio'] = newFieldRounded
             
-            if not self._writeParam():
-                print('Error writing parameters.')
-                return False
             
-            #Determine the electric field
-            print('\tExecuting Elmer...')
-            if not self._runElmer():
-                print('Error executing Elmer.')
-                return False
+            #Solve for the new electric field
+            self._solveEField()
 
-            #Determine the efficiency
-            print('\tGetting efficiency...')
-            if not self._runGetEfficiency(targetEfficiency=targetEfficiency, threshold=threshold):
-                print('Error getting efficiency.')
-                return False
-
-            #Get efficiency values from file
+            #Determine the efficiency and read results from file
+            self._runGetEfficiency(targetEfficiency=targetEfficiency, threshold=threshold)
             effResults = self._readEfficiencyFile()
 
             efficiencyAtField['efficiency'].append(effResults['efficiency'])
@@ -1201,15 +1173,18 @@ class FIMS_Simulation:
                 
                 case 'DID NOT CONVERGE':
                     validEfficiency = False
-                    print(f'Did not converge at {efficiencyAtField['field'][-1]} ({self.param['numAvalanche']} avalanches): {efficiencyAtField['efficiency'][-1]:.3f} +/- {efficiencyAtField['efficiencyErr'][-1]:.3f}')
+                    print(f'Did not converge at {efficiencyAtField['field'][-1]} after {self.param['numAvalanche']} avalanches)')
+                    print(f'\t{efficiencyAtField['efficiency'][-1]:.3f} +/- {efficiencyAtField['efficiencyErr'][-1]:.3f}')
 
                 case 'CONVERGED':
                     validEfficiency = True
-                    print(f'Converged at {efficiencyAtField['field'][-1]}: {efficiencyAtField['efficiency'][-1]:.3f} +/- {efficiencyAtField['efficiencyErr'][-1]:.3f}')
+                    print(f'Converged at {efficiencyAtField['field'][-1]}:')
+                    print(f'\t{efficiencyAtField['efficiency'][-1]:.3f} +/- {efficiencyAtField['efficiencyErr'][-1]:.3f}')
             
                 case 'EXCLUDED':
                     validEfficiency = False
-                    print(f'Excluded at {efficiencyAtField['field'][-1]}: {efficiencyAtField['efficiency'][-1]:.3f} +/- {efficiencyAtField['efficiencyErr'][-1]:.3f}')
+                    print(f'Excluded at {efficiencyAtField['field'][-1]}:')
+                    print(f'\t{efficiencyAtField['efficiency'][-1]:.3f} +/- {efficiencyAtField['efficiencyErr'][-1]:.3f}')
 
                 case _:
                     raise ValueError('Error - Malformed efficiency file.')      
@@ -1217,15 +1192,15 @@ class FIMS_Simulation:
 
         #Print solution
         finalField = self._getParam('fieldRatio')
-        print(f'\nSolution: Field ratio = {finalField}')
+        print(f'Solution: Field ratio = {finalField}')
         
         #Reset parameters
         self.resetParam()
-        #load saved parameters back into class. Update field ratio with solution.
+        #load saved parameters back into class.
         self.param = saveParam
         self.param['fieldRatio'] = finalField
 
-        return True
+        return finalField
 
 #***********************************************************************************#
     def _calcMinField(self): 
@@ -1257,96 +1232,68 @@ class FIMS_Simulation:
             grid standoff ratio, pad length ratio, and 
             optical transparency vs minField.
           Results are then added together.'''
-          #TODO - should this not be max(minFields)?
         radialMinField = 570.580*np.exp(-12.670*optTrans)
         standoffMinField = 27.121*np.exp(-15.9*standoffRatio)
         padMinField = 143.84*np.exp(-15.17*padRatio)
         
+        #TODO for James - should this not be max(minFields)?
         minField = radialMinField + standoffMinField + padMinField + 3
         
         return minField
 
 #***********************************************************************************#
-    def findFieldForTransparency(self, runGMSH=True, minStepSize=1.2):
+    def _findFieldForTransparency(self, minStepSize=1.2):
         """
         Runs simulations to determine what the minimum electric field ratio
         needs to be in order to have 100% E-field transparency.
 
-        First, it optionally generates a gmsh FEM of the geometry before solving the
-        E-field based on a preset field strength via Elmer FEM. It then generates
-        field lines via Garfield++ and determines the transparency. If the 
-        transparency is below the limit, a new field ratio is determined. The 
-        resulting field is solved, and new field lines are generated. This continues
-        until the criteria is reached.
+        Process:
+            1 - Solves an electric field using Elmer. 
+            2 - Executes Garfield++ to draw field lines to determine a transparency.
+            3 - Repeats steps 1 and 2, increasing the field ratio until a solution is reached.
         
-        Upon completion, simulation files are reset.
-        
-        Args:
-            margin (float): number multiplied to the predicted value to create a
-                            buffer in case the raw value is too large or too small.
-            
+        Args:         
             minStepSize (float): number used as the step size once the calculated step
             size becomes too small.
 
         Returns:            
-            finalField (float): The minimum field ratio that results in 100% transparency.
-                                Retuns -1 on a failure or if an error occurs.
+            float: The minimum field ratio required to achieve the 100% transparency.
+                   This value is also loaded into the class parameters upon completion.
         """
+
         #Ensure all parameters exist and save them
-        if not self._checkParam():
-            return -1
+        self._checkParam()
         saveParam = self.param.copy()
+
+        print('Beginning search for minimum field for 100% transparency...')
        
         #Adjust the number of field lines to fill only last 20% of the unit cell
         numLines = int(self._getParam('numFieldLine')*.2)
         self.param['numFieldLine'] = numLines
         
-        #Write parameters and generate geometry
-        if not self._writeParam():
-            print('Error writing parameters.')
-            return -1
-        
-        if runGMSH:
-            print('Executing gmsh...')
-            if not self._runGmsh():
-                    print('Error executing Gmsh.')
-                    return -1
-
-        print('Beginning search for minimum field...')
         isTransparent = False
         stepSize = 1.
         transLimit = self._getParam('transparencyLimit')
         curField = self._getParam('fieldRatio')
         
         while not isTransparent:
+
             #Calculate and write the new field ratio
             curField *= stepSize
             self.param['fieldRatio'] = curField
-            if not self._writeParam():
-                print('Error writing parameters.')
-                return -1
             print(f'Testing field ratio of {curField}')            
             
-            #Determine the electric field
-            print('\tExecuting Elmer...')
-            if not self._runElmer():
-                print('Error executing Elmer.')
-                return -1
+            #Solve the new electric field
+            self._solveEField()
 
-            #Generate field lines
-            print('\tGenerating field lines...')
-            if not self._runFieldLines():
-                print('Error generating field lines.')
-                return  -1
-            
-            #Get the resulting field transparency
+            #Generate field lines and read results from file
+            self._runFieldLines()            
             with open('../Data/fieldTransparency.txt', 'r') as readFile:
                 try:
                     transparency = float(readFile.read())
 
                 except (ValueError, FileNotFoundError):
-                    print("Error: Could not read or parse transparency file.")
-                    return -1
+                    raise ValueError("Error: Could not read or parse transparency file.")
             
             #Determine new step size
             if transLimit/transparency < minStepSize:
@@ -1360,18 +1307,80 @@ class FIMS_Simulation:
 
         #Print solution
         finalField = self._getParam('fieldRatio')
-        print(f'\nSolution: Field ratio = {finalField}')
+        print(f'Solution: Field ratio = {finalField}')
         
         #Reset parameters
         self.resetParam()
-        #load saved parameters back into class. Update field ratio with solution.
+        #load saved parameters back into class.
         self.param = saveParam
         self.param['fieldRatio'] = finalField
 
         return finalField
+    
 
 
+#***********************************************************************************#
+    def findMinFieldRatio(self):
+        """
+        TODO - NOTE this assumes updated other functions to raise errors rather than return T/F
+        """
 
+        #Ensure all parameters exist and save them
+        self._checkParam()
+        saveParam = self.param.copy()
+
+        #Get absolute drift field value
+        driftField = self._getParam('driftField')
+        print(f'Finding minimum field ratio for geometry with drift field: {driftField} V/cm')
+
+        #Choose initial field ratio guess
+        minFieldGuess = self._calcMinField()#TODO - This function can be made a lot better
+        self.param['fieldRatio'] = minFieldGuess
+        print(f'\tInitial field ratio guess: {minFieldGuess}')
+
+        #Generate the FEM geometry
+        self._generateGeometry()
+
+        ## Determine minimum field ratio for conditions
+        # 95% efficiency
+        efficiencyField = self._findFieldForEfficiency()
+        print(f'\tMinimum field ratio for 95% efficiency: {efficiencyField}')
+
+        # 100% transparency
+        transparencyField = self._findFieldForTransparency()
+        print(f'\tMinimum field ratio for 100% transparency: {transparencyField}')
+
+        # Set final field ratio to the maximum of the two found
+        finalField = max(efficiencyField, transparencyField)
+        self.param['fieldRatio'] = finalField
+        print(f'Minimum field ratio set to: {finalField}')
+
+        return finalField
+    
+
+#***********************************************************************************#
+    def _generateGeometry(self):
+        """
+        TODO
+        """
+
+        self._checkParam()
+        self._writeParam()
+        self._runGmsh()
+
+        return
+    
+#***********************************************************************************#
+    def _solveEField(self):
+        """
+        TODO
+        """
+        
+        self._checkParam()
+        self._writeParam()
+        self._runElmer()
+
+        return
 
 
 #***********************************************************************************#
