@@ -60,11 +60,11 @@ class runData:
         getTreeNames
         printMetaData
         getMetaData
-        getCalculatedData        <----- NEW
+        getCalculatedData
         printColumns
         getDataFrame
         getRunParameter
-        getCalcParameter        <----- NEW
+        getCalcParameter
         getRunNumber
         plotCellGeometry
         _plotAddCellGeometry
@@ -79,8 +79,9 @@ class runData:
         _fitAvalancheSize
         plotAvalancheFits
         calcBundleRadius
-        getNumIonOutside        <---------New
-        getNumIonsEscapedOutside    <----------New
+        _getCapturesIons        <----------renamed
+        _getEscapedIons         <----------renamed
+        plotIBNHistogram        <----------new
         _getOutermostLineID
         findStuckElectrons
         _calcIBF
@@ -449,11 +450,23 @@ class runData:
             self._calculatedData['Optical Transparency'] = opticalTransparency
             self._calculatedData['Field Transparency'] = fieldTransparency
 
-            #Field bundle radius
+            #Average field bundle radius
             standoff = self.getRunParameter('Grid Standoff')
-            nominalBundleZ = -.9*standoff                       #TODO - Nominal bundle Z defined here
-            self._calculatedData['Bundle z'] = nominalBundleZ
-            self._calculatedData['Field Bundle Radius'] = self.calcBundleRadius(nominalBundleZ)
+            nominalBundleHeight = []
+            heights = [.9, .8, .7, .6, .5, .3, .2, .1]
+            for num in heights:
+                nominalBundleHeight.append(-num*standoff)
+            
+            bundleRadius = []
+            total = 0
+            for height in nominalBundleHeight:
+                bundleRadius.append(self.calcBundleRadius(height))
+            for radius in bundleRadius:
+                total += radius
+            avgBundleRadius = total/len(bundleRadius)
+            
+            self._calculatedData['Bundle z'] = -.5*standoff
+            self._calculatedData['Field Bundle Radius'] = avgBundleRadius
 
         if numAvalanche > 0:
             # Gains
@@ -763,7 +776,7 @@ class runData:
         Adds field bundle to 2D plots
 
         Args:
-            axis (matplotlib subplot): Axes object where field bunlde is to be added 
+            axis (matplotlib subplot): Axes object where field bundle is to be added 
             axes (str): String defining the cartesian dimensions of 'axes'.
         """
 
@@ -794,15 +807,17 @@ class runData:
 
         return
 
-
 #********************************************************************************#   
-    def plot2DFieldLines(self, target):
+    def plot2DFieldLines(self, target='All'):
         """
         Generates 2D plots of the simulated field lines. Options include:
             Cathode - Field lines initiated near the cathode.
             AboveGrid - Field lines initiated just above the grid.
             BelowGrid - Field lines initiated just below the grid.
-            Edge - Field Lines initiated along the edge of the unit cell, at the cathode.
+            All - Field lines initiated near the cathode as well as those 
+            above and below the grid.
+            Edge - Field Lines initiated along the edge of the unit cell, 
+            at the cathode.
 
         These plots display the field lines, and include 
         the pad geometry and hole in the grid.
@@ -817,6 +832,7 @@ class runData:
             'Cathode',
             'AboveGrid',
             'BelowGrid',
+            'All',
             'Edge'
         ]
     
@@ -834,6 +850,11 @@ class runData:
             
             case 'Edge':
                 fieldLineData = self.getDataFrame('edgeFieldLineData')
+                
+            case 'All':
+                #TODO: look into condensing these into a single function
+                self.plotAllFieldLines()
+                return
     
             case _:
                 print(f'Error: Plot options are: {plotOptions}')
@@ -865,7 +886,6 @@ class runData:
         
         return fig2D
     
-
 #********************************************************************************#   
     def add2DFieldLines(self, axes, fieldLineData, target):
         """
@@ -1007,18 +1027,18 @@ class runData:
     def _trimAvalanche(self):
         """
         Removes any avalanches that have either:
-            Only a single electron (so no avalanching occured), or
+            Only a single electron (so no avalanching occurred), or
             that reached the simulation avalanche limit.
 
         Note that these situations, either no avalanching or an avalanche
         that was exactly the limit size, can occur. 
-        However, it is much more likely that the intial electron attached or drifted
+        However, it is much more likely that the initial electron attached or drifted
         outside of the simulation bounds before causing an avalanche for the e=1 case. 
-        For the avalanche-limit case, it is impossible to tell if this was exacly the
+        For the avalanche-limit case, it is impossible to tell if this was exactly the
         limit, or if there should be more electrons.
 
         Returns:
-            dataframe: The avalancheData dataframe with the 1 and limitting sizes removed.
+            dataframe: The avalancheData dataframe with the 1 and limiting sizes removed.
         """
         avalancheData = self.getDataFrame('avalancheData')
 
@@ -1546,7 +1566,7 @@ class runData:
         Calculates the radius of the outermost electric field line
         at a specified z-coordinate.
 
-        Does a linear interpolation between available datapoints.
+        Does a linear interpolation between available data points.
 
         Args:
             zTarget (float): z-coordinate of desired field bundle radius.
@@ -1557,7 +1577,7 @@ class runData:
         """
         zMax = self.getRunParameter('Cathode Height')
         zMin = -1.*self.getRunParameter('Grid Standoff')
-        if not (zMin < zTarget < zMax):
+        if not (zMin <= zTarget <= zMax):
             raise ValueError('Invalid target z.')
         
         lineID = self._getOutermostLineID()
@@ -1582,15 +1602,17 @@ class runData:
         return targetRadius
 
 #********************************************************************************#
-    def getIonsCapturedInside(self):
+    def _getCapturedIons(self):
         """
         Returns:
             list containing the distance from the edge of the field bundle of 
             each ion that was captured by the grid despite being inside the field 
             bundle.
         """
+        edgeDistance = []
         capturedList = []
-        bundleSize = self.getCalcParameter('Field Bundle Radius')
+        bundleSize = []
+        stand = -1*self.getRunParameter('Grid Standoff')
         
         #Get the radius of the initial position of each ion
         particleData = self.getDataFrame('ionData')
@@ -1599,23 +1621,37 @@ class runData:
         initialX = particleData['Initial x']
         initialR = (initialY**2 + initialX**2)**.5
         
+        #find the bundle size at the initial height of each ion
+        initialZ = particleData['Initial z']
+        for height in initialZ:
+            if height < stand:
+                height = stand
+            bundleSize.append(self.calcBundleRadius(height))
+    
         finalZ = particleData['Final z']
         
-        for ionZ, ionR in zip(finalZ, initialR):
-            if ionZ  < 1 and ionZ > -1 and ionR < bundleSize:
-                capturedList.append(ionR - bundleSize)
+        #calculate the distance each ion is from the edge of the bundle
+        for radius, bundle in zip(initialR, bundleSize):
+            edgeDistance.append(radius - bundle)
+        
+        #Check to see if the ions inside the bundle terminate on the grid
+        for ionZ, dist in zip(finalZ, edgeDistance):
+            if ionZ  < 1 and ionZ > -1:
+                capturedList.append(dist)
 
         return capturedList
 
 #********************************************************************************#
-    def getIonsEscapedOutside(self):
+    def _getEscapedIons(self):
         """
         Returns:
             list containing the distance from the edge of the field bundle
             of each ion that escaped the grid despite being outside the field bundle.
         """
+        edgeDistance = []
         escapedList = []
-        bundleSize = self.getCalcParameter('Field Bundle Radius')
+        bundleSize = []
+        stand = -1*self.getRunParameter('Grid Standoff')
         
         #Get the radius of the initial position of each ion
         particleData = self.getDataFrame('ionData')
@@ -1624,14 +1660,47 @@ class runData:
         initialX = particleData['Initial x']
         initialR = (initialY**2 + initialX**2)**.5
         
+        #find the bundle size at the initial height of each ion
+        initialZ = particleData['Initial z']
+        for height in initialZ:
+            if height < stand:
+                height = stand
+            bundleSize.append(self.calcBundleRadius(height))
+        
+        #Find the final height of each ion
         finalZ = particleData['Final z']
         
-        for ionZ, ionR in zip(finalZ, initialR):
-            if ionZ  > 1 and ionR > bundleSize:
-                escapedList.append(ionR - bundleSize)
+        #calculate the distance each ion is from the edge of the bundle
+        for radius, bundle in zip(initialR, bundleSize):
+            edgeDistance.append(radius - bundle)
+        
+        #Check to see if the ions outside the bundle terminate above the grid
+        for ionZ, dist in zip(finalZ, edgeDistance):
+            if ionZ  > 1:
+                escapedList.append(dist)
         
         return escapedList
-    
+
+#********************************************************************************#
+    def plotIBNHistogram(self):
+        """
+        Creates a bar chart of ions based on their distance from edge of the 
+        field bundle.
+        """
+        #TODO: this takes a while. Maybe there is a more efficient way to find the
+        #ion lists
+        backflowing = self._getEscapedIons()
+        captured = self._getCapturedIons()
+        
+        ionHistogram = plt.figure()
+        plt.hist([backflowing, captured], bins = 'auto', rwidth = .95, 
+                    label = ["Backflowing Ions",'Captured Ions'], 
+                    color = ['red','blue'])
+        plt.xlabel('Distance Created from Edge of Field Bundle')
+        plt.ylabel('Number of Ions')
+        plt.legend()
+        
+        return ionHistogram
 #********************************************************************************#
     def _getOutermostLineID(self):
         """
