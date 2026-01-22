@@ -218,18 +218,18 @@ class FIMS_Optimizer:
             True otherwise
         """
         
-        radius = self.simFIMS.param['holeRadius'].copy
-        pitch = self.simFIMS.param['pitch'].copy
-        pad = self.simFIMS.param['padLength'].copy
-        stand = self.simFIMS.param['gridStandoff'].copy
-        pillar = self.simFIMS.param['pillarRadius'].copy
-        insulator = self.simFIMS.param['thicknessSiO2'].copy
+        radius = self.simFIMS.param['holeRadius']
+        pitch = self.simFIMS.param['pitch']
+        pad = self.simFIMS.param['padLength']
+        stand = self.simFIMS.param['gridStandoff']
+        pillar = self.simFIMS.param['pillarRadius']
+        insulator = self.simFIMS.param['thicknessSiO2']
         
         #TODO: find a more pythonic way to do this
         if pitch - 2*radius < pillar:
-            return = False
+            return False
         elif pitch < (pad*0.866 + pillar)*2:
-            return = False
+            return False
         elif stand < insulator + 2:
             return False
         else:
@@ -303,7 +303,7 @@ class FIMS_Optimizer:
         self.simFIMS._writeParam()
         
         #Check parameters to ensure a valid geometry
-        if self.checkParameters():    
+        if self._checkParameters():    
             # Get the Ion Backflow Number
             resultIBN = self._getIBN()
         else:
