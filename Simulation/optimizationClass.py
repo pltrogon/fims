@@ -206,7 +206,34 @@ class FIMS_Optimizer:
         self.simFIMS._writeParam()
 
         return minField
-    
+
+#***********************************************************************************#
+    def _checkParameters(self):
+        """
+        Checks the geometry parameters to ensure the layout is valid (IE, pads do not
+        overlap, holes do not expose the pillars, etc).
+        
+        Returns:
+            False if geometry is invalid
+            True otherwise
+        """
+        
+        radius = self.simFIMS.param['holeRadius'].copy
+        pitch = self.simFIMS.param['pitch'].copy
+        pad = self.simFIMS.param['padLength'].copy
+        stand = self.simFIMS.param['gridStandoff'].copy
+        pillar = self.simFIMS.param['pillarRadius'].copy
+        insulator = self.simFIMS.param['thicknessSiO2'].copy
+        
+        #TODO: find a more pythonic way to do this
+        if pitch - 2*radius < pillar:
+            return = False
+        elif pitch < (pad*0.866 + pillar)*2:
+            return = False
+        elif stand < insulator + 2:
+            return False
+        else:
+            return True
 #***********************************************************************************#    
     def _getIBN(self):
         """
@@ -268,11 +295,22 @@ class FIMS_Optimizer:
         # Unpack the optimizer array into the simulation's parameter dictionary.
         for i, inParam in enumerate(inputList):
             self.simFIMS.param[inParam] = optimizerParam[i]
+        
+        #Fixing the radius to a fraction of the pitch based on previous simulation results
+        #TODO: consider if this should remain
+        self.simFIMS.param['holeRadius'] = self.simFIMS.param['pitch']*.2
+        
         self.simFIMS._writeParam()
         
-        # Get the Ion Backflow Number
-        resultIBN = self._getIBN()
-        
+        #Check parameters to ensure a valid geometry
+        if self.checkParameters():    
+            # Get the Ion Backflow Number
+            resultIBN = self._getIBN()
+        else:
+            print('Bad Geometry. Skipping Test')
+            resultIBN = 1000
+            
+
         #Output to monitor convergence
         with open('log/logOptimizer.txt', 'a') as log:
             for line in optimizerParam:

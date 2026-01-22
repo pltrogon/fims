@@ -79,8 +79,7 @@ class runData:
         _fitAvalancheSize
         plotAvalancheFits
         calcBundleRadius
-        _getCapturesIons        <----------renamed
-        _getEscapedIons         <----------renamed
+        _getIonEdgeDistance     <----------renamed
         plotIBNHistogram        <----------new
         _getOutermostLineID
         findStuckElectrons
@@ -1602,16 +1601,26 @@ class runData:
         return targetRadius
 
 #********************************************************************************#
-    def _getCapturedIons(self):
+    def _getIonEdgeDistance(self):
         """
+        Uses the ionData data frame to calculate the position of each ion relative
+        to the edge of the field bundle at the height it was created. Ions created
+        inside the field bundle will therefore have a negative position while those
+        created outside will have a positive position. The zero point changes based
+        on the height of the ion.
+        
         Returns:
-            list containing the distance from the edge of the field bundle of 
-            each ion that was captured by the grid despite being inside the field 
-            bundle.
+            tuple of two lists containing the distance from the edge of the 
+            field bundle of each ion that was created in all the avalanches.
+            The lists are divided into two groups: ions captured by the grid,
+            and ions that escape into the drift volume.
         """
+        
         edgeDistance = []
-        capturedList = []
         bundleSize = []
+        capturedList = []
+        escapedList = []
+        
         stand = -1*self.getRunParameter('Grid Standoff')
         
         #Get the radius of the initial position of each ion
@@ -1638,69 +1647,39 @@ class runData:
         for ionZ, dist in zip(finalZ, edgeDistance):
             if ionZ  < 1 and ionZ > -1:
                 capturedList.append(dist)
-
-        return capturedList
-
-#********************************************************************************#
-    def _getEscapedIons(self):
-        """
-        Returns:
-            list containing the distance from the edge of the field bundle
-            of each ion that escaped the grid despite being outside the field bundle.
-        """
-        edgeDistance = []
-        escapedList = []
-        bundleSize = []
-        stand = -1*self.getRunParameter('Grid Standoff')
-        
-        #Get the radius of the initial position of each ion
-        particleData = self.getDataFrame('ionData')
-        particleData = particleData[particleData['Ion Charge']==1]
-        initialY = particleData['Initial y']
-        initialX = particleData['Initial x']
-        initialR = (initialY**2 + initialX**2)**.5
-        
-        #find the bundle size at the initial height of each ion
-        initialZ = particleData['Initial z']
-        for height in initialZ:
-            if height < stand:
-                height = stand
-            bundleSize.append(self.calcBundleRadius(height))
-        
-        #Find the final height of each ion
-        finalZ = particleData['Final z']
-        
-        #calculate the distance each ion is from the edge of the bundle
-        for radius, bundle in zip(initialR, bundleSize):
-            edgeDistance.append(radius - bundle)
-        
-        #Check to see if the ions outside the bundle terminate above the grid
-        for ionZ, dist in zip(finalZ, edgeDistance):
-            if ionZ  > 1:
+            if ionZ > 1:
                 escapedList.append(dist)
-        
-        return escapedList
+
+        return capturedList, escapedList
 
 #********************************************************************************#
     def plotIBNHistogram(self):
         """
-        Creates a bar chart of ions based on their distance from edge of the 
-        field bundle.
+        Creates a stacked double histogram of the distance from the field bundle 
+        edge of every ion created in an avalanche. The double histogram is divided 
+        by whether the ions are captured by the grid or if they escape into the 
+        drift volume.
+        
+        Returns:
+            matplotlib.figure. Figure: the generated IBN position histogram
         """
-        #TODO: this takes a while. Maybe there is a more efficient way to find the
-        #ion lists
-        backflowing = self._getEscapedIons()
-        captured = self._getCapturedIons()
+        
+        captured, backflowing = self._getIonEdgeDistance()
         
         ionHistogram = plt.figure()
         plt.hist([backflowing, captured], bins = 'auto', rwidth = .95, 
-                    label = ["Backflowing Ions",'Captured Ions'], 
-                    color = ['red','blue'])
-        plt.xlabel('Distance Created from Edge of Field Bundle')
+                    label = ["Backflowing Ions", 'Captured Ions'], stacked = True,
+                    color = ['red','darkgreen'])
+        
+        #include a vertical line at the nominal bundle edge (x = 0)
+        plt.axvline(0, color = 'black', linewidth = 2, label = 'Bundle Edge')
+        
+        plt.xlabel('Distance ions originate from Edge of Field Bundle')
         plt.ylabel('Number of Ions')
         plt.legend()
         
         return ionHistogram
+
 #********************************************************************************#
     def _getOutermostLineID(self):
         """
@@ -2351,3 +2330,5 @@ class runData:
         ax.legend()
 
         return fig
+
+#********************************************************************************#
