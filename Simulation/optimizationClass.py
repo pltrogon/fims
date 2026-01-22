@@ -34,7 +34,6 @@ class FIMS_Optimizer:
 
     Methods defined in FIMS_Optimizer:
         _checkParameters
-        _runSim
         _getIBN
         _IBNObjective
         _checkConvergence
@@ -51,22 +50,15 @@ class FIMS_Optimizer:
         self.params = params
         self.simFIMS = FIMS_Simulation()
         
-        if not self._checkParameters():
-            raise TypeError(
-                    '\nParameters must be a list of lists with the following format:\n'
-                    '[\'parameterName\', minimumBound, maximumBound]\n'
-                    '\nAvailable parameters include:\n'
-                    'holeRadius, gridStandoff, padLength, or pitch\n')
-            return
-        
+        self._checkParameters()
+
+        #Create log file for optimizer
         try:
             with open('log/logOptimizer.txt', 'w') as file:
                 pass
         except:
-            print('Error: could not access logOptimizer.txt')
-            return
+            raise FileNotFoundError('Unable to create log file for optimizer.')
         
-            
         self.iterationNumber = 0
                 
 #***********************************************************************************#
@@ -100,43 +92,18 @@ class FIMS_Optimizer:
         
         for element in self.params:
             if not isinstance(element, list):
-                print('Error: input list does not contain lists\n')
-                return False
+                raise ValueError('Error - Parameter element not a list.')
                 
             if len(element) != 3:
-                print('Error: input list elements have invalid length\n')
-                return False
+                raise ValueError('Error - Parameter element does not have three entries.')
                 
             if element[1] >= element[2]:
-                print('Error: range between minimum and maximum values is invalid\n')
-                return False
+                raise ValueError('Error - Minimum bound is not less than maximum bound.')
                 
             if element[0] not in allowedParams:
-                print('Error: input list element is not a valid parameter\n')
-                return False
-        
-        return True
-        
-#***********************************************************************************#
-    def _runSim(self):
-        """
-        Runs the simulation, preserving the parameters.
-        
-        NOTE: This makes a copy of the parameters before running the
-        simulation, as the simulation will reset them at the end.
-        
-        Args:
-            None.
-            
-        Returns:
-            int: The run number of the simulation that was executed.
-        """
-        saveParam = self.simFIMS.param.copy()
-        runNumber = self.simFIMS.runSimulation(False)
-        #Put saved parameters back
-        self.simFIMS.param = saveParam
+                raise ValueError('Error - Parameter element is not a valid parameter.')
 
-        return runNumber
+        return 
 
 #***********************************************************************************#    
     def _getIBN(self):
@@ -160,19 +127,8 @@ class FIMS_Optimizer:
             if element in activeParams:
                 print(f'{element}: {value}')
         print('********************************\n')
-
-        # Get the minimum field ratio for at least 95% detection efficiency
-        #with the current parameters.
-        if self.simFIMS.findFieldForEfficiency(targetEfficiency=.95, threshold=10):
-            raise ValueError('Failed to find minimum field (efficiency).')
-        
-        # Get the minimum field ratio for 100% field transparency with the
-        #current parameters.
-        if self.simFIMS.findFieldForTransparency(False) < 0:
-            raise ValueError('Failed to find minimum field (transparency).')
             
-        #Run full simulation - TODO: This reruns the elmerSolver
-        runNumber = self._runSim()
+        runNumber = self.runForOptimizer()
         
         #Get the IBN
         simData = runData(runNumber)
