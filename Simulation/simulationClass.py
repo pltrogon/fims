@@ -1253,7 +1253,14 @@ class FIMS_Simulation:
 #***********************************************************************************#
     def findMinFieldRatio(self):
         """
-        TODO
+
+        Determines the minimum Electric Field Ratio required to achieve:   
+        - 95% detection efficiency, and
+        - 100% electric field line transparency.
+
+        Returns:
+            float: The minimum field ratio that satisfies both conditions
+                   This value is also loaded into the class parameters upon completion.
         """
 
         #Ensure all parameters exist and save them
@@ -1292,7 +1299,7 @@ class FIMS_Simulation:
 #***********************************************************************************#
     def _generateGeometry(self):
         """
-        TODO
+        Generates the finite-element mesh of the simulation geometry using Gmsh.
         """
 
         self._checkParam()
@@ -1304,7 +1311,7 @@ class FIMS_Simulation:
 #***********************************************************************************#
     def _solveEField(self):
         """
-        TODO
+        Solves the electric field in the simulation geometry using elmer.
         """
         
         self._checkParam()
@@ -1316,7 +1323,7 @@ class FIMS_Simulation:
 #***********************************************************************************#
     def _solveWeightingField(self):
         """
-        TODO
+        Solves the weighting field in the simulation geometry using elmer.
         """
         
         self._checkParam()
@@ -1328,7 +1335,7 @@ class FIMS_Simulation:
 #***********************************************************************************#
     def _runElectronTransport(self):
         """
-        TODO
+        Runs the electron transport simulation using Garfield++.
         """
         
         self._checkParam()

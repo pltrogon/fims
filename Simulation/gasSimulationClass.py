@@ -864,7 +864,13 @@ class gasSimulation:
     #***********************************************************************************#
     def findOptimalDriftField(self):
         """
-        TODO
+        Determines the optimal drift field for maximizing the electron drift velocity.
+        Boundaries of 0.1 and 1 kV/cm are used for the optimization.
+
+        Returns:
+            result (OptimizeResult): The optimization result represented as a 
+                                     'OptimizeResult' object.
+            pd.DataFrame: Dataframe containing the Magboltz parameters at the optimal field.
         """
 
         print(f'Finding optimal drift field for {self.gasFractions}...')
@@ -883,7 +889,10 @@ class gasSimulation:
     #***********************************************************************************#
     def _objectiveForDriftField(self, eField):
         """
-        TODO
+        Objective function for optimizing the electron drift field.
+
+        Returns:
+            float: Negative of the current drift velocity to be minimized. (For maximization)
         """
         curField = round(eField * 1000) / 1000.0
 
@@ -905,7 +914,10 @@ class gasSimulation:
     #***********************************************************************************#
     def _getMaboltzParam(self, eField):
         """
-        TODO
+        Gets and returns the Magboltz parameters for a given electric field.
+
+        Returns:
+            pd.DataFrame: Dataframe containing the Magboltz parameters.
         """
 
         gasCompString = "-".join(map(str, self.gasFractions))
@@ -952,7 +964,10 @@ class gasSimulation:
     #***********************************************************************************#
     def scanT2KForOptimalDriftFields(self):
         """
-        TODO
+        Scans the T2K gas composition space for optimal drift fields.
+
+        T2k gas is composed of Ar/CF4/Isobutane in 95/3/2 proportions.
+        This method scans CF4 and Isobutane concentrations from 0 to 5 % in integer amounts.
         """
         
         rawMagboltzResults = []
@@ -984,7 +999,8 @@ class gasSimulation:
     #***********************************************************************************#
     def saveDriftFieldScan(self, newData):
         """
-        TODO
+        Saves the optimal drift field scan results to a .pkl file.
+        If the file already exists, the new data is appended to the existing data.
         """
 
         filePath = '../Data/Magboltz'

@@ -714,7 +714,7 @@ class magboltzSimulation:
 #********************************************************************************#
     def loadOptimalDrift(self, gasID=None):
         """
-        TODO
+        Loads pre-computed optimal drift field data from a .pkl file.
         """
 
         if gasID is None:
@@ -734,7 +734,7 @@ class magboltzSimulation:
 #********************************************************************************#
     def plotOptimalParam(self):
         """
-        TODO
+        Plots the optimal Magboltz parameters across CF4 and Isobutane concentrations.
         """
         
         if not hasattr(self, 'optimalFieldData'):
