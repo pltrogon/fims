@@ -15,13 +15,6 @@
 #include "Garfield/AvalancheMC.hh"
 #include "Garfield/Sensor.hh"
 #include "Garfield/DriftLineRKF.hh"
-#include "Garfield/ViewDrift.hh"
-
-//ROOT includes
-#include "TApplication.h"
-#include "TTree.h"
-#include "TFile.h"
-#include "TString.h"
 
 //C includes
 #include <iostream>
@@ -46,59 +39,26 @@ int main(int argc, char * argv[]) {
   const double MICRONTOCM = 1e-4;
   bool DEBUG = false;
   double fieldLineX, fieldLineY, fieldLineZ;
-  double measuredTransparency, fieldTransparency;
-  const char* isTransparent;
-  double xRandMax = 2*MICRONTOCM;
-  double yRandMax = 1*MICRONTOCM; 
-
   
   //*************** SETUP ***************//
   //Timing variables
   clock_t startSim, stopSim, runTime;
 
-  TApplication app("app", &argc, argv);
+  //***** Run numbering *****//
+  //Read in run number from runNo
+  int runNo;
+  std::string runNoFile = "../runNo";
+  std::ifstream runInFile;
+  runInFile.open(runNoFile);
 
-  //***** Git Hash *****//
-  TString gitVersion = "UNKNOWN VERSION";
-
-  const char * getGitCommand = "git describe --tags --always --dirty 2>/dev/null";
-
-  FILE * pipe = popen(getGitCommand, "r");
-  if(!pipe){
-    std::cerr << "Error: Could not open pipe to 'getGitCommand'." << std::endl;
-  }
-  else{ 
-    char gitBuffer[128];
-    std::string gitOutput = "";
-    while(fgets(gitBuffer, sizeof(gitBuffer), pipe) != NULL){
-      gitOutput += gitBuffer;
-    }
-    int gitStatus = pclose(pipe);
-
-    if(!gitOutput.empty() && gitOutput.back() == '\n'){
-      gitOutput.pop_back();
-    }
-
-    if(gitStatus == 0){
-      gitVersion = gitOutput;
-    }
-    else{
-      std::cerr << "Error: 'getGitCommand' failed with status " << gitStatus << std::endl;
-    }
+  if(!runInFile.is_open()){
+    std::cerr << "Error reading file '" << runNoFile << "'." << std::endl;
+    return -1;
   }
 
   std::cout << "****************************************\n";
   std::cout << "Building field line simulation: " << "\n";
   std::cout << "****************************************\n";
-
-  //***** Create Output Files *****//
-  std::string fieldlineFilename = "fieldlinePoints.csv";
-  std::string fieldlinePath = "../../Data/"+fieldlineFilename;
-  std::ofstream fieldlineFile;
-  
-  std::string dataFilename = "fieldTransparency.txt";
-  std::string dataPath = "../../Data/"+dataFilename;
-  std::ofstream dataFile;
   
   //***** Simulation Parameters *****//
   //Read in simulation parameters from runControl
@@ -265,14 +225,6 @@ int main(int argc, char * argv[]) {
   std::cout << "****************************************\n";
   std::cout << "Calculating field Lines.\n";
   std::cout << "****************************************\n";
-  
-  fieldlineFile.open(fieldlinePath);
-  
-  
-  if(!fieldlineFile.is_open()){
-    std::cerr << "Error creating or opening file '" << fieldlineFilename << "'." << std::endl;
-    return -1;
-  }
 
   DriftLineRKF driftLines(sensorFIMS);
   driftLines.SetMaximumStepSize(MICRONTOCM);
@@ -285,32 +237,13 @@ int main(int argc, char * argv[]) {
   double yRange = (yBoundary[1] - yBoundary[0])*rangeScale;
   double xWidth = pitch*sqrt(3.)/3.;
   double yWidth = rangeScale*pitch/2.;
-  
-  /*
-  //Lines generated radially from the center to edge of geometry
+
+  // ***** Generate field line start points ***** //
+  //Lines generated radially from the center to corner of unit cell
   //The x-direction is the long axis of the geometry. 
   for(int i = 0; i < numFieldLine; i++){
-    xStart.push_back((2./3.)*xBoundary[1]*i/(numFieldLine-1));
+    xStart.push_back(padLength*i/(numFieldLine-1));
     yStart.push_back(0.);
-    }
-  */
-  
-  /*
-  //Lines populated randomly at the corner along the positive x-axis
-  for(int i = 0; i < numFieldLine; i++){
-    //Get random numbers between 0 and xRandMax/yRandMax
-    double randX = 1.0*rand()/RAND_MAX*(xRandMax);
-    double randY = (0.5 - 1.0*rand()/RAND_MAX)*(yRandMax);
-    xStart.push_back((2./3.)*xBoundary[1] - randX);
-    yStart.push_back(randY);
-  }
-  */
-  
-  //Lines populated along the positive x-axis beyond a given cutoff point
-  for(int i = 0; i < numFieldLine; i++){
-    xStart.push_back(xWidth*((1 - fieldCutoff) + fieldCutoff*i/(numFieldLine-1.)));
-    yStart.push_back(0.);
-    std::cout << "starting points:" << xStart[i] << "," << yStart[i] << std::endl;
   }
   
   // ***** Calculate field Lines ***** //
@@ -319,26 +252,30 @@ int main(int argc, char * argv[]) {
   int numAtPad = 0;
   int prevDriftLine = 0;
 
+  double transparency = 0.;
+  double varience = 0.;
+  double transparencyErr = 0.;
+
   std::cout << "Computing field lines" << std::endl;
   for(int inFieldLine = 0; inFieldLine < totalFieldLines; inFieldLine++){
+
+    //Create field line
     driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], zmax*rangeScale, fieldLines);
-    //Get coordinates of every point along field line
-    for(int inLine = 0; inLine < fieldLines.size(); inLine++){
-      fieldLineX = fieldLines[inLine][0];
-      fieldLineY = fieldLines[inLine][1];
-      fieldLineZ = fieldLines[inLine][2];
-    fieldlineFile << fieldLineX << ", " << fieldLineY << ", " << fieldLineZ << std::endl;
-    }
     
     //Find if termination point is at pad
-    //TODO: Find more elegant way to determine where a line terminates
     int lineEnd = fieldLines.size() - 1;
-    if(  (abs(fieldLines[lineEnd][0]) <= padLength)
-      && (abs(fieldLines[lineEnd][1]) <= padLength*sqrt(3.)/2.)
-      && (fieldLines[lineEnd][2] <= -gridStandoff*rangeScale)){
+   
+    fieldLineX = fieldLines[lineEnd][0];
+    fieldLineY = fieldLines[lineEnd][1];
+    fieldLineZ = fieldLines[lineEnd][2];
+
+    //TODO: Find more elegant way to determine where a line terminates
+    // Currently is pad outer radius and below 50% of grid standoff
+    double lineRadius2 = std::pow(fieldLineX, 2.) + std::pow(fieldLineY, 2.);
+    if(sqrt(lineRadius2) <= padLength && fieldLineZ < -gridStandoff/2.){
         numAtPad++;
     }
-    
+
     //Print a progress update every 10%
     int driftLineProgress = (100*(inFieldLine+1))/totalFieldLines;
     if(   (driftLineProgress % 10 == 0)
@@ -347,30 +284,43 @@ int main(int argc, char * argv[]) {
       prevDriftLine = driftLineProgress;
     }
 
-  }//End corner field line loop
-  fieldlineFile.close();
+  }//End field line loop
 
   std::cout << "Done " << totalFieldLines << " field lines; Determining transparency." << "\n";
-  
-  //Determine transparency
-  measuredTransparency = (1.*numAtPad) / (1.*numFieldLine);
-  //Note: assumes that the transparency outside of the measured region is 100%
-  fieldTransparency = (1 - fieldCutoff) + measuredTransparency*fieldCutoff;
-  std::cout << "Corner transparency is " << fieldTransparency <<  "." << std::endl;
-  
-  
-  //Evaluates transparency and deals with appropriate outcome
-  if(fieldTransparency >= transparencyLimit){
-    isTransparent = "1";
-  }
-  else{
-    std::cout << "Warning: Field transparency is lower than the limit." << std::endl;
-    isTransparent = "0";
-  }
-  
-  //***** Output transparency value *****//
+
+  //Determine transparency - Binomail Statistics
+  //transparency = (1.*numAtPad) / (1.*numFieldLine);
+  //transparencyErr = sqrt(transparency*(1-transparency)/numFieldLine);
+
+  //Determine transparency - Baysian statistics
+  double success = 1.*numAtPad;
+  double total = 1.*numFieldLine;
+
+  transparency = (success + 1.) / (total + 2.);
+  varience = ((success+1.)*(success+2.))/((total+2.)*(total+3.)) - transparency*transparency;
+  transparencyErr = std::sqrt(varience);
+
+
+  std::cout << "Transparency is " << transparency <<  "." << std::endl;
+
+  //***** Output transparency value *****//	
+	//create output file
+  std::string dataFilename = "fieldTransparency.dat";
+  std::string dataPath = "../../Data/"+dataFilename;
+  std::ofstream dataFile;
+
   dataFile.open(dataPath);
-  dataFile << fieldTransparency << std::endl;
+  if(!dataFile.is_open()){
+    std::cerr << "Error: Could not open file: " << dataPath << std::endl;
+  }
+
+  //write some extra information
+	dataFile << "// Finding transparency for run: " << runNo << "\n";
+	dataFile << "// Field lines at pad: " << numAtPad << " (of " << numFieldLine << ")\n";
+
+  //***** Output transparency value *****//
+  dataFile << "// Transparency:\n" << transparency << "\n" << transparencyErr << std::endl;
+
   dataFile.close();
 
   std::cout << "****************************************\n";

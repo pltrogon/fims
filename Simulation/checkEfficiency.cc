@@ -352,7 +352,7 @@ int main(int argc, char * argv[]) {
 
 	//write some extra information
 	dataFile << "// Finding efficiency for run: " << runNo << "\n";
-	dataFile << "// Total avalanches: " << totalAvalanches << " ( of " << numAvalanche << ")\n";
+	dataFile << "// Total avalanches: " << totalAvalanches << " (of " << numAvalanche << ")\n";
 
   //include convergence criteria
   dataFile << "// Stop condition:\n";
