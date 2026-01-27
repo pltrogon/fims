@@ -84,14 +84,15 @@ int main(int argc, char * argv[]) {
 
   //***** Simulation Parameters *****//
   //Read in simulation parameters from runControl
-
+  int numInputs;
   double  padLength, pitch;
   double gridStandoff, gridThickness, holeRadius;
   double cathodeHeight, thicknessSiO2, pillarRadius;
   double fieldRatio, transparencyLimit;
   int numFieldLine;
   int numAvalanche, avalancheLimit;
-  double gasCompAr, gasCompCO2;
+  double gasCompAr, gasCompCO2, gasCompCF4, gasCompIsobutane;
+  double gasPenning;
 
   std::ifstream paramFile;
   std::string runControlFile = "../runControl";
@@ -131,7 +132,8 @@ int main(int argc, char * argv[]) {
   paramFile.close();
 
   //Parse the values from the map
-  if(numKeys != 16){//Number of user-defined simulation parameters in runControl to search for.
+  numInputs = std::stoi(readParam["numInputs"]);
+  if(numKeys != numInputs){
     std::cerr << "Error: Invalid simulation parameters in 'runControl'." << std::endl;
     return -1;
   }
@@ -151,16 +153,19 @@ int main(int argc, char * argv[]) {
 
   //Field parameters
   fieldRatio = std::stod(readParam["fieldRatio"]);
-  transparencyLimit = std::stod(readParam["transparencyLimit"]);
-
   numFieldLine = std::stoi(readParam["numFieldLine"]);
 
   //Simulation Parameters
   numAvalanche = std::stoi(readParam["numAvalanche"]);
   avalancheLimit = std::stoi(readParam["avalancheLimit"]);
+  
+ //Gasses defined as percentages
+  gasCompAr = std::stod(readParam["gasCompAr"])*100.;
+  gasCompCO2 = std::stod(readParam["gasCompCO2"])*100.;
+  gasCompCF4 = std::stod(readParam["gasCompCF4"])*100.;
+  gasCompIsobutane = std::stod(readParam["gasCompIsobutane"])*100.;
 
-  gasCompAr = std::stod(readParam["gasCompAr"]);
-  gasCompCO2 = std::stod(readParam["gasCompCO2"]);
+  gasPenning = std::stod(readParam["gasPenning"]);
 
   
   //*************** SIMULATION ***************//
@@ -171,22 +176,14 @@ int main(int argc, char * argv[]) {
   // Define the gas mixture
   MediumMagboltz* gasFIMS = new MediumMagboltz();
 
-  //Set parameters
-  if((gasCompAr==0) && (gasCompCO2==0)){
-      gasFIMS->SetComposition(
-        "ar", 95.0,
-        "cf4", 3.0, 
-        "iC4H10", 2.0
-      );
-      gasFIMS->EnablePenningTransfer(0.385, .0, "ar");
-  }
-  else{
-      gasFIMS->SetComposition(
-      "ar", gasCompAr, 
-      "co2", gasCompCO2
-    );
-    gasFIMS->EnablePenningTransfer(0.51, .0, "ar");
-  }
+  //Set gas parameters
+  gasFIMS->SetComposition(
+    "ar", gasCompAr, 
+    "co2", gasCompCO2,
+    "cf4", gasCompCF4,
+    "iC4H10", gasCompIsobutane
+  );
+  gasFIMS->EnablePenningTransfer(gasPenning, .0, "ar");
 
   //gas parameters:
   double gasTemperature = 293.15; //K

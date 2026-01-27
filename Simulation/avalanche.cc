@@ -144,14 +144,15 @@ int main(int argc, char * argv[]) {
 
   //***** Simulation Parameters *****//
   //Read in simulation parameters from runControl
-
+  int numInputs;
   double  padLength, pitch;
   double gridStandoff, gridThickness, holeRadius;
   double cathodeHeight, thicknessSiO2, pillarRadius;
   double driftField, fieldRatio, transparencyLimit;
   int numFieldLine;
   int numAvalanche, avalancheLimit;
-  double gasCompAr, gasCompCO2;
+  double gasCompAr, gasCompCO2, gasCompCF4, gasCompIsobutane;
+  double gasPenning;
 
   std::ifstream paramFile;
   std::string runControlFile = "../runControl";
@@ -191,7 +192,8 @@ int main(int argc, char * argv[]) {
   paramFile.close();
 
   //Parse the values from the map
-  if(numKeys != 16){//Number of user-defined simulation parameters in runControl to search for.
+  numInputs = std::stoi(readParam["numInputs"]);
+  if(numKeys != numInputs){
     std::cerr << "Error: Invalid simulation parameters in 'runControl'." << std::endl;
     return -1;
   }
@@ -212,16 +214,19 @@ int main(int argc, char * argv[]) {
   //Field parameters
   driftField = std::stod(readParam["driftField"]);
   fieldRatio = std::stod(readParam["fieldRatio"]);
-  transparencyLimit = std::stod(readParam["transparencyLimit"]);
-
   numFieldLine = std::stoi(readParam["numFieldLine"]);
 
   //Simulation Parameters
   numAvalanche = std::stoi(readParam["numAvalanche"]);
   avalancheLimit = std::stoi(readParam["avalancheLimit"]);
 
-  gasCompAr = std::stod(readParam["gasCompAr"]);
-  gasCompCO2 = std::stod(readParam["gasCompCO2"]);
+  //Gasses defined as percentages
+  gasCompAr = std::stod(readParam["gasCompAr"])*100.;
+  gasCompCO2 = std::stod(readParam["gasCompCO2"])*100.;
+  gasCompCF4 = std::stod(readParam["gasCompCF4"])*100.;
+  gasCompIsobutane = std::stod(readParam["gasCompIsobutane"])*100.;
+
+  gasPenning = std::stod(readParam["gasPenning"]);
 
 
   // ***** Output data file ***** //  
@@ -282,28 +287,15 @@ int main(int argc, char * argv[]) {
   // Define the gas mixture
   MediumMagboltz* gasFIMS = new MediumMagboltz();
 
-  //Set parameters
-  if((gasCompAr==0) && (gasCompCO2==0)){
-      gasFIMS->SetComposition(
-        "ar", 95.0,//95
-        "cf4", 3.0,//3
-        "iC4H10", 2.0//2
-      );
-      gasFIMS->EnablePenningTransfer(0.385, 0., "ar");//TODO - Confirm this rate of .385
-  }
-  else{
-      gasFIMS->SetComposition(
-      "ar", gasCompAr, 
-      "co2", gasCompCO2
-    );
-    gasFIMS->EnablePenningTransfer(0.51, .0, "ar");
-    /*
-     * From Garfield/Examples/Gem/gem.c:
-     *    Penning rate = 0.51 for 80/20 Ar/CO2 Mix
-     * From Garfield/Examples/Ansys123/triplegem.c:
-     *    Penning rate = 0.55 for 45/15/40 Ar/CO2/CF4 Mix
-     */
-  }
+  //Set gas parameters
+  gasFIMS->SetComposition(
+    "ar", gasCompAr, 
+    "co2", gasCompCO2,
+    "cf4", gasCompCF4,
+    "iC4H10", gasCompIsobutane
+  );
+  gasFIMS->EnablePenningTransfer(gasPenning, .0, "ar");
+
 
   //STP gas parameters:
   double gasTemperature = 293.15; //K
@@ -316,10 +308,10 @@ int main(int argc, char * argv[]) {
   gasFIMS->Initialise(true);
 
   // Load ion mobilities. 
-
   const std::string path = std::getenv("GARFIELD_INSTALL");
   const std::string posIonPath = path + "/share/Garfield/Data/IonMobility_Ar+_Ar.txt";
-  const std::string negIonPath = path + "/share/Garfield/Data/IonMobility_CO2+_CO2.txt";
+  //const std::string negIonPath = path + "/share/Garfield/Data/IonMobility_CO2+_CO2.txt";//TODO if statement here?
+  const std::string negIonPath = path + "/share/Garfield/Data/IonMobility_CF4+_CF4.txt";
   gasFIMS->LoadIonMobility(posIonPath);
   gasFIMS->LoadNegativeIonMobility(negIonPath);//TODO - Is this correct for negative ion drift? 
 
@@ -885,6 +877,9 @@ int main(int argc, char * argv[]) {
   
   metaDataTree->Branch("Gas Comp: Ar", &gasCompAr, "gasCompAr/D");
   metaDataTree->Branch("Gas Comp: CO2", &gasCompCO2, "gasCompCO2/D");
+  metaDataTree->Branch("Gas Comp: CF4", &gasCompCF4, "gasCompCF4/D");
+  metaDataTree->Branch("Gas Comp: Isobutane", &gasCompIsobutane, "gasCompIsobutane/D");
+  metaDataTree->Branch("Gas Penning", &gasPenning, "gasPenning/D");
 
   metaDataTree->Branch("Drift Velocity (Drift) ", &driftVelocity, "driftVelocity/D");
   metaDataTree->Branch("Diffusion L (Drift)", &driftDiffusionL, "driftDiffusionL/D");

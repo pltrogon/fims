@@ -123,27 +123,28 @@ class FIMS_Simulation:
             Dimensions in microns.
             Electric field in V/cm.
 
-            When both gas compositions are 0, the simulated gas is T2K.
-    
         Returns:
             dict: Dictionary of default parameters and values.
         """
         defaultParam = {
-            'padLength': 44.,
-            'pitch': 225.,
-            'gridStandoff': 100.,
+            'padLength': 20.,
+            'pitch': 55.,
+            'gridStandoff': 50.,
             'gridThickness': 1.,
             'holeRadius': 55.,
             'cathodeHeight': 200.,
             'thicknessSiO2': 5.,
-            'pillarRadius': 20.,
+            'pillarRadius': 2.,
             'driftField': 280.,
             'fieldRatio': 80.,
             'numFieldLine': 25,
-            'numAvalanche': 1500,
+            'numAvalanche': 2000,
             'avalancheLimit': 600,
-            'gasCompAr': 0.,
-            'gasCompCO2': 0.,
+            'gasCompAr': 0.95,
+            'gasCompCO2': 0.00,
+            'gasCompCF4': 0.03,
+            'gasCompIsobutane': 0.02,
+            'gasPenning': 0.385
         }
         return defaultParam
 
@@ -161,7 +162,27 @@ class FIMS_Simulation:
         for inParam in allParam:
             if inParam not in self.param:
                 raise KeyError(f"Parameter '{inParam}' missing from parameter dictionary.")
+            
+        #Check gas composition 
+        self._checkGasComp()
                 
+        return
+    
+#***********************************************************************************#    
+    def _checkGasComp(self):
+        """
+        Ensures that the gas composition percentages sum to 1.0.
+        """
+        totalComp = (
+            float(self._getParam('gasCompAr')) +
+            float(self._getParam('gasCompCO2')) +
+            float(self._getParam('gasCompCF4')) +
+            float(self._getParam('gasCompIsobutane'))
+        )
+        
+        if not math.isclose(totalComp, 1.0, rel_tol=1e-3):
+            raise ValueError(f'Gas composition percentages must sum to 1.0. Current sum: {totalComp}')
+        
         return
 
 #***********************************************************************************#
@@ -221,21 +242,18 @@ class FIMS_Simulation:
     
         """
 
-        #Check for necessary pathways
+        #Check for necessary pathways and create if not present
         paths = [
             'log', 
             'build',
             'build/parallelData', 
             '../Data/Magboltz'
         ]
-
         for inPath in paths:
             os.makedirs(inPath, exist_ok=True)
 
-        #Check for runControl file
-        if not os.path.exists('runControl'):
-            self._makeRunControl()
-
+        #Make runControl file
+        self._makeRunControl()
 
         # Get garfield path into environment
         envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
@@ -288,7 +306,9 @@ class FIMS_Simulation:
 
         runControlLines = [
             '// FIMS Simulation Control File //',
-            'Assumes the form "variable = value;" for each line.',
+            '// Assumes the form "variable = value;" for each line.',
+            '// Number of input parameters (numInputs included):',
+            'numInputs = 19;',   ##### NOTE: Change this if parameters are added/removed #####
             '',
             '//----- Geometry parameters -----//',
             '// Dimensions in microns.',
@@ -321,6 +341,10 @@ class FIMS_Simulation:
             '// Gas composition (in percentage)',
             f'gasCompAr = {defaultParams["gasCompAr"]:.2f};',
             f'gasCompCO2 = {defaultParams["gasCompCO2"]:.2f};',
+            f'gasCompCF4 = {defaultParams["gasCompCF4"]:.2f};',
+            f'gasCompIsobutane = {defaultParams["gasCompIsobutane"]:.2f};',
+            '',
+            f'gasPenning = {defaultParams["gasPenning"]:.3f};',
             '',
             '// End of runControl file\n'
         ]
@@ -1066,7 +1090,7 @@ class FIMS_Simulation:
         #Limit step size for stability
         stepSizeLimit = 10
         if fieldStep > stepSizeLimit:
-            print(f'Warning: Step size limited to 5 for {stepSizeLimit}.')
+            print(f'Warning: Step size limited to {stepSizeLimit}.')
             newField = curField+stepSizeLimit
 
         #Ensure step is at least 1
@@ -1382,6 +1406,7 @@ class FIMS_Simulation:
 
         #Choose initial field ratio guess
         minFieldGuess = self._calcMinField()#TODO - This function can be made a lot better
+        minFieldGuess = 170
         self.param['fieldRatio'] = minFieldGuess
         print(f'\tInitial field ratio guess: {minFieldGuess}')
 

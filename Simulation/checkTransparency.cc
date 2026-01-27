@@ -62,13 +62,14 @@ int main(int argc, char * argv[]) {
   
   //***** Simulation Parameters *****//
   //Read in simulation parameters from runControl
-
+  int numInputs;
   double  padLength, pitch;
   double gridStandoff, gridThickness, holeRadius;
   double cathodeHeight, thicknessSiO2, pillarRadius;
   double fieldRatio, transparencyLimit;
   int numFieldLine;
-  double gasCompAr, gasCompCO2;
+  double gasCompAr, gasCompCO2, gasCompCF4, gasCompIsobutane;
+  double gasPenning;
 
   std::ifstream paramFile;
   std::string runControlFile = "../runControl";
@@ -108,7 +109,8 @@ int main(int argc, char * argv[]) {
   paramFile.close();
 
   //Parse the values from the map
-  if(numKeys != 16){//Number of user-defined simulation parameters in runControl to search for.
+  numInputs = std::stoi(readParam["numInputs"]);
+  if(numKeys != numInputs){
     std::cerr << "Error: Invalid simulation parameters in 'runControl'." << std::endl;
     return -1;
   }
@@ -129,11 +131,15 @@ int main(int argc, char * argv[]) {
   //Field parameters
   fieldRatio = std::stod(readParam["fieldRatio"]);
   numFieldLine = std::stoi(readParam["numFieldLine"]);
-  transparencyLimit = std::stod(readParam["transparencyLimit"]);
 
   //Simulation Parameters
-  gasCompAr = std::stod(readParam["gasCompAr"]);
-  gasCompCO2 = std::stod(readParam["gasCompCO2"]);
+ //Gasses defined as percentages
+  gasCompAr = std::stod(readParam["gasCompAr"])*100.;
+  gasCompCO2 = std::stod(readParam["gasCompCO2"])*100.;
+  gasCompCF4 = std::stod(readParam["gasCompCF4"])*100.;
+  gasCompIsobutane = std::stod(readParam["gasCompIsobutane"])*100.;
+
+  gasPenning = std::stod(readParam["gasPenning"]);
 
   
   //*************** SIMULATION ***************//
@@ -144,32 +150,28 @@ int main(int argc, char * argv[]) {
   // Define the gas mixture
   MediumMagboltz* gasFIMS = new MediumMagboltz();
 
-    //Set parameters
-  if((gasCompAr==0) && (gasCompCO2==0)){
-      gasFIMS->SetComposition(
-        "ar", 95.0,
-        "cf4", 3.0, 
-        "iC4H10", 2.0
-      );
-      gasFIMS->EnablePenningTransfer(0.385, .0, "ar");
-  }
-  else{
-      gasFIMS->SetComposition(
-      "ar", gasCompAr, 
-      "co2", gasCompCO2
-    );
-    gasFIMS->EnablePenningTransfer(0.51, .0, "ar");
-  }
+  //Set gas parameters
+  gasFIMS->SetComposition(
+    "ar", gasCompAr, 
+    "co2", gasCompCO2,
+    "cf4", gasCompCF4,
+    "iC4H10", gasCompIsobutane
+  );
+  gasFIMS->EnablePenningTransfer(gasPenning, .0, "ar");
 
   gasFIMS->SetTemperature(293.15); // Room temperature
   gasFIMS->SetPressure(760.);     // Atmospheric pressure
   gasFIMS->SetMaxElectronEnergy(200);
   gasFIMS->Initialise(true);
-  // Load the penning transfer and ion mobilities.
-
+  
+  // Load the ion mobilities.
+  // Load ion mobilities. 
   const std::string path = std::getenv("GARFIELD_INSTALL");
-  gasFIMS->LoadIonMobility(path + "/share/Garfield/Data/IonMobility_Ar+_Ar.txt");
-  gasFIMS->LoadNegativeIonMobility(path + "/share/Garfield/Data/IonMobility_CO2+_CO2.txt");//TODO - Is this correct for negative ion
+  const std::string posIonPath = path + "/share/Garfield/Data/IonMobility_Ar+_Ar.txt";
+  //const std::string negIonPath = path + "/share/Garfield/Data/IonMobility_CO2+_CO2.txt";
+  const std::string negIonPath = path + "/share/Garfield/Data/IonMobility_CF4+_CF4.txt";
+  gasFIMS->LoadIonMobility(posIonPath);
+  gasFIMS->LoadNegativeIonMobility(negIonPath);//TODO - Is this correct for negative ion drift? 
   
   // Import elmer-generated field map
   std::string geometryPath = "../Geometry/";
