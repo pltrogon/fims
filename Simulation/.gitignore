@@ -1,5 +1,6 @@
 # Ignore these files in this folder
 runNo
+runControl
 GARFIELDPATH
 log/
 Geometry/FIMS.msh

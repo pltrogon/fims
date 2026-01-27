@@ -232,6 +232,10 @@ class FIMS_Simulation:
         for inPath in paths:
             os.makedirs(inPath, exist_ok=True)
 
+        #Check for runControl file
+        if not os.path.exists('runControl'):
+            self._makeRunControl()
+
 
         # Get garfield path into environment
         envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
@@ -271,6 +275,62 @@ class FIMS_Simulation:
             with open('runNo', 'w') as file:
                 file.write('1000')  # Starting run number
                 
+        return
+
+#***********************************************************************************#
+    def _makeRunControl(self):
+        """
+        Creates a runControl. file with the default parameters.
+
+        This assumes the form 'variable = value;' for each line.
+        """
+
+        filename = 'runControl'
+        
+        runControlInfo = f"""
+// FIMS Simulation Control File //
+
+//----- Geometry parameters -----//
+// Dimensions in microns.
+
+// Pad and pitch
+padLength = {self.param['padLength']:.1f};
+pitch = {self.param['pitch']:.1f};
+
+// Grid
+gridStandoff = {self.param['gridStandoff']:.1f};
+gridThickness = {self.param['gridThickness']:.1f};
+holeRadius = {self.param['holeRadius']:.1f};
+
+// Other
+cathodeHeight = {self.param['cathodeHeight']:.1f};
+thicknessSiO2 = {self.param['thicknessSiO2']:.1f};
+pillarRadius = {self.param['pillarRadius']:.1f};
+
+//----- Electric field parameters -----//
+// Electric field in V/cm.
+
+driftField = {self.param['driftField']:.1f};
+fieldRatio = {self.param['fieldRatio']:.1f};
+numFieldLine = {self.param['numFieldLine']};
+
+//----- Simulation parameters -----//
+// Avalanche controls
+numAvalanche = {self.param['numAvalanche']};
+avalancheLimit = {self.param['avalancheLimit']};
+
+// Gas composition (in percentage)
+gasCompAr = {self.param['gasCompAr']:.2};
+gasCompCO2 = {self.param['gasCompCO2']:.2f};
+
+"""
+        
+        try:
+            with open(filename, 'w') as file:
+                file.write(runControlInfo)
+        except Exception as e:
+            raise RuntimeError(f"An error occurred while writing to the file '{filename}': {e}")
+        
         return
 
 #***********************************************************************************#        
