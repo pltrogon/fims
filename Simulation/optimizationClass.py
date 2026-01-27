@@ -53,22 +53,15 @@ class FIMS_Optimizer:
         self.params = params
         self.simFIMS = FIMS_Simulation()
         
-        if not self._checkParameters():
-            raise TypeError(
-                    '\nParameters must be a list of lists with the following format:\n'
-                    '[\'parameterName\', minimumBound, maximumBound]\n'
-                    '\nAvailable parameters include:\n'
-                    'holeRadius, gridStandoff, padLength, or pitch\n')
-            return
-        
+        self._checkParameters()
+
+        #Create log file for optimizer
         try:
             with open('log/logOptimizer.txt', 'w') as file:
                 pass
         except:
-            print('Error: could not access logOptimizer.txt')
-            return
+            raise FileNotFoundError('Unable to create log file for optimizer.')
         
-            
         self.iterationNumber = 0
                 
 #***********************************************************************************#
@@ -102,70 +95,18 @@ class FIMS_Optimizer:
         
         for element in self.params:
             if not isinstance(element, list):
-                print('Error: input list does not contain lists\n')
-                return False
+                raise ValueError('Error - Parameter element not a list.')
                 
             if len(element) != 3:
-                print('Error: input list elements have invalid length\n')
-                return False
+                raise ValueError('Error - Parameter element does not have three entries.')
                 
             if element[1] >= element[2]:
-                print('Error: range between minimum and maximum values is invalid\n')
-                return False
+                raise ValueError('Error - Minimum bound is not less than maximum bound.')
                 
             if element[0] not in allowedParams:
-                print('Error: input list element is not a valid parameter\n')
-                return False
-        
-        return True
-        
-#***********************************************************************************#
-    def _runSim(self):
-        """
-        Runs the simulation, preserving the parameters.
-        
-        NOTE: This makes a copy of the parameters before running the
-        simulation, as the simulation will reset them at the end.
-        
-        Args:
-            None.
-            
-        Returns:
-            int: The run number of the simulation that was executed.
-        """
-        saveParam = self.simFIMS.param.copy()
-        runNumber = self.simFIMS.runSimulation(False)
-        #Put saved parameters back
-        self.simFIMS.param = saveParam
-        self.simFIMS._writeParam()
+                raise ValueError('Error - Parameter element is not a valid parameter.')
 
-        return runNumber
-#***********************************************************************************#
-    def _checkTransparency(self):
-        #Get the relevant data
-        transLimit = self.simFIMS._getParam('transparencyLimit')
-        curField = self.simFIMS._getParam('fieldRatio')
-        
-        #Generate field lines
-        if not self._runFieldLines():
-            print('Error generating field lines.')
-            return  -1
-        
-        #Get the resulting field transparency
-        with open('../Data/fieldTransparency.txt', 'r') as readFile:
-            try:
-                transparency = float(readFile.read())
-                
-            except (ValueError, FileNotFoundError):
-                print("Error: Could not read or parse transparency file.")
-                return -1
-        
-        #Check transparency
-        if transparency >= transLimit:
-            return True
-        
-        print('Current field does not permit 100% transparency.')
-        return False
+        return 
 
 #***********************************************************************************#    
     def _getMinField(self):
@@ -229,15 +170,8 @@ class FIMS_Optimizer:
             if element in activeParams:
                 print(f'{element}: {value}')
         print('********************************\n')
-
-        #Find minimum field for 95% efficiency and 100% transparency while
-        #preserving the parameters
-        minField = self._getMinField()
-        
-        #Run full simulation - TODO: This reruns the elmerSolver
-        timeStart = time.time()
-        runNumber = self._runSim()
-        timeEnd = time.time()
+            
+        runNumber = self.runForOptimizer()
         
         print('********************************\n')
         print('Time to run avalanche sim: ', timeEnd - timeStart)
