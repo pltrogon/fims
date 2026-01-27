@@ -355,7 +355,7 @@ class FIMS_Optimizer:
         while num <= numOfParams:
             singleParam = []
             for line in data:
-                paramValue = round(line[num], 3)
+                paramValue = round(line[num], 2) #Adjust this number to adjust the sensitivity
                 singleParam.append(paramValue)
             if singleParam.count(singleParam[0]) == len(singleParam):
                 numOfRepeatedParams += 1

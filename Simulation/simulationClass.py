@@ -129,7 +129,7 @@ class FIMS_Simulation:
         defaultParam = {
             'padLength': 15.,
             'pitch': 30.,
-            'gridStandoff': 30.,
+            'gridStandoff': 40.,
             'gridThickness': 1.,
             'holeRadius': 6.,
             'cathodeHeight': 150.,
@@ -139,8 +139,8 @@ class FIMS_Simulation:
             'fieldRatio': 88.,
             'transparencyLimit': 0.99,
             'numFieldLine': 25,
-            'numAvalanche': 1500,
-            'avalancheLimit': 700,
+            'numAvalanche': 3000,
+            'avalancheLimit': 800,
             'gasCompAr': 0.,
             'gasCompCO2': 0.,
         }
