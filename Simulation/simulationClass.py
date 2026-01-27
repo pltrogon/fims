@@ -15,6 +15,11 @@ import subprocess
 import time
 import itertools
 import re
+import copy
+
+#Include the analysis object        
+sys.path.insert(1, '../Analysis')
+from runDataClass import runData
 
 class FIMS_Simulation:
     """
@@ -89,15 +94,11 @@ class FIMS_Simulation:
         """
         Initializes a FIMS_Simulation object.
         """
-        #Include the analysis object        
-        sys.path.insert(1, '../Analysis')
-        from runDataClass import runData
-
         try:
             self.param = self.defaultParam()
             self._checkParam()
         except KeyError:
-            raise ValueError('Error initializing parameters.')
+            raise RuntimeError('Error initializing parameters.')
 
         self._GARFIELDPATH = self._getGarfieldPath()
         if self._GARFIELDPATH is None:
@@ -188,12 +189,12 @@ class FIMS_Simulation:
 #***********************************************************************************#
     def _getParam(self, parameter):
         """
-        Gets and returns desired parameter.
+        Gets and returns a copy of the desired parameter.
         """
         if parameter not in self.param:
             raise KeyError(f'Error - Invalid parameter: {parameter}.')
             
-        return self.param[parameter]
+        return copy.copy(self.param[parameter])
 
 #***********************************************************************************#       
     def _getGarfieldPath(self):
@@ -237,7 +238,7 @@ class FIMS_Simulation:
         Compiles the executable using cmake and make.
         Initializes a simulation run counter if it does not already exist.
     
-        Note: If a degmentation fault occurs, it is most likely that the
+        Note: If a segmentation fault occurs, it is most likely that the
               Garfield++ library is not sourced correctly.
     
         """
@@ -1049,6 +1050,8 @@ class FIMS_Simulation:
 
         If errors are provided, utilizes a step base on the maximum possible slope.
         Assumes that the value is monotonically increasing for field ratios.
+
+        The resulting field ratio is rounded up to the nearest integer.
         
         *TODO - Tested for when  current and prevoious values are both LESS than target. Behaviour when bracketing target unknown.*
 
@@ -1187,7 +1190,7 @@ class FIMS_Simulation:
         print(f'Beginning search for minimum field to achieve {targetEfficiency*100:.0f}% efficiency...')
         
         iterNo = 0
-        iterNoLimit = 10
+        iterNoLimit = 20
 
         efficiencyAtField = {
             'field': [],
@@ -1386,13 +1389,12 @@ class FIMS_Simulation:
 #***********************************************************************************#
     def findMinFieldRatio(self):
         """
-
         Determines the minimum Electric Field Ratio required to achieve:   
         - 95% detection efficiency, and
         - 100% electric field line transparency.
 
         Returns:
-            float: The minimum field ratio that satisfies both conditions
+            float: The minimum field ratio that satisfies both conditions.
                    This value is also loaded into the class parameters upon completion.
         """
 
@@ -1405,8 +1407,8 @@ class FIMS_Simulation:
         print(f'Finding minimum field ratio for geometry with drift field: {driftField} V/cm')
 
         #Choose initial field ratio guess
-        minFieldGuess = self._calcMinField()#TODO - This function can be made a lot better
-        minFieldGuess = 170
+        #minFieldGuess = self._calcMinField()#TODO - This function can be made a lot better
+        minFieldGuess = 175
         self.param['fieldRatio'] = minFieldGuess
         print(f'\tInitial field ratio guess: {minFieldGuess}')
 

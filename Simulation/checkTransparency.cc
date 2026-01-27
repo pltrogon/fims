@@ -56,6 +56,9 @@ int main(int argc, char * argv[]) {
     return -1;
   }
 
+  runInFile >> runNo;
+  runInFile.close();
+
   std::cout << "****************************************\n";
   std::cout << "Building field line simulation: " << "\n";
   std::cout << "****************************************\n";
