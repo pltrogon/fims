@@ -280,51 +280,52 @@ class FIMS_Simulation:
 #***********************************************************************************#
     def _makeRunControl(self):
         """
-        Creates a runControl. file with the default parameters.
-
-        This assumes the form 'variable = value;' for each line.
+        Creates a runControl file with the default parameters.
         """
 
         filename = 'runControl'
-        
-        runControlInfo = f"""
-// FIMS Simulation Control File //
+        defaultParams = self.defaultParam()
 
-//----- Geometry parameters -----//
-// Dimensions in microns.
+        runControlLines = [
+            '// FIMS Simulation Control File //',
+            'Assumes the form "variable = value;" for each line.',
+            '',
+            '//----- Geometry parameters -----//',
+            '// Dimensions in microns.',
+            '',
+            '// Pad and pitch',
+            f'padLength = {defaultParams["padLength"]:.1f};',
+            f'pitch = {defaultParams["pitch"]:.1f};',
+            '',
+            '// Grid',
+            f'gridStandoff = {defaultParams["gridStandoff"]:.1f};',
+            f'gridThickness = {defaultParams["gridThickness"]:.1f};',
+            f'holeRadius = {defaultParams["holeRadius"]:.1f};',
+            '',
+            '// Other',
+            f'cathodeHeight = {defaultParams["cathodeHeight"]:.1f};',
+            f'thicknessSiO2 = {defaultParams["thicknessSiO2"]:.1f};',
+            f'pillarRadius = {defaultParams["pillarRadius"]:.1f};',
+            '',
+            '//----- Electric field parameters -----//',
+            '// Electric field in V/cm.',
+            f'driftField = {defaultParams["driftField"]:.1f};',
+            f'fieldRatio = {defaultParams["fieldRatio"]:.1f};',
+            f'numFieldLine = {defaultParams["numFieldLine"]};',
+            '',
+            '//----- Simulation parameters -----//',
+            '// Avalanche controls',
+            f'numAvalanche = {defaultParams["numAvalanche"]};',
+            f'avalancheLimit = {defaultParams["avalancheLimit"]};',
+            '',
+            '// Gas composition (in percentage)',
+            f'gasCompAr = {defaultParams["gasCompAr"]:.2f};',
+            f'gasCompCO2 = {defaultParams["gasCompCO2"]:.2f};',
+            '',
+            '// End of runControl file\n'
+        ]
 
-// Pad and pitch
-padLength = {self.param['padLength']:.1f};
-pitch = {self.param['pitch']:.1f};
-
-// Grid
-gridStandoff = {self.param['gridStandoff']:.1f};
-gridThickness = {self.param['gridThickness']:.1f};
-holeRadius = {self.param['holeRadius']:.1f};
-
-// Other
-cathodeHeight = {self.param['cathodeHeight']:.1f};
-thicknessSiO2 = {self.param['thicknessSiO2']:.1f};
-pillarRadius = {self.param['pillarRadius']:.1f};
-
-//----- Electric field parameters -----//
-// Electric field in V/cm.
-
-driftField = {self.param['driftField']:.1f};
-fieldRatio = {self.param['fieldRatio']:.1f};
-numFieldLine = {self.param['numFieldLine']};
-
-//----- Simulation parameters -----//
-// Avalanche controls
-numAvalanche = {self.param['numAvalanche']};
-avalancheLimit = {self.param['avalancheLimit']};
-
-// Gas composition (in percentage)
-gasCompAr = {self.param['gasCompAr']:.2};
-gasCompCO2 = {self.param['gasCompCO2']:.2f};
-
-"""
-        
+        runControlInfo = '\n'.join(runControlLines)
         try:
             with open(filename, 'w') as file:
                 file.write(runControlInfo)
