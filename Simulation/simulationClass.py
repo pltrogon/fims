@@ -77,10 +77,10 @@ class FIMS_Simulation:
         _runElmerWeighting
         _runGarfield
         runSimulation
-        runForOptimizer         <----- NEW
-        _runGetEfficiency       <----- NEW
-        _readEfficiencyFile     <----- NEW
-        findFieldForEfficiency <----- NEW
+        runForOptimizer
+        _runGetEfficiency
+        _readEfficiencyFile
+        findFieldForEfficiency
         findFieldForTransparency <------ Changed from findMinField
     """
 
@@ -1179,7 +1179,7 @@ class FIMS_Simulation:
         return minField
 
 #***********************************************************************************#
-    def _findFieldForTransparency(self, minStepSize=1.2):
+    def _findFieldForTransparency(self, minStepSize=1.1):
         """
         Runs simulations to determine what the minimum electric field ratio
         needs to be in order to have 100% E-field transparency.
@@ -1254,11 +1254,9 @@ class FIMS_Simulation:
         self._writeParam()
 
         return finalField
-    
-
 
 #***********************************************************************************#
-    def findMinFieldRatio(self):
+    def findMinFieldRatio(self, transMinStep = 1.1):
         """
 
         Determines the minimum Electric Field Ratio required to achieve:   
@@ -1292,7 +1290,7 @@ class FIMS_Simulation:
         print(f'\tMinimum field ratio for 95% efficiency: {efficiencyField}')
 
         # 100% transparency
-        transparencyField = self._findFieldForTransparency()
+        transparencyField = self._findFieldForTransparency(transMinStep)
         print(f'\tMinimum field ratio for 100% transparency: {transparencyField}')
 
         # Set final field ratio to the maximum of the two found
