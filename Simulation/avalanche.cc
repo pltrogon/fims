@@ -881,11 +881,11 @@ int main(int argc, char * argv[]) {
   metaDataTree->Branch("Gas Comp: Isobutane", &gasCompIsobutane, "gasCompIsobutane/D");
   metaDataTree->Branch("Gas Penning", &gasPenning, "gasPenning/D");
 
-  metaDataTree->Branch("Drift Velocity (Drift) ", &driftVelocity, "driftVelocity/D");
+  metaDataTree->Branch("Drift Velocity (Drift)", &driftVelocity, "driftVelocity/D");
   metaDataTree->Branch("Diffusion L (Drift)", &driftDiffusionL, "driftDiffusionL/D");
   metaDataTree->Branch("Diffusion T (Drift)", &driftDiffusionT, "driftDiffusionT/D");
   
-  metaDataTree->Branch("Drift Velocity (Amplify) ", &ampVelocity, "ampVelocity/D");
+  metaDataTree->Branch("Drift Velocity (Amplify)", &ampVelocity, "ampVelocity/D");
   metaDataTree->Branch("Diffusion L (Amplify)", &ampDiffusionL, "ampDiffusionL/D");
   metaDataTree->Branch("Diffusion T (Amplify)", &ampDiffusionT, "ampDiffusionT/D");
 

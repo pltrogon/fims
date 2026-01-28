@@ -1308,7 +1308,8 @@ class FIMS_Simulation:
         Process:
             1 - Solves an electric field using Elmer. 
             2 - Executes Garfield++ to draw field lines to determine a transparency.
-            3 - Repeats steps 1 and 2, increasing the field ratio until a solution is reached.
+            3 - Repeats steps 1 and 2, increasing the field ratio using a modified 
+                secant method until a solution is reached.
 
         Note that this assumes that the field strength is monotonically increasing.
 
@@ -1408,7 +1409,7 @@ class FIMS_Simulation:
 
         #Choose initial field ratio guess
         #minFieldGuess = self._calcMinField()#TODO - This function can be made a lot better
-        minFieldGuess = 100
+        minFieldGuess = 150
         self.param['fieldRatio'] = minFieldGuess
         print(f'\tInitial field ratio guess: {minFieldGuess}')
 
@@ -1879,6 +1880,8 @@ class FIMS_Simulation:
     def _loadOptimalDriftFile(self):
         """
         Loads pre-computed optimal drift field data from a .pkl file.
+
+        This data can be generated using the gasDataClass.py module.
         """
 
         filePath = '../Data/Magboltz'

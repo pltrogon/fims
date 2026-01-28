@@ -7,6 +7,7 @@ import glob
 import pandas as pd
 
 from scipy.special import gammaincc
+from runDataClass import runData
 
 
 
@@ -442,3 +443,92 @@ def plotDataSets(dataSets, xVal, yVal, savePlot=False):
         
     plt.show()
     return
+
+
+#********************************************************************************#
+def plot2DGasScan(allData, plotParams):
+    """
+    Generates a series of 2D color mesh plots for various gas mixture parameters.
+
+    Args:
+        allData (pd.DataFrame): DataFrame containing simulation results
+        plotParams (dict): Dictionary where keys are column names in allData
+                           and values are tuples of (units, logPlot).
+                           - units (str): Units for the color bar.
+                           - logPlot (bool): Whether to use logarithmic scale.
+    """
+
+    numPlots = len(plotParams)
+    numCols = 2 if numPlots > 1 else 1
+    numRows = int(np.ceil(numPlots/2))
+
+    fig, axes = plt.subplots(
+        numRows, numCols, 
+        figsize=(12, 5*numRows), 
+        constrained_layout=True, squeeze=False
+    )
+
+    fig.suptitle(f'Simulation Results for Ar/CF4/Isobutane Mixtures', fontweight='bold', fontsize=16)
+
+    axesFlat = axes.flatten()
+
+    for ax, (inData, (units, logPlot)) in zip(axesFlat, plotParams.items()):
+
+        # Pivot the data for pcolormesh
+        plotData = allData.pivot(index='Gas Comp: CF4', columns='Gas Comp: Isobutane', values=inData)
+        
+        dataMesh = ax.pcolormesh(
+            plotData.columns, 
+            plotData.index, 
+            plotData.values, 
+            shading='nearest', 
+            cmap='viridis',
+            norm='log' if logPlot else None
+        )
+
+        ax.scatter(2, 3, marker='$T2K$', color='r', s=1000, label='T2K Gas')
+        ax.scatter(0, 0, marker='$Pure~Ar$', color='r', s=1000, label='Pure Ar')
+
+        ax.set_title(f'{inData.strip()}', fontweight='bold')
+        ax.set_xlabel(f'Isobutane Concentration (%)')
+        ax.set_ylabel(f'CF4 Concentration (%)')
+
+        fig.colorbar(dataMesh, ax=ax, label=f'{inData.strip()} ({units})')
+
+    # Hide any unused subplots
+    for i in range(numPlots, len(axesFlat)):
+        axesFlat[i].axis('off')
+
+    return fig
+
+#********************************************************************************#
+def getGasData(runNoList):
+    """
+    Retrieves and compiles metadata and calculated data for a list of runs
+    into a single DataFrame.
+
+    Args:
+        runNoList (list): List of run numbers to retrieve data for.
+    Returns:
+        pd.DataFrame: DataFrame containing combined metadata and calculated data
+                      for all specified runs, sorted by run number.
+    """
+
+    allRunData = []
+
+    # Get the data from each run
+    for inRun in runNoList:
+        simData = runData(inRun)
+
+        metaData = simData.getMetaData()
+        calcData = simData.getCalculatedData()
+
+        inRunData = {'runNo': inRun} | metaData | calcData
+
+        allRunData.append(inRunData)
+
+    #Combine all reults into a single dataframe, sorted by run number
+    allRunData = pd.DataFrame(allRunData)
+    allRunData = allRunData.sort_values(by='runNo').reset_index(drop=True)
+
+    return allRunData
