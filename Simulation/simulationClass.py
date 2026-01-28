@@ -64,7 +64,7 @@ class FIMS_Simulation:
     Methods defined in FIMS_Simulation:
         defaultParam
         _checkParam
-        _getParam
+        getParam
         _getGarfieldPath
         _setupSimulation
         _readParam
@@ -175,10 +175,10 @@ class FIMS_Simulation:
         Ensures that the gas composition percentages sum to 1.0.
         """
         totalComp = (
-            float(self._getParam('gasCompAr')) +
-            float(self._getParam('gasCompCO2')) +
-            float(self._getParam('gasCompCF4')) +
-            float(self._getParam('gasCompIsobutane'))
+            float(self.getParam('gasCompAr')) +
+            float(self.getParam('gasCompCO2')) +
+            float(self.getParam('gasCompCF4')) +
+            float(self.getParam('gasCompIsobutane'))
         )
         
         if not math.isclose(totalComp, 1.0, rel_tol=1e-3):
@@ -187,7 +187,7 @@ class FIMS_Simulation:
         return
 
 #***********************************************************************************#
-    def _getParam(self, parameter):
+    def getParam(self, parameter):
         """
         Gets and returns a copy of the desired parameter.
         """
@@ -496,16 +496,16 @@ class FIMS_Simulation:
         self._checkParam()
             
 
-        driftField = float(self._getParam('driftField'))/1e4 #V/micron
-        fieldRatio = float(self._getParam('fieldRatio'))
+        driftField = float(self.getParam('driftField'))/1e4 #V/micron
+        fieldRatio = float(self.getParam('fieldRatio'))
         amplificationField = driftField*fieldRatio #V/micron
         
         # Calculate the voltage required to achieve amplification field
-        gridDistance = float(self._getParam('gridStandoff')) - float(self._getParam('gridThickness'))/2. #micron
+        gridDistance = float(self.getParam('gridStandoff')) - float(self.getParam('gridThickness'))/2. #micron
         gridVoltage = amplificationField*gridDistance
     
         # Calculate for drift field
-        cathodeDistance = float(self._getParam('cathodeHeight')) - float(self._getParam('gridThickness'))/2. #micron
+        cathodeDistance = float(self.getParam('cathodeHeight')) - float(self.getParam('gridThickness'))/2. #micron
         cathodeVoltage = driftField*cathodeDistance + gridVoltage
     
         potentials = {
@@ -1140,7 +1140,7 @@ class FIMS_Simulation:
         newField = None
 
         if iterNo == 1:
-            newField = self._getParam('fieldRatio')
+            newField = self.getParam('fieldRatio')
 
         # Take constant step of 2 for 2nd iteration
         elif iterNo == 2:
@@ -1245,9 +1245,9 @@ class FIMS_Simulation:
         #End of find field for efficiency loop
 
         #Print solution
-        finalField = self._getParam('fieldRatio')
+        finalField = self.getParam('fieldRatio')
         print(f'Solution found for {targetEfficiency*100:.0f}% efficiency: Field ratio = {finalField}')
-        #print(efficiencyAtField)
+        print(efficiencyAtField)
         
         #Reset parameters
         self.resetParam()
@@ -1269,10 +1269,10 @@ class FIMS_Simulation:
             float: Numerical solution to the minimum field for 100% transparency.
         """
         #Get geometry variables
-        radius = self._getParam('holeRadius')
-        standoff = self._getParam('gridStandoff')
-        pad = self._getParam('padLength')
-        pitch = self._getParam('pitch')
+        radius = self.getParam('holeRadius')
+        standoff = self.getParam('gridStandoff')
+        pad = self.getParam('padLength')
+        pitch = self.getParam('pitch')
     
         #Calculate what the minimum field ratio should be
         gridArea = pitch**2*math.sqrt(3)/2
@@ -1372,7 +1372,7 @@ class FIMS_Simulation:
 
 
         #Print solution
-        finalField = self._getParam('fieldRatio')
+        finalField = self.getParam('fieldRatio')
         print(f'Solution: Field ratio = {finalField}')
         #print(transparencyAtField)
         
@@ -1403,12 +1403,12 @@ class FIMS_Simulation:
         saveParam = self.param.copy()
 
         #Get absolute drift field value
-        driftField = self._getParam('driftField')
+        driftField = self.getParam('driftField')
         print(f'Finding minimum field ratio for geometry with drift field: {driftField} V/cm')
 
         #Choose initial field ratio guess
         #minFieldGuess = self._calcMinField()#TODO - This function can be made a lot better
-        minFieldGuess = 175
+        minFieldGuess = 100
         self.param['fieldRatio'] = minFieldGuess
         print(f'\tInitial field ratio guess: {minFieldGuess}')
 
@@ -1501,6 +1501,9 @@ class FIMS_Simulation:
         #get the run number for this simulation
         runNo = self._getRunNumber()
         print(f'Running simulation - Run number: {runNo}')
+
+        #Get the optimal drift field for this gas
+        self.param['driftField'] = self._getOptimalDriftField()
 
         #Find the minimum field ratio for this geometry that satisfies:
         #  95% efficiency and 100% transparency
@@ -1650,7 +1653,7 @@ class FIMS_Simulation:
         electronCharge = -1.602176634e-19
 
         #Geometry parameters
-        pitch = self._getParam('pitch')        
+        pitch = self.getParam('pitch')        
         xMax = math.sqrt(3)/2.*pitch
         xMin = -xMax
         yMax = pitch
@@ -1827,4 +1830,56 @@ class FIMS_Simulation:
 
 
         
+
+#***********************************************************************************#
+    def _getOptimalDriftField(self):
+        """
+        Determines the optimal drift field for the current gas mixture in V/cm.
+
+        NOTE: This assumes that the gas composition is a T2K-like mixture of Ar, CF4, and Isobutane.
+
+        It rounds the drift field to the nearest integer value.
+
+        Returns:
+            float: The optimal drift field in V/cm.
+        """
+
+        self._checkGasComp()
+
+        allOptimalFieldData = self._loadOptimalDriftFile()
+
+        intAr = round(self.getParam('gasCompAr')*100)
+        intCF4 = round(self.getParam('gasCompCF4')*100)
+        intIsobutane = round(self.getParam('gasCompIsobutane')*100)
+
+        gasCompFilter = (
+            (allOptimalFieldData['Ar'] == intAr) &
+            (allOptimalFieldData['CF4'] == intCF4) &
+            (allOptimalFieldData['Isobutane'] == intIsobutane)
+        )
+
+        #Get optimal field for this gas composition
+        optimalFieldData = allOptimalFieldData.loc[gasCompFilter, 'optimalField']
+        if optimalFieldData.empty:
+            raise ValueError('Error: No optimal drift field data found for the current gas composition.')
         
+        #Get field strength in V/cm
+        optimalFieldStrength = optimalFieldData.iloc[0]*1000
+
+        return round(optimalFieldStrength)
+
+
+#********************************************************************************#
+    def _loadOptimalDriftFile(self):
+        """
+        Loads pre-computed optimal drift field data from a .pkl file.
+        """
+
+        filePath = '../Data/Magboltz'
+        fileName = f'OptimalDriftFields.myT2K.pkl'
+        filename = os.path.join(filePath, fileName)
+
+        optimalFieldData = pd.read_pickle(filename)  
+
+        return optimalFieldData
+    

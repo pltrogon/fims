@@ -155,7 +155,7 @@ class FIMS_Optimizer:
         # Unpack the optimizer array into the simulation's parameter dictionary.
         for i, inParam in enumerate(inputList):
             self.simFIMS.param[inParam] = optimizerParam[i]
-        self.simFIMS._writeParam()
+        #self.simFIMS._writeParam()#This should not be necessary - runing the sim itself will write
         
         # Get the Ion Backflow Number
         resultIBN = self._getIBN()
@@ -223,10 +223,10 @@ class FIMS_Optimizer:
         # Unpack the optimizer array into the simulation's parameter dictionary.
         for i, inParam in enumerate(inputList):
             self.simFIMS.param[inParam] = optimizerParam[i]
-        radius = self.simFIMS._getParam('holeRadius')
-        padLength = self.simFIMS._getParam('padLength')
-        standoff = self.simFIMS._getParam('gridStandoff')
-        pitch = self.simFIMS._getParam('pitch')
+        radius = self.simFIMS.getParam('holeRadius')
+        padLength = self.simFIMS.getParam('padLength')
+        standoff = self.simFIMS.getParam('gridStandoff')
+        pitch = self.simFIMS.getParam('pitch')
         
         #Calculate dummy IBN value
         IBN = 100*(((radius-50)/11.25)**2 - (padLength/225)**2 + abs(standoff - 100)/225)*(.95 + random.random()/10)
