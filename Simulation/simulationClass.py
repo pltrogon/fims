@@ -1846,25 +1846,31 @@ class FIMS_Simulation:
 
         self._checkGasComp()
 
-        allOptimalFieldData = self._loadOptimalDriftFile()
+        try:
+            allOptimalFieldData = self._loadOptimalDriftFile()
 
-        intAr = round(self.getParam('gasCompAr')*100)
-        intCF4 = round(self.getParam('gasCompCF4')*100)
-        intIsobutane = round(self.getParam('gasCompIsobutane')*100)
+            intAr = round(self.getParam('gasCompAr')*100)
+            intCF4 = round(self.getParam('gasCompCF4')*100)
+            intIsobutane = round(self.getParam('gasCompIsobutane')*100)
 
-        gasCompFilter = (
-            (allOptimalFieldData['Ar'] == intAr) &
-            (allOptimalFieldData['CF4'] == intCF4) &
-            (allOptimalFieldData['Isobutane'] == intIsobutane)
-        )
+            gasCompFilter = (
+                (allOptimalFieldData['Ar'] == intAr) &
+                (allOptimalFieldData['CF4'] == intCF4) &
+                (allOptimalFieldData['Isobutane'] == intIsobutane)
+            )
 
-        #Get optimal field for this gas composition
-        optimalFieldData = allOptimalFieldData.loc[gasCompFilter, 'optimalField']
-        if optimalFieldData.empty:
-            raise ValueError('Error: No optimal drift field data found for the current gas composition.')
-        
-        #Get field strength in V/cm
-        optimalFieldStrength = optimalFieldData.iloc[0]*1000
+            #Get optimal field for this gas composition
+            optimalFieldData = allOptimalFieldData.loc[gasCompFilter, 'optimalField']
+            if optimalFieldData.empty:
+                raise ValueError('Error: No optimal drift field data found for the current gas composition.')
+            
+            #Get field strength in V/cm
+            optimalFieldStrength = optimalFieldData.iloc[0]*1000
+
+        except Exception as e:
+            print(f'Error loading optimal drift field data: {e}')
+            print('Using default optimal drift field of 280 V/cm.')
+            optimalFieldStrength = 280
 
         return round(optimalFieldStrength)
 
