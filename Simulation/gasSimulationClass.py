@@ -2,6 +2,7 @@
 # CLASS DEFINITION FOR GAS SIMULATION #
 #######################################
 from __future__ import annotations
+import glob
 
 import numpy as np
 import pandas as pd
@@ -15,6 +16,8 @@ import subprocess
 import time
 import itertools
 import re
+
+from scipy.optimize import Bounds, minimize_scalar
 
 
 class gasSimulation:
@@ -262,15 +265,14 @@ class gasSimulation:
         Executes the Magboltz program to get the electron drift velocity and 
         diffusion coefficiencts for a range of fields between 0.1 kV/cm and 100 kV/cm.
         """
-        eFields = np.logspace(-1, 2, 31)
+        eFields = np.logspace(-1, 2, 31)#for 100 kV/cm max
 
         print(f'Scanning {len(eFields)} fields...')
         for inField in eFields:
             self.runMagboltz(inField)
         print(f'Done {len(eFields)} fields...')
 
-        return
-    
+        return    
 
 #***********************************************************************************#
     def _runParallelPlateAvalanches(self, fieldStrength=0, plateSeparation=0):
@@ -856,5 +858,163 @@ class gasSimulation:
 
         plt.grid()
         plt.show()
+
+        return
+    
+    #***********************************************************************************#
+    def findOptimalDriftField(self):
+        """
+        Determines the optimal drift field for maximizing the electron drift velocity.
+        Boundaries of 0.1 and 1 kV/cm are used for the optimization.
+
+        Returns:
+            result (OptimizeResult): The optimization result represented as a 
+                                     'OptimizeResult' object.
+            pd.DataFrame: Dataframe containing the Magboltz parameters at the optimal field.
+        """
+
+        print(f'Finding optimal drift field for {self.gasFractions}...')
+
+        self._optimalMagboltzData = None
+
+        result = minimize_scalar(
+            self._objectiveForDriftField,
+            bounds=(0.1, 1), #Boundaries of 0.1 and 1 kV/cm
+            method='bounded',
+            options={'xatol': 0.01}
+        )
+
+        return result, self._optimalMagboltzData
+    
+    #***********************************************************************************#
+    def _objectiveForDriftField(self, eField):
+        """
+        Objective function for optimizing the electron drift field.
+
+        Returns:
+            float: Negative of the current drift velocity to be minimized. (For maximization)
+        """
+        curField = round(eField * 1000) / 1000.0
+
+        self.runMagboltz(curField)
+        magboltzData = self._getMaboltzParam(curField)
+
+        if magboltzData.empty:
+            return 1e4 #Large penalty for failure
+
+        curDriftVelocity = magboltzData['driftVelocity'].iloc[0] #Want to maximize this
+
+        if (self._optimalMagboltzData is None or 
+            curDriftVelocity > (self._optimalMagboltzData['driftVelocity'].iloc[0])):
+
+            self._optimalMagboltzData = magboltzData
+
+        return -1*curDriftVelocity
+
+    #***********************************************************************************#
+    def _getMaboltzParam(self, eField):
+        """
+        Gets and returns the Magboltz parameters for a given electric field.
+
+        Returns:
+            pd.DataFrame: Dataframe containing the Magboltz parameters.
+        """
+
+        gasCompString = "-".join(map(str, self.gasFractions))
+        gasFieldString = f'{int(eField*1000)}'#filename is in V/cm
+
+        gasFilename = f'magboltz.{self.gasID}-{gasCompString}.{gasFieldString}.dat'
+        filePath = os.path.join('../Data/Magboltz', gasFilename)
+
+        dataMagboltz = []
+
+        inData = {"filename": os.path.basename(filePath)}
+        try:
+            with open(filePath, 'r') as inFile:
+                lines = [line.strip() for line in inFile.readlines()]
+            
+            if len(lines) < 11:
+                print(f"Error: File {inFile} has unexpected format.")
+                return pd.DataFrame()
+
+
+            inData['gasComposition'] = lines[3]
+            inData['eField'] = float(lines[5])
+            inData['driftVelocity'] = float(lines[7])
+            inData['driftVelocityErr'] = float(lines[8])
+            inData['diffusionLongitudinal'] = float(lines[10])
+            inData['diffusionLongitudinalErr'] = float(lines[11])
+            inData['diffusionTransverse'] = float(lines[13])
+            inData['diffusionTransverseErr'] = float(lines[14])
+
+            dataMagboltz.append(inData)
+            
+        except IndexError:
+            print(f"Parsing Error: Could not find data at expected line index in {filePath}.")
+        except ValueError:
+            print(f"Parsing Error: Could not convert value to float in {filePath}.")
+        except IOError as e:
+            print(f"Error opening or reading file {filePath}: {e}")
+        except Exception as e:
+            print(f"An unexpected error occurred while processing {filePath}: {e}")
+
+        return pd.DataFrame(dataMagboltz)
+    
+
+    #***********************************************************************************#
+    def scanT2KForOptimalDriftFields(self):
+        """
+        Scans the T2K gas composition space for optimal drift fields.
+
+        T2k gas is composed of Ar/CF4/Isobutane in 95/3/2 proportions.
+        This method scans CF4 and Isobutane concentrations from 0 to 5 % in integer amounts.
+        """
+        
+        rawMagboltzResults = []
+        
+        scanCF4 = range(0, 6)
+        scanIsobutane = range(0, 6)
+
+        for compCF4, compIsobutane in itertools.product(scanCF4, scanIsobutane):
+            compAr = 100 - compCF4 - compIsobutane
+
+            gasComp = [compAr, compCF4, compIsobutane]
+            self.setGasComposition('myT2K', gasComp)
+            
+            optimizerResults, magboltzResults = self.findOptimalDriftField()
+
+            if not magboltzResults.empty:
+                magboltzResults['Ar'] = compAr
+                magboltzResults['CF4'] = compCF4
+                magboltzResults['Isobutane'] = compIsobutane
+                magboltzResults['optimalField'] = optimizerResults.x
+
+            rawMagboltzResults.append(magboltzResults)
+
+        allMagboltzResults = pd.concat(rawMagboltzResults, ignore_index=True)
+        self.saveDriftFieldScan(allMagboltzResults)
+
+        return
+    
+    #***********************************************************************************#
+    def saveDriftFieldScan(self, newData):
+        """
+        Saves the optimal drift field scan results to a .pkl file.
+        If the file already exists, the new data is appended to the existing data.
+        """
+
+        filePath = '../Data/Magboltz'
+        fileName = f'OptimalDriftFields.{self.gasID}.pkl'
+        filename = os.path.join(filePath, fileName)
+
+        if os.path.exists(filename):
+            print(f'File exists - Appending.')
+            existingData = pd.read_pickle(filename)
+            dataToSave = pd.concat([existingData, newData], ignore_index=True)  
+        else:
+            print('Creating new file.')
+            dataToSave = newData
+
+        dataToSave.to_pickle(filename)
 
         return

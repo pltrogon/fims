@@ -129,9 +129,10 @@ int main(int argc, char* argv[]) {
   double effectiveTownsend;
   std::array<double, 6> diffusionTensor;
 
+  int numCollisions = 8;//10
   gasFIMS->RunMagboltz(
     //Input values:
-    fieldStrength, 0., 0., 10, true,
+    fieldStrength, 0., 0., numCollisions, true,
     //Outputs:
     xDriftVelocity, yDriftVelocity, zDriftVelocity,
     bulkFlux, bulkDriftVelocity, 
