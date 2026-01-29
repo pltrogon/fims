@@ -7,7 +7,6 @@ import glob
 import pandas as pd
 
 from scipy.special import gammaincc
-from runDataClass import runData
 
 
 
@@ -453,9 +452,10 @@ def plot2DGasScan(allData, plotParams):
     Args:
         allData (pd.DataFrame): DataFrame containing simulation results
         plotParams (dict): Dictionary where keys are column names in allData
-                           and values are tuples of (units, logPlot).
+                           and values are tuples of (units, scale).
                            - units (str): Units for the color bar.
-                           - logPlot (bool): Whether to use logarithmic scale.
+                           - scale (str): Scale for color bar ('log', 'logit'), 
+                                            otherwise is linear.
     """
 
     numPlots = len(plotParams)
@@ -472,10 +472,14 @@ def plot2DGasScan(allData, plotParams):
 
     axesFlat = axes.flatten()
 
-    for ax, (inData, (units, logPlot)) in zip(axesFlat, plotParams.items()):
+    for ax, (inData, (units, scale)) in zip(axesFlat, plotParams.items()):
 
         # Pivot the data for pcolormesh
         plotData = allData.pivot(index='Gas Comp: CF4', columns='Gas Comp: Isobutane', values=inData)
+        
+        plotScale = 'linear'
+        if scale == 'log' or scale == 'logit':
+            plotScale = scale
         
         dataMesh = ax.pcolormesh(
             plotData.columns, 
@@ -483,7 +487,7 @@ def plot2DGasScan(allData, plotParams):
             plotData.values, 
             shading='nearest', 
             cmap='viridis',
-            norm='log' if logPlot else None
+            norm=plotScale
         )
 
         ax.scatter(2, 3, marker='$T2K$', color='r', s=1000, label='T2K Gas')
@@ -514,6 +518,8 @@ def getGasData(runNoList):
                       for all specified runs, sorted by run number.
     """
 
+    from runDataClass import runData
+    
     allRunData = []
 
     # Get the data from each run

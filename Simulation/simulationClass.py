@@ -1427,6 +1427,9 @@ class FIMS_Simulation:
 
         # Set final field ratio to the maximum of the two found
         finalField = max(efficiencyField, transparencyField)
+
+        #load saved parameters back into class.
+        self.param = saveParam
         self.param['fieldRatio'] = finalField
         print(f'Solution for minimum field ratio: {finalField}')
 
@@ -1510,6 +1513,8 @@ class FIMS_Simulation:
         #  95% efficiency and 100% transparency
         minField = self.findMinFieldRatio()
 
+        self.param['fieldRatio'] = minField
+
         #Solve for the weighting field
         self._solveWeightingField()
         
@@ -1520,6 +1525,119 @@ class FIMS_Simulation:
         self.resetParam()
         
         return runNo
+    
+#***********************************************************************************#
+    def runForOptimizerALT(self, efficiencyGoal=0.95, efficiencyThreshold=10, transparencyGoal=.99):
+        """
+        Executes a full avalanche simulation of the FIMS geometry at a given geometry and field ratio.
+
+        Gets the detection efficiency and E field transparency at the current field ratio.
+        Executes the electron transport simulation.
+
+        Args:
+            efficiencyGoal (float): The target efficiency.
+            efficiencyThreshold (int): The minimum number of electrons required to be considered a 'success'.
+            transparencyGoal (float): The target transparency.
+
+        Returns:
+            tuple containing:
+                - int: The run number of the simulation that was executed.
+                - float: The detection efficiency at the current field ratio.
+                - float: The field transparency at the current field ratio.
+        """
+
+        #Check and save parameters
+        self._checkParam()
+        
+
+        #get the run number for this simulation
+        runNo = self._getRunNumber()
+        print(f'Running simulation - Run number: {runNo}')
+
+        #Get the optimal drift field for this gas
+        self.param['driftField'] = self._getOptimalDriftField()
+
+        #Generate Geometry and solve the Electric and weighting fields
+        self._generateGeometry()
+        self._solveEField()
+        self._solveWeightingField()
+
+        #Get the detection efficiency
+        efficiency = self._getEfficiency(efficiencyGoal=efficiencyGoal, efficiencyThreshold=efficiencyThreshold)
+
+        #Get the field transparency
+        transparency = self._getTransparency(transparencyGoal=transparencyGoal)
+
+        #Run the electron transport simulation
+        self._runElectronTransport()
+
+        #Reset parameters
+        self.resetParam()
+
+        return runNo, efficiency, transparency
+
+
+#***********************************************************************************#
+    def _getEfficiency(self, efficiencyGoal=0.95, efficiencyThreshold=10):
+        """
+        Runs a Garfield++ executable the generates electron avalanches to determine
+        the detection efficiency at the current field ratio.
+
+        Args:
+            efficiencyGoal (float): The target efficiency.
+            efficiencyThreshold (int): The minimum number of electrons required to be considered a 'success'.
+
+        Returns:
+            float: The detection efficiency at the current field ratio.
+        """
+
+        self._checkParam()
+        saveParam = self.param.copy()
+
+        self.param['numAvalanche'] = 3000
+        self.param['avalancheLimit'] = 20 #Limit can be low. Check is boolean - above threshold or not
+
+        self._writeParam()
+        self._runGetEfficiency(targetEfficiency=efficiencyGoal, threshold=efficiencyThreshold)
+        effResults = self._readEfficiencyFile()
+
+        print(f'\tDetection efficiency: {effResults['efficiency']:.3f} +/- {effResults['efficiencyErr']:.3f}')
+
+        self.param = saveParam
+
+        return effResults['efficiency']
+    
+#***********************************************************************************#
+    def _getTransparency(self, transparencyGoal=0.99):
+        """
+        Runs a Garfield++ executable to determine field lines and calculate
+        the field transparency.
+
+        Args:
+            transparencyGoal (float): The target transparency.
+
+        Returns:
+            float: The field transparency at the current field ratio.
+        """
+
+        self._checkParam()
+        saveParam = self.param.copy()
+
+        self.param['numFieldLine'] = 200
+
+        self._writeParam()
+        self._runFieldLines()  
+        transparencyResults = self._readTransparencyFile()
+
+        print(f'\tField transparency: {transparencyResults['transparency']:.3f} +/- {transparencyResults['transparencyErr']:.3f}') 
+
+        self.param = saveParam
+
+        return transparencyResults['transparency']
+
+
+
+
 
 
 #***********************************************************************************#
