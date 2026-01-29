@@ -1053,7 +1053,7 @@ class FIMS_Simulation:
 
         The resulting field ratio is rounded up to the nearest integer.
         
-        *TODO - Tested for when  current and prevoious values are both LESS than target. Behaviour when bracketing target unknown.*
+        *TODO - Tested for when  current and previous values are both LESS than target. Behavior when bracketing target unknown.*
 
         Args:
             fields (np.array): Numpy array of the field ratio. Has form: [current, previous]
@@ -1091,15 +1091,15 @@ class FIMS_Simulation:
         fieldStep = damping*targetDiff*fieldDiff/effDiff
 
         #Limit step size for stability
-        stepSizeLimit = 10
+        stepSizeLimit = 12
         if fieldStep > stepSizeLimit:
             print(f'Warning: Step size limited to {stepSizeLimit}.')
             newField = curField+stepSizeLimit
 
-        #Ensure step is at least 1
-        elif fieldStep < 1:
-            print(f'Warning: Field step small. Using heuristic step of 1.')
-            newField = curField+2
+        #Ensure new field is at least 1% larger than the current field
+        elif fieldStep/curField < .01:
+            print(f'Warning: Field step small. Using heuristic step of 1%.')
+            newField = curField*1.01
 
         #Round step up to nearest integer
         else:
