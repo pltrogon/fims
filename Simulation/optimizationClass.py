@@ -11,7 +11,7 @@ import uproot
 import random
 import warnings
 
-from scipy.optimize import Bounds, minimize, differential_evolution
+from scipy.optimize import Bounds, minimize, differential_evolution, LinearConstraint
 
 simDir = os.getcwd()
 analysisDir = os.path.join(simDir, '..', 'Analysis')
@@ -33,14 +33,15 @@ class FIMS_Optimizer:
 
     Methods defined in FIMS_Optimizer:
         _checkParameters
-        _runSim
-        _checkTransparency  <-----New
-        _getMinField        <-----New
+        _checkGeometry      <------Renamed (depreciated)
+        _getMinField
         _getIBN
         _IBNObjective
-        _checkConvergence
         _testObjective
+        _getConstraints     <-------New
+        _checkConvergence
         optimizeForIBN
+
     """
 
 #***********************************************************************************#
@@ -83,16 +84,17 @@ class FIMS_Optimizer:
     def _checkParameters(self):
         """Checks the input parameters to make sure they have the correct format."""
         
+        givenParam = self.params.copy()
         allowedParams = ['holeRadius', 'gridStandoff', 'padLength', 'pitch']
         
-        if self.params is None:
+        if givenParam is None:
             raise ValueError('Error - No parameters.')
 
-        if not isinstance(self.params, list):
+        if not isinstance(givenParam, list):
             print('Error: Input not a list')
             return False
         
-        for element in self.params:
+        for element in givenParam:
             if not isinstance(element, list):
                 raise ValueError('Error - Parameter element not a list.')
                 
@@ -106,6 +108,37 @@ class FIMS_Optimizer:
                 raise ValueError('Error - Parameter element is not a valid parameter.')
 
         return 
+
+#***********************************************************************************#
+    def _checkGeometry(self):
+        """
+        TODO: depreciated
+        Checks the geometry parameters to ensure the layout is valid (IE, pads do not
+        overlap, holes do not expose the pillars, etc).
+        
+        Returns:
+            False if geometry is invalid
+            True otherwise
+        """
+        
+        radius = self.simFIMS.param['holeRadius']
+        pitch = self.simFIMS.param['pitch']
+        pad = self.simFIMS.param['padLength']
+        stand = self.simFIMS.param['gridStandoff']
+        pillar = self.simFIMS.param['pillarRadius']
+        insulator = self.simFIMS.param['thicknessSiO2']
+        
+        if pillar + 2*radius > pitch:
+            return False
+        
+        elif (pad*0.866 + pillar)*2 > pitch:
+            return False
+        
+        elif insulator + 2 > stand: #2 chosen as an arbitrary buffer distance
+            return False
+        
+        else:
+            return True
 
 #***********************************************************************************#    
     def _getMinField(self):
@@ -147,33 +180,6 @@ class FIMS_Optimizer:
 
         return minField
 
-#***********************************************************************************#
-    def _checkParameters(self):
-        """
-        Checks the geometry parameters to ensure the layout is valid (IE, pads do not
-        overlap, holes do not expose the pillars, etc).
-        
-        Returns:
-            False if geometry is invalid
-            True otherwise
-        """
-        
-        radius = self.simFIMS.param['holeRadius']
-        pitch = self.simFIMS.param['pitch']
-        pad = self.simFIMS.param['padLength']
-        stand = self.simFIMS.param['gridStandoff']
-        pillar = self.simFIMS.param['pillarRadius']
-        insulator = self.simFIMS.param['thicknessSiO2']
-        
-        #TODO: find a more pythonic way to do this
-        if pitch - 2*radius < pillar:
-            return False
-        elif pitch < (pad*0.866 + pillar)*2:
-            return False
-        elif stand < insulator + 2:
-            return False
-        else:
-            return True
 #***********************************************************************************#    
     def _getIBN(self):
         """
@@ -229,14 +235,10 @@ class FIMS_Optimizer:
         for i, inParam in enumerate(inputList):
             self.simFIMS.param[inParam] = optimizerParam[i]
         
-        #Fixing the radius to a fraction of the pitch based on previous simulation results
-        #TODO: consider if this should remain
-        self.simFIMS.param['holeRadius'] = self.simFIMS.param['pitch']*.2
-        
         self.simFIMS._writeParam()
         
         #Check parameters to ensure a valid geometry
-        if self._checkParameters():    
+        if self._checkGeometry():    
             # Get the Ion Backflow Number
             resultIBN = self._getIBN()
         else:
@@ -252,6 +254,103 @@ class FIMS_Optimizer:
         print(f'\n******************** IBN = {resultIBN} ********************')
         
         return resultIBN
+
+#***********************************************************************************#
+    def _testObjective(self, optimizerParam, inputList):
+        """
+        An equation that takes the input parameters and calculates a dummy IBN
+        value. Used for debugging the optimizer.
+        
+        Args:
+            array of optimizer values
+            list of the names of the input variables
+        Returns:
+            Int, dummy IBN value
+        """
+        
+        # Unpack the optimizer array into the simulation's parameter dictionary.
+        for i, inParam in enumerate(inputList):
+            self.simFIMS.param[inParam] = optimizerParam[i]
+        radius = self.simFIMS._getParam('holeRadius')
+        padLength = self.simFIMS._getParam('padLength')
+        standoff = self.simFIMS._getParam('gridStandoff')
+        pitch = self.simFIMS._getParam('pitch')
+        
+        #Calculate dummy IBN value
+        IBN = (1
+                + abs(radius - 6)**2 
+                + abs(padLength - 20)**2 
+                + abs(standoff - 30)**2 
+                + abs(pitch - 30)**2
+                )*(.95 + random.random()/10)
+        
+        self.iterationNumber += 1
+        print(
+            'test, radius, standoff, pitch, IBN: ', 
+            self.iterationNumber, 
+            round(radius, 2), 
+            round(standoff, 2),
+            round(padLength, 2),
+            round(pitch, 2),
+            ' | ',
+            round(IBN, 4)
+            )
+        
+        #Append iteration values to log
+        with open('log/logOptimizer.txt', 'a') as log:
+            log.write(f'{radius} {standoff} {padLength} {pitch} {IBN}\n')
+        
+        return IBN
+
+#***********************************************************************************#
+    def _getConstraints(self):
+        """
+        Creates a dictionary of constraints to be used by the optimizer. These
+        constraints prevent overlapping geometry.
+        
+        Note: Assumes that all four possible input parameters are being used.
+        
+        returns: dictionary of constraints
+        """
+        givenParams = []
+        for list in self.params.copy():
+            givenParams.append(list[0])
+        
+        radNum = givenParams.index('holeRadius')
+        standNum = givenParams.index('gridStandoff')
+        padNum = givenParams.index('padLength')
+        pitchNum = givenParams.index('pitch')
+        
+        pillar = self.simFIMS.param['pillarRadius']
+        SiO2 = self.simFIMS.param['thicknessSiO2']
+        
+        #constraints formatted for SLSQP method
+        constraint = [
+            {'type': 'ineq', 'fun': lambda x: x[pitchNum] - 2*x[radNum] - pillar},
+            {'type': 'ineq', 'fun': lambda x: x[pitchNum] - (x[padNum]*0.866 + pillar)*2},
+            {'type': 'ineq', 'fun': lambda x: x[standNum] - (SiO2 + 2)}
+            ]
+        
+        #matrix elements for the constrain equations
+        linCon1 = [0,0,0,0]
+        linCon2 = [0,0,0,0]
+        linCon3 = [0,0,0,0]
+        
+        linCon1[radNum] = -2
+        linCon1[pitchNum] = 1
+        
+        linCon2[pitchNum] = 1
+        linCon2[padNum] = -1.732
+        
+        linCon3[standNum] = 1
+        
+        lowBound = [pillar, 2*pillar, SiO2+2]
+        upBound = [np.inf, np.inf, np.inf]
+        
+        #Constraints formatted for methods other than SLSQP
+        altConstraint = LinearConstraint([linCon1, linCon2, linCon3], lowBound, upBound)
+        
+        return altConstraint
 
 #***********************************************************************************#
     def _checkConvergence(self, optimizerResult):
@@ -303,35 +402,6 @@ class FIMS_Optimizer:
         return
 
 #***********************************************************************************#
-    def _testObjective(self, optimizerParam, inputList):
-        # Unpack the optimizer array into the simulation's parameter dictionary.
-        for i, inParam in enumerate(inputList):
-            self.simFIMS.param[inParam] = optimizerParam[i]
-        radius = self.simFIMS._getParam('holeRadius')
-        padLength = self.simFIMS._getParam('padLength')
-        standoff = self.simFIMS._getParam('gridStandoff')
-        pitch = self.simFIMS._getParam('pitch')
-        
-        #Calculate dummy IBN value
-        IBN = 100*(((radius-50)/11.25)**2 - (padLength/225)**2 + abs(standoff - 100)/225)*(.95 + random.random()/10)
-        self.iterationNumber += 1
-        print(
-            'test, radius, standoff, IBN: ', 
-            self.iterationNumber, 
-            round(radius, 2), 
-            round(standoff, 2),
-            round(padLength, 2),
-            ' | ',
-            round(IBN, 4)
-            )
-        
-        #Append iteration values to log
-        with open('log/logOptimizer.txt', 'a') as log:
-            log.write(f'{radius} {standoff} {padLength} {pitch} {IBN}\n')
-        
-        return IBN
-
-#***********************************************************************************#
     def optimizeForIBN(self):
         """
         Runs an optimization routine to find the FIMS parameters that minimize 
@@ -364,19 +434,21 @@ class FIMS_Optimizer:
                 fun=self._testObjective,
                 x0=initialGuess,
                 args=(inputList),
-                method='Nelder-Mead',
+                method='COBYQA',
+                constraints = self._getConstraints(),
                 callback=self._checkConvergence,
                 bounds=optimizerBounds,
-            )
+                )
         else:
             result = minimize(
                 fun=self._IBNObjective,
-                x0=initialGuess,
                 args=(inputList),
-                method='Nelder-Mead',
-                callback=self._checkConvergence,
+                x0=initialGuess,
+                method='COBYQA',
+                constraints = self._getConstraints(),
                 bounds=optimizerBounds,
-            )
+                callback=self._checkConvergence,
+                )
 
         print('\n*************** Optimization Complete ***************')
 
@@ -396,6 +468,4 @@ class FIMS_Optimizer:
         self.simFIMS.resetParam()
         
         return resultVals
-
-#***********************************************************************************#
 

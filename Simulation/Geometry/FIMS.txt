@@ -38,7 +38,7 @@ topSiO2 = padBase + thicknessSiO2;
 //  Primary region of interest is central hole/pad,
 //  so elements at corner can be larger.
 gridElm = (halfPitch - holeRadius)/10;
-centerHoleElm = gridThickness/3;
+centerHoleElm = gridThickness/4;
 cornerHoleElm = holeRadius/5;
 centerPadElm = gridThickness;
 cornerPadElm = padLength/2;
