@@ -203,7 +203,7 @@ class FIMS_Optimizer:
                 print(f'{element}: {value}')
         print('********************************\n')
             
-        runNumber = self.runForOptimizer()
+        runNumber = self.simFIMS.runForOptimizer()
         
         print('********************************\n')
         print('Time to run avalanche sim: ', timeEnd - timeStart)
