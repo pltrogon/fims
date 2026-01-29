@@ -202,8 +202,9 @@ class FIMS_Optimizer:
             if element in activeParams:
                 print(f'{element}: {value}')
         print('********************************\n')
-            
+        timeStart = time.time()    
         runNumber = self.simFIMS.runForOptimizer()
+        timeEnd = time.time()
         
         print('********************************\n')
         print('Time to run avalanche sim: ', timeEnd - timeStart)
