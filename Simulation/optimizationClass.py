@@ -33,8 +33,6 @@ class FIMS_Optimizer:
 
     Methods defined in FIMS_Optimizer:
         _checkParameters
-        _checkGeometry      <------Renamed (depreciated)
-        _getMinField
         _getIBN
         _IBNObjective
         _testObjective
@@ -82,7 +80,21 @@ class FIMS_Optimizer:
 
 #***********************************************************************************#
     def _checkParameters(self):
-        """Checks the input parameters to make sure they have the correct format."""
+        """
+        Checks the input parameters to make sure they have the correct format. The
+        input should be a list of lists, where each sub-list should contain the 
+        name of a valid parameter to be adjusted, the minimum value for that
+        parameter, and the maximum value for it. If the parameter is not a valid
+        option, or if the format is not a list of lists, or if the maximum value is
+        less than the minimum, then the method will raise an error. Otherwise, it
+        will do nothing.
+        
+        Valid parameter names: holeRadius, gridStandoff, padLength, and pitch
+        
+        Args: none
+        
+        returns: None
+        """
         
         givenParam = self.params.copy()
         allowedParams = ['holeRadius', 'gridStandoff', 'padLength', 'pitch']
@@ -96,91 +108,24 @@ class FIMS_Optimizer:
         
         for element in givenParam:
             if not isinstance(element, list):
-                raise ValueError('Error - Parameter element not a list.')
+                raise ValueError('Error - Primary list elements not lists.')
                 
             if len(element) != 3:
-                raise ValueError('Error - Parameter element does not have three entries.')
+                raise ValueError('Error - Secondary list is missing an index. '
+                                    'List should have the form: parameter name, '
+                                    'min value, max value')
                 
             if element[1] >= element[2]:
-                raise ValueError('Error - Minimum bound is not less than maximum bound.')
+                raise ValueError('Error - Minimum bound is greater than maximum bound.')
                 
             if element[0] not in allowedParams:
-                raise ValueError('Error - Parameter element is not a valid parameter.')
+                raise ValueError('Error - Parameter name is not valid.\n'
+                                    'Options are: holeRadius, gridStandoff, '
+                                    'padLength, and pitch.')
 
         return 
 
 #***********************************************************************************#
-    def _checkGeometry(self):
-        """
-        TODO: depreciated
-        Checks the geometry parameters to ensure the layout is valid (IE, pads do not
-        overlap, holes do not expose the pillars, etc).
-        
-        Returns:
-            False if geometry is invalid
-            True otherwise
-        """
-        
-        radius = self.simFIMS.param['holeRadius']
-        pitch = self.simFIMS.param['pitch']
-        pad = self.simFIMS.param['padLength']
-        stand = self.simFIMS.param['gridStandoff']
-        pillar = self.simFIMS.param['pillarRadius']
-        insulator = self.simFIMS.param['thicknessSiO2']
-        
-        if pillar + 2*radius > pitch:
-            return False
-        
-        elif (pad*0.866 + pillar)*2 > pitch:
-            return False
-        
-        elif insulator + 2 > stand: #2 chosen as an arbitrary buffer distance
-            return False
-        
-        else:
-            return True
-
-#***********************************************************************************#    
-    def _getMinField(self):
-        """
-        Wrapper for minField functions
-        """
-        savedParams = self.simFIMS.param.copy()
-        
-        #Calculate an initial guess for the minimum field to use as a baseline
-        estimatedMinField = self.simFIMS._calcMinField()
-        self.simFIMS.param['fieldRatio'] = estimatedMinField
-        
-        # Get the minimum field ratio for at least 95% detection efficiency
-        timeStart = time.time()
-        minField = self.simFIMS.findFieldForEfficiency(targetEfficiency=.95, threshold=10)
-        if minField < 0:
-            raise ValueError('Failed to find minimum field (efficiency).')
-        timeEnd = time.time()
-        
-        print('********************************\n')
-        print('Time to find min field for efficiency: ', timeEnd - timeStart)
-        print('********************************\n')
-
-        # Get the minimum field ratio for 100% field transparency
-        timeStart = time.time()
-        if not self._checkTransparency:
-            minField = self.simFIMS.findFieldForTransparency(False)
-            if minField < 0:
-                raise ValueError('Failed to find minimum field (transparency).')
-        timeEnd = time.time()
-        
-        print('********************************\n')
-        print('Time to find min field for transparency: ', timeEnd - timeStart)
-        print('********************************\n')
-        
-        self.simFIMS.param = savedParams
-        self.simFIMS.param['fieldRatio'] = minField
-        self.simFIMS._writeParam()
-
-        return minField
-
-#***********************************************************************************#    
     def _getIBN(self):
         """
         Orchestrates the process of running a simulation and calculating
@@ -193,7 +138,6 @@ class FIMS_Optimizer:
             float: The calculated Ion Backflow Number.
         """
         #Acquire list of parameters and the names of the active parameters
-        saveParam = self.simFIMS.param.copy()
         activeParams = [line[0] for line in self.params]
         
         print('\n********************************')
@@ -207,7 +151,7 @@ class FIMS_Optimizer:
         timeEnd = time.time()
         
         print('********************************\n')
-        print('Time to run avalanche sim: ', timeEnd - timeStart)
+        print('Time to run sim: ', timeEnd - timeStart)
         print('********************************\n')
 
         #Get the IBN
@@ -236,17 +180,8 @@ class FIMS_Optimizer:
         for i, inParam in enumerate(inputList):
             self.simFIMS.param[inParam] = optimizerParam[i]
         
-        self.simFIMS._writeParam()
-        
-        #Check parameters to ensure a valid geometry
-        if self._checkGeometry():    
-            # Get the Ion Backflow Number
-            resultIBN = self._getIBN()
-        else:
-            print('Bad Geometry. Skipping Test')
-            resultIBN = 1000
+        resultIBN = self._getIBN()
             
-
         #Output to monitor convergence
         with open('log/logOptimizer.txt', 'a') as log:
             for line in optimizerParam:
@@ -272,10 +207,10 @@ class FIMS_Optimizer:
         # Unpack the optimizer array into the simulation's parameter dictionary.
         for i, inParam in enumerate(inputList):
             self.simFIMS.param[inParam] = optimizerParam[i]
-        radius = self.simFIMS._getParam('holeRadius')
-        padLength = self.simFIMS._getParam('padLength')
-        standoff = self.simFIMS._getParam('gridStandoff')
-        pitch = self.simFIMS._getParam('pitch')
+        radius = self.simFIMS.param['holeRadius']
+        padLength = self.simFIMS.param['padLength']
+        standoff = self.simFIMS.param['gridStandoff']
+        pitch = self.simFIMS.param['pitch']
         
         #Calculate dummy IBN value
         IBN = (1
