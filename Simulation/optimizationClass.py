@@ -505,15 +505,7 @@ def _getIBNALT(self):
             [line[2] for line in activeParameters]
         )
         
-        initialGuess = np.array([self.simFIMS.param[p] for p in inputList])
-
-        self._lastOptimizerParams = None
-        self._lastOptimizerResults = (None, None, None)
-
-        constraints = [
-            NonLinearConstraint(lambda x: self._optimizerMaster(x, inputList)[1], 0.95, 1.01),
-            NonLinearConstraint(lambda x: self._optimizerMaster(x, inputList)[2], 0.99, 1.01)
-        ]
+        initialGuess = np.array([self.simFIMS.param[p] for p in inputList]) 
 
         print('Beginning optimization...')
         result = minimize(
@@ -523,7 +515,7 @@ def _getIBNALT(self):
             method='COBYQA',
             callback=self._checkConvergence,
             bounds=optimizerBounds,
-            constraints=constraints
+            constraints=_getConstraintsAlt()
         )
 
         print('\n*************** Optimization Complete ***************')
@@ -560,3 +552,51 @@ def _getIBNALT(self):
             self._lastOptimizerParams = np.copy(x)
         
         return self._lastOptimizerResults
+        
+#***********************************************************************************#
+    def _getConstraintsAlt(self):
+        """
+        Creates a dictionary of constraints to be used by the optimizer. These
+        constraints prevent overlapping geometry.
+        
+        Note: Assumes that all four possible input parameters are being used.
+        
+        returns: dictionary of constraints
+        """
+        givenParams = []
+        for list in self.params.copy():
+            givenParams.append(list[0])
+        
+        radNum = givenParams.index('holeRadius')
+        standNum = givenParams.index('gridStandoff')
+        padNum = givenParams.index('padLength')
+        pitchNum = givenParams.index('pitch')
+        
+        pillar = self.simFIMS.param['pillarRadius']
+        SiO2 = self.simFIMS.param['thicknessSiO2']
+        
+        #matrix elements for the constrain equations
+        linCon1 = [0,0,0,0]
+        linCon2 = [0,0,0,0]
+        linCon3 = [0,0,0,0]
+        
+        linCon1[radNum] = -2
+        linCon1[pitchNum] = 1
+        
+        linCon2[pitchNum] = 1
+        linCon2[padNum] = -1.732
+        
+        linCon3[standNum] = 1
+        
+        lowBound = [pillar, 2*pillar, SiO2+2]
+        upBound = [np.inf, np.inf, np.inf]
+        
+        #Constraints formatted for methods other than SLSQP
+        constraints = [
+                        LinearConstraint([linCon1, linCon2, linCon3], lowBound, upBound),
+                        NonLinearConstraint(lambda x: self._optimizerMaster(x, inputList)[1], 0.95, 1.01),
+                        NonLinearConstraint(lambda x: self._optimizerMaster(x, inputList)[2], 0.99, 1.01)
+                        ]
+        
+        return constraints
+
