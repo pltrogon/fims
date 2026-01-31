@@ -25,11 +25,30 @@ class RepeatedInputs(Warning):
 
 class FIMS_Optimizer:
     """
-    ===============================================
-    TODO - THIS CLASS NEEDS A DESCRIPTIVE DOCSTRING
-    ===============================================
-
     Class representing the FIMS Optimization.
+    
+    Initializes to a set of parameters given in the form of a list of lists. The
+    Input is then checked to verify the format and validity. For specific details
+    on this check, see the docstring for _checkParameters below.
+    
+    The primary function of this class it to minimize the Ion backflow number (IBN)
+    of an externally defined geometry. The process relies on multiple functions defined
+    in the FIMS simulationClass.py file. 
+    
+    The process for minimization is as follows:
+        0. check if debug mode is active. If not, proceed
+        1. verify input parameters
+        2. get initial guess from simulationClass.py default parameters
+        3. define the bounds for the optimizer based on the user input
+        4. define the constraints based on the current parameters
+        5. get the minimum field from simulationClass.py
+        6. simulate a garfield++ avalanche via simulationClass.py
+        7. check for convergence (built-in minimizer criteria + compare parameter values to previous trials)
+        8. If not converged, change the parameter values and go back to step 4
+        9. If it did converge, print the optimized values along with the IBN of that configuration.
+    
+    All trials along with their respective values and results are exported to a log file titled
+    "log/logOptimizer.txt".
 
     Methods defined in FIMS_Optimizer:
         _checkParameters
@@ -39,7 +58,6 @@ class FIMS_Optimizer:
         _getConstraints     <-------New
         _checkConvergence
         optimizeForIBN
-
     """
 
 #***********************************************************************************#
@@ -515,7 +533,7 @@ def _getIBNALT(self):
             method='COBYQA',
             callback=self._checkConvergence,
             bounds=optimizerBounds,
-            constraints=_getConstraintsAlt()
+            constraints=self._getConstraintsAlt(inputList)
         )
 
         print('\n*************** Optimization Complete ***************')
@@ -554,7 +572,7 @@ def _getIBNALT(self):
         return self._lastOptimizerResults
         
 #***********************************************************************************#
-    def _getConstraintsAlt(self):
+    def _getConstraintsAlt(self, inputList):
         """
         Creates a dictionary of constraints to be used by the optimizer. These
         constraints prevent overlapping geometry.
@@ -563,22 +581,20 @@ def _getIBNALT(self):
         
         returns: dictionary of constraints
         """
-        givenParams = []
-        for list in self.params.copy():
-            givenParams.append(list[0])
         
-        radNum = givenParams.index('holeRadius')
-        standNum = givenParams.index('gridStandoff')
-        padNum = givenParams.index('padLength')
-        pitchNum = givenParams.index('pitch')
+        radNum = inputList.index('holeRadius')
+        standNum = inputList.index('gridStandoff')
+        padNum = inputList.index('padLength')
+        pitchNum = inputList.index('pitch')
+        field = inputList.index('fieldRatio')
         
         pillar = self.simFIMS.param['pillarRadius']
         SiO2 = self.simFIMS.param['thicknessSiO2']
         
-        #matrix elements for the constrain equations
-        linCon1 = [0,0,0,0]
-        linCon2 = [0,0,0,0]
-        linCon3 = [0,0,0,0]
+        #matrix elements for the linear constraint equations
+        linCon1 = [0,0,0,0,0]
+        linCon2 = [0,0,0,0,0]
+        linCon3 = [0,0,0,0,0]
         
         linCon1[radNum] = -2
         linCon1[pitchNum] = 1
@@ -591,11 +607,23 @@ def _getIBNALT(self):
         lowBound = [pillar, 2*pillar, SiO2+2]
         upBound = [np.inf, np.inf, np.inf]
         
+        #matrix elements for non-linear constraint equations
+        nonLinCon = [
+                    lambda x: self.optimizerMaster(x, inputList)[1]
+                    lambda x: self.optimizerMaster(x, inputList)[2]
+                    ]
+        
+        nonLinLowBound = [0.95, 0.99]
+        nonLinUpBound = [1.01, 1.01]
+        
+        
         #Constraints formatted for methods other than SLSQP
         constraints = [
                         LinearConstraint([linCon1, linCon2, linCon3], lowBound, upBound),
                         NonLinearConstraint(lambda x: self._optimizerMaster(x, inputList)[1], 0.95, 1.01),
                         NonLinearConstraint(lambda x: self._optimizerMaster(x, inputList)[2], 0.99, 1.01)
+                        #NonLinearConstraint([nonLinCon1, nonLinCon2], nonLinLowBound, nonLinUpBound)
+                        #TODO: Is this equivalent to the above two constraints?
                         ]
         
         return constraints
