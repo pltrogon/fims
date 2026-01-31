@@ -431,7 +431,7 @@ class FIMS_Optimizer:
 #***********************************************************************************#
 #*****************Methods Using Field Ratio as a Constraint*************************#
 #***********************************************************************************#
-def _getIBNALT(self):
+    def _getIBNALT(self):
         """
         Orchestrates the process of running a simulation and calculating
         the Ion Backflow Number (IBN) from the results.
@@ -609,7 +609,7 @@ def _getIBNALT(self):
         
         #matrix elements for non-linear constraint equations
         nonLinCon = [
-                    lambda x: self.optimizerMaster(x, inputList)[1]
+                    lambda x: self.optimizerMaster(x, inputList)[1],
                     lambda x: self.optimizerMaster(x, inputList)[2]
                     ]
         

@@ -1160,7 +1160,7 @@ class FIMS_Simulation:
         return newField
 
 #***********************************************************************************#
-    def _findFieldForEfficiency(self, targetEfficiency=.95, threshold=10):
+    def _findFieldForEfficiency(self, targetEfficiency=.95, threshold=10): #TODO: can the two field finders be combined into a single method?
         """
         Performs an iterative search to find the minimum Electric Field Ratio 
         required to achieve a specified detection efficiency for electron avalanches.
