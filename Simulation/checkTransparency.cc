@@ -244,13 +244,44 @@ int main(int argc, char * argv[]) {
   double yWidth = rangeScale*pitch/2.;
 
   // ***** Generate field line start points ***** //
+  
+  /*
   //Lines generated radially from the center to corner of unit cell
   //The x-direction is the long axis of the geometry. 
   for(int i = 0; i < numFieldLine; i++){
     xStart.push_back(padLength*i/(numFieldLine-1));
     yStart.push_back(0.);
   }
-  
+  */
+
+  //Rejection sampled points near the edge of the unit cell
+  double sampleWidth = .95; //Reject the inner portion of the unit cell
+  double halfPitch = pitch/2.;
+
+  while(xStart.size() < numFieldLine){
+
+    // Generate random point in rectangle defined by padLength (x) and halfPitch (y)
+    double sampleX =  ((double)std::rand()/RAND_MAX)*padLength;
+    double sampleY =  ((double)std::rand()/RAND_MAX)*halfPitch;
+
+    //Determine if point is in unit cell - Skip if not
+    double unitY = (-2.*halfPitch/padLength) * (sampleX-padLength);
+    if(sampleY > unitY){
+      continue;
+    }
+
+    //Determine if point is near edge of cell - Skip if not
+    double checkY = sampleWidth*halfPitch;
+    double edgeY = (-2.*halfPitch/padLength) * (sampleX-sampleWidth*padLength);
+    if((sampleY < checkY) && (sampleY < edgeY)){
+      continue;
+    }
+
+    xStart.push_back(sampleX);
+    yStart.push_back(sampleY);
+  }
+
+
   // ***** Calculate field Lines ***** //
   std::vector<std::array<float, 3> > fieldLines;
   int totalFieldLines = xStart.size();
