@@ -161,6 +161,7 @@ class FIMS_Optimizer:
             float: The calculated Ion Backflow Number.
         """
         #Acquire list of parameters and the names of the active parameters
+        saveParam = self.simFIMS.param.copy()
         activeParams = [line[0] for line in self.params]
         
         print('\n********************************')

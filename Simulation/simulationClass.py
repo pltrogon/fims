@@ -86,7 +86,7 @@ class FIMS_Simulation:
         _runGetEfficiency
         _readEfficiencyFile
         findFieldForEfficiency
-        findFieldForTransparency <------ Changed from findMinField
+        findFieldForTransparency
     """
 
 #***********************************************************************************#
@@ -1057,7 +1057,7 @@ class FIMS_Simulation:
 
         Args:
             fields (np.array): Numpy array of the field ratio. Has form: [current, previous]
-            valus (np.array): Numpy array of the values. Has form: [current, previous, target]
+            values (np.array): Numpy array of the values. Has form: [current, previous, target]
             valuesErr (np.array): Optional. Array of errors in the values. Has form: [currentError, previousError]
             damping (float): Damping factor for the secant method to avoid too large of steps.
 
@@ -1085,8 +1085,8 @@ class FIMS_Simulation:
 
 
         if abs(effDiff) < 0.001:
-                print(f'Warning: Slope near zero. Using heuristic step of 1.')
-                return curField+1
+                print(f'Warning: Slope near zero. Using heuristic step of 2.')
+                return curField + 2
 
         fieldStep = damping*targetDiff*fieldDiff/effDiff
 
@@ -1096,10 +1096,10 @@ class FIMS_Simulation:
             print(f'Warning: Step size limited to {stepSizeLimit}.')
             newField = curField+stepSizeLimit
 
-        #Ensure new field is at least 1% larger than the current field
-        elif fieldStep/curField < .01:
-            print(f'Warning: Field step small. Using heuristic step of 1%.')
-            newField = curField*1.01
+        #Ensure new field is at least 2
+        elif fieldStep < 2:
+            print(f'Warning: Field step small. Using heuristic step of 2.')
+            newField = curField + 2
 
         #Round step up to nearest integer
         else:
@@ -1107,7 +1107,6 @@ class FIMS_Simulation:
             newField = curField+roundedStep
 
         return newField
-    
 
 #***********************************************************************************#
     def _getNextField(self, iterNo, valueAtField, targetValue):
@@ -1266,9 +1265,14 @@ class FIMS_Simulation:
         field transparency and 95% efficiency.
 
         Calculation is based off of exponential fits to simulated data.
-
+        
+        Note: parameters are assumed to be completely independent of all other 
+        parameters, which is not strictly true. However, it is usually sufficient 
+        for the purposes of an initial guess.
+        
         Returns:
-            float: Numerical solution to the minimum field for 100% transparency.
+            float: Numerical solution to the minimum field for 100% transparency
+            and 95% efficiency.
         """
         #Get geometry variables
         radius = self._getParam('holeRadius')
@@ -1278,30 +1282,41 @@ class FIMS_Simulation:
 
         gridArea = pitch**2*math.sqrt(3)/2
         holeArea = math.pi*radius**2
-        
+
         #Convert to dimensionless variables
         optTrans = holeArea/gridArea
         standoffRatio = standoff/pad
         padRatio = pad/pitch
-        
+
         #Input parameters into exponential fit equations
         '''Values come from exponential fits to data - 
             grid standoff ratio, pad length ratio, and 
             optical transparency vs minField.
           Results are then added together.'''
-        
+
         #Minimum field for 100% transparency
         radialMinField = 570.580*np.exp(-12.670*optTrans)
         standoffMinField = 26.85*np.exp(-4.46*standoffRatio)
         padMinField = 143.84*np.exp(-15.17*padRatio)
         
-        #TODO for James - should this not be max(minFields)?
-        minField = radialMinField + standoffMinField + padMinField + 3
+        minFieldTrans = radialMinField + standoffMinField + padMinField + 3
 
-        #Round down to nearest integer
-        minFieldRounded = math.floor(minField)
+        #Minimum field for 95% efficiency
         
-        return minFieldRounded
+        #Ar+CO2 (depreciated)
+        #minFieldEff = 53.21*np.exp(-0.38*standoffRatio) + 23.47  #Ar+Co2
+
+        #T2K gas
+        padEffField = 371.4*np.exp(-0.16*pad)
+        standEffField = 190.6*np.exp(-0.02*standoff)
+
+        minFieldEff = padEffField + standEffField + 50
+
+        #Choose the larger of the two fields so that both conditions are
+        #satisfied simultaneously.
+        minField = max(minFieldTrans, minFieldEff)
+
+        return minField
 
 #***********************************************************************************#
     def _findFieldForTransparency(self, targetTransparency=0.99):
@@ -1390,7 +1405,7 @@ class FIMS_Simulation:
         return finalField
 
 #***********************************************************************************#
-    def findMinFieldRatio(self, transMinStep = 1.1):
+    def findMinFieldRatio(self):
         """
         Determines the minimum Electric Field Ratio required to achieve:   
         - 95% detection efficiency, and
@@ -1410,8 +1425,7 @@ class FIMS_Simulation:
         print(f'Finding minimum field ratio for geometry with drift field: {driftField} V/cm')
 
         #Choose initial field ratio guess
-        #minFieldGuess = self._calcMinField()#TODO - This function can be made a lot better
-        minFieldGuess = 175
+        minFieldGuess = self._calcMinField()
         self.param['fieldRatio'] = minFieldGuess
         print(f'\tInitial field ratio guess: {minFieldGuess}')
 
@@ -1421,24 +1435,28 @@ class FIMS_Simulation:
         ## Determine minimum field ratio for conditions
         # 95% efficiency
         efficiencyField = self._findFieldForEfficiency()
+        print('************************************************************')
         print(f'\tMinimum field ratio for 95% efficiency: {efficiencyField}')
-
+        print('************************************************************')
+        
         # 100% transparency
-        transparencyField = self._findFieldForTransparency(transMinStep)
+        transparencyField = self._findFieldForTransparency()
+        print('************************************************************')
         print(f'\tMinimum field ratio for 100% transparency: {transparencyField}')
-
+        print('************************************************************')
+        
         # Set final field ratio to the maximum of the two found
         finalField = max(efficiencyField, transparencyField)
         self.param['fieldRatio'] = finalField
         print(f'Solution for minimum field ratio: {finalField}')
-
+        print('************************************************************')
+        
         return finalField
     
-
 #***********************************************************************************#
     def _generateGeometry(self):
         """
-        Generates the finite-element mesh of the simulation geometry using Gmsh.
+        Generates the finite-element mesh of the simulation geometry using gmsh.
         """
 
         self._checkParam()

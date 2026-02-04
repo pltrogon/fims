@@ -293,7 +293,7 @@ int main(int argc, char * argv[]) {
 
   std::cout << "Done " << totalFieldLines << " field lines; Determining transparency." << "\n";
 
-  //Determine transparency - Binomail Statistics
+  //Determine transparency - Binomial Statistics
   //transparency = (1.*numAtPad) / (1.*numFieldLine);
   //transparencyErr = sqrt(transparency*(1-transparency)/numFieldLine);
 
@@ -301,7 +301,7 @@ int main(int argc, char * argv[]) {
   double success = 1.*numAtPad;
   double total = 1.*numFieldLine;
 
-  transparency = (success + 1.) / (total + 2.);
+  transparency = (success + 1.) / (total + 2.); //TODO this results in a maximum of 99.5%. Is that correct?
   varience = ((success+1.)*(success+2.))/((total+2.)*(total+3.)) - transparency*transparency;
   transparencyErr = std::sqrt(varience);
 
