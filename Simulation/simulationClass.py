@@ -205,8 +205,8 @@ class FIMS_Simulation:
         )
         
         if not math.isclose(totalComp, 1.0, rel_tol=1e-3):
-            raise ValueError(f'Gas composition percentages must sum "
-                                "to 1.0. Current sum: {totalComp}')
+            raise ValueError(f'Gas composition percentages must sum '
+                                f'to 1.0. Current sum: {totalComp}')
         
         return
 
@@ -240,8 +240,8 @@ class FIMS_Simulation:
             with open(filename, 'r') as file:
                 garfieldPath = file.read().strip()
                 if not os.path.exists(garfieldPath):
-                    print(f"Error: File 'setupGarfield.sh' not found "
-                            "at '{garfieldPath}'.")
+                    print("Error: File 'setupGarfield.sh' not found "
+                            f"at '{garfieldPath}'.")
                     return None
     
         except FileNotFoundError:
@@ -260,9 +260,10 @@ class FIMS_Simulation:
         """
         Initializes Garfield++ and creates an avalanche executable.
         
-        Reads the Garfiled++ source path, and ensures a log and build directory.
-        Compiles the executable using cmake and make.
-        Initializes a simulation run counter if it does not already exist.
+        Reads the Garfiled++ source path, and ensures a log and build
+        directory. Compiles the executable using cmake and make.
+        Initializes a simulation run counter if it does not already 
+        exist.
     
         Note: If a segmentation fault occurs, it is most likely that the
               Garfield++ library is not sourced correctly.
@@ -1053,15 +1054,10 @@ class FIMS_Simulation:
         constEffField = 50
         
         #Minimum field for 100% transparency
-        minFieldTrans = radialMinField
-                        + standoffMinField
-                        + padMinField
-                        + 3
+        minFieldTrans = radialMinField + standoffMinField + padMinField + 3
         
         #Minimum field for 95% efficiency
-        minFieldEff = padEffField
-                        + standEffField
-                        + constEffField
+        minFieldEff = padEffField + standEffField + constEffField
         
         #Choose the larger of the two fields so that both 
         #conditions are satisfied simultaneously.
