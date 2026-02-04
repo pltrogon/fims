@@ -294,16 +294,19 @@ int main(int argc, char * argv[]) {
   std::cout << "Done " << totalFieldLines << " field lines; Determining transparency." << "\n";
 
   //Determine transparency - Binomial Statistics
-  //transparency = (1.*numAtPad) / (1.*numFieldLine);
-  //transparencyErr = sqrt(transparency*(1-transparency)/numFieldLine);
+  transparency = (1.*numAtPad) / (1.*numFieldLine);
+  transparencyErr = sqrt(transparency*(1-transparency)/numFieldLine);
 
-  //Determine transparency - Baysian statistics
-  double success = 1.*numAtPad;
-  double total = 1.*numFieldLine;
+  //TODO: Tanner- Since our results are independent of prior results, exact, and small 
+  //in sample size, it seems to me that binomial statistics would be the better choice.
+  
+  //Determine transparency - Bayesian statistics
+  //double success = 1.*numAtPad;
+  //double total = 1.*numFieldLine;
 
-  transparency = (success + 1.) / (total + 2.); //TODO this results in a maximum of 99.5%. Is that correct?
-  varience = ((success+1.)*(success+2.))/((total+2.)*(total+3.)) - transparency*transparency;
-  transparencyErr = std::sqrt(varience);
+  //transparency = (success + 1.) / (total + 2.);
+  //varience = ((success+1.)*(success+2.))/((total+2.)*(total+3.)) - transparency*transparency;
+  //transparencyErr = std::sqrt(varience);
 
 
   std::cout << "Transparency is " << transparency <<  "." << std::endl;

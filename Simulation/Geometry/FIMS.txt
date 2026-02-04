@@ -40,9 +40,10 @@ topSiO2 = padBase + thicknessSiO2;
 gridElm = (halfPitch - holeRadius)/8;
 centerHoleElm = gridThickness/3;
 cornerHoleElm = holeRadius/5;
-centerPadElm = thicknessSiO2/4;
+centerPadElm = gridThickness;
+centerDiElm = thicknessSiO2/3;
 cornerPadElm = padLength/2;
-dielectricElm = thicknessSiO2/2;
+dielectricElm = thicknessSiO2; //TODO: verify that this isn't too large
 pillarElm = pillarRadius/2;
 cathodeElm = cathodeHeight/20;
 
@@ -268,9 +269,9 @@ dielectricBy = newp; Point(dielectricBy) = {0, yMax, padBase, dielectricElm};
 dielectricTx = newp; Point(dielectricTx) = {xMax, 0, topSiO2, dielectricElm};
 dielectricTy = newp; Point(dielectricTy) = {0, yMax, topSiO2, dielectricElm};
 
-dielectricTCentral0 = newp; Point(dielectricTCentral0) = {padLength, 0, topSiO2, centerPadElm};
-dielectricTCentral1 = newp; Point(dielectricTCentral1) = {halfPad, padInRadius, topSiO2, centerPadElm};
-dielectricTCentral2 = newp; Point(dielectricTCentral2) = {0, padInRadius, topSiO2, centerPadElm};
+dielectricTCentral0 = newp; Point(dielectricTCentral0) = {padLength, 0, topSiO2, centerDiElm};
+dielectricTCentral1 = newp; Point(dielectricTCentral1) = {halfPad, padInRadius, topSiO2, centerDiElm};
+dielectricTCentral2 = newp; Point(dielectricTCentral2) = {0, padInRadius, topSiO2, centerDiElm};
 
 dielectricTCorner0 = newp; Point(dielectricTCorner0) = {xMax - padLength, yMax, topSiO2, cornerPadElm};
 dielectricTCorner1 = newp; Point(dielectricTCorner1) = {xMax - halfPad, yMax - padInRadius, topSiO2, cornerPadElm};
