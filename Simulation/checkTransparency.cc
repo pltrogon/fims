@@ -257,22 +257,23 @@ int main(int argc, char * argv[]) {
   //Rejection sampled points near the edge of the unit cell
   double sampleWidth = .95; //Reject the inner portion of the unit cell
   double halfPitch = pitch/2.;
+  double cellLength = halfPitch*2./std::sqrt(3.);
 
   while(xStart.size() < numFieldLine){
 
-    // Generate random point in rectangle defined by padLength (x) and halfPitch (y)
-    double sampleX =  ((double)std::rand()/RAND_MAX)*padLength;
+    // Generate random point in rectangle defined by cellLength (x) and halfPitch (y)
+    double sampleX =  ((double)std::rand()/RAND_MAX)*cellLength;
     double sampleY =  ((double)std::rand()/RAND_MAX)*halfPitch;
 
     //Determine if point is in unit cell - Skip if not
-    double unitY = (-2.*halfPitch/padLength) * (sampleX-padLength);
+    double unitY = (-2.*halfPitch/cellLength) * (sampleX-cellLength);
     if(sampleY > unitY){
       continue;
     }
 
     //Determine if point is near edge of cell - Skip if not
     double checkY = sampleWidth*halfPitch;
-    double edgeY = (-2.*halfPitch/padLength) * (sampleX-sampleWidth*padLength);
+    double edgeY = (-2.*halfPitch/cellLength) * (sampleX-sampleWidth*cellLength);
     if((sampleY < checkY) && (sampleY < edgeY)){
       continue;
     }
