@@ -316,8 +316,8 @@ class FIMS_Optimizer:
         five times in a row without change (within 1e-3).
         """
         data = []
-        num = 0
         numOfRepeatedParams = 0
+        precision = 2
         
         #Ensure that at least 5 iterations have occurred before terminating
         if self.iterationNumber < 5:
@@ -333,8 +333,8 @@ class FIMS_Optimizer:
         #Get the data from the previous 4 runs
         recentData = fullData[-4:]
         
-        #Split data into separate, readable lists and determine the number of
-        #input parameters
+        #Split data into separate, readable lists and determine 
+        #the number of input parameters
         for line in recentData:
             rawData = map(float, line.split())
             data.append(list(rawData))
@@ -343,22 +343,28 @@ class FIMS_Optimizer:
         #-3 to remove the IBN, efficiency, and transparency
         #numOfParams = len(data[0]) - 3 #TODO: check Tanner's change
         
-        #Calculate the number of input parameters that have not changed
-        while num <= numOfParams:
+        #Loop through each parameter one at a time
+        paramID = 0
+        while paramID <= numOfParams:
             singleParam = []
-            for line in data:
-                paramValue = round(line[num], 2)
+            
+            #isolate and round the parameter value
+            for nums in data:
+                paramValue = round(nums[paramID], precision)
                 singleParam.append(paramValue)
-            if singleParam.count(singleParam[0]) == len(singleParam):
+            
+            #check if the last 4 trials are identical
+            if singleParam.count(singleParam[-1]) == len(singleParam):
                 numOfRepeatedParams += 1
-            num += 1
+            
+            paramID += 1
         
         #Check the convergence condition
         if numOfRepeatedParams == numOfParams:
             print('Warning: series of identical input parameters detected\n'
             'Terminating optimization...')
             raise StopIteration
-            
+        
         return
 
 #***********************************************************************************#
@@ -395,9 +401,11 @@ class FIMS_Optimizer:
                 x0=initialGuess,
                 args=(inputList),
                 method='COBYQA',
+                initial_tr_radius = 5.0,   #TODO: playtest this setting
                 constraints = self._getConstraints(),
                 callback=self._checkConvergence,
                 bounds=optimizerBounds,
+                scale = True,
                 )
         else:
             result = minimize(
