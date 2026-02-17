@@ -254,8 +254,9 @@ int main(int argc, char * argv[]) {
   }
   */
 
+
   //Rejection sampled points near the edge of the unit cell
-  double sampleWidth = .95; //Reject the inner portion of the unit cell
+  double sampleWidth = std::sqrt(0.95); //Reject the inner portion of the unit cell
   double halfPitch = pitch/2.;
   double cellLength = halfPitch*2./std::sqrt(3.);
 

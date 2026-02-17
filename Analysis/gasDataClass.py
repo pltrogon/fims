@@ -631,7 +631,7 @@ class magboltzSimulation:
         if fig is None and axes is None:
             newPlot = True
             fig, axes = plt.subplots(1, 2, figsize=(16, 8))
-            fig.suptitle(f'Magboltz Calculations')
+            fig.suptitle(f'MagBoltz Calculations')
         else:
             newPlot = False
 
@@ -698,7 +698,7 @@ class magboltzSimulation:
                 inax.set_xscale('log')
                 inax.grid()
 
-            velocity.set_title('Electron Drift Velocity')
+            velocity.set_title('Drift Velocity')
             velocity.set_ylabel('Drift Velocity (um/ns)')
             
             diffusion.set_title('Diffusion Coefficients')
