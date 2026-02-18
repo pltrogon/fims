@@ -38,10 +38,10 @@ Solver 1
   Optimize Bandwidth = True
   Steady State Convergence Tolerance = 1.0e-5
   Nonlinear System Convergence Tolerance = 1.0e-7
-  Nonlinear System Max Iterations = 400
+  Nonlinear System Max Iterations = 500
   Nonlinear System Newton After Iterations = 3
   Nonlinear System Newton After Tolerance = 1.0e-3
-  Nonlinear System Relaxation Factor = 1.0
+  Nonlinear System Relaxation Factor = 1.1
   Linear System Solver = Iterative
   Linear System Iterative Method = BiCGStab
   Linear System Max Iterations = 500
@@ -131,13 +131,13 @@ End
 Boundary Condition 1
   Target Boundaries(1) = 1
   Name = "Cathode"
-	Potential = -116.46600000000001
+	Potential = -104.98600000000002
 End
 
 Boundary Condition 2
   Target Boundaries(1) = 2
   Name = "Grid"
-	Potential = -110.88000000000001
+	Potential = -100.80000000000001
 End
 
 Boundary Condition 3

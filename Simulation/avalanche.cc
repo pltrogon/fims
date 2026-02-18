@@ -14,6 +14,7 @@
  *        electronDataTree
  *        ionDataTree
  *        electronTrackDataTree
+ *        ionTrackDataTree  (WIP)
  *        signalDataTree
  * 
  * Tanner Polischuk & James Harrison IV
@@ -559,6 +560,7 @@ int main(int argc, char * argv[]) {
     AvalancheMicroscopic* avalancheE = nullptr;
     AvalancheMC* driftIon = nullptr;
     ViewDrift* viewElectronDrift = nullptr;
+    ViewDrift* viewIonDrift = nullptr;
     TFile* parallelDataFile = nullptr;
     std::string parallelFilename;
 
@@ -579,6 +581,7 @@ int main(int argc, char * argv[]) {
       avalancheE = new AvalancheMicroscopic;
       driftIon = new AvalancheMC;
       viewElectronDrift = new ViewDrift();
+      viewIonDrift = new ViewDrift();
 
       //Link objects
       parallelFieldFIMS->SetGas(gasFIMS);
@@ -600,13 +603,21 @@ int main(int argc, char * argv[]) {
 
       driftIon->SetSensor(parallelSensorFIMS);
       driftIon->SetDistanceSteps(MICRONTOCM/10.);
+      driftIon->EnableDriftLines(true);
+      
       viewElectronDrift->SetArea(
         xBoundary[0], yBoundary[0], zBoundary[0], 
         xBoundary[1], yBoundary[1], zBoundary[1]
       );
+      viewIonDrift->SetArea(
+        xBoundary[0], yBoundary[0], zBoundary[0], 
+        xBoundary[1], yBoundary[1], zBoundary[1]
+      );
+      
+      
       avalancheE->EnablePlotting(viewElectronDrift, 250);
-
-
+      driftIon->EnablePlotting(viewIonDrift);
+      
       //Filename
       int threadID = omp_get_thread_num();
       std::string parallelDataPath = "parallelData/";
@@ -633,6 +644,7 @@ int main(int argc, char * argv[]) {
     double xfIon, yfIon, zfIon, tfIon;
     int statIon;
     float electronDriftx, electronDrifty, electronDriftz;
+    float ionDriftx, ionDrifty, ionDriftz, ionDriftt;
     double signalTime, signalStrength;
 
     TTree* parallelAvalancheDataTree = new TTree("avalancheDataTree", "Avalanche Results");
@@ -677,6 +689,13 @@ int main(int argc, char * argv[]) {
     parallelElectronTrackDataTree->Branch("Drift x", &electronDriftx, "electronDriftx/F");
     parallelElectronTrackDataTree->Branch("Drift y", &electronDrifty, "electronDrifty/F");
     parallelElectronTrackDataTree->Branch("Drift z", &electronDriftz, "electronDriftz/F");
+  
+    TTree* parallelIonTrackDataTree = new TTree("ionTrackDataTree", "Ion Tracks");
+    parallelIonTrackDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
+    parallelIonTrackDataTree->Branch("Electron ID", &electronID, "electronID/I");
+    parallelIonTrackDataTree->Branch("Drift x", &ionDriftx, "ionDriftx/F");
+    parallelIonTrackDataTree->Branch("Drift y", &ionDrifty, "ionDrifty/F");
+    parallelIonTrackDataTree->Branch("Drift z", &ionDriftz, "ionDriftz/F");
 
     TTree* parallelSignalDataTree = new TTree("signalDataTree", "Induced Signal");
     parallelSignalDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
@@ -723,21 +742,38 @@ int main(int argc, char * argv[]) {
 
         ionCharge = 1;
         driftIon->DriftIon(xi, yi, zi, ti);
+        
         driftIon->GetIonEndpoint(0, xiIon, yiIon, ziIon, tiIon, xfIon, yfIon, zfIon, tfIon, statIon);
+        
         //Fill tree with data from this positive ion
         parallelIonDataTree->Fill();
-        totalIons++;  
+        
+        //get ion drift lines
+        bool isIon;
+        std::vector<std::array<float, 3> > ionDriftLines;
+        
+        viewIonDrift->GetDriftLine(0, ionDriftLines, isIon);
+        
+        for(int ionPoint = 0; ionPoint < ionDriftLines.size(); ionPoint++){
+          ionDriftx = ionDriftLines[ionPoint][0];
+          ionDrifty = ionDriftLines[ionPoint][1];
+          ionDriftz = ionDriftLines[ionPoint][2];
+          //Fill tree with data for this point
+          parallelIonTrackDataTree->Fill();
+        }
+        
+        totalIons++;
+        viewIonDrift->Clear();
 
-        //Check for electron attatchment
+        //Check for electron attachment
         if(stat == -7){
           attachedElectrons++;
 
-          //Drift negative ion from end of electron tracks that attatch
+          //Drift negative ion from end of electron tracks that attach
           ionCharge = -1;
           driftIon->DriftNegativeIon(xf, yf, zf, tf);
           driftIon->GetNegativeIonEndpoint(0, xiIon, yiIon, ziIon, tiIon, xfIon, yfIon, zfIon, tfIon, statIon);
-          //Fill tree with data from this negative ion
-          parallelIonDataTree->Fill();
+
           totalIons++;
         }
 
@@ -794,6 +830,7 @@ int main(int argc, char * argv[]) {
     delete avalancheE;
     delete driftIon;
     delete viewElectronDrift;
+    delete viewIonDrift;
     delete parallelDataFile;
 
   }//End parallization
@@ -905,6 +942,7 @@ int main(int argc, char * argv[]) {
     "electronDataTree",
     "ionDataTree",
     "electronTrackDataTree",
+    "ionTrackDataTree",
     "signalDataTree"
   };
 

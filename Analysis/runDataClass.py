@@ -51,6 +51,7 @@ class runData:
             _ionData: Information for each individual simulated ion.
             _avalancheData: Information for each simulated avalanche.
             _electronTrackData: Information for the full tracks of each electron.
+            _ionTrackData:  Information for the full tracks of each ion (Note: WIP).
             _calculatedData: Information calculated from simulation resutls, including
                              gain, IBN, IBF, etc.
             
@@ -112,6 +113,7 @@ class runData:
             'ionData',
             'avalancheData',
             'electronTrackData',
+            'ionTrackData',
             'signalData'
         ]
 
@@ -327,6 +329,14 @@ class runData:
                 ]
             
             case 'electronTrackData':
+                dataToScale = [
+                    'Drift x', 
+                    'Drift y', 
+                    'Drift z'
+                ]
+
+            
+            case 'ionTrackData':
                 dataToScale = [
                     'Drift x', 
                     'Drift y', 
@@ -687,8 +697,9 @@ class runData:
         # Define the hole in the grid.
         hole = plt.Circle((0, 0), holeRadius,
                         facecolor='none', edgecolor='k', lw=1, label='Hole')
-        holeXY = holeRadius*np.array([-1, -1, 1, 1, -1])
-        holeZ = halfGrid*np.array([1, 1, -1, -1, 1])
+        holeXY1 = np.array([-pitch, -holeRadius])
+        holeXY2 = np.array([holeRadius, pitch])
+        holeZ = halfGrid*np.array([0,0])
 
         #Corners of the geometry cell
         #geoX = 3./2.*outRadius*np.array([-1, 1, 1, -1, -1])
@@ -724,8 +735,11 @@ class runData:
                 axis.plot([cellX[2], cellX[1], cellX[1], cellX[2], cellX[2]], 
                         [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight], 
                         c='b', ls='--', lw=1)
-                axis.plot(holeXY, holeZ, 
-                        label='Hole', c='k', ls='-')
+                axis.plot(holeXY1, holeZ, 
+                        label='Grid', c='k', ls='-', lw=2)
+                axis.plot(holeXY2, holeZ, 
+                        c='k', ls='-', lw=2)
+                        
                 axis.plot([geoX[0], geoX[1], geoX[1], geoX[0], geoX[0]], 
                         [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight], 
                         c='g', ls='--', lw=1, label='Simulation Boundary')
@@ -747,8 +761,10 @@ class runData:
                 axis.plot([0, 0], 
                         [padHeight, cathodeHeight],
                         label='Cell', c='b', ls='--', lw=1)
-                axis.plot(holeXY, holeZ, 
-                        label='Hole', c='k', ls='-')
+                axis.plot(holeXY1, holeZ, 
+                        label='Grid', c='k', ls='-', lw=2)
+                axis.plot(holeXY2, holeZ, 
+                        c='k', ls='-', lw=2)
                 axis.plot([geoY[1], geoY[2], geoY[2], geoY[1], geoY[1]], 
                         [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight], 
                         c='g', ls='--', lw=1, label='Simulation Boundary')
@@ -1151,7 +1167,7 @@ class runData:
 #********************************************************************************#   
     def plotAvalanche2D(self, avalancheID=0, plotName=''):
         """
-        Generates 2D plots of a single electron avalanche.
+        Generates 2D plots of the electrons in a single electron avalanche.
 
         Includes individual electron tracks and geometry components.
     
@@ -1168,7 +1184,7 @@ class runData:
         groupedData = singleData.groupby('Electron ID')
     
         if groupedData is None:
-            print(f"An error occured plotting ID='{avalancheID}'.")
+            print(f"An error occurred plotting ID='{avalancheID}'.")
             return
 
         # Create figure and subplots for different projections.
@@ -1215,8 +1231,82 @@ class runData:
         
         return fig2D
         
+#********************************************************************************#
+    def plotIonAvalanche2D(self, avalancheID=0, plotName=''):
+        """
+        Generates 2D plots of the ions in a single electron avalanche.
+
+        Includes individual ion tracks and geometry components.
+    
+        Args:
+            avalancheID (int): Index of avalanche within simulation.
+    
+        """
+        zLimit = self.getRunParameter('Grid Standoff')
+        
+        allData = self.getDataFrame('ionTrackData')
+        singleData = allData[allData['Avalanche ID']==avalancheID]
+        
+        gain = self._getAvalancheGain(avalancheID)
+    
+        groupedData = singleData.groupby('Electron ID')
+    
+        if groupedData is None:
+            print(f"An error occurred plotting ID='{avalancheID}'.")
+            return
+
+        # Create figure and subplots for different projections.
+        fig2D = plt.figure(figsize=(14, 7))
+        fig2D.suptitle(f'Avalanche: {plotName} (ID #{avalancheID}) Gain = {gain}')
+        ax11 = fig2D.add_subplot(221)
+        ax12 = fig2D.add_subplot(223)
+        ax13 = fig2D.add_subplot(122)
+    
+        # iterate through all lines
+        for electronID, driftLine in groupedData:
+            ax11.plot(driftLine['Drift x'], 
+                      driftLine['Drift z'], 
+                      lw=1)
+            ax12.plot(driftLine['Drift y'], 
+                      driftLine['Drift z'], 
+                      lw=1)
+            ax13.plot(driftLine['Drift x'], 
+                      driftLine['Drift y'], 
+                      lw=1)
+
+        # Plot the initial electron location
+        xInit = singleData['Drift x'].iloc[0]
+        yInit = singleData['Drift y'].iloc[0]
+        zInit = singleData['Drift z'].iloc[0]
+        
+        ax11.plot(xInit, 
+                  zInit, 
+                  label='Initial', marker='x', c='r')
+        
+        ax12.plot(yInit, 
+                  zInit, 
+                  label='Initial', marker='x', c='r')
+        
+        ax13.plot(xInit, 
+                  yInit, 
+                  label='Initial', marker='x', c='r')
+        
+        self._plotAddCellGeometry(ax11, 'xz')
+        self._plotAddCellGeometry(ax12, 'yz')
+        self._plotAddCellGeometry(ax13, 'xy')
+        self._plotAddFieldBundle(ax11, 'xz')
+        self._plotAddFieldBundle(ax12, 'yz')
+        self._plotAddFieldBundle(ax13, 'xy')
+        
+        ax11.set_ylim(-zLimit, zLimit*1.2)
+        ax12.set_ylim(-zLimit, zLimit*1.2)
+        plt.tight_layout()
+        
+        return fig2D
+        
 
 #********************************************************************************#   
+
     def plotDiffusion(self, target):
         """
         Plots the diffusion of simulated particles in the drift direction (z) and 
@@ -1307,7 +1397,7 @@ class runData:
 #********************************************************************************#   
     def plotParticleHeatmaps(self, target, numBins=51):
         """
-        Plots 2D histograms displaying heatmaps of the intial and final locations 
+        Plots 2D histograms displaying heatmaps of the initial and final locations 
         of simulated particles.
 
         Options to plot include: electrons, positive ions, and negative ions.

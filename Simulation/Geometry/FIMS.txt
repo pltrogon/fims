@@ -37,15 +37,16 @@ topSiO2 = padBase + thicknessSiO2;
 // ***** Finite element sizes ***** //
 //  Primary region of interest is central hole/pad,
 //  so elements at corner can be larger.
-gridElm = (halfPitch - holeRadius)/8.;
-centerHoleElm = gridThickness/3.;
-cornerHoleElm = holeRadius/5.;
-centerPadElm = gridThickness/3.;
+gridElm = (halfPitch - holeRadius)/10.;
+centerHoleElm = gridThickness/4.;
+cornerHoleElm = holeRadius/2.;
+centerPadElm = gridThickness;
 centerDiElm = gridStandoff/120.;
 cornerPadElm = padLength/2.;
 dielectricElm = thicknessSiO2/1.5;
-pillarElm = pillarRadius/3.;
-cathodeElm = cathodeHeight/25.;
+pillarElmTop = gridThickness;
+pillarElmBott = (gridStandoff/30.)*pillarRadius;
+cathodeElm = cathodeHeight/15.;
 
 //**********************************************************************
 // DEFINE THE GEOMETRY
@@ -85,15 +86,15 @@ gridCornerBx = newp; Point(gridCornerBx) = {xMax, 0, gridBottom, gridElm};
 gridCornerBy = newp; Point(gridCornerBy) = {0, yMax, gridBottom, gridElm};
 
 //Pillar sections
-gridPillarX0 = newp; Point(gridPillarX0) = {xPillarDist, 0, gridBottom, pillarElm};
-gridPillarX1 = newp; Point(gridPillarX1) = {xPillarDist - pillarRadius, 0, gridBottom, pillarElm};
-gridPillarX2 = newp; Point(gridPillarX2) = {xPillarDist, pillarRadius, gridBottom, pillarElm};
-gridPillarX3 = newp; Point(gridPillarX3) = {xPillarDist + pillarRadius, 0, gridBottom, pillarElm};
+gridPillarX0 = newp; Point(gridPillarX0) = {xPillarDist, 0, gridBottom, pillarElmTop};
+gridPillarX1 = newp; Point(gridPillarX1) = {xPillarDist - pillarRadius, 0, gridBottom, pillarElmTop};
+gridPillarX2 = newp; Point(gridPillarX2) = {xPillarDist, pillarRadius, gridBottom, pillarElmTop};
+gridPillarX3 = newp; Point(gridPillarX3) = {xPillarDist + pillarRadius, 0, gridBottom, pillarElmTop};
 
-gridPillarY0 = newp; Point(gridPillarY0) = {yPillarDist, yMax, gridBottom, pillarElm};
-gridPillarY1 = newp; Point(gridPillarY1) = {yPillarDist - pillarRadius, yMax, gridBottom, pillarElm};
-gridPillarY2 = newp; Point(gridPillarY2) = {yPillarDist, yMax - pillarRadius, gridBottom, pillarElm};
-gridPillarY3 = newp; Point(gridPillarY3) = {yPillarDist + pillarRadius, yMax, gridBottom, pillarElm};
+gridPillarY0 = newp; Point(gridPillarY0) = {yPillarDist, yMax, gridBottom, pillarElmTop};
+gridPillarY1 = newp; Point(gridPillarY1) = {yPillarDist - pillarRadius, yMax, gridBottom, pillarElmTop};
+gridPillarY2 = newp; Point(gridPillarY2) = {yPillarDist, yMax - pillarRadius, gridBottom, pillarElmTop};
+gridPillarY3 = newp; Point(gridPillarY3) = {yPillarDist + pillarRadius, yMax, gridBottom, pillarElmTop};
 
 // ***** Lines ***** //
 //Top of the grid
@@ -278,15 +279,15 @@ dielectricTCorner1 = newp; Point(dielectricTCorner1) = {xMax - halfPad, yMax - p
 dielectricTCorner2 = newp; Point(dielectricTCorner2) = {xMax, yMax - padInRadius, topSiO2, cornerPadElm};
 
 //Pillar sections
-dielectricPillarX0 = newp; Point(dielectricPillarX0) = {xPillarDist, 0, topSiO2, pillarElm};
-dielectricPillarX1 = newp; Point(dielectricPillarX1) = {xPillarDist - pillarRadius, 0, topSiO2, pillarElm};
-dielectricPillarX2 = newp; Point(dielectricPillarX2) = {xPillarDist, pillarRadius, topSiO2, pillarElm};
-dielectricPillarX3 = newp; Point(dielectricPillarX3) = {xPillarDist + pillarRadius, 0, topSiO2, pillarElm};
+dielectricPillarX0 = newp; Point(dielectricPillarX0) = {xPillarDist, 0, topSiO2, pillarElmBott};
+dielectricPillarX1 = newp; Point(dielectricPillarX1) = {xPillarDist - pillarRadius, 0, topSiO2, pillarElmBott};
+dielectricPillarX2 = newp; Point(dielectricPillarX2) = {xPillarDist, pillarRadius, topSiO2, pillarElmBott};
+dielectricPillarX3 = newp; Point(dielectricPillarX3) = {xPillarDist + pillarRadius, 0, topSiO2, pillarElmBott};
 
-dielectricPillarY0 = newp; Point(dielectricPillarY0) = {yPillarDist, yMax, topSiO2, pillarElm};
-dielectricPillarY1 = newp; Point(dielectricPillarY1) = {yPillarDist - pillarRadius, yMax, topSiO2, pillarElm};
-dielectricPillarY2 = newp; Point(dielectricPillarY2) = {yPillarDist, yMax - pillarRadius, topSiO2, pillarElm};
-dielectricPillarY3 = newp; Point(dielectricPillarY3) = {yPillarDist + pillarRadius, yMax, topSiO2, pillarElm};
+dielectricPillarY0 = newp; Point(dielectricPillarY0) = {yPillarDist, yMax, topSiO2, pillarElmBott};
+dielectricPillarY1 = newp; Point(dielectricPillarY1) = {yPillarDist - pillarRadius, yMax, topSiO2, pillarElmBott};
+dielectricPillarY2 = newp; Point(dielectricPillarY2) = {yPillarDist, yMax - pillarRadius, topSiO2, pillarElmBott};
+dielectricPillarY3 = newp; Point(dielectricPillarY3) = {yPillarDist + pillarRadius, yMax, topSiO2, pillarElmBott};
 
 // ***** Lines ***** //
 //Bottom of Dielectric
