@@ -1269,15 +1269,11 @@ class FIMS_Simulation:
             float: Numerical solution to the minimum field for 100% transparency.
         """
         #Get geometry variables
-        radius = self.getParam('holeRadius')
         standoff = self.getParam('gridStandoff')
         pad = self.getParam('padLength')
         pitch = self.getParam('pitch')
     
-        #Calculate what the minimum field ratio should be
-        gridArea = pitch**2*math.sqrt(3)/2
-        holeArea = math.pi*radius**2
-        optTrans = holeArea/gridArea
+        optTrans = self._calcOpticalTransparency()
         
         standoffRatio = standoff/pitch
         padRatio = pad/pitch
@@ -1298,6 +1294,27 @@ class FIMS_Simulation:
         minFieldRounded = math.floor(minField)
         
         return minFieldRounded
+    
+#***********************************************************************************#
+    def _calcOpticalTransparency(self):
+        """
+        Calculates the optical transparency of the grid based on the geometry parameters.
+
+        Returns:
+            float: The optical transparency of the grid.
+        """ 
+
+        #Get geometry variables
+        radius = self.getParam('holeRadius')
+        pitch = self.getParam('pitch')
+    
+        gridArea = pitch**2*math.sqrt(3)/2
+        holeArea = math.pi*radius**2
+
+        opticalTransparency = holeArea/gridArea
+
+        return opticalTransparency
+
 
 #***********************************************************************************#
     def _findFieldForTransparency(self, targetTransparency=0.99):
@@ -1408,8 +1425,9 @@ class FIMS_Simulation:
         print(f'Finding minimum field ratio for geometry with drift field: {driftField} V/cm')
 
         #Choose initial field ratio guess
-        #minFieldGuess = self._calcMinField()#TODO - This function can be made a lot better
-        minFieldGuess = 150
+        opticalTransparency = self._calcOpticalTransparency()
+        minFieldGuess = .9*(2/opticalTransparency - 1)
+
         self.param['fieldRatio'] = minFieldGuess
         print(f'\tInitial field ratio guess: {minFieldGuess}')
 
