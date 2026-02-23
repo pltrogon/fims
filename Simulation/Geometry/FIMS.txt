@@ -37,16 +37,20 @@ topSiO2 = padBase + thicknessSiO2;
 // ***** Finite element sizes ***** //
 //  Primary region of interest is central hole/pad,
 //  so elements at corner can be larger.
-gridElm = (halfPitch - holeRadius)/10.;
-centerHoleElm = gridThickness/4.;
-cornerHoleElm = holeRadius/2.;
-centerPadElm = gridThickness;
-centerDiElm = gridStandoff/120.;
-cornerPadElm = padLength/2.;
-dielectricElm = thicknessSiO2/1.5;
+cathodeElm = cathodeHeight/16.;
+gridElm = (halfPitch - holeRadius)/12.;
+nearDielectricElm = (halfPitch - padLength*0.87)/3;
+farDielectricElm = padLength/2;
+
+centerHoleElm = gridThickness/3;
+centerDiElm = gridStandoff/75.;
+centerPadElm = padLength/25;
+
+cornerHoleElm = holeRadius/2;
+cornerPadElm = padLength/2;
+
 pillarElmTop = gridThickness;
-pillarElmBott = (gridStandoff/30.)*pillarRadius;
-cathodeElm = cathodeHeight/15.;
+pillarElmBott = pillarRadius/1.5;
 
 //**********************************************************************
 // DEFINE THE GEOMETRY
@@ -263,12 +267,12 @@ cornerPadSurface = news; Plane Surface(cornerPadSurface) = {cornerPadLoop};
 
 // ***** Points ***** //
 //Bottom of dielectric
-dielectricBx = newp; Point(dielectricBx) = {xMax, 0, padBase, dielectricElm};
-dielectricBy = newp; Point(dielectricBy) = {0, yMax, padBase, dielectricElm};
+dielectricBx = newp; Point(dielectricBx) = {xMax, 0, padBase, farDielectricElm};
+dielectricBy = newp; Point(dielectricBy) = {0, yMax, padBase, nearDielectricElm};
 
 //Top of dielectric
-dielectricTx = newp; Point(dielectricTx) = {xMax, 0, topSiO2, dielectricElm};
-dielectricTy = newp; Point(dielectricTy) = {0, yMax, topSiO2, dielectricElm};
+dielectricTx = newp; Point(dielectricTx) = {xMax, 0, topSiO2, farDielectricElm};
+dielectricTy = newp; Point(dielectricTy) = {0, yMax, topSiO2, nearDielectricElm};
 
 dielectricTCentral0 = newp; Point(dielectricTCentral0) = {padLength, 0, topSiO2, centerDiElm};
 dielectricTCentral1 = newp; Point(dielectricTCentral1) = {halfPad, padInRadius, topSiO2, centerDiElm};

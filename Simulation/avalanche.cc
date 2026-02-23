@@ -749,17 +749,19 @@ int main(int argc, char * argv[]) {
         parallelIonDataTree->Fill();
         
         //get ion drift lines
-        bool isIon;
-        std::vector<std::array<float, 3> > ionDriftLines;
+        //Only the first 50 avalanches are recorded to reduce memory usage
+        if(avalancheID < 50){
+          bool isIon;
+          std::vector<std::array<float, 3> > ionDriftLines;
+          viewIonDrift->GetDriftLine(0, ionDriftLines, isIon);
         
-        viewIonDrift->GetDriftLine(0, ionDriftLines, isIon);
-        
-        for(int ionPoint = 0; ionPoint < ionDriftLines.size(); ionPoint++){
-          ionDriftx = ionDriftLines[ionPoint][0];
-          ionDrifty = ionDriftLines[ionPoint][1];
-          ionDriftz = ionDriftLines[ionPoint][2];
-          //Fill tree with data for this point
-          parallelIonTrackDataTree->Fill();
+          for(int ionPoint = 0; ionPoint < ionDriftLines.size(); ionPoint++){
+            ionDriftx = ionDriftLines[ionPoint][0];
+            ionDrifty = ionDriftLines[ionPoint][1];
+            ionDriftz = ionDriftLines[ionPoint][2];
+            //Fill tree with data for this point
+            parallelIonTrackDataTree->Fill();
+          }
         }
         
         totalIons++;

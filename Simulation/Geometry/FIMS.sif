@@ -41,7 +41,7 @@ Solver 1
   Nonlinear System Max Iterations = 500
   Nonlinear System Newton After Iterations = 3
   Nonlinear System Newton After Tolerance = 1.0e-3
-  Nonlinear System Relaxation Factor = 1.1
+  Nonlinear System Relaxation Factor = 1.0
   Linear System Solver = Iterative
   Linear System Iterative Method = BiCGStab
   Linear System Max Iterations = 500
@@ -131,13 +131,13 @@ End
 Boundary Condition 1
   Target Boundaries(1) = 1
   Name = "Cathode"
-	Potential = -104.98600000000002
+	Potential = -103.58600000000001
 End
 
 Boundary Condition 2
   Target Boundaries(1) = 2
   Name = "Grid"
-	Potential = -100.80000000000001
+	Potential = -99.68
 End
 
 Boundary Condition 3
