@@ -258,7 +258,7 @@ int main(int argc, char * argv[]) {
   int prevDriftLine = 0;
 
   double transparency = 0.;
-  double varience = 0.;
+  double variance = 0.;
   double transparencyErr = 0.;
 
   std::cout << "Computing field lines" << std::endl;
