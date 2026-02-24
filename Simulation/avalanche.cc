@@ -749,19 +749,16 @@ int main(int argc, char * argv[]) {
         parallelIonDataTree->Fill();
         
         //get ion drift lines
-        //Only the first 50 avalanches are recorded to reduce memory usage
-        if(avalancheID < 50){
-          bool isIon;
-          std::vector<std::array<float, 3> > ionDriftLines;
-          viewIonDrift->GetDriftLine(0, ionDriftLines, isIon);
-        
-          for(int ionPoint = 0; ionPoint < ionDriftLines.size(); ionPoint++){
-            ionDriftx = ionDriftLines[ionPoint][0];
-            ionDrifty = ionDriftLines[ionPoint][1];
-            ionDriftz = ionDriftLines[ionPoint][2];
-            //Fill tree with data for this point
-            parallelIonTrackDataTree->Fill();
-          }
+        bool isIon;
+        std::vector<std::array<float, 3> > ionDriftLines;
+        viewIonDrift->GetDriftLine(0, ionDriftLines, isIon);
+      
+        for(int ionPoint = 0; ionPoint < ionDriftLines.size(); ionPoint++){
+          ionDriftx = ionDriftLines[ionPoint][0];
+          ionDrifty = ionDriftLines[ionPoint][1];
+          ionDriftz = ionDriftLines[ionPoint][2];
+          //Fill tree with data for this point
+          parallelIonTrackDataTree->Fill();
         }
         
         totalIons++;
@@ -814,7 +811,7 @@ int main(int argc, char * argv[]) {
 
       //*** TODO ***/
       //Can insert any other per-avalanche analysis/data here.
-      // -- Histograms of energy loss/collison, time between collisions,
+      // -- Histograms of energy loss/collision, time between collisions,
 
       //Fill tree with data from this avalanche
       parallelAvalancheDataTree->Fill();

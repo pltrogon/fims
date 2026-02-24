@@ -37,20 +37,20 @@ topSiO2 = padBase + thicknessSiO2;
 // ***** Finite element sizes ***** //
 //  Primary region of interest is central hole/pad,
 //  so elements at corner can be larger.
-cathodeElm = cathodeHeight/16.;
-gridElm = (halfPitch - holeRadius)/12.;
-nearDielectricElm = (halfPitch - padLength*0.87)/3;
-farDielectricElm = padLength/2;
+cathodeElm = cathodeHeight/16.0;
+gridElm = (halfPitch - holeRadius)/12.0;
+nearDielectricElm = (halfPitch - padLength*sqrt3/2.0)/3.0;
+farDielectricElm = padLength/2.0;
 
-centerHoleElm = gridThickness/3;
-centerDiElm = gridStandoff/75.;
-centerPadElm = padLength/25;
+centerHoleElm = gridThickness/3.0;
+centerDiElm = gridStandoff/75.0;
+centerPadElm = padLength/25.0;
 
-cornerHoleElm = holeRadius/2;
-cornerPadElm = padLength/2;
+cornerHoleElm = holeRadius/2.0;
+cornerPadElm = padLength/2.0;
 
-pillarElmTop = gridThickness;
-pillarElmBott = pillarRadius/1.5;
+pillarElmTop = gridThickness*1.0;
+pillarElmBott = pillarRadius/2.0;
 
 //**********************************************************************
 // DEFINE THE GEOMETRY
