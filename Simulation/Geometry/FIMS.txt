@@ -42,9 +42,9 @@ gridElm = (halfPitch - holeRadius)/12.0;
 nearDielectricElm = (halfPitch - padLength*sqrt3/2.0)/3.0;
 farDielectricElm = padLength/2.0;
 
-centerHoleElm = gridThickness/3.0;
-centerDiElm = gridStandoff/75.0;
-centerPadElm = padLength/25.0;
+centerHoleElm = gridThickness/4.0;
+centerDiElm = gridStandoff/80.0;
+centerPadElm = padLength/30.0;
 
 cornerHoleElm = holeRadius/2.0;
 cornerPadElm = padLength/2.0;

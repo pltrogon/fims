@@ -1743,13 +1743,15 @@ class runData:
         return capturedList, escapedList
 
 #********************************************************************************#
-    def plotIBNHistogram(self):
+    def plotIBNHistogram(self, color = ['red','dark green','black']):
         """
         Creates a stacked double histogram of the distance from the field bundle 
         edge of every ion created in an avalanche. The double histogram is divided 
         by whether the ions are captured by the grid or if they escape into the 
         drift volume.
         
+        Args:
+            color: list of color names given as strings
         Returns:
             matplotlib.figure. Figure: the generated IBN position histogram
         """
@@ -1759,13 +1761,14 @@ class runData:
         ionHistogram = plt.figure()
         plt.hist([backflowing, captured], bins = 'auto', rwidth = .95, 
                     label = ["Backflowing Ions", 'Captured Ions'], stacked = True,
-                    color = ['red','darkgreen'])
+                    color = color[0:2])
         
         #include a vertical line at the nominal bundle edge (x = 0)
-        plt.axvline(0, color = 'black', linewidth = 2, label = 'Bundle Edge')
+        plt.axvline(0, color = color[2], linewidth = 2, label = 'Bundle Edge')
         
-        plt.xlabel('Distance ions originate from Edge of Field Bundle')
+        plt.xlabel('Distance Ions Originate from Edge of Field Bundle')
         plt.ylabel('Number of Ions')
+        plt.title('Ions Created Inside vs Ions Created Outside of the Field Bundle')
         plt.legend()
         
         return ionHistogram
