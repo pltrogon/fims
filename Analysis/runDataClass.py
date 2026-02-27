@@ -697,9 +697,9 @@ class runData:
         # Define the hole in the grid.
         hole = plt.Circle((0, 0), holeRadius,
                         facecolor='none', edgecolor='k', lw=1, label='Hole')
-        holeXY1 = np.array([-pitch, -holeRadius])
-        holeXY2 = np.array([holeRadius, pitch])
-        holeZ = halfGrid*np.array([0,0])
+        holeXY1 = np.array([-pitch, -holeRadius, -holeRadius, -pitch])
+        holeXY2 = np.array([pitch, holeRadius, holeRadius, pitch])
+        holeZ = halfGrid*np.array([-1, -1, 1, 1])
 
         #Corners of the geometry cell
         #geoX = 3./2.*outRadius*np.array([-1, 1, 1, -1, -1])
@@ -1759,9 +1759,9 @@ class runData:
         captured, backflowing = self._getIonEdgeDistance()
         
         ionHistogram = plt.figure()
-        plt.hist([backflowing, captured], bins = 'auto', rwidth = .95, 
-                    label = ["Backflowing Ions", 'Captured Ions'], stacked = True,
-                    color = color[0:2])
+        plt.hist([backflowing, captured], bins = 'auto', 
+                    label = ["Backflowing Ions", 'Captured Ions'], 
+                    stacked = True, color = color[0:2])
         
         #include a vertical line at the nominal bundle edge (x = 0)
         plt.axvline(0, color = color[2], linewidth = 2, label = 'Bundle Edge')
@@ -2166,7 +2166,7 @@ class runData:
         """
         Generates a histogram of the avalanche size distribution; The data is split
         based on a given threshold, and the resulting efficiency is indicated.
-        Also includes a fitted Polya function, also split to distiguish the PDF both
+        Also includes a fitted Polya function, also split to distinguish the PDF both
         above and below threshold.
 
         Args:

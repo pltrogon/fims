@@ -728,7 +728,7 @@ class FIMS_Simulation:
         """
         Runs Elmer to determine a finite-element Electric field solution.
     
-        Converts a gmsh mesh to elmer format using ElmerGrid.
+        Converts a Gmsh mesh to elmer format using ElmerGrid.
         Calculates potentials and E fields for the mesh using ElmerSolver.
         Output files are saved to a subdirectory called 'elmerResults/'.
         Writes the output of the programs to 'log/logElmerGrid' and 'log/logElmerSolver'.
@@ -963,7 +963,7 @@ class FIMS_Simulation:
     
         self._checkParam()
     
-        #If geometry does not change, gmsh and weighting do not need to be done.
+        #If geometry does not change, Gmsh and weighting do not need to be done.
         #However, check that the mesh and weighting field files exist.
         #If not, override input and generate.
         if not changeGeometry:
@@ -981,7 +981,7 @@ class FIMS_Simulation:
         #write parameters for sim
         self._writeParam()
     
-        #Allow for skipping gmsh if geometry has not changed.
+        #Allow for skipping Gmsh if geometry has not changed.
         if changeGeometry:
             self._generateGeometry()
     
@@ -1181,10 +1181,10 @@ class FIMS_Simulation:
             print(f'Warning: Step size limited to {stepSizeLimit}.')
             newField = curField+stepSizeLimit
 
-        #Ensure new field is at least 2
-        elif fieldStep < 2:
-            print(f'Warning: Field step small. Using heuristic step of 2.')
-            newField = curField + 2
+        #Ensure new field is at least 1 unit larger than previous field
+        elif fieldStep < 1:
+            print(f'Warning: Field step small. Using heuristic step of 1.')
+            newField = curField + 1
 
         #Round step up to nearest integer
         else:
@@ -1339,7 +1339,6 @@ class FIMS_Simulation:
         #load saved parameters back into class.
         self.param = saveParam
         self.param['fieldRatio'] = finalField
-        self._writeParam()
 
         return finalField
 
@@ -1627,7 +1626,7 @@ class FIMS_Simulation:
 #**********************************************************************#
     def _generateGeometry(self):
         """
-        Generates the finite-element mesh of the simulation geometry using gmsh.
+        Generates the finite-element mesh of the simulation geometry using Gmsh.
         """
 
         self._checkParam()

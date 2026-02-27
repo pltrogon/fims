@@ -618,9 +618,9 @@ class FIMS_Optimizer:
         
         #matrix elements for non-linear constraint equations
         nonLinCon = [
-                    lambda x: self.optimizerMaster(x, inputList)[1],
-                    lambda x: self.optimizerMaster(x, inputList)[2]
-                    ]
+                        lambda x: self.optimizerMaster(x, inputList)[1],
+                        lambda x: self.optimizerMaster(x, inputList)[2]
+                        ]
         
         nonLinLowBound = [0.95, 0.99]
         nonLinUpBound = [1.01, 1.01]
