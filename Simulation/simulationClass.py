@@ -1370,7 +1370,7 @@ class FIMS_Simulation:
         print(f'Beginning search for minimum field to achieve >{targetTransparency}% transparency...')
        
         iterNo = 0
-        iterNoLimit = 10
+        iterNoLimit = 20
 
         transparencyAtField = {
             'field': [],

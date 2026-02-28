@@ -74,7 +74,8 @@ class runData:
         _trimAvalanche
         _histAvalanche
         plotAvalancheSize
-        plotAvalanche2D
+        plotElectronAvalanche   <----------renamed
+        plotIonAvalanche        <----------new
         plotDiffusion
         plotParticleHeatmaps
         _fitAvalancheSize
@@ -1165,7 +1166,7 @@ class runData:
         return fig
 
 #********************************************************************************#   
-    def plotAvalanche2D(self, avalancheID=0, plotName=''):
+    def plotElectronAvalanche(self, avalancheID=0, plotName=''):
         """
         Generates 2D plots of the electrons in a single electron avalanche.
 
@@ -1175,64 +1176,57 @@ class runData:
             avalancheID (int): Index of avalanche within simulation.
     
         """
-    
+        #Acquire avalanche data
         allData = self.getDataFrame('electronTrackData')
-        singleData = allData[allData['Avalanche ID']==avalancheID]
-        
         gain = self._getAvalancheGain(avalancheID)
-    
+        
+        #Reduce data to a single avalanche
+        singleData = allData[allData['Avalanche ID']==avalancheID]
+        xInit = singleData['Drift x'].iloc[0]
+        yInit = singleData['Drift y'].iloc[0]
+        zInit = singleData['Drift z'].iloc[0]
         groupedData = singleData.groupby('Electron ID')
     
         if groupedData is None:
             print(f"An error occurred plotting ID='{avalancheID}'.")
             return
 
-        # Create figure and subplots for different projections.
+        #Create figure and subplots for different projections.
         fig2D = plt.figure(figsize=(14, 7))
         fig2D.suptitle(f'Avalanche: {plotName} (ID #{avalancheID}) Gain = {gain}')
-        ax11 = fig2D.add_subplot(221)
-        ax12 = fig2D.add_subplot(223)
-        ax13 = fig2D.add_subplot(122)
+        subxz = fig2D.add_subplot(221)
+        subyz = fig2D.add_subplot(223)
+        subxy = fig2D.add_subplot(122)
     
-        # iterate through all lines
+        #Plot field lines on each subplot
         for electronID, driftLine in groupedData:
-            ax11.plot(driftLine['Drift x'], 
-                      driftLine['Drift z'], 
-                      lw=.5)
-            ax12.plot(driftLine['Drift y'], 
-                      driftLine['Drift z'], 
-                      lw=.5)
-            ax13.plot(driftLine['Drift x'], 
-                      driftLine['Drift y'], 
-                      lw=.5)
+            subxz.plot(driftLine['Drift x'], driftLine['Drift z'], lw=.5)
+            subyz.plot(driftLine['Drift y'], driftLine['Drift z'], lw=.5)
+            subxy.plot(driftLine['Drift x'], driftLine['Drift y'], lw=.5)
 
-        # Plot the initial electron location
-        xInit = singleData['Drift x'].iloc[0]
-        yInit = singleData['Drift y'].iloc[0]
-        zInit = singleData['Drift z'].iloc[0]
+        #Plot the location of the initial electron
+        subxz.plot(xInit, zInit, label='Initial', marker='x', color='red')
+        subyz.plot(yInit, zInit, label='Initial', marker='x', color='red')
+        subxy.plot(xInit, yInit, label='Initial', marker='x', color='red')
         
-        ax11.plot(xInit, 
-                  zInit, 
-                  label='Initial', marker='x', c='r')
-        ax12.plot(yInit, 
-                  zInit, 
-                  label='Initial', marker='x', c='r')
-        ax13.plot(xInit, 
-                  yInit, 
-                  label='Initial', marker='x', c='r')
-    
-        self._plotAddCellGeometry(ax11, 'xz')
-        self._plotAddCellGeometry(ax12, 'yz')
-        self._plotAddCellGeometry(ax13, 'xy')
-        self._plotAddFieldBundle(ax11, 'xz')
-        self._plotAddFieldBundle(ax12, 'yz')
-        self._plotAddFieldBundle(ax13, 'xy')
+        #Add cell geometry overlay to each subplot
+        self._plotAddCellGeometry(subxz, 'xz')
+        self._plotAddCellGeometry(subyz, 'yz')
+        self._plotAddCellGeometry(subxy, 'xy')
+        
+        #Add field bundle indicator (TODO: improve field bundle 
+        #calculation and overlay)
+        """
+        self._plotAddFieldBundle(subxz, 'xz')
+        self._plotAddFieldBundle(subyz, 'yz')
+        self._plotAddFieldBundle(subxy, 'xy')
+        """
         plt.tight_layout()   
         
         return fig2D
         
 #********************************************************************************#
-    def plotIonAvalanche2D(self, avalancheID=0, plotName=''):
+    def plotIonAvalanche(self, avalancheID=0, plotName='', lineWidth=1):
         """
         Generates 2D plots of the ions in a single electron avalanche.
 
@@ -1240,71 +1234,65 @@ class runData:
     
         Args:
             avalancheID (int): Index of avalanche within simulation.
-    
         """
-        zLimit = self.getRunParameter('Grid Standoff')
         
+        #Get avalanche information
+        zLimit = self.getRunParameter('Grid Standoff')
         allData = self.getDataFrame('ionTrackData')
+        gain = self._getAvalancheGain(avalancheID)
         singleData = allData[allData['Avalanche ID']==avalancheID]
         
-        gain = self._getAvalancheGain(avalancheID)
-    
-        groupedData = singleData.groupby('Electron ID')
-    
-        if groupedData is None:
-            print(f"An error occurred plotting ID='{avalancheID}'.")
-            return
-
-        # Create figure and subplots for different projections.
-        fig2D = plt.figure(figsize=(14, 7))
-        fig2D.suptitle(f'Avalanche: {plotName} (ID #{avalancheID}) Gain = {gain}')
-        ax11 = fig2D.add_subplot(221)
-        ax12 = fig2D.add_subplot(223)
-        ax13 = fig2D.add_subplot(122)
-    
-        # iterate through all lines
-        for electronID, driftLine in groupedData:
-            ax11.plot(driftLine['Drift x'], 
-                      driftLine['Drift z'], 
-                      lw=1)
-            ax12.plot(driftLine['Drift y'], 
-                      driftLine['Drift z'], 
-                      lw=1)
-            ax13.plot(driftLine['Drift x'], 
-                      driftLine['Drift y'], 
-                      lw=1)
-
-        # Plot the initial electron location
+        #Initial electron location
         xInit = singleData['Drift x'].iloc[0]
         yInit = singleData['Drift y'].iloc[0]
         zInit = singleData['Drift z'].iloc[0]
         
-        ax11.plot(xInit, 
-                  zInit, 
-                  label='Initial', marker='x', c='r')
+        #Group each drift line by its electron id
+        groupedData = singleData.groupby('Electron ID')
         
-        ax12.plot(yInit, 
-                  zInit, 
-                  label='Initial', marker='x', c='r')
+        if groupedData is None:
+            print(f"An error occurred plotting ID='{avalancheID}'.")
+            return
+
+        #Create figure and subplots for different projections.
+        fig2D = plt.figure(figsize=(14, 7))
+        fig2D.suptitle(f'Avalanche: {plotName} (ID #{avalancheID}) Gain = {gain}')
         
-        ax13.plot(xInit, 
-                  yInit, 
-                  label='Initial', marker='x', c='r')
+        subxz = fig2D.add_subplot(221)
+        subyz = fig2D.add_subplot(223)
+        subxy = fig2D.add_subplot(122)
+    
+        #Plot each ion drift line in each subplot
+        for electronID, driftLine in groupedData:
+            subxz.plot(driftLine['Drift x'], driftLine['Drift z'], lw=lineWidth)
+            subyz.plot(driftLine['Drift y'], driftLine['Drift z'], lw=lineWidth)
+            subxy.plot(driftLine['Drift x'], driftLine['Drift y'], lw=lineWidth)
+
+        #Add initial electron location to each subplot
+        subxz.plot(xInit, zInit, label='Initial', marker='x', color='red')
+        subyz.plot(yInit, zInit, label='Initial', marker='x', color='red')
+        subxy.plot(xInit, yInit, label='Initial', marker='x', color='red')
         
-        self._plotAddCellGeometry(ax11, 'xz')
-        self._plotAddCellGeometry(ax12, 'yz')
-        self._plotAddCellGeometry(ax13, 'xy')
-        self._plotAddFieldBundle(ax11, 'xz')
-        self._plotAddFieldBundle(ax12, 'yz')
-        self._plotAddFieldBundle(ax13, 'xy')
+        #Add cell Geometry overlay to each subplot
+        self._plotAddCellGeometry(subxz, 'xz')
+        self._plotAddCellGeometry(subyz, 'yz')
+        self._plotAddCellGeometry(subxy, 'xy')
         
-        ax11.set_ylim(-zLimit, zLimit*1.2)
-        ax12.set_ylim(-zLimit, zLimit*1.2)
+        #Add field bundle indicator (TODO: improve field bundle 
+        #calculation and overlay)
+        """
+        self._plotAddFieldBundle(subxz, 'xz')
+        self._plotAddFieldBundle(subyz, 'yz')
+        self._plotAddFieldBundle(subxy, 'xy')
+        """
+        
+        #Zoom in the plot to focus on the region under the grid
+        subxz.set_ylim(-zLimit, zLimit)
+        subyz.set_ylim(-zLimit, zLimit)
         plt.tight_layout()
         
         return fig2D
         
-
 #********************************************************************************#   
 
     def plotDiffusion(self, target):

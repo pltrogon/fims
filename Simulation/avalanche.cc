@@ -739,14 +739,27 @@ int main(int argc, char * argv[]) {
         avalancheE->GetElectronEndpoint(inElectron, xi, yi, zi, ti, Ei, xf, yf, zf, tf, Ef, stat);
           
         totalElectrons++;
-
+        
+        //Begin extraction of individual ion data
         ionCharge = 1;
         driftIon->DriftIon(xi, yi, zi, ti);
-        
         driftIon->GetIonEndpoint(0, xiIon, yiIon, ziIon, tiIon, xfIon, yfIon, zfIon, tfIon, statIon);
         
-        //Fill tree with data from this positive ion
+        //Fill tree with end points from this positive ion
         parallelIonDataTree->Fill();
+        totalIons++;
+        
+        //Check for electron attachment
+        if(stat == -7){
+          attachedElectrons++;
+
+          //Drift negative ion from end of electron tracks that attach
+          ionCharge = -1;
+          driftIon->DriftNegativeIon(xf, yf, zf, tf);
+          driftIon->GetNegativeIonEndpoint(0, xiIon, yiIon, ziIon, tiIon, xfIon, yfIon, zfIon, tfIon, statIon);
+
+          totalIons++;
+        }
         
         //get ion drift lines
         bool isIon;
@@ -760,21 +773,8 @@ int main(int argc, char * argv[]) {
           //Fill tree with data for this point
           parallelIonTrackDataTree->Fill();
         }
-        
-        totalIons++;
         viewIonDrift->Clear();
 
-        //Check for electron attachment
-        if(stat == -7){
-          attachedElectrons++;
-
-          //Drift negative ion from end of electron tracks that attach
-          ionCharge = -1;
-          driftIon->DriftNegativeIon(xf, yf, zf, tf);
-          driftIon->GetNegativeIonEndpoint(0, xiIon, yiIon, ziIon, tiIon, xfIon, yfIon, zfIon, tfIon, statIon);
-
-          totalIons++;
-        }
 
         // Get electron drift line data
         int numElectronDrift = viewElectronDrift->GetNumberOfDriftLines();
