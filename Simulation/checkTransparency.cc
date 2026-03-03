@@ -240,14 +240,14 @@ int main(int argc, char * argv[]) {
   double fieldCutoff = 0.2;
   double xRange = (xBoundary[1] - xBoundary[0])*rangeScale;
   double yRange = (yBoundary[1] - yBoundary[0])*rangeScale;
-  double xWidth = pitch*sqrt(3.)/3.;
+  double xWidth = rangeScale*pitch*sqrt(3.)/3.;
   double yWidth = rangeScale*pitch/2.;
 
   // ***** Generate field line start points ***** //
   //Lines generated radially from the center to corner of unit cell
   //The x-direction is the long axis of the geometry. 
   for(int i = 0; i < numFieldLine; i++){
-    xStart.push_back(padLength*i/(numFieldLine-1));
+    xStart.push_back(xWidth*i/(numFieldLine-1));
     yStart.push_back(0.);
   }
   
@@ -275,9 +275,10 @@ int main(int argc, char * argv[]) {
     fieldLineZ = fieldLines[lineEnd][2];
 
     //TODO: Find more elegant way to determine where a line terminates
-    // Currently is pad outer radius and below 50% of grid standoff
+    // Currently is pad outer radius and no more than 10% of the grid standoff away from the pad
     double lineRadius2 = std::pow(fieldLineX, 2.) + std::pow(fieldLineY, 2.);
-    if(sqrt(lineRadius2) <= padLength && fieldLineZ < -gridStandoff/2.){
+    std::cout << "final z: " << fieldLineZ << std::endl;
+    if(sqrt(lineRadius2) <= padLength && fieldLineZ < -1.0*(gridStandoff*0.9)){
         numAtPad++;
     }
 

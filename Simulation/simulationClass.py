@@ -1226,7 +1226,8 @@ class FIMS_Simulation:
         if iterNo == 1:
             newField = self._getParam('fieldRatio')
 
-        # Take constant step of 2 for 2nd iteration
+        # Take constant step of 2 for 2nd iteration 
+        #TODO: why 2?
         elif iterNo == 2:
             newField = valueAtField['field'][0] + 2
 
@@ -1379,7 +1380,7 @@ class FIMS_Simulation:
         } 
 
         isTransparent = False
-        self.param['numFieldLine'] = 200
+        self.param['numFieldLine'] = 400
         
         while not isTransparent:
 
