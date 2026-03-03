@@ -13,10 +13,10 @@ Simulation
   Steady State Max Iterations = 1
   Output Intervals(1) = 1
   Coordinate Scaling = 1e-6
-  Solver Input File = FIMSsurrounding.sif
-  ! Post File = FIMSsurrounding.ep !Output for Garfield
-  ! Post File = FIMSsurrounding.vtu !Output for ParaView
-  Output file = "elmerResults/FIMSsurrounding.result"
+  Solver Input File = FIMSsurroundingWeighting.sif
+  ! Post File = FIMSsurroundingWeighting.ep !Output for Garfield
+  ! Post File = FIMSsurroundingWeighting.vtu !Output for ParaView
+  Output file = "elmerResults/FIMSsurroundingWeighting.result"
 End
 
 Constants
@@ -29,12 +29,10 @@ End
 Solver 1
   Equation = Electrostatics
   Variable = Potential
-  Calculate Electric Field = True
   Procedure = "StatElecSolve" "StatElecSolver"
-  Exec Solver = Always
-  Stabilize = True
-  Optimize Bandwidth = True
-  Steady State Convergence Tolerance = 1.0e-5
+  Calculate Capacitance Matrix = True
+  Calculate Weighting Potentials = True
+  Calculate Electric Field = True
   Linear System Solver = Iterative
   Linear System Iterative Method = BiCGStab
   Linear System Max Iterations = 500
@@ -48,14 +46,21 @@ Solver 1
   Output Format = Vtu
 End
 
+Solver 2
+  Exec Solver = After Simulation
+  Procedure = "SaveData" "SaveScalars"
+  Filename = "elmerResults/FIMSsurroundingCapacitance.dat"
+  Variable 1 = Potential
+  Capacitance Matrix = True
+End
+
 Equation 1
-  Name = "Efield"
+  Name = "WeightingField"
   Electric Field = Computed
-  Active Solvers(1) = 1
+  Active Solvers(2) = 1 2
 End
 
 ! Material Definitions
-
 Material 1
   Name = "Air (room temperature)"
   Relative Permittivity = 1
@@ -72,7 +77,6 @@ Material 3
 End
 
 ! Assigning materials to the Gmsh physical volumes
-
 Body 1
   Target Bodies(1) = 3
   Name = "Gas"
@@ -99,62 +103,69 @@ End
 Boundary Condition 1
   Target Boundaries(1) = 1
   Name = "Cathode"
-	Potential = -116.46600000000001
+  Potential = 0.0
+  Capacitance Body = 1
 End
 
 Boundary Condition 2
   Target Boundaries(1) = 2
   Name = "Grid"
-	Potential = -110.88000000000001
+  Potential = 0.0
+  Capacitance Body = 2
 End
 
 Boundary Condition 3
   Target Boundaries(1) = 3
   Name = "CentralPad"
   Potential = 0.0
+  Capacitance Body = 3
 End
 
 Boundary Condition 4
   Target Boundaries(1) = 4
   Name = "TopPad"
   Potential = 0.0
+  Capacitance Body = 4
 End
 
 Boundary Condition 5
   Target Boundaries(1) = 5
   Name = "BottomPad"
   Potential = 0.0
+  Capacitance Body = 5
 End
 
 Boundary Condition 6
   Target Boundaries(1) = 6
   Name = "RightTopPad"
   Potential = 0.0
+  Capacitance Body = 6
 End
 
 Boundary Condition 7
   Target Boundaries(1) = 7
   Name = "RightBottomPad"
   Potential = 0.0
+  Capacitance Body = 7
 End
 
 Boundary Condition 8
   Target Boundaries(1) = 8
   Name = "LeftTopPad"
   Potential = 0.0
+  Capacitance Body = 8
 End
 
 Boundary Condition 9
   Target Boundaries(1) = 9
   Name = "LeftBottomPad"
   Potential = 0.0
+  Capacitance Body = 9
 End
 
 Boundary Condition 10
   Target Boundaries(1) = 10
   Name = "DielectricTop"
-  Charge Density = Variable Coordinate 1, Coordinate 2, Coordinate 3
-  File "chargeBuildup.dat"
 End
 
 Boundary Condition 11
