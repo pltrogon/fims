@@ -460,16 +460,19 @@ class FIMS_Simulation:
         return
 
 #***********************************************************************************#        
-    def _readSIF(self):
+    def _readSIF(self, sifFile='FIMS.sif'):
         """
-        Reads the FIMS.sif file and returns its content as a list of lines.
+        Reads the solver input file and returns its content as a list of lines.
         This file is assumed to be in the 'Geometry/' folder.
+
+        Args:
+            sifFile (str): The name of the .sif file to read.
     
         Returns:
-            list: A list of strings, each a line of FIMS.sif.
+            list: A list of strings, each a line of file.
                   Returns None if an error occurs.
         """
-        filename = os.path.join('./Geometry', 'FIMS.sif')
+        filename = os.path.join('./Geometry', sifFile)
     
         try:
             with open(filename, 'r') as file:
@@ -516,16 +519,19 @@ class FIMS_Simulation:
         return potentials
 
 #***********************************************************************************#
-    def _writeSIF(self):
+    def _writeSIF(self, sifFile='FIMS.sif'):
         """
-        Rewrites the FIMS.sif file boundary conditons based on the given parameters.
+        Rewrites the solver input file boundary conditons based on the given parameters.
     
         Assumes that 'Potential' is defined on the line following 'Name'.
+
+        Args:
+            sifFile (str): The name of the .sif file to read and rewrite.
         """
         self._checkParam()
     
         #Read old .sif file
-        sifLines = self._readSIF()
+        sifLines = self._readSIF(sifFile=sifFile)
     
         potentials = self._calcPotentials()
     
@@ -549,7 +555,7 @@ class FIMS_Simulation:
         sifLines[writeGrid] = f"\tPotential = {potentials['gridVoltage']}\n"
     
         #Write new .sif file
-        filename = os.path.join('./Geometry', 'FIMS.sif')
+        filename = os.path.join('./Geometry', sifFile)
         self._writeFile(filename, sifLines)
 
         return
@@ -607,6 +613,7 @@ class FIMS_Simulation:
         self._checkParam()
         self._writeRunControl()
         self._writeSIF()
+        self._writeSIF(sifFile='FIMSSurrounding.sif')
         
         return
 
@@ -653,7 +660,7 @@ class FIMS_Simulation:
         return runNo
 
 #***********************************************************************************#
-    def _runGmsh(self):
+    def _runGmsh(self, geoFile='FIMS.txt'):
         """
         Runs the Gmsh program to generate a 3D finite-element mesh of the simulation geometry.
         Writes the output of Gmsh to 'log/logGmsh'.
@@ -665,13 +672,13 @@ class FIMS_Simulation:
             OptimizeNetgen: Enables Netgen algorithm optimization
             MeshSizeFromPoints: Uses mesh sizes defined at specific points
     
-        Returns:
-            bool: True if Gmsh runs successfully, False otherwise.
+        Args:
+            geoFile (str): The name of the geometry file to use for meshing, located in the 'Geometry/' folder.
+
         """
         try:
             print('\tExecuting Gmsh...')
 
-            geoFile = 'FIMS.txt'
             with open(os.path.join(os.getcwd(), 'log/logGmsh.txt'), 'w+') as gmshOutput:
                 startTime = time.monotonic()
                 subprocess.run(
@@ -697,7 +704,7 @@ class FIMS_Simulation:
         return
 
 #***********************************************************************************#
-    def _runElmer(self):
+    def _runElmer(self, surrounding=False):
         """
         Runs Elmer to determine a finite-element Electric field solution.
     
@@ -705,11 +712,16 @@ class FIMS_Simulation:
         Calculates potentials and E fields for the mesh using ElmerSolver.
         Output files are saved to a subdirectory called 'elmerResults/'.
         Writes the output of the programs to 'log/logElmerGrid' and 'log/logElmerSolver'.
+
+        Args:
+            surrounding (bool): Option to run Elmer for the surrounding geometry.
         """
         originalCWD = os.getcwd()
         os.chdir('./Geometry')
-    
-        os.makedirs("elmerResults", exist_ok=True)
+
+        base = 'FIMSSurrounding' if surrounding else 'FIMS'
+
+        os.makedirs('elmerResults', exist_ok=True)
             
         try:
             print('\tExecuting Elmer...')
@@ -717,7 +729,7 @@ class FIMS_Simulation:
             with open(os.path.join(originalCWD, 'log/logElmerGrid.txt'), 'w+') as elmerOutput:
                 startTime = time.monotonic()
                 subprocess.run(
-                    ['ElmerGrid', '14', '2', 'FIMS.msh', 
+                    ['ElmerGrid', '14', '2', f'{base}.msh', 
                      '-names',
                      '-out', 'elmerResults', 
                      '-autoclean'], 
@@ -731,7 +743,7 @@ class FIMS_Simulation:
             with open(os.path.join(originalCWD, 'log/logElmerSolver.txt'), 'w+') as elmerOutput:
                 startTime = time.monotonic()
                 subprocess.run(
-                    ['ElmerSolver', 'FIMS.sif'],
+                    ['ElmerSolver', f'{base}.sif'],
                     stdout=elmerOutput,
                     check=True
                 )
@@ -746,15 +758,22 @@ class FIMS_Simulation:
         return
 
 #***********************************************************************************#
-    def _runElmerWeighting(self):
+    def _runElmerWeighting(self, surrounding=False):
         """
         Runs ElmerSolver to determine the weighing field for a simulation.
     
         Assumes that the Gmsh mesh has already been converted to 
         Elmer format by ElmerGrid. Creates the appropriate .sif file.
         Writes the ElmerSolver output to 'log/logElmerWeighting'.
+
+        Args:
+            surrounding (bool): Option to run Elmer for the surrounding geometry.
         """
-        self._makeWeighting()
+
+        base = 'FIMSSurrounding' if surrounding else 'FIMS'
+
+        if not surrounding:
+            self._makeWeighting()
         
         originalCWD = os.getcwd()
         os.chdir('./Geometry')
@@ -764,7 +783,7 @@ class FIMS_Simulation:
             with open(os.path.join(originalCWD, 'log/logElmerWeighting.txt'), 'w+') as elmerOutput:
                 startTime = time.monotonic()
                 subprocess.run(
-                    ['ElmerSolver', 'FIMSWeighting.sif'],
+                    ['ElmerSolver', f'{base}Weighting.sif'],
                     stdout=elmerOutput, 
                     check=True
                 )
@@ -780,7 +799,7 @@ class FIMS_Simulation:
         return
 
 #***********************************************************************************#
-    def _runGarfield(self):
+    def _runGarfield(self, surrounding=False):
         """
         Runs a Garfield++ executable to determine field lines and simulate 
         electron avalanches based on the parameters in 'runControl'.
@@ -789,8 +808,14 @@ class FIMS_Simulation:
         The simulation is numbered based on the number found in 'runNo';
         This also incremenmts this number.
         The information from this simulation is saved in .root format within 'Data/'.
+
+        Args:
+            surrounding (bool): Option to run Garfield for the surrounding geometry.
         """
         originalCWD = os.getcwd()
+
+        executable = 'runAvalancheSurrounding' if surrounding else 'runAvalanche'
+        
         try:
             print('\tExecuting Garfield++...')
             os.chdir('./build/')
@@ -804,7 +829,7 @@ class FIMS_Simulation:
             with open(os.path.join(originalCWD, 'log/logGarfieldAvalanche.txt'), 'w+') as garfieldOutput:
                 startTime = time.monotonic()
                 setupAvalanche = (
-                    f'./runAvalanche'
+                    f'./{executable}'
                 )
                 subprocess.run(
                     setupAvalanche, 
@@ -1663,7 +1688,7 @@ class FIMS_Simulation:
 # METHODS FOR RUNNING CHARGE BUILDUP - UNTESTED (TODO)
 #***********************************************************************************#
 #***********************************************************************************#
-
+#TODO - check the files here for FIMSsurrounding and elmerSurroundingResults
 
 #***********************************************************************************#
     def resetCharge(self):
@@ -2028,3 +2053,43 @@ class FIMS_Simulation:
 
         return optimalFieldData
     
+
+
+
+#***********************************************************************************#
+#***********************************************************************************#
+# METHODS FOR RUNNING WITH SURROUNDING CELLS
+#***********************************************************************************#
+#***********************************************************************************#
+
+#***********************************************************************************#
+    def runSimulationSurrounding(self):
+        """
+        TODO
+        """
+    
+        self._checkParam()
+
+        #get the run number for this simulation
+        runNo = self._getRunNumber()
+        print(f'Running simulation - Run number: {runNo}')
+        
+        #write parameters for sim
+        self._writeParam()
+    
+        #Generate mesh for surrounding geometry
+        self._runGmsh(geoFile='FIMSSurrounding.txt')
+
+        #Solve field and weighting field for surrounding geometry
+        self._runElmer(surrounding=True)
+        self._runElmerWeighting(surrounding=True)
+    
+        #Run charge transport simulation for surrounding geometry
+        self._runGarfield(surrounding=True)
+    
+        #reset parameters to finish
+        self.resetParam()
+        
+        return runNo
+    
+
