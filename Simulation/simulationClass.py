@@ -1367,7 +1367,12 @@ class FIMS_Simulation:
         #Ensure all parameters exist and save them
         self._checkParam()
         saveParam = self.param.copy()
-
+        
+        #Verify transparency can be obtained with 2 sigma statistical confidence (Bayesian)
+        if targetTransparency == 1.0:
+            print('target transparency statistically unobtainable (Bayesian). Setting to 0.99')
+            targetTransparency =0.99
+        
         print(f'Beginning search for minimum field to achieve >{targetTransparency}% transparency...')
        
         iterNo = 0
@@ -1402,23 +1407,26 @@ class FIMS_Simulation:
             transparencyAtField['transparency'].append(transparencyResults['transparency'])
             transparencyAtField['transparencyErr'].append(transparencyResults['transparencyErr'])
                 
-
+            twoSigmaTransparency = transparencyAtField['transparency'][-1] - 2*transparencyAtField['transparencyErr'][-1]
+            
             #Check transparency to terminate loop
-            if transparencyAtField['transparency'][-1] >= targetTransparency:
+            if twoSigmaTransparency >= targetTransparency:
                 isTransparent = True
-                print(f'Transparent at field ratio = {transparencyAtField['field'][-1]}:')
-                print(f'\tTransparency = {transparencyAtField['transparency'][-1]:.3f} +/- {transparencyAtField['transparencyErr'][-1]:.3f}')
+                print(f'Transparent at field ratio = {transparencyAtField["field"][-1]}:')
+                print(f'\tTransparency = {transparencyAtField["transparency"][-1]:.3f}',
+                        f'+/- {transparencyAtField["transparencyErr"][-1]:.3f}')
+
             else:
                 isTransparent = False
-                print(f'Not transparent at field ratio = {transparencyAtField['field'][-1]}:')
-                print(f'\tTransparency = {transparencyAtField['transparency'][-1]:.3f} +/- {transparencyAtField['transparencyErr'][-1]:.3f}')
-        #End of find field for transparency loop
+                print(f'Not transparent at field ratio = {transparencyAtField["field"][-1]}:')
+                print(f'\tTransparency = {transparencyAtField["transparency"][-1]:.3f}',
+                        f'+/- {transparencyAtField["transparencyErr"][-1]:.3f}')
 
+        #End of find field for transparency loop
 
         #Print solution
         finalField = self._getParam('fieldRatio')
         print(f'Solution: Field ratio = {finalField}')
-        #print(transparencyAtField)
         
         #Reset parameters
         self.resetParam()
