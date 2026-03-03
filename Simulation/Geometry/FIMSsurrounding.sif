@@ -13,15 +13,13 @@ Simulation
   Steady State Max Iterations = 5
   Output Intervals(1) = 1
   Coordinate Scaling = 1e-6
-  Solver Input File = FIMS.sif
-  Post File = FIMS.ep !Output for Garfield
-  Post File = FIMS.vtu !Output for ParaView
+  Solver Input File = FIMSsurrounding.sif
+  Post File = FIMSsurrounding.ep !Output for Garfield
+  Post File = FIMSsurrounding.vtu !Output for ParaView
   Output file = "elmerResults/FIMSsurrounding.result"
 End
 
 Constants
-  Gravity(4) = 0 -1 0 9.82
-  Stefan Boltzmann = 5.670374419e-08
   Permittivity of Vacuum = 8.85418781e-12
   Permeability of Vacuum = 1.25663706e-6
   Boltzmann Constant = 1.380649e-23
@@ -37,11 +35,6 @@ Solver 1
   Stabilize = True
   Optimize Bandwidth = True
   Steady State Convergence Tolerance = 1.0e-5
-  Nonlinear System Convergence Tolerance = 1.0e-7
-  Nonlinear System Max Iterations = 400
-  Nonlinear System Newton After Iterations = 3
-  Nonlinear System Newton After Tolerance = 1.0e-3
-  Nonlinear System Relaxation Factor = 1.0
   Linear System Solver = Iterative
   Linear System Iterative Method = BiCGStab
   Linear System Max Iterations = 500
@@ -65,25 +58,12 @@ End
 
 Material 1
   Name = "Air (room temperature)"
-  Viscosity = 1.983e-5
-  Heat Capacity = 1005.0
-  Heat expansion Coefficient = 3.43e-3
-  Density = 1.205
-  Heat Conductivity = 0.0257
-  Sound speed = 343.0
   Relative Permittivity = 1
 End
 
 Material 2
   Name = "Aluminium (generic)"
-  Density = 2700.0
   Relative Permittivity = 1e10
-  Heat Capacity = 897.0
-  Heat Conductivity = 237.0
-  Sound speed = 5000.0
-  Poisson ratio = 0.35
-  Youngs modulus = 70.0e9
-  Heat expansion Coefficient = 23.1e-6
 End
 
 Material 3
@@ -172,13 +152,13 @@ End
 
 Boundary Condition 10
   Target Boundaries(1) = 10
-  Name = "DielectricSurfaceCharge"
+  Name = "DielectricTop"
   Charge Density = Variable Coordinate 1, Coordinate 2, Coordinate 3
   File "chargeBuildup.dat"
 End
 
 Boundary Condition 11
   Target Boundaries(1) = 11
-  Name = "MirrorBoundaries"
+  Name = "Boundaries"
   Electric Flux = 0.0
 End

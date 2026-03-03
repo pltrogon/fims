@@ -1188,13 +1188,17 @@ Physical Surface("Cathode") = {
 
 Physical Surface("Grid") = {
     gridTopSurface, gridBottomSurface,
-    gridCenterHoleSurface0, gridCenterHoleSurface1, gridCenterHoleSurface2, gridCenterHoleSurface3,
+
+    gridCenterHoleSurface0, gridCenterHoleSurface1, 
+    gridCenterHoleSurface2, gridCenterHoleSurface3,
+
     gridAdjacentHoleSurface0, gridAdjacentHoleSurface1, 
     gridAdjacentHoleSurface2, gridAdjacentHoleSurface3, 
     gridAdjacentHoleSurface4, gridAdjacentHoleSurface5,
     gridAdjacentHoleSurface6, gridAdjacentHoleSurface7, 
     gridAdjacentHoleSurface8, gridAdjacentHoleSurface9, 
     gridAdjacentHoleSurface10, gridAdjacentHoleSurface11,
+    
     gridSideSurface0, gridSideSurface1, 
     gridSideSurface2, gridSideSurface3, gridSideSurface4, 
     gridSideSurface5, gridSideSurface6, 
