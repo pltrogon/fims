@@ -128,11 +128,11 @@ class FIMS_Simulation:
             dict: Dictionary of default parameters and values.
         """
         defaultParam = {
-            'padLength': 20.,
+            'padLength': 12.,
             'pitch': 55.,
             'gridStandoff': 50.,
             'gridThickness': 1.,
-            'holeRadius': 55.,
+            'holeRadius': 20.,
             'cathodeHeight': 200.,
             'thicknessSiO2': 5.,
             'pillarRadius': 2.,
@@ -601,6 +601,65 @@ class FIMS_Simulation:
         self._writeFile(filename, sifLinesNew)
 
         return
+    
+#***********************************************************************************#
+    def _makeWeightingSurrounding(self):
+        """
+        Writes a new .sif file for determining the weighting field for a given pad.
+    
+        Sets all electrode boundary conditions to 0, then sets the pad potential to 1.
+
+        Args:
+            targetPad (str): The name of the pad to set to 1.0 potential.
+
+        """
+
+        padNames = [
+            'CentralPad', 
+            'TopPad', 
+            'BottomPad', 
+            'RightTopPad', 
+            'RightBottomPad',
+            'LeftTopPad',
+            'LeftBottomPad'
+        ]
+
+        #Read original sif file
+        originalLines = self._readSIF(sifFile='FIMSSurrounding.sif')
+
+        for targetPad in padNames:
+
+            sifLines = originalLines.copy()
+        
+            # Process lines one by one
+            sifLinesNew = []
+            targetPadBC = False
+
+            for line in sifLines:
+                line = line.replace('FIMSSurrounding', f'FIMSSurroundingWeighting_{targetPad}')
+
+                #Check if BC for Central Pad
+                if f'{targetPad}' in line:
+                    targetPadBC = True
+
+                #Set potentials -> 1 if target Pad, 0 otherwise
+                if 'Potential = ' in line:
+                    if targetPadBC:
+                        sifLinesNew.append('\tPotential = 1.0\n')
+                        targetPadBC = False
+                        continue
+                    else:
+                        sifLinesNew.append('\tPotential = 0.0\n')
+                        continue
+
+                #Keep all other non-potential lines unchanged
+                sifLinesNew.append(line)
+
+            #Write new sif file
+            filename = f'Geometry/FIMSSurroundingWeighting_{targetPad}.sif'
+            self._writeFile(filename, sifLinesNew)
+
+        return
         
 
 #***********************************************************************************#
@@ -758,22 +817,17 @@ class FIMS_Simulation:
         return
 
 #***********************************************************************************#
-    def _runElmerWeighting(self, surrounding=False):
+    def _runElmerWeighting(self):
         """
         Runs ElmerSolver to determine the weighing field for a simulation.
     
         Assumes that the Gmsh mesh has already been converted to 
         Elmer format by ElmerGrid. Creates the appropriate .sif file.
         Writes the ElmerSolver output to 'log/logElmerWeighting'.
-
-        Args:
-            surrounding (bool): Option to run Elmer for the surrounding geometry.
         """
 
-        base = 'FIMSSurrounding' if surrounding else 'FIMS'
 
-        if not surrounding:
-            self._makeWeighting()
+        self._makeWeighting()
         
         originalCWD = os.getcwd()
         os.chdir('./Geometry')
@@ -783,12 +837,55 @@ class FIMS_Simulation:
             with open(os.path.join(originalCWD, 'log/logElmerWeighting.txt'), 'w+') as elmerOutput:
                 startTime = time.monotonic()
                 subprocess.run(
-                    ['ElmerSolver', f'{base}Weighting.sif'],
+                    ['ElmerSolver', 'FIMSWeighting.sif'],
                     stdout=elmerOutput, 
                     check=True
                 )
                 endTime = time.monotonic()
                 elmerOutput.write(f'\n\nElmerSolver run time: {endTime - startTime} s')
+    
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f'ElmerSolver weighting failed with exit code {e.returncode}.')
+        
+        finally:
+            os.chdir(originalCWD)
+
+        return
+    
+#***********************************************************************************#
+    def _runElmerWeightingSurrounding(self):
+        """
+        Runs ElmerSolver to determine the weighing field for a simulation.
+    
+        Assumes that the Gmsh mesh has already been converted to 
+        Elmer format by ElmerGrid. Creates the appropriate .sif file.
+        Writes the ElmerSolver output to 'log/logElmerWeighting'.
+        """
+
+        padNames = [
+            'CentralPad', 
+            'TopPad', 
+            'BottomPad', 
+            'RightTopPad', 
+            'RightBottomPad',
+            'LeftTopPad',
+            'LeftBottomPad'
+        ]
+
+        self._makeWeightingSurrounding()
+        
+        originalCWD = os.getcwd()
+        os.chdir('./Geometry')
+        try:
+            for targetPad in padNames:
+                print(f'\tExecuting Elmer weighting for {targetPad}...')
+
+                with open(os.path.join(originalCWD, 'log/logElmerWeighting.txt'), 'w+') as elmerOutput:
+                    subprocess.run(
+                        ['ElmerSolver', f'FIMSSurroundingWeighting_{targetPad}.sif'],
+                        stdout=elmerOutput, 
+                        check=True
+                    )
     
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f'ElmerSolver weighting failed with exit code {e.returncode}.')
@@ -998,6 +1095,47 @@ class FIMS_Simulation:
         self.resetParam()
         
         return runNo
+    
+#***********************************************************************************#
+    def runSimulationSurrounding(self):
+        """
+        Executes the full simulation process for a geometry consisting of the central
+        cell and half of all surrounding cells included.
+
+        This is a larger region to mesh/solve, but allows for neighbouring pads to be
+        individually chacterized, and allows for charge-buildup studies on the SiO2 
+        layer. Pillars are not included, but the weighing field for each pad is 
+        calculated. Capacitance matrix between all electrodes is also calculated.
+
+        """
+    
+        self._checkParam()
+
+        #get the run number for this simulation
+        runNo = self._getRunNumber()
+        print(f'Running simulation - Run number: {runNo}')
+        
+        #write parameters for sim
+        self._writeParam()
+    
+        #Generate mesh for surrounding geometry
+        self._runGmsh(geoFile='FIMSSurrounding.txt')
+
+        #Solve field and weighting field for surrounding geometry
+        self._runElmer(surrounding=True)
+        self._runElmerWeightingSurrounding()
+    
+        #Run charge transport simulation for surrounding geometry
+        self._runGarfield(surrounding=True)
+    
+        #reset parameters to finish
+        self.resetParam()
+        
+        return runNo
+    
+
+
+
         
 #***********************************************************************************#
 #***********************************************************************************#
@@ -2052,44 +2190,8 @@ class FIMS_Simulation:
         optimalFieldData = pd.read_pickle(filename)  
 
         return optimalFieldData
-    
 
 
 
-#***********************************************************************************#
-#***********************************************************************************#
-# METHODS FOR RUNNING WITH SURROUNDING CELLS
-#***********************************************************************************#
-#***********************************************************************************#
-
-#***********************************************************************************#
-    def runSimulationSurrounding(self):
-        """
-        TODO
-        """
-    
-        self._checkParam()
-
-        #get the run number for this simulation
-        runNo = self._getRunNumber()
-        print(f'Running simulation - Run number: {runNo}')
-        
-        #write parameters for sim
-        self._writeParam()
-    
-        #Generate mesh for surrounding geometry
-        self._runGmsh(geoFile='FIMSSurrounding.txt')
-
-        #Solve field and weighting field for surrounding geometry
-        self._runElmer(surrounding=True)
-        self._runElmerWeighting(surrounding=True)
-    
-        #Run charge transport simulation for surrounding geometry
-        self._runGarfield(surrounding=True)
-    
-        #reset parameters to finish
-        self.resetParam()
-        
-        return runNo
     
 

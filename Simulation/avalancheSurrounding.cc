@@ -347,7 +347,7 @@ int main(int argc, char * argv[]) {
   fieldFIMS.SetGas(gasFIMS);
 
   // Import the weighting field for the readout electrode.
-  fieldFIMS.SetWeightingField(elmerResultsPath+"FIMSSurroundingWeighting.result", "CentralPad");
+  fieldFIMS.SetWeightingField(elmerResultsPath+"FIMSSurroundingWeighting_CentralPad.result", "CentralPad");
 
   //Create a sensor
   Sensor* sensorFIMS = new Sensor();
@@ -583,12 +583,12 @@ int main(int argc, char * argv[]) {
       //Link objects
       parallelFieldFIMS->SetGas(gasFIMS);
 
-      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeighting.result", "CentralPad");
-      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeighting.result", "TopPad");
-      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeighting.result", "BottomPad");
-      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeighting.result", "RightTopPad");
-      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeighting.result", "RightBottomPad");
-      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeighting.result", "LeftTopPad");
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeighting_CentralPad.result", "CentralPad");
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeighting_TopPad.result", "TopPad");
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeighting_BottomPad.result", "BottomPad");
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeighting_RightTopPad.result", "RightTopPad");
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeighting_RightBottomPad.result", "RightBottomPad");
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeighting_LeftTopPad.result", "LeftTopPad");
       parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeighting.result", "LeftBottomPad");
 
       parallelFieldFIMS->EnableMirrorPeriodicityX();
