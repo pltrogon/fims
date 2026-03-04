@@ -589,7 +589,7 @@ int main(int argc, char * argv[]) {
       parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeighting_RightTopPad.result", "RightTopPad");
       parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeighting_RightBottomPad.result", "RightBottomPad");
       parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeighting_LeftTopPad.result", "LeftTopPad");
-      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeighting.result", "LeftBottomPad");
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeighting_LeftBottomPad.result", "LeftBottomPad");
 
       parallelFieldFIMS->EnableMirrorPeriodicityX();
       parallelFieldFIMS->EnableMirrorPeriodicityY();
@@ -649,6 +649,7 @@ int main(int argc, char * argv[]) {
     int statIon;
     float electronDriftx, electronDrifty, electronDriftz;
     double signalTime, signalStrength;
+    double signalTopPad, signalBottomPad, signalRightTopPad, signalRightBottomPad, signalLeftTopPad, signalLeftBottomPad;
 
     TTree* parallelAvalancheDataTree = new TTree("avalancheDataTree", "Avalanche Results");
     parallelAvalancheDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
@@ -697,6 +698,12 @@ int main(int argc, char * argv[]) {
     parallelSignalDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
     parallelSignalDataTree->Branch("Signal Time", &signalTime, "signalTime/D");
     parallelSignalDataTree->Branch("Signal Strength", &signalStrength, "signalStrength/D");
+    parallelSignalDataTree->Branch("Top Pad Signal", &signalTopPad, "signalTopPad/D");
+    parallelSignalDataTree->Branch("Bottom Pad Signal", &signalBottomPad, "signalBottomPad/D");
+    parallelSignalDataTree->Branch("Right Top Pad Signal", &signalRightTopPad, "signalRightTopPad/D");
+    parallelSignalDataTree->Branch("Right Bottom Pad Signal", &signalRightBottomPad, "signalRightBottomPad/D");
+    parallelSignalDataTree->Branch("Left Top Pad Signal", &signalLeftTopPad, "signalLeftTopPad/D");
+    parallelSignalDataTree->Branch("Left Bottom Pad Signal", &signalLeftBottomPad, "signalLeftBottomPad/D");
   
 
     //***** Parallel Avalanche Loop *****//
@@ -782,7 +789,14 @@ int main(int argc, char * argv[]) {
       //Get signal for each timestep
       for(int inSignal = 0; inSignal < nSignalBins; inSignal++){
         signalTime = inSignal*timeStep;
-        signalStrength = parallelSensorFIMS->GetSignal("centerPad", inSignal);
+        signalStrength = parallelSensorFIMS->GetSignal("CentralPad", inSignal);
+
+        signalTopPad = parallelSensorFIMS->GetSignal("TopPad", inSignal);
+        signalBottomPad = parallelSensorFIMS->GetSignal("BottomPad", inSignal);
+        signalRightTopPad = parallelSensorFIMS->GetSignal("RightTopPad", inSignal);
+        signalRightBottomPad = parallelSensorFIMS->GetSignal("RightBottomPad", inSignal);
+        signalLeftTopPad = parallelSensorFIMS->GetSignal("LeftTopPad", inSignal);
+        signalLeftBottomPad = parallelSensorFIMS->GetSignal("LeftBottomPad", inSignal);
         
         //Fill tree
         parallelSignalDataTree->Fill();
