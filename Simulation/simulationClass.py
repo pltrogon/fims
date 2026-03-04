@@ -894,6 +894,32 @@ class FIMS_Simulation:
             os.chdir(originalCWD)
 
         return
+    
+#***********************************************************************************#
+    def _runElmerCapacitance(self):
+        """
+        TODO
+        """
+
+        originalCWD = os.getcwd()
+        os.chdir('./Geometry')
+        try:
+            print(f'\tExecuting Elmer capacitance...')
+
+            with open(os.path.join(originalCWD, 'log/logElmerCapacitance.txt'), 'w+') as elmerOutput:
+                subprocess.run(
+                    ['ElmerSolver', f'FIMSCapacitance.sif'],
+                    stdout=elmerOutput, 
+                    check=True
+                )
+    
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f'ElmerSolver capacitance failed with exit code {e.returncode}.')
+        
+        finally:
+            os.chdir(originalCWD)
+
+        return
 
 #***********************************************************************************#
     def _runGarfield(self, surrounding=False):
@@ -1124,6 +1150,7 @@ class FIMS_Simulation:
         #Solve field and weighting field for surrounding geometry
         self._runElmer(surrounding=True)
         self._runElmerWeightingSurrounding()
+        self._runElmerCapacitance()
     
         #Run charge transport simulation for surrounding geometry
         self._runGarfield(surrounding=True)
