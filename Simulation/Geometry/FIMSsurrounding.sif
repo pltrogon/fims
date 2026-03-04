@@ -13,10 +13,10 @@ Simulation
   Steady State Max Iterations = 1
   Output Intervals(1) = 1
   Coordinate Scaling = 1e-6
-  Solver Input File = FIMSsurrounding.sif
-  ! Post File = FIMSsurrounding.ep !Output for Garfield
-  ! Post File = FIMSsurrounding.vtu !Output for ParaView
-  Output file = "elmerResults/FIMSsurrounding.result"
+  Solver Input File = FIMSSurrounding.sif
+  Post File = FIMSSurrounding.ep !Output for Garfield
+  ! Post File = FIMSSurrounding.vtu !Output for ParaView
+  Output file = "elmerResults/FIMSSurrounding.result"
 End
 
 Constants
