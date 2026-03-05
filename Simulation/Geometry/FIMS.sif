@@ -10,7 +10,7 @@ Simulation
   Coordinate System = Cartesian
   Coordinate Mapping(3) = 1 2 3
   Simulation Type = Steady state
-  Steady State Max Iterations = 5
+  Steady State Max Iterations = 1
   Output Intervals(1) = 1
   Coordinate Scaling = 1e-6
   Solver Input File = FIMS.sif
@@ -131,7 +131,7 @@ End
 Boundary Condition 1
   Target Boundaries(1) = 1
   Name = "Cathode"
-	Potential = -116.46600000000001
+	Potential = -113.66600000000001
 End
 
 Boundary Condition 2
