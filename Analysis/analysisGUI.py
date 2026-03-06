@@ -402,8 +402,11 @@ class App(tk.Tk):
                 case 'BelowGrid':
                     self.currentFig = self.simData.plot2DFieldLines('BelowGrid')
 
-                case 'AvalancheTracks':
-                    self.currentFig = self.simData.plotAvalanche2D(avalancheID=self.curAvalancheID.get())
+                case 'ElectronAvalancheTracks':
+                    self.currentFig = self.simData.plotElectronAvalanche(avalancheID=self.curAvalancheID.get())
+
+                case 'IonAvalancheTracks':
+                    self.currentFig = self.simData.plotIonAvalanche(avalancheID=self.curAvalancheID.get())
 
                 case 'Heatmap':
                     self.currentFig = self.simData.plotParticleHeatmaps(self.curParticle.get())

@@ -111,6 +111,7 @@ class FIMS_Simulation:
         -----Untested Charge Buildiup------
     """
 
+
 #**********************************************************************#
     def __init__(self):
         """
@@ -130,16 +131,19 @@ class FIMS_Simulation:
 
         return
 
+
 #**********************************************************************#
     #String definition
     def __str__(self):
         """
-        Returns a formatted string containing all of the simulation parameters.
+        Returns a formatted string containing all of the 
+        simulation parameters.
         """
         paramList = [f'{key}: {value}' for key, value in self.param.items()]            
         return "FIMS Simulation Parameters:\n\t" + "\n\t".join(paramList)
 
-#**********************************************************************#    
+
+#**********************************************************************#
     def defaultParam(self):
         """
         Default FIMS parameters.
@@ -171,6 +175,7 @@ class FIMS_Simulation:
         }
         return defaultParam
 
+
 #**********************************************************************#    
     def _checkParam(self):
         """
@@ -184,31 +189,34 @@ class FIMS_Simulation:
         allParam = self.defaultParam()
         for inParam in allParam:
             if inParam not in self.param:
-                raise KeyError(f"Parameter '{inParam}' missing from "
-                                "parameter dictionary.")
+                raise KeyError(f'{inParam} missing from parameter dictionary.')
             
         #Check gas composition 
         self._checkGasComp()
                 
         return
-    
-#**********************************************************************#    
+
+
+#**********************************************************************#
     def _checkGasComp(self):
         """
         Ensures that the gas composition percentages sum to 1.0.
         """
         totalComp = (
-            float(self._getParam('gasCompAr')) +
-            float(self._getParam('gasCompCO2')) +
-            float(self._getParam('gasCompCF4')) +
-            float(self._getParam('gasCompIsobutane'))
-        )
+            float(self._getParam('gasCompAr'))
+            + float(self._getParam('gasCompCO2'))
+            + float(self._getParam('gasCompCF4'))
+            + float(self._getParam('gasCompIsobutane'))
+            )
         
         if not math.isclose(totalComp, 1.0, rel_tol=1e-3):
-            raise ValueError(f'Gas composition percentages must sum '
-                                f'to 1.0. Current sum: {totalComp}')
+            raise ValueError(
+                            'Gas composition percentages '
+                            f'must sum to 1.0. Current sum: {totalComp}'
+                            )
         
         return
+
 
 #**********************************************************************#
     def _getParam(self, parameter):
@@ -219,6 +227,7 @@ class FIMS_Simulation:
             raise KeyError(f'Error - Invalid parameter: {parameter}.')
             
         return copy.copy(self.param[parameter])
+
 
 #**********************************************************************#       
     def _getGarfieldPath(self):
@@ -240,8 +249,11 @@ class FIMS_Simulation:
             with open(filename, 'r') as file:
                 garfieldPath = file.read().strip()
                 if not os.path.exists(garfieldPath):
-                    print("Error: File 'setupGarfield.sh' not found "
-                            f"at '{garfieldPath}'.")
+                    print(
+                        "Error: File 'setupGarfield.sh' "
+                        f"not found at '{garfieldPath}'."
+                        )
+                    
                     return None
     
         except FileNotFoundError:
@@ -255,19 +267,19 @@ class FIMS_Simulation:
             
         return garfieldPath
 
+
 #**********************************************************************#
     def _setupSimulation(self):
         """
         Initializes Garfield++ and creates an avalanche executable.
         
-        Reads the Garfiled++ source path, and ensures a log and build
+        Reads the Garfield++ source path, and ensures a log and build
         directory. Compiles the executable using cmake and make.
         Initializes a simulation run counter if it does not already 
         exist.
     
-        Note: If a segmentation fault occurs, it is most likely that the
-              Garfield++ library is not sourced correctly.
-    
+        Note: If a segmentation fault occurs, it is most likely that 
+                the Garfield++ library is not sourced correctly.
         """
 
         #Check for necessary pathways and create if not present
@@ -276,7 +288,8 @@ class FIMS_Simulation:
             'build',
             'build/parallelData', 
             '../Data/Magboltz'
-        ]
+            ]
+
         for inPath in paths:
             os.makedirs(inPath, exist_ok=True)
 
@@ -286,17 +299,24 @@ class FIMS_Simulation:
         # Get garfield path into environment
         envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
         try:
-            envOutput = subprocess.check_output(envCommand, shell=True, universal_newlines=True)
-            newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line)
+            envOutput = subprocess.check_output(
+                            envCommand, 
+                            shell=True, 
+                            universal_newlines=True
+                            )
+            
+            newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line) 
+            #TODO: this can be done better
             os.environ.update(newEnv)
+        
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f'ERROR - Failed to source Garfield++ environment: {e.stderr}')
+            raise RuntimeError(
+                    'ERROR - Failed to source Garfield++ environment: '
+                    f'{e.stderr}'
+                    )
 
         #Make executables
-        makeBuild = (
-            f'cmake .. && '
-            f'make'
-        )
+        makeBuild = (f'cmake .. && make')
 
         # Change to the build directory and run cmake and make
         originalCWD = os.getcwd()
@@ -310,9 +330,13 @@ class FIMS_Simulation:
                 env=os.environ,
                 capture_output=True,
                 text=True
-            )
+                )
+                
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f'ERROR - Failed to build project: {e.stderr}')
+            raise RuntimeError(
+                    f'ERROR - Failed to build project: {e.stderr}'
+                    )
+        
         finally:
             os.chdir(originalCWD)
 
@@ -322,6 +346,7 @@ class FIMS_Simulation:
                 file.write('1000')  # Starting run number
                 
         return
+
 
 #**********************************************************************#
     def _makeRunControl(self):
@@ -336,7 +361,7 @@ class FIMS_Simulation:
             '// FIMS Simulation Control File //',
             '// Assumes the form "variable = value;" for each line.',
             '// Number of input parameters (numInputs included):',
-            'numInputs = 19;',   ##### NOTE: Change this if parameters are added/removed #####
+            'numInputs = 19;',   #TODO: Change this if parameters are added/removed#
             '',
             '//----- Geometry parameters -----//',
             '// Dimensions in microns.',
@@ -382,14 +407,19 @@ class FIMS_Simulation:
             with open(filename, 'w') as file:
                 file.write(runControlInfo)
         except Exception as e:
-            raise RuntimeError(f"An error occurred while writing to the file '{filename}': {e}")
+            raise RuntimeError(
+                    'An error occurred while writing to file '
+                    f'"{filename}": {e}'
+                    )
         
         return
+
 
 #**********************************************************************#        
     def _readParam(self):
         """
-        Reads the simulation parameters contained in the simulation control file.
+        Reads the simulation parameters contained in the simulation 
+        control file.
         """
         
         filename = 'runControl'
@@ -405,26 +435,40 @@ class FIMS_Simulation:
                     
                     # Split at the first '='
                     if '=' not in line:
-                        raise ValueError(f"Malformed line {lineNo} in {filename}: Missing '='")
+                        raise ValueError(
+                                f'Malformed line {lineNo} '
+                                f'in {filename}: Missing "="'
+                                )
+                                        
                     key, _, value = line.partition('=')
                     
                     key = key.strip()
                     value = value.strip().rstrip(';')
                     
                     if not key:
-                        raise ValueError(f"Malformed line {lineNo} in {filename}: Missing Key")
+                        raise ValueError(
+                                f'Malformed line {lineNo} '
+                                f'in {filename}: Missing Key.'
+                                )
 
                     readInParam[key] = value
 
         except FileNotFoundError:
-            raise FileNotFoundError(f"Critical Error: Configuration file '{filename}' not found.")
+            raise FileNotFoundError(
+                        'Critical Error: Configuration file '
+                        f'"{filename}" not found.'
+                        )
+        
         except Exception as e:
-            raise RuntimeError(f"Error reading parameters from {filename}: {e}")
+            raise RuntimeError(
+                    f'Error reading parameters from {filename}: {e}'
+                    )
 
         self.param = readInParam
         self._checkParam()
         
         return
+
 
 #**********************************************************************#    
     def _writeFile(self, filename, lines):
@@ -441,9 +485,13 @@ class FIMS_Simulation:
                 file.writelines(lines)
                 
         except Exception as e:
-            raise RuntimeError(f"An error occurred while writing to the file '{filename}': {e}")
+            raise RuntimeError(
+                    'An error occurred while writing to the file '
+                    f'"{filename}": {e}'
+                    )
             
         return
+
 
 #**********************************************************************#
     def _writeRunControl(self):
@@ -983,23 +1031,24 @@ class FIMS_Simulation:
     
         #Allow for skipping Gmsh if geometry has not changed.
         if changeGeometry:
-            self._generateGeometry()
+            self._runGmsh()
     
         #Determine the Electric and weighting fields
-        self._solveEField()
+        self._runElmer()
 
         #If geometry does not change, neither will weighting field.
         if changeGeometry: 
-            self._solveWeightingField()
+            self._runElmerWeighting()
     
         #Run the electron transport simulation
-        self._runElectronTransport()
+        self._runGarfield()
     
         #reset parameters to finish
         self.resetParam()
         
         return runNo
         
+
 #**********************************************************************#
 #**********************************************************************#
 # METHODS FOR RUNNING MINIMUM FIELD
@@ -1049,21 +1098,21 @@ class FIMS_Simulation:
         #constEffField = 23.47
         
         #T2K gas
-        padEffField = 371.4*np.exp(-0.16*pad)
-        standEffField = 190.6*np.exp(-0.02*standoff)
-        constEffField = 50
+        padEffField = 371.4*np.exp(-0.16*pad) + 50
+        standEffField = 190.6*np.exp(-0.02*standoff) + 50
         
         #Minimum field for 100% transparency
-        minFieldTrans = radialMinField + standoffMinField + padMinField + 3
+        minFieldTrans = min(radialMinField, standoffMinField, padMinField)
         
         #Minimum field for 95% efficiency
-        minFieldEff = padEffField + standEffField + constEffField
+        minFieldEff = min(padEffField, standEffField)
         
         #Choose the larger of the two fields so that both 
         #conditions are satisfied simultaneously.
         minField = max(minFieldTrans, minFieldEff)
         
         return minField
+
 
 #**********************************************************************#
     def _readEfficiencyFile(self):
@@ -1170,8 +1219,8 @@ class FIMS_Simulation:
 
 
         if abs(valDiff) < 0.001:
-                print(f'Warning: Slope near zero. Using heuristic step of 2.')
-                return curField + 2
+                print(f'Warning: Slope near zero. Using heuristic step of 1.')
+                return curField + 1
 
         fieldStep = damping*targetDiff*fieldDiff/valDiff
 
@@ -1193,19 +1242,21 @@ class FIMS_Simulation:
 
         return newField
 
+
 #**********************************************************************#
     def _getNextField(self, iterNo, valueAtField, targetValue):
         """
         Determines the next field ratio for achieving a target value. 
-        Utilizes the iteration number to choreograph a secant-based root-finding method.
+        Utilizes the iteration number to choreograph a secant-based 
+        root-finding method.
         
         Args:
             iterNo (int): Iteration number.
-            valueAtField (dict): Dictionary containing field and value information:
+            valueAtField (dict): Dictionary of field information:
                 - 'field': Array of previous field ratios.
                 - 'value': Array of previous values.
                 - 'valueErr': Array of previous value errors.
-            verbose (bool): Optional parameter for displaying the intermediate results
+            targetValue (float): target value for search 
 
         Returns:
             float: Calculated field ratio for target value
@@ -1227,7 +1278,6 @@ class FIMS_Simulation:
             newField = self._getParam('fieldRatio')
 
         # Take constant step of 2 for 2nd iteration 
-        #TODO: why 2?
         elif iterNo == 2:
             newField = valueAtField['field'][0] + 2
 
@@ -1244,11 +1294,13 @@ class FIMS_Simulation:
         
         return newField
 
+
 #**********************************************************************#
     def _findFieldForEfficiency(self, targetEfficiency=.95, threshold=10):
         """
-        Performs an iterative search to find the minimum Electric Field Ratio 
-        required to achieve a specified detection efficiency for electron avalanches.
+        Performs an iterative search to find the minimum Electric Field
+        Ratio required to achieve a specified detection efficiency for 
+        electron avalanches.
 
         Process:
             1 - Solves an electric field using Elmer. 
@@ -1256,18 +1308,20 @@ class FIMS_Simulation:
             3 - Repeats steps 1 and 2, increasing the field ratio using a modified 
                 secant method until a solution is reached.
 
-        Note that this assumes that the field strength is monotonically increasing.
+        Note that this assumes that the field strength is monotonically 
+        increasing.
 
         Args:
-            targetEfficiency (float): The target electron detection efficiency.
-            threshold (int): The minimum avalanche size required for an event to 
-                             be counted as 'detected'.
+            targetEfficiency (float): The target electron detection 
+                                    efficiency.
+            threshold (int): The minimum avalanche size required for an 
+                            event to be counted as 'detected'.
 
         Returns:
-            float: The minimum field ratio required to achieve the target efficiency.
-                   This value is also loaded into the class parameters upon completion.
+            float: The minimum field ratio required to achieve the target
+            efficiency. This value is also loaded into the class 
+            parameters upon completion.
         """
-
         #Ensure all parameters exist and save them
         self._checkParam()
         saveParam = self.param.copy()
@@ -1281,12 +1335,12 @@ class FIMS_Simulation:
             'field': [],
             'efficiency': [],
             'efficiencyErr': []
-        }        
+            }        
 
         validEfficiency = False
 
         self.param['numAvalanche'] = 3000
-        self.param['avalancheLimit'] = 20 #Limit can be low. Check is boolean - above threshold or not
+        self.param['avalancheLimit'] = 20 #Limit can be low. Check is boolean: above threshold or not
         
         while not validEfficiency:
 
@@ -1299,7 +1353,7 @@ class FIMS_Simulation:
             newField = self._getNextField(iterNo, efficiencyAtField, targetEfficiency)
             efficiencyAtField['field'].append(newField)
             self.param['fieldRatio'] = newField
-            self._solveEField()
+            self._runElmer()
 
             #Determine the efficiency and read results from file
             self._runGetEfficiency(targetEfficiency=targetEfficiency, threshold=threshold)
@@ -1314,26 +1368,34 @@ class FIMS_Simulation:
                 case 'DID NOT CONVERGE':
                     validEfficiency = False
                     print(f'Did not converge at field ratio = {efficiencyAtField['field'][-1]}:')
-                    print(f'\tEfficiency = {efficiencyAtField['efficiency'][-1]:.3f} +/- {efficiencyAtField['efficiencyErr'][-1]:.3f}')
+                    print(
+                        f'\tEfficiency = {efficiencyAtField["efficiency"][-1]:.3f}',
+                        f'+/- {efficiencyAtField["efficiencyErr"][-1]:.3f}'
+                        )
 
                 case 'CONVERGED':
                     validEfficiency = True
-                    print(f'Converged at field ratio = {efficiencyAtField['field'][-1]}:')
-                    print(f'\tEfficiency = {efficiencyAtField['efficiency'][-1]:.3f} +/- {efficiencyAtField['efficiencyErr'][-1]:.3f}')
+                    print(f'Converged at field ratio = {efficiencyAtField["field"][-1]}:')
+                    print(
+                        f'\tEfficiency = {efficiencyAtField["efficiency"][-1]:.3f}',
+                        f'+/- {efficiencyAtField["efficiencyErr"][-1]:.3f}'
+                        )
             
                 case 'EXCLUDED':
                     validEfficiency = False
                     print(f'Excluded at field ratio = {efficiencyAtField['field'][-1]}:')
-                    print(f'\tEfficiency = {efficiencyAtField['efficiency'][-1]:.3f} +/- {efficiencyAtField['efficiencyErr'][-1]:.3f}')
+                    print(
+                        f'\tEfficiency = {efficiencyAtField["efficiency"][-1]:.3f}',
+                        '+/- {efficiencyAtField["efficiencyErr"][-1]:.3f}'
+                        )
 
                 case _:
-                    raise ValueError('Error - Malformed efficiency file.')      
+                    raise ValueError('Error - Malformed efficiency file.') 
         #End of find field for efficiency loop
 
         #Print solution
         finalField = self._getParam('fieldRatio')
         print(f'Solution found for {targetEfficiency*100:.0f}% efficiency: Field ratio = {finalField}')
-        #print(efficiencyAtField)
         
         #Reset parameters
         self.resetParam()
@@ -1343,37 +1405,47 @@ class FIMS_Simulation:
 
         return finalField
 
+
 #**********************************************************************#
     def _findFieldForTransparency(self, targetTransparency=0.99):
         """
-        Runs simulations to determine what the minimum electric field ratio
-        needs to be in order to have >99% E-field transparency.
+        Runs simulations to determine what the minimum electric field 
+        ratio needs to be in order to have >99% E-field transparency.
 
         Process:
             1 - Solves an electric field using Elmer. 
             2 - Executes Garfield++ to draw field lines to determine a transparency.
             3 - Repeats steps 1 and 2, increasing the field ratio until a solution is reached.
 
-        Note that this assumes that the field strength is monotonically increasing.
+        Note that this assumes that the field strength is monotonically
+        increasing.
 
         Args:
-            targetTransparency (float): The target electric field line transparency.
+            targetTransparency (float): The target electric field 
+            line transparency.
 
         Returns:            
-            float: The minimum field ratio required to achieve the 100% transparency.
-                   This value is also loaded into the class parameters upon completion.
+            float: The minimum field ratio required to achieve the 100%
+                transparency. This value is also loaded into the class 
+                parameters upon completion.
         """
 
         #Ensure all parameters exist and save them
         self._checkParam()
         saveParam = self.param.copy()
         
-        #Verify transparency can be obtained with 2 sigma statistical confidence (Bayesian)
-        if targetTransparency == 1.0:
-            print('target transparency statistically unobtainable (Bayesian). Setting to 0.99')
-            targetTransparency =0.99
+        #Verify transparency can be obtained with 2 sigma confidence
+        if targetTransparency >= 1.0:
+            print(
+                'target transparency statistically unobtainable',
+                '(Bayesian). Setting to 0.99'
+                )
+            targetTransparency = 0.99
         
-        print(f'Beginning search for minimum field to achieve >{targetTransparency}% transparency...')
+        print(
+            'Beginning search for minimum field to achieve',
+            f'> {targetTransparency}% transparency...'
+            )
        
         iterNo = 0
         iterNoLimit = 20
@@ -1382,7 +1454,7 @@ class FIMS_Simulation:
             'field': [],
             'transparency': [],
             'transparencyErr': []
-        } 
+            } 
 
         isTransparent = False
         self.param['numFieldLine'] = 400
@@ -1398,7 +1470,7 @@ class FIMS_Simulation:
             newField = self._getNextField(iterNo, transparencyAtField, targetTransparency)
             transparencyAtField['field'].append(newField)
             self.param['fieldRatio'] = newField
-            self._solveEField()
+            self._runElmer()
 
             #Generate field lines and read results from file
             self._runFieldLines()  
@@ -1413,14 +1485,18 @@ class FIMS_Simulation:
             if twoSigmaTransparency >= targetTransparency:
                 isTransparent = True
                 print(f'Transparent at field ratio = {transparencyAtField["field"][-1]}:')
-                print(f'\tTransparency = {transparencyAtField["transparency"][-1]:.3f}',
-                        f'+/- {transparencyAtField["transparencyErr"][-1]:.3f}')
+                print(
+                    f'\tTransparency = {transparencyAtField["transparency"][-1]:.3f}',
+                    f'+/- {transparencyAtField["transparencyErr"][-1]:.3f}'
+                    )
 
             else:
                 isTransparent = False
                 print(f'Not transparent at field ratio = {transparencyAtField["field"][-1]}:')
-                print(f'\tTransparency = {transparencyAtField["transparency"][-1]:.3f}',
-                        f'+/- {transparencyAtField["transparencyErr"][-1]:.3f}')
+                print(
+                    f'\tTransparency = {transparencyAtField["transparency"][-1]:.3f}',
+                    f'+/- {transparencyAtField["transparencyErr"][-1]:.3f}'
+                    )
 
         #End of find field for transparency loop
 
@@ -1463,7 +1539,7 @@ class FIMS_Simulation:
         print(f'\tInitial field ratio guess: {minFieldGuess}')
 
         #Generate the FEM geometry
-        self._generateGeometry()
+        self._runGmsh()
 
         ## Determine minimum field ratio for conditions
         # 95% efficiency
@@ -1565,7 +1641,7 @@ class FIMS_Simulation:
             newField = max(newFieldEff, newFieldTrans)
             valuesAtField['field'].append(newField)
             self.param['fieldRatio'] = newField
-            self._solveEField()
+            self._runElmer()
 
             #Generate field lines and read results from file
             self._runFieldLines()  
@@ -1707,10 +1783,10 @@ class FIMS_Simulation:
         minField = self.findMinFieldRatio()
 
         #Solve for the weighting field
-        self._solveWeightingField()
+        self._runElmerWeighting()
         
         #Run the electron transport simulation
-        self._runElectronTransport()
+        self._runGarfield()
         
         #Reset parameters
         self.resetParam()

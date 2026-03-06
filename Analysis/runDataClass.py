@@ -1226,7 +1226,7 @@ class runData:
         return fig2D
         
 #********************************************************************************#
-    def plotIonAvalanche(self, avalancheID=0, plotName='', lineWidth=1):
+    def plotIonAvalanche(self, avalancheID=0, plotName=''):
         """
         Generates 2D plots of the ions in a single electron avalanche.
 
@@ -1264,9 +1264,9 @@ class runData:
     
         #Plot each ion drift line in each subplot
         for electronID, driftLine in groupedData:
-            subxz.plot(driftLine['Drift x'], driftLine['Drift z'], lw=lineWidth)
-            subyz.plot(driftLine['Drift y'], driftLine['Drift z'], lw=lineWidth)
-            subxy.plot(driftLine['Drift x'], driftLine['Drift y'], lw=lineWidth)
+            subxz.plot(driftLine['Drift x'], driftLine['Drift z'])
+            subyz.plot(driftLine['Drift y'], driftLine['Drift z'])
+            subxy.plot(driftLine['Drift x'], driftLine['Drift y'])
 
         #Add initial electron location to each subplot
         subxz.plot(xInit, zInit, label='Initial', marker='x', color='red')
@@ -1294,7 +1294,6 @@ class runData:
         return fig2D
         
 #********************************************************************************#   
-
     def plotDiffusion(self, target):
         """
         Plots the diffusion of simulated particles in the drift direction (z) and 
@@ -1310,7 +1309,14 @@ class runData:
             'electron',
             'posIon',
             'negIon'
-        ]
+            ]
+        
+        #Get run data
+        padLength = self.getRunParameter('Pad Length')
+        standoff = self.getRunParameter('Grid Standoff')
+        holeRadius = self.getRunParameter('Hole Radius')
+        avalancheNum = self.getRunParameter('Number of Avalanches')
+
         match target:
             case 'electron':
                 particleData = self.getDataFrame('electronData')
@@ -1330,54 +1336,43 @@ class runData:
         if particleData is None:
             print(f"An error occured plotting '{target}'.")
             return
-
+        
+        #Calculate drift distance
         driftX = particleData['Final x'] - particleData['Initial x']
         driftY = particleData['Final y'] - particleData['Initial y']
         driftZ = particleData['Final z'] - particleData['Initial z']
 
         driftR = np.sqrt(driftX**2 + driftY**2)
 
+        #Plot drift data
         fig = plt.figure(figsize=(12, 4))
-        fig.suptitle(f"Total Drift of: {target}s ({self.getRunParameter('Number of Avalanches')} Avalanches)")
+        fig.suptitle(f"Total Drift of: {target}s ({avalancheNum} Avalanches)")
         
-        ax1 = fig.add_subplot(121)
-        ax2 = fig.add_subplot(122)
+        subZ = fig.add_subplot(121)
+        subXY = fig.add_subplot(122)
 
-        ax1.hist(abs(driftZ), bins=100)
-        ax2.hist(driftR, bins=100)
+        subZ.hist(abs(driftZ), bins=100)
+        subXY.hist(driftR, bins=100)
+        
+        #Add grid elements overlay
+        subZ.axvline(abs(driftZ.iloc[0]), c='r', ls=':', label='Initial Electron')
+        subZ.axvline(standoff, c='g', ls='--', label='Grid Height')
+        
+        subXY.axvline(driftR.iloc[0], c='r', ls=':', label='Initial Electron')
+        subXY.axvline(holeRadius, c='g', ls='--', label='Hole Radius')
+        subXY.axvline(padLength, c='m', ls='--', label='Pad Length')
+        
+        #Add plot labels
+        subZ.set_title('Drift in z')
+        subZ.set_xlabel('Drift in z (um)')
+        
+        subXY.set_title('Drift in xy Plane')
+        subXY.set_xlabel('Drift in r (um)')
 
-        ax1.axvline(
-            abs(driftZ.iloc[0]), 
-            c='r', ls=':', label='Initial Electron'
-        )
-        ax1.axvline(
-            self.getRunParameter('Grid Standoff'), 
-            c='g', ls='--', label='Grid Height'
-        )
-
-        ax2.axvline(
-            driftR.iloc[0], 
-            c='r', ls=':', label='Initial Electron'
-        )
-        ax2.axvline(
-            self.getRunParameter('Hole Radius'), 
-            c='g', ls='--', label='Hole Radius'
-        )
-        ax2.axvline(
-            self.getRunParameter('Pad Length'), 
-            c='m', ls='--', label='Pad Length'
-        )
-    
-        ax1.set_title('Drift in z')
-        ax2.set_title('Drift in xy Plane')
-    
-        ax1.set_xlabel('Drift in z (um)')
-        ax2.set_xlabel('Drift in r (um)')
-
-        ax1.legend()
-        ax2.legend()
-        ax1.grid()
-        ax2.grid()
+        subZ.legend()
+        subXY.legend()
+        subZ.grid()
+        subXY.grid()
         plt.tight_layout()   
         
         return fig
@@ -1693,6 +1688,7 @@ class runData:
             The lists are divided into two groups: ions captured by the grid,
             and ions that escape into the drift volume.
         """
+        #TODO: consider doing as dictionary instead of tuple of two lists
         
         edgeDistance = []
         bundleSize = []
@@ -1731,7 +1727,7 @@ class runData:
         return capturedList, escapedList
 
 #********************************************************************************#
-    def plotIBNHistogram(self, color = ['red','dark green','black']):
+    def plotIBNHistogram(self, color=['red','dark green','black']):
         """
         Creates a stacked double histogram of the distance from the field bundle 
         edge of every ion created in an avalanche. The double histogram is divided 
@@ -1749,10 +1745,10 @@ class runData:
         ionHistogram = plt.figure()
         plt.hist([backflowing, captured], bins = 'auto', 
                     label = ["Backflowing Ions", 'Captured Ions'], 
-                    stacked = True, color = color[0:2])
+                    stacked = True, color=color[0:2])
         
         #include a vertical line at the nominal bundle edge (x = 0)
-        plt.axvline(0, color = color[2], linewidth = 2, label = 'Bundle Edge')
+        plt.axvline(0, color=color[2], linewidth=2, label = 'Bundle Edge')
         
         plt.xlabel('Distance Ions Originate from Edge of Field Bundle')
         plt.ylabel('Number of Ions')
@@ -2164,14 +2160,12 @@ class runData:
         Returns:
             matplotlib.figure.Figure: The generated efficiency plot.
         """
-
+        gain = self.getCalcParameter('Trimmed Gain')
         fitResults = self._fitAvalancheSize(binWidth=1)
-        fitPolya = fitResults['fitPolya']
-
         histData = self._histAvalanche(trim=True, binWidth=binWidth)
 
+        fitPolya = fitResults['fitPolya']
         cutMask = histData['binCenters'] <= threshold
-       
         xData = histData['binCenters']
         yData = histData['prob']
 
@@ -2195,49 +2189,36 @@ class runData:
 
         ax = fig.add_subplot(111)
 
-        ax.bar(
-            xDataCut,
-            yDataCut,
-            width=binWidth,
-            label='Data Below Threshold', color='r', alpha=0.5
-        )
-        ax.bar(
-            xDataPass,
-            yDataPass,
-            width=binWidth,
-            label='Detected Data', color='g', alpha=0.5
-        ) 
-        ax.axvline(
-            x=threshold, 
-            c='r', ls='--', label=f'{threshold}-electron Threshold'
-        )
-        ax.plot(
-            xPolyaCut, polyaCut, 
-            label='Cut Polya', c='m', ls=':'
-        )
-        ax.plot(
-            xPolya, polyaData, 
-            label='Remaining Polya', c='m', ls='-'
-        )
-
-        gain = self.getCalcParameter('Trimmed Gain')
-        ax.axvline(
-            x=gain,
-            c='g', ls='--', label=f'Mean Avalanche Size (Gain) = {gain:.1f}'
-        )
-
+        ax.bar(xDataCut, yDataCut, width=binWidth,
+                label='Data Below Threshold', color='r', alpha=0.5
+                )
+                
+        ax.bar(xDataPass, yDataPass, width=binWidth,
+                label='Detected Data', color='g', alpha=0.5
+                )
+                
+        ax.axvline(x=threshold, c='r', ls='--', 
+                    label=f'{threshold}-electron Threshold'
+                    )
+        
+        """#TODO: undo this comment
+        ax.plot(xPolyaCut, polyaCut, label='Cut Polya', c='m', ls=':')
+        ax.plot(xPolya, polyaData, label='Remaining Polya', c='m', ls='-')
+        """
+        
+        ax.axvline(x=gain, c='g', ls='--', 
+                    label=f'Mean Avalanche Size (Gain) = {gain:.1f}'
+                     )
+        """
         polyaEff = fitPolya.calcEfficiency(threshold)
         efficiencyText = f'Polya Efficiency = {polyaEff:.4f}'
 
-        ax.text(
-            0.8, 0.5, efficiencyText, 
-            fontsize=10, 
-            horizontalalignment='center',
-            verticalalignment='center', 
-            transform=ax.transAxes,
-            bbox=dict(facecolor='w', edgecolor='black', boxstyle='round,pad=1')
-        )
-
+        ax.text(0.8, 0.5, efficiencyText, fontsize=10, 
+                horizontalalignment='center', verticalalignment='center', 
+                transform=ax.transAxes,
+                bbox=dict(facecolor='w', edgecolor='black', boxstyle='round,pad=1')
+                )
+        """
         plt.xlabel('Number of Electrons in Avalanche')
         plt.ylabel('Probability of Avalanche Size')
         plt.legend()

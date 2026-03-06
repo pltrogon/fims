@@ -10,7 +10,7 @@ Simulation
   Coordinate System = Cartesian
   Coordinate Mapping(3) = 1 2 3
   Simulation Type = Steady state
-  Steady State Max Iterations = 5
+  Steady State Max Iterations = 1
   Output Intervals(1) = 1
   Coordinate Scaling = 1e-6
   Solver Input File = FIMS.sif

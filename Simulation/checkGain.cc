@@ -1,7 +1,7 @@
 /*
  * checkGain.cc
  *
- * TODO
+ * TODO: Is this file depreciated?
  * 
  * Tanner Polischuk & James Harrison IV
  */

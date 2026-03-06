@@ -113,14 +113,16 @@ class FIMS_Optimizer:
         will do nothing.
         
         Valid parameter names: holeRadius, gridStandoff, padLength, and pitch
-        
-        Args: none
-        
-        returns: None
         """
         
         givenParam = self.params.copy()
-        allowedParams = ['holeRadius', 'gridStandoff', 'padLength', 'pitch']
+        
+        allowedParams = [
+                        'holeRadius', 
+                        'gridStandoff', 
+                        'padLength', 
+                        'pitch'
+                        ]
         
         if givenParam is None:
             raise ValueError('Error - No parameters.')
@@ -153,9 +155,6 @@ class FIMS_Optimizer:
         """
         Orchestrates the process of running a simulation and calculating
         the Ion Backflow Number (IBN) from the results.
-        
-        Args:
-            None.
 
         Returns:
             float: The calculated Ion Backflow Number.
@@ -184,9 +183,9 @@ class FIMS_Optimizer:
         """
         Objective function to optimize for minimum IBN.
 
-        Updates the simulation's parameter dictionary using the values in the optimizer
-        parameter array. Then gets the current IBN, prints the value to monitor convergence,
-        and returns it for the optimizer to minimize.
+        Updates the simulation's parameter dictionary using the values in the 
+        optimizer parameter array. Then gets the current IBN, prints the value to 
+        monitor convergence, and returns it for the optimizer to minimize.
         
         Args:
             optimizerParam (np.array): The flat array of parameters from the optimizer.
@@ -444,9 +443,6 @@ class FIMS_Optimizer:
         """
         Orchestrates the process of running a simulation and calculating
         the Ion Backflow Number (IBN) from the results.
-        
-        Args:
-            None.
 
         Returns:
             IBN (float): The calculated Ion Backflow Number.
@@ -512,9 +508,13 @@ class FIMS_Optimizer:
                 log.write(f'{line} ')
             log.write(f' {resultIBN} {efficiency} {transparency}\n')
 
-        print('********************************************************************************')
-        print(f'IBN = {resultIBN}, Efficiency = {efficiency}, Transparency = {transparency}')
-        print('********************************************************************************')
+        print('********************************************************************')
+        print(
+            f'IBN = {resultIBN},'
+            f'Efficiency = {efficiency},'
+            f'Transparency = {transparency}'
+            )
+        print('********************************************************************')
 
         return resultIBN, efficiency, transparency
     
