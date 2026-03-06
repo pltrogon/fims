@@ -211,9 +211,8 @@ class FIMS_Simulation:
         
         if not math.isclose(totalComp, 1.0, rel_tol=1e-3):
             raise ValueError(
-                            'Gas composition percentages '
-                            f'must sum to 1.0. Current sum: {totalComp}'
-                            )
+                f'Gas composition not complete: {totalComp}'
+            )
         
         return
 
@@ -250,9 +249,8 @@ class FIMS_Simulation:
                 garfieldPath = file.read().strip()
                 if not os.path.exists(garfieldPath):
                     print(
-                        "Error: File 'setupGarfield.sh' "
-                        f"not found at '{garfieldPath}'."
-                        )
+                        f"Error: File '{garfieldPath}' not found."
+                    )
                     
                     return None
     
@@ -288,7 +286,7 @@ class FIMS_Simulation:
             'build',
             'build/parallelData', 
             '../Data/Magboltz'
-            ]
+        ]
 
         for inPath in paths:
             os.makedirs(inPath, exist_ok=True)
@@ -297,23 +295,8 @@ class FIMS_Simulation:
         self._makeRunControl()
 
         # Get garfield path into environment
-        envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
-        try:
-            envOutput = subprocess.check_output(
-                            envCommand, 
-                            shell=True, 
-                            universal_newlines=True
-                            )
-            
-            newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line) 
-            #TODO: this can be done better
-            os.environ.update(newEnv)
-        
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(
-                    'ERROR - Failed to source Garfield++ environment: '
-                    f'{e.stderr}'
-                    )
+        newEnv = self._getGarfieldEnvironment()
+        os.environ.update(newEnv)
 
         #Make executables
         makeBuild = (f'cmake .. && make')
@@ -334,8 +317,8 @@ class FIMS_Simulation:
                 
         except subprocess.CalledProcessError as e:
             raise RuntimeError(
-                    f'ERROR - Failed to build project: {e.stderr}'
-                    )
+                f'ERROR - Failed to build project: {e.stderr}'
+            )
         
         finally:
             os.chdir(originalCWD)
@@ -347,7 +330,39 @@ class FIMS_Simulation:
                 
         return
 
+#**********************************************************************#
+    def _getGarfieldEnvironment(self):
+        """
+        Sourced the Garfield++ environment via bash.
 
+        Returns:
+            dict: Dictionary of environment variables.
+        """
+
+        garfieldEnv = {}
+        envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
+        
+        try:
+            envOutput = subprocess.check_output(
+                envCommand, 
+                shell=True, 
+                universal_newlines=True,
+                stderr=subprocess.STDOUT
+            )
+            
+            for line in envOutput.strip().splitlines():
+                if '=' in line:
+                    key, value = line.split('=', 1)
+                    garfieldEnv[key.strip()] = value.strip()
+        
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(
+                f'ERROR - Failed to source Garfield++: {e.output}'
+            )
+
+        return garfieldEnv
+        
+    
 #**********************************************************************#
     def _makeRunControl(self):
         """
@@ -361,7 +376,7 @@ class FIMS_Simulation:
             '// FIMS Simulation Control File //',
             '// Assumes the form "variable = value;" for each line.',
             '// Number of input parameters (numInputs included):',
-            'numInputs = 19;',   #TODO: Change this if parameters are added/removed#
+            'numInputs = 19;',   ##### Change this if parameters are added/removed ######
             '',
             '//----- Geometry parameters -----//',
             '// Dimensions in microns.',
@@ -408,9 +423,8 @@ class FIMS_Simulation:
                 file.write(runControlInfo)
         except Exception as e:
             raise RuntimeError(
-                    'An error occurred while writing to file '
-                    f'"{filename}": {e}'
-                    )
+                f"An error occurred while writing '{filename}': {e}"
+            )
         
         return
 
@@ -436,9 +450,8 @@ class FIMS_Simulation:
                     # Split at the first '='
                     if '=' not in line:
                         raise ValueError(
-                                f'Malformed line {lineNo} '
-                                f'in {filename}: Missing "="'
-                                )
+                            f'Malformed line in {filename}: Missing "="'
+                        )
                                         
                     key, _, value = line.partition('=')
                     
@@ -447,22 +460,20 @@ class FIMS_Simulation:
                     
                     if not key:
                         raise ValueError(
-                                f'Malformed line {lineNo} '
-                                f'in {filename}: Missing Key.'
-                                )
+                            f'Malformed line in {filename}: Missing Key.'
+                        )
 
                     readInParam[key] = value
 
         except FileNotFoundError:
             raise FileNotFoundError(
-                        'Critical Error: Configuration file '
-                        f'"{filename}" not found.'
-                        )
+                'Critical Error: Configuration file not found.'
+            )
         
         except Exception as e:
             raise RuntimeError(
-                    f'Error reading parameters from {filename}: {e}'
-                    )
+                f'Error reading parameters from {filename}: {e}'
+            )
 
         self.param = readInParam
         self._checkParam()
@@ -486,9 +497,8 @@ class FIMS_Simulation:
                 
         except Exception as e:
             raise RuntimeError(
-                    'An error occurred while writing to the file '
-                    f'"{filename}": {e}'
-                    )
+                f'An error occurred while writing to "{filename}": {e}'
+            )
             
         return
 
@@ -871,9 +881,7 @@ class FIMS_Simulation:
             os.chdir('./build/')
 
             # Get garfield path into environment
-            envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
-            envOutput = subprocess.check_output(envCommand, shell=True, universal_newlines=True)
-            newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line)
+            newEnv = self._getGarfieldEnvironment()
             os.environ.update(newEnv)
 
             with open(os.path.join(originalCWD, 'log/logGarfieldAvalanche.txt'), 'w+') as garfieldOutput:
@@ -915,9 +923,7 @@ class FIMS_Simulation:
             os.chdir('./build/')
 
             # Get garfield path into environment
-            envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
-            envOutput = subprocess.check_output(envCommand, shell=True, universal_newlines=True)
-            newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line)
+            newEnv = self._getGarfieldEnvironment()
             os.environ.update(newEnv)
 
             with open(os.path.join(originalCWD, 'log/logGarfieldFieldLines.txt'), 'w+') as garfieldOutput:
@@ -959,9 +965,7 @@ class FIMS_Simulation:
             os.chdir('./build/')
 
             # Get garfield path into environment
-            envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
-            envOutput = subprocess.check_output(envCommand, shell=True, universal_newlines=True)
-            newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line)
+            newEnv = self._getGarfieldEnvironment()
             os.environ.update(newEnv)
 
             with open(os.path.join(originalCWD, 'log/logGarfieldGetEfficiency.txt'), 'w+') as garfieldOutput:
@@ -1225,7 +1229,7 @@ class FIMS_Simulation:
         fieldStep = damping*targetDiff*fieldDiff/valDiff
 
         #Limit step size for stability
-        stepSizeLimit = 12
+        stepSizeLimit = 10
         if fieldStep > stepSizeLimit:
             print(f'Warning: Step size limited to {stepSizeLimit}.')
             newField = curField+stepSizeLimit
@@ -1335,7 +1339,7 @@ class FIMS_Simulation:
             'field': [],
             'efficiency': [],
             'efficiencyErr': []
-            }        
+        }        
 
         validEfficiency = False
 
@@ -1379,15 +1383,15 @@ class FIMS_Simulation:
                     print(
                         f'\tEfficiency = {efficiencyAtField["efficiency"][-1]:.3f}',
                         f'+/- {efficiencyAtField["efficiencyErr"][-1]:.3f}'
-                        )
+                    )
             
                 case 'EXCLUDED':
                     validEfficiency = False
                     print(f'Excluded at field ratio = {efficiencyAtField['field'][-1]}:')
                     print(
                         f'\tEfficiency = {efficiencyAtField["efficiency"][-1]:.3f}',
-                        '+/- {efficiencyAtField["efficiencyErr"][-1]:.3f}'
-                        )
+                        f'+/- {efficiencyAtField["efficiencyErr"][-1]:.3f}'
+                    )
 
                 case _:
                     raise ValueError('Error - Malformed efficiency file.') 
@@ -1436,16 +1440,13 @@ class FIMS_Simulation:
         
         #Verify transparency can be obtained with 2 sigma confidence
         if targetTransparency >= 1.0:
-            print(
-                'target transparency statistically unobtainable',
-                '(Bayesian). Setting to 0.99'
-                )
+            print('Warning - Invalid target.')
             targetTransparency = 0.99
         
         print(
             'Beginning search for minimum field to achieve',
             f'> {targetTransparency}% transparency...'
-            )
+        )
        
         iterNo = 0
         iterNoLimit = 20
@@ -1454,7 +1455,7 @@ class FIMS_Simulation:
             'field': [],
             'transparency': [],
             'transparencyErr': []
-            } 
+        } 
 
         isTransparent = False
         self.param['numFieldLine'] = 400
@@ -1488,7 +1489,7 @@ class FIMS_Simulation:
                 print(
                     f'\tTransparency = {transparencyAtField["transparency"][-1]:.3f}',
                     f'+/- {transparencyAtField["transparencyErr"][-1]:.3f}'
-                    )
+                )
 
             else:
                 isTransparent = False
@@ -1496,7 +1497,7 @@ class FIMS_Simulation:
                 print(
                     f'\tTransparency = {transparencyAtField["transparency"][-1]:.3f}',
                     f'+/- {transparencyAtField["transparencyErr"][-1]:.3f}'
-                    )
+                )
 
         #End of find field for transparency loop
 
