@@ -261,6 +261,7 @@ class FIMS_Simulation:
                 file.write('<<< Enter Garfield source path here. >>>')
                 print(f"File '{filename}' created. Please update.")
             return None
+            
         except Exception as e:
             print(f'An error occurred while reading the file: {e}')
             return None
@@ -306,7 +307,7 @@ class FIMS_Simulation:
                             )
             
             newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line) 
-            #TODO: this can be done better
+            #TODO: can this be shortened or split across multiple lines?
             os.environ.update(newEnv)
         
         except subprocess.CalledProcessError as e:
@@ -361,7 +362,7 @@ class FIMS_Simulation:
             '// FIMS Simulation Control File //',
             '// Assumes the form "variable = value;" for each line.',
             '// Number of input parameters (numInputs included):',
-            'numInputs = 19;',   #TODO: Change this if parameters are added/removed#
+            'numInputs = 19;',   ##TODO: Change this if parameters are added/removed##
             '',
             '//----- Geometry parameters -----//',
             '// Dimensions in microns.',
@@ -465,7 +466,7 @@ class FIMS_Simulation:
                     )
 
         self.param = readInParam
-        self._checkParam()
+        self._checkParam() #TODO: redundant? (checked on initialization and after write)
         
         return
 
@@ -568,8 +569,7 @@ class FIMS_Simulation:
             dict: Dictionary containing the potentials for the cathode and grid (in V).
                   Empty if necessary parameters are unavailable. 
         """
-        self._checkParam()
-            
+        self._checkParam() #TODO: redundant? bad params should be caught before reaching private methods
 
         driftField = float(self._getParam('driftField'))/1e4 #V/micron
         fieldRatio = float(self._getParam('fieldRatio'))
@@ -597,7 +597,7 @@ class FIMS_Simulation:
     
         Assumes that 'Potential' is defined on the line following 'Name'.
         """
-        self._checkParam()
+        self._checkParam() #TODO: redundant? bad params should be caught before reaching private methods
     
         #Read old .sif file
         sifLines = self._readSIF()
@@ -1008,9 +1008,7 @@ class FIMS_Simulation:
         Returns:
             int: The run number of the simulation that was executed. 
         """
-    
         self._checkParam()
-    
         #If geometry does not change, Gmsh and weighting do not need to be done.
         #However, check that the mesh and weighting field files exist.
         #If not, override input and generate.
@@ -1180,23 +1178,31 @@ class FIMS_Simulation:
 #**********************************************************************#
     def _getFieldRatio(self, fields, values, valuesErr=None, damping=0.8):
         """
-        Calculates the next field strength ratio using the secant method to approach a target value.
+        Calculates the next field strength ratio using the secant 
+        method to approach a target value.
 
-        If errors are provided, utilizes a step base on the maximum possible slope.
-        Assumes that the value is monotonically increasing for field ratios.
+        If errors are provided, utilizes a step base on the maximum 
+        possible slope. Assumes that the value is monotonically 
+        increasing for field ratios.
 
         The resulting field ratio is rounded up to the nearest integer.
         
-        *TODO - Tested for when  current and previous values are both LESS than target. Behavior when bracketing target unknown.*
+        *TODO - Tested for when  current and previous values are both 
+        LESS than target. Behavior when bracketing target unknown.*
 
         Args:
-            fields (np.array): Numpy array of the field ratio. Has form: [current, previous]
-            values (np.array): Numpy array of the values. Has form: [current, previous, target]
-            valuesErr (np.array): Optional. Array of errors in the values. Has form: [currentError, previousError]
-            damping (float): Damping factor for the secant method to avoid too large of steps.
+            fields (np.array): Numpy array of the field ratio. 
+                Has form: [current, previous]
+            values (np.array): Numpy array of the values. 
+                Has form: [current, previous, target]
+            valuesErr (np.array): Optional. Array of errors in the values. 
+                Has form: [currentError, previousError]
+            damping (float): Damping factor for the secant method to 
+                avoid too large of steps.
 
         Returns:
-            float: Numerical solution to the field ratio in order to achieve target value
+            float: Numerical solution to the field ratio in order to 
+                achieve target value
         """
 
         curField, prevField = fields
@@ -1323,7 +1329,7 @@ class FIMS_Simulation:
             parameters upon completion.
         """
         #Ensure all parameters exist and save them
-        self._checkParam()
+        self._checkParam() #TODO: redundant? bad params should be caught before reaching private methods
         saveParam = self.param.copy()
         
         print(f'Beginning search for minimum field to achieve {targetEfficiency*100:.0f}% efficiency...')
@@ -1353,7 +1359,7 @@ class FIMS_Simulation:
             newField = self._getNextField(iterNo, efficiencyAtField, targetEfficiency)
             efficiencyAtField['field'].append(newField)
             self.param['fieldRatio'] = newField
-            self._runElmer()
+            self._solveEField()
 
             #Determine the efficiency and read results from file
             self._runGetEfficiency(targetEfficiency=targetEfficiency, threshold=threshold)
@@ -1431,7 +1437,7 @@ class FIMS_Simulation:
         """
 
         #Ensure all parameters exist and save them
-        self._checkParam()
+        self._checkParam() #TODO: redundant? bad params should be caught before reaching private methods
         saveParam = self.param.copy()
         
         #Verify transparency can be obtained with 2 sigma confidence
@@ -1454,7 +1460,7 @@ class FIMS_Simulation:
             'field': [],
             'transparency': [],
             'transparencyErr': []
-            } 
+        } 
 
         isTransparent = False
         self.param['numFieldLine'] = 400
@@ -1470,10 +1476,10 @@ class FIMS_Simulation:
             newField = self._getNextField(iterNo, transparencyAtField, targetTransparency)
             transparencyAtField['field'].append(newField)
             self.param['fieldRatio'] = newField
-            self._runElmer()
+            self._solveEField()
 
             #Generate field lines and read results from file
-            self._runFieldLines()  
+            self._runFieldLines()
             transparencyResults = self._readTransparencyFile()
 
             transparencyAtField['transparency'].append(transparencyResults['transparency'])
@@ -1641,7 +1647,7 @@ class FIMS_Simulation:
             newField = max(newFieldEff, newFieldTrans)
             valuesAtField['field'].append(newField)
             self.param['fieldRatio'] = newField
-            self._runElmer()
+            self._solveEField()
 
             #Generate field lines and read results from file
             self._runFieldLines()  
@@ -1714,7 +1720,7 @@ class FIMS_Simulation:
         Generates the finite-element mesh of the simulation geometry using Gmsh.
         """
 
-        self._checkParam()
+        self._checkParam() #TODO: redundant? bad params should be caught before reaching private methods
         self._writeParam()
         self._runGmsh()
 
@@ -1726,7 +1732,7 @@ class FIMS_Simulation:
         Solves the electric field in the simulation geometry using elmer.
         """
         
-        self._checkParam()
+        self._checkParam() #TODO: redundant? bad params should be caught before reaching private methods
         self._writeParam()
         self._runElmer()
 
@@ -1738,7 +1744,7 @@ class FIMS_Simulation:
         Solves the weighting field in the simulation geometry using elmer.
         """
         
-        self._checkParam()
+        self._checkParam() #TODO: redundant? bad params should be caught before reaching private methods
         self._writeParam()
         self._runElmerWeighting()
 
@@ -1750,7 +1756,7 @@ class FIMS_Simulation:
         Runs the electron transport simulation using Garfield++.
         """
         
-        self._checkParam()
+        self._checkParam() #TODO: redundant? bad params should be caught before reaching private methods
         self._writeParam()
         self._runGarfield()
 

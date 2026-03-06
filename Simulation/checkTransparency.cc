@@ -277,8 +277,7 @@ int main(int argc, char * argv[]) {
     //TODO: Find more elegant way to determine where a line terminates
     // Currently is pad outer radius and no more than 10% of the grid standoff away from the pad
     double lineRadius2 = std::pow(fieldLineX, 2.) + std::pow(fieldLineY, 2.);
-    std::cout << "final z: " << fieldLineZ << std::endl;
-    if(sqrt(lineRadius2) <= padLength && fieldLineZ < -1.0*(gridStandoff*0.9)){
+    if(sqrt(lineRadius2) <= padLength && fieldLineZ < -0.9*gridStandoff){
         numAtPad++;
     }
 

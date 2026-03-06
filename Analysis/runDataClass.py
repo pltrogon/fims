@@ -1683,12 +1683,11 @@ class runData:
         on the height of the ion.
         
         Returns:
-            tuple of two lists containing the distance from the edge of the 
-            field bundle of each ion that was created in all the avalanches.
-            The lists are divided into two groups: ions captured by the grid,
-            and ions that escape into the drift volume.
+            dictionary of two lists which contain the distance of each ion from the
+            edge of the field bundle
+                -escaped: only ions which escaped into the drift volume
+                -captured: only ions which were captured by the grid
         """
-        #TODO: consider doing as dictionary instead of tuple of two lists
         
         edgeDistance = []
         bundleSize = []
@@ -1723,8 +1722,13 @@ class runData:
                 capturedList.append(dist)
             if ionZ > 1:
                 escapedList.append(dist)
-
-        return capturedList, escapedList
+        
+        ionLists = {
+            'escaped': escapedList,
+            'captured': capturedList
+            }
+        
+        return ionLists
 
 #********************************************************************************#
     def plotIBNHistogram(self, color=['red','dark green','black']):
@@ -1740,7 +1744,9 @@ class runData:
             matplotlib.figure. Figure: the generated IBN position histogram
         """
         
-        captured, backflowing = self._getIonEdgeDistance()
+        ionLists = self._getIonEdgeDistance()
+        captured = ionLists['captured']
+        backflowing = ionLists['escaped']
         
         ionHistogram = plt.figure()
         plt.hist([backflowing, captured], bins = 'auto', 
@@ -2256,6 +2262,7 @@ class runData:
 #********************************************************************************#
     def plotAvalancheSignal(self, avalancheID=0):
         """
+        TODO: add details here
         """
 
         allData = self.getDataFrame('signalData')

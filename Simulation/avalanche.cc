@@ -602,7 +602,7 @@ int main(int argc, char * argv[]) {
       avalancheE->EnableAvalancheSizeLimit(avalancheLimit);
 
       driftIon->SetSensor(parallelSensorFIMS);
-      driftIon->SetDistanceSteps(MICRONTOCM/10.);
+      driftIon->SetDistanceSteps(MICRONTOCM);
       driftIon->EnableDriftLines(true);
       
       viewElectronDrift->SetArea(
