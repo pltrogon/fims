@@ -289,10 +289,9 @@ class FIMS_Simulation:
         finally:
             os.chdir(originalCWD)
 
-        #Check for run number file
+        #Check for run number file and create if not present
         if not os.path.exists('runNo'):
-            with open('runNo', 'w') as file:
-                file.write('1000')  # Starting run number
+            self.setRunNumber()
                 
         return
 
@@ -651,6 +650,33 @@ class FIMS_Simulation:
             raise RuntimeError(f"An error occurred while reading the file '{filename}': {e}")
         
         return runNo
+    
+
+#********************************************************************************#
+    def setRunNumber(runNumber=None):
+        """
+        Sets the simulation run number to a given input value.
+        Defaults to 1000 if input not given or if the file is created.
+
+        Args:
+            runNumber (int): The run number to set. Must be a non-negative integer.
+        """
+
+        if runNumber is None or not os.path.exists('runNo'):
+            runNumber = 1000
+
+        if not isinstance(runNumber, int) or runNumber < 0:
+            raise ValueError('Error: Run number must be a non-negative integer.')
+
+        try:
+            with open('runNo', 'w') as file:
+                file.write(str(runNumber))
+
+        except Exception as e:
+            print(f'Error occurred while setting run number: {e}')
+
+        return
+    
 
 #***********************************************************************************#
     def _runGmsh(self):
