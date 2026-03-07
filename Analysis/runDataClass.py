@@ -560,26 +560,25 @@ class runData:
         #    (Must be done as separate patches)
         hole = {}
         #Hole for primary cell
-        hole[0] = plt.Circle((0, 0), holeRadius, 
-                            facecolor='none', edgecolor='k', lw=1, 
-                            label=f'Hole (r = {holeRadius:.0f} um)')
+        hole[0] = plt.Circle(
+            (0, 0), holeRadius, 
+            facecolor='none', edgecolor='k', lw=1, label=f'Hole (r = {holeRadius:.0f} um)'
+        )
         # Neighboring cell holes (#808080 = Grey)
         for i in range(len(neighborX)):
             hole[i+1] = plt.Circle(
-                (neighborX[i], 
-                 neighborY[i]), 
-                 holeRadius, 
-                 facecolor='none', edgecolor='#808080', ls=':', lw=1)
+                (neighborX[i], neighborY[i]), holeRadius, 
+                 facecolor='none', edgecolor='#808080', ls=':', lw=1
+            )
 
         # Define circles representing the pillars.
         #    (Must be done as separate patches)
         pillar = {}
         for i in range(6):
             pillar[i] = plt.Circle(
-                (outRadius*hexCornerX[i], 
-                 outRadius*hexCornerY[i]), 
-                 pillarRadius,
-                 facecolor='none', edgecolor='#808080', ls='--', lw=1)
+                (outRadius*hexCornerX[i], outRadius*hexCornerY[i]), pillarRadius,
+                 facecolor='none', edgecolor='#808080', ls='--', lw=1
+            )
 
         pillar[0].set_label(f'Pillar  (r = {pillarRadius:.0f} um)')
 
@@ -593,15 +592,21 @@ class runData:
                 label='Pad', c='m', lw=1)
 
         #Add the cell boundary
-        ax1.plot(cellX, cellY, 
-                label='Unit Cell Boundary', c='b', ls='--', lw=1)
+        ax1.plot(
+            cellX, cellY, 
+            label='Unit Cell Boundary', c='b', ls='--', lw=1
+        )
         
         #Add boundaries of neighboring cells and pads
         for i in range(6):
-            ax1.plot(neighborX[i]+cellX, neighborY[i]+cellY,
-                    c='b', ls=':', lw=1)
-            ax1.plot(neighborX[i]+padX, neighborY[i]+padY,
-                    c='m', ls=':', lw=1)
+            ax1.plot(
+                neighborX[i]+cellX, neighborY[i]+cellY,
+                c='b', ls=':', lw=1
+            )
+            ax1.plot(
+                neighborX[i]+padX, neighborY[i]+padY,
+                c='m', ls=':', lw=1
+            )
         
         #Add the holes in the grid
         for i in range(len(hole)):
@@ -613,23 +618,11 @@ class runData:
 
         #Add markers to center of cells
         ax1.plot(0., 0., marker='x', c='r')
-        ax1.plot(neighborX, neighborY,
-                marker='.', c='r', ls='')
-        '''
-        #Add geometry cell
-        geoX = 3./2.*outRadius*np.array([0, 1, 1, 0, 0])
-        geoY = inRadius*np.array([1, 1, 0, 0, 1])
-        ax1.plot(geoX, geoY,
-                c='g', ls=':', lw=1, label='Geometry Boundary')
-
-        #Add simulation boundary
-        #simX = 3./2.*outRadius*np.array([-1, 1, 1, -1, -1])
-        #simY = inRadius*np.array([1, 1, -1, -1, 1])
-        simX = pitch*np.array([-1, 1, 1, -1, -1])
-        simY = pitch*np.array([1, 1, -1, -1, 1])
-        ax1.plot(simX, simY,
-                c='g', ls='--', lw=1, label='Simulation Boundary')
-        '''
+        ax1.plot(
+            neighborX, neighborY,
+            marker='.', c='r', ls=''
+        )
+        
         #Add dimensions
         ax1.plot(
             [0, neighborX[4]], [0, neighborY[4]],
@@ -696,8 +689,10 @@ class runData:
         cellY = hexCornerY*outRadius
 
         # Define the hole in the grid.
-        hole = plt.Circle((0, 0), holeRadius,
-                        facecolor='none', edgecolor='k', lw=1, label='Hole')
+        hole = plt.Circle(
+            (0, 0), holeRadius,
+            facecolor='none', edgecolor='k', lw=1, label='Hole'
+        )
         holeXY1 = np.array([-pitch, -holeRadius, -holeRadius, -pitch])
         holeXY2 = np.array([pitch, holeRadius, holeRadius, pitch])
         holeZ = halfGrid*np.array([-1, -1, 1, 1])
@@ -713,13 +708,19 @@ class runData:
         
         match axes:
             case 'xy':
-                axis.plot(padX, padY, 
-                        label='Pad', c='m', lw=1)
-                axis.plot(cellX, cellY, 
-                        label='Cell', c='b', ls='--', lw=1)
+                axis.plot(
+                    padX, padY, 
+                    label='Pad', c='m', lw=1
+                )
+                axis.plot(
+                    cellX, cellY, 
+                    label='Cell', c='b', ls='--', lw=1
+                )
                 axis.add_patch(hole)
-                axis.plot(geoX, geoY,
-                        c='g', ls='--', lw=1, label='Simulation Boundary')
+                axis.plot(
+                    geoX, geoY,
+                    c='g', ls='--', lw=1, label='Simulation Boundary'
+                )
 
                 axis.set_xlabel('x (um)')
                 axis.set_ylabel('y (um)')
@@ -730,23 +731,35 @@ class runData:
             case 'xz':
                 axis.plot(padX, padZ, 
                         label='Pad', c='m', lw=2)
-                axis.plot([cellX[3], cellX[0], cellX[0], cellX[3], cellX[3]], 
-                        [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight],
-                        label='Cell', c='b', ls='--', lw=1)
-                axis.plot([cellX[2], cellX[1], cellX[1], cellX[2], cellX[2]], 
-                        [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight], 
-                        c='b', ls='--', lw=1)
-                axis.plot(holeXY1, holeZ, 
-                        label='Grid', c='k', ls='-', lw=2)
-                axis.plot(holeXY2, holeZ, 
-                        c='k', ls='-', lw=2)
+                axis.plot(
+                    [cellX[3], cellX[0], cellX[0], cellX[3], cellX[3]], 
+                    [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight],
+                    label='Cell', c='b', ls='--', lw=1
+                )
+                axis.plot(
+                    [cellX[2], cellX[1], cellX[1], cellX[2], cellX[2]], 
+                    [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight], 
+                    c='b', ls='--', lw=1
+                )
+                axis.plot(
+                    holeXY1, holeZ, 
+                    label='Grid', c='k', ls='-', lw=2
+                )
+                axis.plot(
+                    holeXY2, holeZ, 
+                    c='k', ls='-', lw=2
+                )
                         
-                axis.plot([geoX[0], geoX[1], geoX[1], geoX[0], geoX[0]], 
-                        [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight], 
-                        c='g', ls='--', lw=1, label='Simulation Boundary')
-                axis.plot([geoX[0], geoX[1]],
-                         [0, 0],
-                         c='#808080', ls=':', lw=1, label='Grid')
+                axis.plot(
+                    [geoX[0], geoX[1], geoX[1], geoX[0], geoX[0]], 
+                    [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight], 
+                    c='g', ls='--', lw=1, label='Simulation Boundary'
+                )
+                axis.plot(
+                    [geoX[0], geoX[1]],
+                    [0, 0],
+                    c='#808080', ls=':', lw=1, label='Grid'
+                )
                 
                 axis.set_xlabel('x (um)')
                 axis.set_ylabel('z (um)')
@@ -754,24 +767,38 @@ class runData:
                 axis.set_ylim(padHeight, cathodeHeight)
 
             case 'yz':
-                axis.plot(padY, padZ, 
-                        label='Pad', c='m', lw=2)
-                axis.plot([cellY[4], cellY[1], cellY[1], cellY[4], cellY[4]], 
-                        [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight],
-                        label='Cell', c='b', ls='--', lw=1)
-                axis.plot([0, 0], 
-                        [padHeight, cathodeHeight],
-                        label='Cell', c='b', ls='--', lw=1)
-                axis.plot(holeXY1, holeZ, 
-                        label='Grid', c='k', ls='-', lw=2)
-                axis.plot(holeXY2, holeZ, 
-                        c='k', ls='-', lw=2)
-                axis.plot([geoY[1], geoY[2], geoY[2], geoY[1], geoY[1]], 
-                        [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight], 
-                        c='g', ls='--', lw=1, label='Simulation Boundary')
-                axis.plot([geoY[0], geoY[2]],
-                         [0, 0],
-                         c='#808080', ls=':', lw=1, label='Grid')
+                axis.plot(
+                    padY, padZ, 
+                    label='Pad', c='m', lw=2
+                )
+                axis.plot(
+                    [cellY[4], cellY[1], cellY[1], cellY[4], cellY[4]], 
+                    [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight],
+                    label='Cell', c='b', ls='--', lw=1
+                )
+                axis.plot(
+                    [0, 0], 
+                    [padHeight, cathodeHeight],
+                    label='Cell', c='b', ls='--', lw=1
+                )
+                axis.plot(
+                    holeXY1, holeZ, 
+                    label='Grid', c='k', ls='-', lw=2
+                )
+                axis.plot(
+                    holeXY2, holeZ, 
+                    c='k', ls='-', lw=2
+                )
+                axis.plot(
+                    [geoY[1], geoY[2], geoY[2], geoY[1], geoY[1]], 
+                    [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight], 
+                    c='g', ls='--', lw=1, label='Simulation Boundary'
+                )
+                axis.plot(
+                    [geoY[0], geoY[2]],
+                    [0, 0],
+                    c='#808080', ls=':', lw=1, label='Grid'
+                )
 
                 axis.set_xlabel('y (um)')
                 axis.set_ylabel('z (um)')
@@ -868,7 +895,6 @@ class runData:
                 fieldLineData = self.getDataFrame('edgeFieldLineData')
                 
             case 'All':
-                #TODO: look into condensing these into a single function
                 self.plotAllFieldLines()
                 return
     
@@ -1149,8 +1175,7 @@ class runData:
         ax.bar(
             histData['binCenters'], 
             histData['prob'], 
-            width=binWidth,
-            label='Simulation'
+            width=binWidth, label='Simulation'
         )  
         ax.axvline(
             histData['gain'], 
@@ -1205,9 +1230,9 @@ class runData:
             subxy.plot(driftLine['Drift x'], driftLine['Drift y'], lw=.5)
 
         #Plot the location of the initial electron
-        subxz.plot(xInit, zInit, label='Initial', marker='x', color='red')
-        subyz.plot(yInit, zInit, label='Initial', marker='x', color='red')
-        subxy.plot(xInit, yInit, label='Initial', marker='x', color='red')
+        subxz.plot(xInit, zInit, 'rx', label='Initial')
+        subyz.plot(yInit, zInit, 'rx', label='Initial')
+        subxy.plot(xInit, yInit, 'rx', label='Initial')
         
         #Add cell geometry overlay to each subplot
         self._plotAddCellGeometry(subxz, 'xz')
@@ -1269,9 +1294,9 @@ class runData:
             subxy.plot(driftLine['Drift x'], driftLine['Drift y'])
 
         #Add initial electron location to each subplot
-        subxz.plot(xInit, zInit, label='Initial', marker='x', color='red')
-        subyz.plot(yInit, zInit, label='Initial', marker='x', color='red')
-        subxy.plot(xInit, yInit, label='Initial', marker='x', color='red')
+        subxz.plot(xInit, zInit, 'rx', label='Initial')
+        subyz.plot(yInit, zInit, 'rx', label='Initial')
+        subxy.plot(xInit, yInit, 'rx', label='Initial')
         
         #Add cell Geometry overlay to each subplot
         self._plotAddCellGeometry(subxz, 'xz')
@@ -1425,18 +1450,26 @@ class runData:
         ax4 = fig.add_subplot(224)
     
         # Plot data
-        ax1.hist2d(particleData['Initial x'], 
-                   particleData['Initial y'], 
-                   bins=numBins, cmin=1)
-        ax2.hist2d(particleData['Final x'], 
-                   particleData['Final y'], 
-                   bins=numBins, cmin=1)
-        ax3.hist2d(particleData['Initial x'], 
-                   particleData['Initial z'], 
-                   bins=numBins, cmin=1)
-        ax4.hist2d(particleData['Final x'], 
-                   particleData['Final z'], 
-                   bins=numBins, cmin=1)
+        ax1.hist2d(
+            particleData['Initial x'], 
+            particleData['Initial y'], 
+            bins=numBins, cmin=1
+        )
+        ax2.hist2d(
+            particleData['Final x'], 
+            particleData['Final y'], 
+            bins=numBins, cmin=1
+        )
+        ax3.hist2d(
+            particleData['Initial x'], 
+            particleData['Initial z'], 
+            bins=numBins, cmin=1
+        )
+        ax4.hist2d(
+            particleData['Final x'], 
+            particleData['Final z'], 
+            bins=numBins, cmin=1
+        )
     
         #Add geometry Pieces
         self._plotAddCellGeometry(ax1, 'xy')
@@ -1483,11 +1516,11 @@ class runData:
         aveFinal = electronData['Final Energy'].mean()
 
         ax1.axvline(
-            x=aveInit, 
+            aveInit, 
             c='r', ls='--', label=f'Average = {aveInit:.1f}'
         )
         ax2.axvline(
-            x=aveFinal, 
+            aveFinal, 
             c='r', ls='--', label=f'Average = {aveFinal:.1f}'
         )
 
@@ -1587,30 +1620,40 @@ class runData:
         ax.bar(
             histData['binCenters'], 
             histData['prob'],
-            width=binWidth,
-            label='Simulation'
+            width=binWidth, label='Simulation'
         ) 
 
-        ax.plot(fitResults['xVal'], 
-                polyaResults, 
-                'm-', lw=3, 
-                label=r'Fitted Polya ($\theta$' 
-                    + f" = {fitResults['fitPolya'].theta:.2})")
-        ax.axvline(x=fitResults['fitPolya'].gain, 
-               c='m', ls=':', label=f"Polya Gain = {fitResults['fitPolya'].gain:.0f}e")
+        ax.plot(
+            fitResults['xVal'], polyaResults, 
+            'm-', lw=3, 
+            label=r'Fitted Polya ($\theta$' + f" = {fitResults['fitPolya'].theta:.2})"
+        )
+        ax.axvline(
+            fitResults['fitPolya'].gain, 
+            c='m', ls=':', label=f"Polya Gain = {fitResults['fitPolya'].gain:.0f}e"
+        )
         
         '''For plotting an exponential
-        ax.plot(fitResults['xVal'], 
-                fitResults['fitExpo'].calcPolya(fitResults['xVal']), 
-                'r', lw=2, label=f'Fitted Exponential')
-        ax.axvline(x=fitResults['fitExpo'].gain, 
-               c='r', ls=':', label=f"Expo Gain = {fitResults['fitExpo'].gain:.0f}e")
+        ax.plot(
+            fitResults['xVal'], 
+            fitResults['fitExpo'].calcPolya(fitResults['xVal']), 
+            c='r', lw=2, label=f'Fitted Exponential'
+        )
+        ax.axvline(
+            fitResults['fitExpo'].gain, 
+            c='r', ls=':', label=f"Expo Gain = {fitResults['fitExpo'].gain:.0f}e"
+        )
         '''
 
         rawGain = self.getCalcParameter('Raw Gain')
-        ax.axvline(x=rawGain, c='g', ls='--', label=f"Raw Gain = {rawGain:.0f}e")
-        ax.axvline(x=fitResults['dataGain'], 
-               c='g', ls=':', label=f"Trimmed Gain = {fitResults['dataGain']:.0f}e")
+        ax.axvline(
+            rawGain, 
+            c='g', ls='--', label=f"Raw Gain = {rawGain:.0f}e"
+        )
+        ax.axvline(
+            fitResults['dataGain'], 
+            c='g', ls=':', label=f"Trimmed Gain = {fitResults['dataGain']:.0f}e"
+        )
 
 
         polyaStats = f'Polya Fit Statistics\nChi2 = {polyaChi2['chi2']:.4f}\nrChi2 = {polyaChi2['rChi2']:.4f}'
@@ -1621,7 +1664,7 @@ class runData:
             horizontalalignment='center',
             verticalalignment='center', 
             transform=ax.transAxes,
-            bbox=dict(facecolor='none', edgecolor='black', boxstyle='round,pad=1')
+            bbox=dict(facecolor='none', edgecolor='k', boxstyle='round,pad=1')
         )
         '''
         plt.xlabel('Numer of Electrons in Avalanche: n')
@@ -1731,7 +1774,7 @@ class runData:
         return ionLists
 
 #********************************************************************************#
-    def plotIBNHistogram(self, color=['red','dark green','black']):
+    def plotIBNHistogram(self):
         """
         Creates a stacked double histogram of the distance from the field bundle 
         edge of every ion created in an avalanche. The double histogram is divided 
@@ -1749,12 +1792,14 @@ class runData:
         backflowing = ionLists['escaped']
         
         ionHistogram = plt.figure()
-        plt.hist([backflowing, captured], bins = 'auto', 
-                    label = ["Backflowing Ions", 'Captured Ions'], 
-                    stacked = True, color=color[0:2])
+        plt.hist(
+            [backflowing, captured], 
+            bins='auto', stacked=True, c=['r', 'g'],
+            label =['Backflowing', 'Captured'], 
+        )
         
         #include a vertical line at the nominal bundle edge (x = 0)
-        plt.axvline(0, color=color[2], linewidth=2, label = 'Bundle Edge')
+        plt.axvline(0, c='k', lw=2, label='Bundle Edge')
         
         plt.xlabel('Distance Ions Originate from Edge of Field Bundle')
         plt.ylabel('Number of Ions')
@@ -1795,7 +1840,7 @@ class runData:
             atCathode['Field Line x'], 
             atCathode['Field Line y'], 
             unitCellLength
-            )
+        )
         cellLines = atCathode[withinUnitCell]
 
         #Find line with max radius
@@ -2024,7 +2069,7 @@ class runData:
             outerFieldLine['Field Line x'], 
             outerFieldLine['Field Line y'], 
             self.getRunParameter('Pad Length')
-            )
+        )
 
         #Check if the last datapoint is above the neighbor pad
         aboveNeighbor = withinNeighborHex(
@@ -2032,7 +2077,7 @@ class runData:
             outerFieldLine['Field Line y'], 
             self.getRunParameter('Pad Length'),
             self.getRunParameter('Pitch')
-            )
+        )
 
         isTransparent = (abovePad.iloc[-1] or aboveNeighbor.iloc[-1])
 
@@ -2195,36 +2240,45 @@ class runData:
 
         ax = fig.add_subplot(111)
 
-        ax.bar(xDataCut, yDataCut, width=binWidth,
-                label='Data Below Threshold', color='r', alpha=0.5
-                )
+        ax.bar(
+            xDataCut, yDataCut, 
+            width=binWidth, label='Data Below Threshold', color='r', alpha=0.5
+        )
                 
-        ax.bar(xDataPass, yDataPass, width=binWidth,
-                label='Detected Data', color='g', alpha=0.5
-                )
+        ax.bar(
+            xDataPass, yDataPass,
+            width=binWidth, label='Detected Data', color='g', alpha=0.5
+        )
                 
-        ax.axvline(x=threshold, c='r', ls='--', 
-                    label=f'{threshold}-electron Threshold'
-                    )
+        ax.axvline(
+            threshold, 
+            c='r', ls='--', label=f'{threshold}-electron Threshold'
+        )
         
-        """#TODO: undo this comment
-        ax.plot(xPolyaCut, polyaCut, label='Cut Polya', c='m', ls=':')
-        ax.plot(xPolya, polyaData, label='Remaining Polya', c='m', ls='-')
-        """
+        ax.plot(
+            xPolyaCut, polyaCut, 
+            label='Cut Polya', c='m', ls=':'
+        )
+        ax.plot(
+            xPolya, polyaData, 
+            label='Remaining Polya', c='m', ls='-'
+        )
         
-        ax.axvline(x=gain, c='g', ls='--', 
-                    label=f'Mean Avalanche Size (Gain) = {gain:.1f}'
-                     )
-        """
+        ax.axvline(
+            gain, 
+            c='g', ls='--', label=f'Mean Avalanche Size (Gain) = {gain:.1f}'
+        )
+        
         polyaEff = fitPolya.calcEfficiency(threshold)
         efficiencyText = f'Polya Efficiency = {polyaEff:.4f}'
 
-        ax.text(0.8, 0.5, efficiencyText, fontsize=10, 
-                horizontalalignment='center', verticalalignment='center', 
-                transform=ax.transAxes,
-                bbox=dict(facecolor='w', edgecolor='black', boxstyle='round,pad=1')
-                )
-        """
+        ax.text(
+            0.8, 0.5, efficiencyText, fontsize=10, 
+            horizontalalignment='center', verticalalignment='center', 
+            transform=ax.transAxes,
+            bbox=dict(facecolor='w', edgecolor='k', boxstyle='round,pad=1')
+        )
+        
         plt.xlabel('Number of Electrons in Avalanche')
         plt.ylabel('Probability of Avalanche Size')
         plt.legend()
@@ -2285,7 +2339,7 @@ class runData:
             singleData['Signal Time'], singleData['Signal Strength'].cumsum()
         )
         ax2.axhline(
-            y=totalCharge,
+            totalCharge,
             label=f'Total Charge = {totalCharge:.3f}', c='r', ls='--'
         )
 
@@ -2333,7 +2387,7 @@ class runData:
             averageSignal.index, averageCharge
         )
         ax2.axhline(
-            y=averageTotalCharge,
+            averageTotalCharge,
             label=f'Total Charge = {averageTotalCharge:.3f}', c='r', ls='--'
         )
 
@@ -2388,7 +2442,7 @@ class runData:
             c='r', label=f'Slope = {slope:.2e}'
         )
         ax.axvline(
-            x=allAvalanche['Gain'].mean(),
+            allAvalanche['Gain'].mean(),
             c='g', ls='--', label=f'Average Gain = {allAvalanche['Gain'].mean():.1f}'
         )
 
