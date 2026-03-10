@@ -765,8 +765,9 @@ int main(int argc, char * argv[]) {
         bool isIon;
         std::vector<std::array<float, 3> > ionDriftLines;
         viewIonDrift->GetDriftLine(0, ionDriftLines, isIon);
-      
-        for(int ionPoint = 0; ionPoint < ionDriftLines.size(); ionPoint++){
+        
+        //Only save every 5th point along the drift line
+        for(int ionPoint = 0; ionPoint < ionDriftLines.size(); ionPoint += 4){ 
           ionDriftx = ionDriftLines[ionPoint][0];
           ionDrifty = ionDriftLines[ionPoint][1];
           ionDriftz = ionDriftLines[ionPoint][2];

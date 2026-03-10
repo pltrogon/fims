@@ -1056,17 +1056,15 @@ class FIMS_Simulation:
 # METHODS FOR RUNNING MINIMUM FIELD
 #**********************************************************************#
 #**********************************************************************#
-    def _calcMinField(self): 
+    def _calcEfficiencyMinField(self):
         """
         Calculates an initial guess for the minimum field ratio to 
-        achieve 100% field transparency and 95% efficiency.
+        achieve 95% Efficiency.
 
         Calculation is based off of exponential fits to simulated data.
         
-        Values come from 3 separate exponential fits to simulated data:
-            grid standoff ratio, pad length ratio, and optical
-            transparency vs minField. Results from each fit are then 
-            added together.
+        Values come from 2 separate exponential fits to simulated data:
+            grid standoff ratio and pad length ratio vs minField.
         
         Note: ratios are assumed to be completely independent of each
         other, which is not strictly true. However, it is usually 
@@ -1074,7 +1072,51 @@ class FIMS_Simulation:
         
         Returns:
             float: Numerical solution to the minimum field for 
-            100% transparency and 95% efficiency.
+            95% efficiency.
+        """
+        #Get geometry variables
+        standoff = self._getParam('gridStandoff')
+        pad = self._getParam('padLength')
+        pitch = self._getParam('pitch')
+        
+        #Convert to dimensionless variables
+        standoffRatio = standoff/pad
+        padRatio = pad/pitch
+        
+        #Insert values into fitted equations
+        #Ar+CO2 (depreciated)
+        #standEffField = 53.21*np.exp(-0.38*standoffRatio)
+        #constEffField = 23.47
+        
+        #T2K gas
+        padEffField = 371.4*np.exp(-0.16*pad) + 50
+        standEffField = 190.6*np.exp(-0.02*standoff) + 50
+        
+        #Minimum field for 95% efficiency
+        minFieldEff = max(padEffField, standEffField)
+        
+        return minFieldEff
+
+
+#**********************************************************************#
+    def _calcTransparencyMinField(self):
+        """
+        Calculates an initial guess for the minimum field ratio to 
+        achieve 100% field transparency.
+
+        Calculation is based off of exponential fits to simulated data.
+        
+        Values come from 3 separate exponential fits to simulated data:
+            grid standoff ratio, pad length ratio, and optical
+            transparency vs minField.
+        
+        Note: ratios are assumed to be completely independent of each
+        other, which is not strictly true. However, it is usually 
+        sufficient for the purposes of an initial guess.    
+        
+        Returns:
+            float: Numerical solution to the minimum field for 
+            100% transparency.
         """
         #Get geometry variables
         radius = self._getParam('holeRadius')
@@ -1090,31 +1132,39 @@ class FIMS_Simulation:
         standoffRatio = standoff/pad
         padRatio = pad/pitch
         
-        #Inserting values into fitted equations
-        radialMinField = 570.580*np.exp(-12.670*optTrans)
-        standoffMinField = 26.85*np.exp(-4.46*standoffRatio)
-        padMinField = 143.84*np.exp(-15.17*padRatio)
-        
-        #Ar+CO2 (depreciated)
-        #standEffField = 53.21*np.exp(-0.38*standoffRatio)
-        #constEffField = 23.47
-        
-        #T2K gas
-        padEffField = 371.4*np.exp(-0.16*pad) + 50
-        standEffField = 190.6*np.exp(-0.02*standoff) + 50
+        #Insert values into fitted equations
+        radialMinField = 532.105*np.exp(-14.03*optTrans) + 9.2
+        standoffMinField = 26.85*np.exp(-4.46*standoffRatio) + 2
+        padMinField = 143.84*np.exp(-15.17*padRatio) + 2
         
         #Minimum field for 100% transparency
-        minFieldTrans = min(radialMinField, standoffMinField, padMinField)
+        minFieldTrans = max(radialMinField, standoffMinField, padMinField)
+        
+        return minFieldTrans
+
+
+#**********************************************************************#
+    def _calcMinField(self): 
+        """
+        Finds and returns the minimum field required to satisfy both
+        field conditions: 100% transparency and 95% efficiency.
+        
+        Returns:
+            float: Numerical solution to the minimum field for 
+            100% transparency and 95% efficiency.
+        """
+        #Minimum field for 100% transparency
+        minFieldTrans = self._calcTransparencyMinField()
         
         #Minimum field for 95% efficiency
-        minFieldEff = min(padEffField, standEffField)
+        minFieldEff = self._calcEfficiencyMinField()
         
         #Choose the larger of the two fields so that both 
         #conditions are satisfied simultaneously.
-        minField = max(minFieldTrans, minFieldEff)
+        netMinField = max(minFieldTrans, minFieldEff)
         
-        return minField
-
+        return netMinField
+        
 
 #**********************************************************************#
     def _readEfficiencyFile(self):
@@ -1339,7 +1389,7 @@ class FIMS_Simulation:
         print(f'Beginning search for minimum field to achieve {targetEfficiency*100:.0f}% efficiency...')
         
         iterNo = 0
-        iterNoLimit = 20
+        iterNoLimit = 100
 
         efficiencyAtField = {
             'field': [],
@@ -1455,7 +1505,7 @@ class FIMS_Simulation:
         )
        
         iterNo = 0
-        iterNoLimit = 20
+        iterNoLimit = 100
 
         transparencyAtField = {
             'field': [],
@@ -1613,7 +1663,7 @@ class FIMS_Simulation:
                 f'\t{targetTransparency*100}% transparency\n')
         
         iterNo = 0
-        iterNoLimit = 30
+        iterNoLimit = 100
 
         valuesAtField = {
             'field': [],
