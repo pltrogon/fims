@@ -322,11 +322,15 @@ class gmshClass:
         Args:
             neighborCells: If True, also creates the 6 adjacent cells.
             runGUI: If True, runs the Gmsh GUI to visualize the geometry and mesh.
+
+        Returns:
+            The base filename of the generated mesh.
         """
 
+
         filePath = 'Geometry'
-        fileName = 'FIMSHexagonalCell.msh'
-        filename = os.path.join(filePath, fileName)
+        fileBase = 'FIMSHexagonalCell'
+        filename = os.path.join(filePath, f'{fileBase}.msh')
 
         gmsh.initialize()
         gmsh.model.add(filename)
@@ -343,7 +347,7 @@ class gmshClass:
 
         gmsh.finalize()
 
-        return
+        return fileBase
 
     
             
@@ -356,26 +360,21 @@ class elmerClass:
     def __init__(self, name, numPads, capacitance=False):
 
         self.capacitance = capacitance
+
+        self.meshFilename = f'{name}.msh'
         if self.capacitance:
             self.name = f'{name}Capacitance'
         else:
             self.name = name
+        self.sifFilename = f'{self.name}.sif'
 
         self.numPads = numPads
         self.numMaterials = 4 if self.numPads == 2 else 3
         
-
-        self.meshFilename = f'{name}.msh'
-        self.sifFilename = f'{name}.sif'
-
         self._elmerBaseInfo()
-        
-        self.selectSolver()
-        self.addMaterials()
-        self.assignMaterials()
-
-        self.assignBoundaryConditions()
-
+        self._selectSolver()
+        self._addMaterials()
+        self._assignBoundaryConditions()
 
         return
 
@@ -431,7 +430,7 @@ class elmerClass:
         return
 
 #***********************************************************************************#
-    def selectSolver(self):
+    def _selectSolver(self):
 
         self.solver = {
             'Solver 1': {
@@ -466,7 +465,7 @@ class elmerClass:
         return
     
 #***********************************************************************************#
-    def addMaterials(self):
+    def _addMaterials(self):
 
         allMaterials = [
             {'Name': '"Air (room temperature)"', 'Relative Permittivity': '1.0'},
@@ -494,7 +493,7 @@ class elmerClass:
     
 
 #***********************************************************************************#
-    def assignBoundaryConditions(self):
+    def _assignBoundaryConditions(self):
 
         self.boundaries = {}
 
@@ -502,6 +501,8 @@ class elmerClass:
             1: 'Cathode', 2: 'Grid', 3: 'CentralPad'
         }
 
+        if self.numPads == 1:
+            pass
         if self.numPads == 2:
             electrodeMap[4] = 'CornerPad'
         elif self.numPads == 7:
@@ -511,7 +512,7 @@ class elmerClass:
                 8: 'LeftTopPad', 9: 'LeftBottomPad'
             })
         else:
-            raise ValueError('Number of pads must be either 2 or 7.')
+            raise ValueError('Number of pads must be 1, 2 or 7.')
 
         for i in range(1, self.numPads+3):
             name = electrodeMap[i]
@@ -532,10 +533,14 @@ class elmerClass:
 
         self.boundaries[f'Boundary {dielectricID}'] = {
             'Target Boundaries(1)': dielectricID,
-            'Name': '"DielectricSurfaceCharge"',
-            'Charge Density': 'Variable Coordinate 1, Coordinate 2, Coordinate 3',
-            'File': '"chargeBuildup.dat"'
-            }
+            'Name': '"DielectricSurfaceCharge"'
+        }
+        if not self.capacitance:
+            self.boundaries[f'Boundary {dielectricID}'].update({
+                'Charge Density': 'Variable Coordinate 1, Coordinate 2, Coordinate 3',
+                'File': '"chargeBuildup.dat"'
+            })
+
         self.boundaries[f'Boundary {boundaryID}'] = {
             'Target Boundaries(1)': boundaryID,
             'Name': '"MirrorBoundaries"',
@@ -548,7 +553,7 @@ class elmerClass:
         
 #***********************************************************************************#
     def writeSIF(self):
-        with open(self.sifFilename, 'w') as f:
+        with open(f'Geometry/{self.sifFilename}', 'w') as f:
 
             f.write(self.intro)
 
@@ -566,9 +571,9 @@ class elmerClass:
 
                     #Handle charge density file differently since it doesn't use an equals sign
                         if 'Boundary' in title and key == 'File':
-                            f.write(f'\t{key} {value}\n')
+                            f.write(f'  {key} {value}\n')
                         else:
-                            f.write(f'\t{key} = {value}\n')
+                            f.write(f'  {key} = {value}\n')
                             
                     f.write('End\n\n')
 
