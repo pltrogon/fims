@@ -161,8 +161,25 @@ int main(int argc, char * argv[]) {
   gasFIMS->SetPressure(760.);     // Atmospheric pressure
   gasFIMS->SetMaxElectronEnergy(200);
   gasFIMS->Initialise(true);
-  // Load the penning transfer and ion mobilities.
-  gasFIMS->EnablePenningTransfer(0.51, .0, "ar");
+  
+  //Enable penning transfer while suppressing warning message about using microscopic tracking
+  auto enablePenningWithoutWarning = [&gasFIMS]() -> bool {
+    
+    // Create dummy buffer for warning messages to fall into the void
+    std::ofstream nullStream("/dev/null"); //Note: only works on Unix systems (linux/Mac)
+
+    // Swap the buffer of cerr to the dummy buffer
+    std::streambuf* oldBuffer = std::cerr.rdbuf(nullStream.rdbuf());
+
+    bool ret = gasFIMS->EnablePenningTransfer(0.51, 0.0, "ar");
+
+    // Restore the original buffer
+    std::cerr.rdbuf(oldBuffer);
+
+    return ret;
+  };
+  
+  enablePenningWithoutWarning();
 
   const std::string path = std::getenv("GARFIELD_INSTALL");
   gasFIMS->LoadIonMobility(path + "/share/Garfield/Data/IonMobility_Ar+_Ar.txt");

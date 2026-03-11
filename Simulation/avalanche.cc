@@ -297,7 +297,7 @@ int main(int argc, char * argv[]) {
   );
   
   //Enable penning transfer while suppressing warning message about using microscopic tracking
-  auto EnablePenningTransferWrapper = [&gasFIMS, &gasPenning]() -> bool {
+  auto enablePenningWithoutWarning = [&gasFIMS, &gasPenning]() -> bool {
     
     // Create dummy buffer for warning messages to fall into the void
     std::ofstream nullStream("/dev/null"); //Note: only works on Unix systems (linux/Mac)
@@ -313,10 +313,7 @@ int main(int argc, char * argv[]) {
     return ret;
   };
   
-  EnablePenningTransferWrapper();
-
-  //gasFIMS->EnablePenningTransfer(gasPenning, .0, "ar");
-
+  enablePenningWithoutWarning();
 
   //STP gas parameters:
   double gasTemperature = 293.15; //K
@@ -458,9 +455,10 @@ int main(int argc, char * argv[]) {
       fieldLineDataTree->Fill();
     }
 
-    //Calculate lines from grid - only do those outside of hole
+    //Calculate lines from grid - only do those outside of hole and the pillar
     double lineRadius2 = std::pow(xStart[inFieldLine], 2.) + std::pow(yStart[inFieldLine], 2.);
     double holeRadius2 = std::pow(holeRadius, 2.);
+    double pillarStart = std::pow(pitch*sqrt(3.)/2., 2.) - std::pow(pillarRadius, 2.);
     double gridLineSeparation = 2.0;
 
     //Do above grid
@@ -483,8 +481,9 @@ int main(int argc, char * argv[]) {
     //Do below grid
     gridFieldLineLocation = -1;
     fieldLines.clear();
-
-    if(lineRadius2 >= holeRadius2){
+  
+    //TODO: verify that pillar position implemented correctly
+    if(lineRadius2 >= holeRadius2 && lineRadius2 < pillarStart){
       driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], -gridLineSeparation*gridThickness/2., fieldLines);
 
       //Get coordinates of every point along field line and fill the tree

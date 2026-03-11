@@ -190,8 +190,9 @@ class FIMS_Simulation:
         allParam = self.defaultParam()
         for inParam in allParam:
             if inParam not in self.param:
-                raise KeyError(f'{inParam} missing from parameter '
-                               'dictionary.')
+                raise KeyError(
+                        f'{inParam} missing from parameter dictionary.'
+                      )
             
         # Check gas composition 
         self._checkGasComp()
@@ -378,7 +379,7 @@ class FIMS_Simulation:
             '// FIMS Simulation Control File //',
             '// Assumes the form "variable = value;" for each line.',
             '// Number of input parameters (numInputs included):',
-            'numInputs = 19;',   # TODO: Change if param number changed
+            'numInputs = 19;',   # TODO: Why exactly do we need to specify the number of params?
             '',
             '//----- Geometry parameters -----//',
             '// Dimensions in microns.',
@@ -479,7 +480,7 @@ class FIMS_Simulation:
                   )
 
         self.param = readInParam
-        self._checkParam() # TODO: redundant? (checked on initialization and after write)
+        self._checkParam() # TODO: redundant?
         
         return
 
@@ -545,7 +546,6 @@ class FIMS_Simulation:
             key = parts[0].strip()
             if len(parts) == 2 and key in self.param:
                     newLines.append(f"{key} = {self.param[key]};\n")
-                    # TODO: verify that this change didn't break anything
             else:
                 newLines.append(line + '\n')
     
@@ -588,12 +588,14 @@ class FIMS_Simulation:
 
     def _calcPotentials(self):
         """
-        Calculates the required potentials to achieve a desired field ratio.
+        Calculates the potentials needed to reach a given field ratio.
     
-        Assumes that the drift field is defined as V/cm and distances are in microns.
+        Assumes that the drift field is defined as V/cm and distances
+        are in microns.
     
         Returns:
-            dict: Dictionary containing the potentials for the cathode and grid (in V).
+            dict: Dictionary containing the potentials for the cathode 
+                and grid (in V).
                   Empty if necessary parameters are unavailable. 
         """
         self._checkParam() # TODO: redundant? bad params should be caught before reaching private methods
@@ -1361,17 +1363,17 @@ class FIMS_Simulation:
     
 #**********************************************************************#
 
-    def _getFieldRatio(self, fields, values, valError = None, damp=0.8):
+    def _getFieldRatio(self, fields, values, valError = None, damp=0.9):
         """
         Calculates the next field ratio using the secant method.
         
-        If errors are provided, utilizes a step base on the maximum 
-        possible slope. Assumes that the value is monotonically 
+        If errors are provided, utilizes a step base on the maximum
+        possible slope. Assumes that the value is monotonically
         increasing for field ratios.
 
         The resulting field ratio is rounded up to the nearest integer.
         
-        *TODO - Tested for when  current and previous values are both 
+        *TODO - Tested for when  current and previous values are both
         LESS than target. Behavior when bracketing target unknown.*
 
         Args:
@@ -1394,7 +1396,7 @@ class FIMS_Simulation:
 
         fieldDiff = curField - prevField
 
-        #If errors exist, use the maximum possible slope
+        # If errors exist, use the maximum possible slope
         if valError is not None:
             curValErr, prevValErr = valError
             prevValMin = prevVal - prevValErr
@@ -1415,19 +1417,19 @@ class FIMS_Simulation:
 
         fieldStep = damp*targetDiff*fieldDiff/valDiff
 
-        #Limit step size for stability
+        # Limit step size for stability
         stepSizeLimit = 10
         if fieldStep > stepSizeLimit:
             print(f'Warning: Step size limited to {stepSizeLimit}.')
             newField = curField+stepSizeLimit
 
-        #Ensure new field is at least 1 unit larger than previous field
+        # Ensure new field is at least 1 unit larger than previous field
         elif fieldStep < 1:
             print('Warning: Field step small. '
                   'Using heuristic step of 1.')
             newField = curField + 1
 
-        #Round step up to nearest integer
+        # Round step up to nearest integer
         else:
             roundedStep = math.ceil(fieldStep)
             newField = curField+roundedStep
@@ -1436,7 +1438,7 @@ class FIMS_Simulation:
 
 #**********************************************************************#
 
-    def _getNextField(self, iterNo, valueAtField, targetValue):
+    def _getNextField(self, iterNo, valueAtField, target):
         """
         Determines the next field ratio for achieving a target value.
         
@@ -1449,13 +1451,13 @@ class FIMS_Simulation:
                 - 'field': Array of previous field ratios.
                 - 'value': Array of previous values.
                 - 'valueErr': Array of previous value errors.
-            targetValue (float): target value for search 
+            target (float): target value for search 
 
         Returns:
             float: Calculated field ratio for target value
         """
 
-        #Identify data key
+        # Identify data key
         dataKeys = [k for k in valueAtField.keys() if k != 'field' and not k.endswith('Err')] 
         # TODO: find a way to split this line up
 
@@ -1479,11 +1481,19 @@ class FIMS_Simulation:
 
         # Use secant method to determine new field
         else:
+            prevField = valueAtField['field'][-1]
+            prevVal = valueAtField[valueKey][-1]
+            prevErr = valueAtField[errorKey][-1]
+            
+            2ndLastField = valueAtField['field'][-2]
+            2ndLastVal = valueAtField[valueKey][-2]
+            2ndLastErr = valueAtField[errorKey][-2]
+            
             newField = self._getFieldRatio( 
-                fields = np.array([valueAtField['field'][-1], valueAtField['field'][-2]]),
-                values = np.array([valueAtField[valueKey][-1], valueAtField[valueKey][-2], targetValue]),
-                valError = np.array([valueAtField[errorKey][-1], valueAtField[errorKey][-2]])
-            ) # TODO: find way to compress these lines 
+                fields = np.array([prevField, 2ndLastField]),
+                values = np.array([prevVal, 2ndLastVal, target]),
+                valError = np.array([prevErr, 2ndLastErr])
+            )
         
         if newField is None:
             raise ValueError('Error: Invalid new field')
