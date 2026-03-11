@@ -295,7 +295,27 @@ int main(int argc, char * argv[]) {
     "cf4", gasCompCF4,
     "iC4H10", gasCompIsobutane
   );
-  gasFIMS->EnablePenningTransfer(gasPenning, .0, "ar");
+  
+  //Enable penning transfer while suppressing warning message about using microscopic tracking
+  auto EnablePenningTransferWrapper = [&gasFIMS, &gasPenning]() -> bool {
+    
+    // Create dummy buffer for warning messages to fall into the void
+    std::ofstream nullStream("/dev/null"); //Note: only works on Unix systems (linux/Mac)
+
+    // Swap the buffer of cerr to the dummy buffer
+    std::streambuf* oldBuffer = std::cerr.rdbuf(nullStream.rdbuf());
+
+    bool ret = gasFIMS->EnablePenningTransfer(gasPenning, 0.0, "ar");
+
+    // Restore the original buffer
+    std::cerr.rdbuf(oldBuffer);
+
+    return ret;
+  };
+  
+  EnablePenningTransferWrapper();
+
+  //gasFIMS->EnablePenningTransfer(gasPenning, .0, "ar");
 
 
   //STP gas parameters:
