@@ -155,7 +155,7 @@ class FIMS_Simulation:
             dict: Dictionary of default parameters and values.
         """
         defaultParam = {
-            'padLength': 12.,
+            'padLength': 20.,
             'pitch': 80.,
             'gridStandoff': 45.,
             'gridThickness': 1.,
@@ -166,7 +166,7 @@ class FIMS_Simulation:
             'driftField': 280.,
             'fieldRatio': 80.,
             'numFieldLine': 25,
-            'numAvalanche': 1000,
+            'numAvalanche': 3000,
             'avalancheLimit': 700,
             'gasCompAr': 0.95,
             'gasCompCO2': 0.00,
@@ -1485,14 +1485,14 @@ class FIMS_Simulation:
             prevVal = valueAtField[valueKey][-1]
             prevErr = valueAtField[errorKey][-1]
             
-            2ndLastField = valueAtField['field'][-2]
-            2ndLastVal = valueAtField[valueKey][-2]
-            2ndLastErr = valueAtField[errorKey][-2]
+            scndLastField = valueAtField['field'][-2]
+            scndLastVal = valueAtField[valueKey][-2]
+            scndLastErr = valueAtField[errorKey][-2]
             
             newField = self._getFieldRatio( 
-                fields = np.array([prevField, 2ndLastField]),
-                values = np.array([prevVal, 2ndLastVal, target]),
-                valError = np.array([prevErr, 2ndLastErr])
+                fields = np.array([prevField, scndLastField]),
+                values = np.array([prevVal, scndLastVal, target]),
+                valError = np.array([prevErr, scndLastErr])
             )
         
         if newField is None:
