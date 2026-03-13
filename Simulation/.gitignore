@@ -5,6 +5,7 @@ GARFIELDPATH
 log/
 Geometry/*.msh
 Geometry/*.sif
+Geometry/*.txt
 Geometry/elmerResults/
 build/
 __pycache__/

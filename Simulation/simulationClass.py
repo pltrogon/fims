@@ -43,6 +43,7 @@ class FIMS_Simulation:
 
     *****
     IMPORTANT: The parameters are reset to defaults after every simulation.
+    TODO - Maybe not?
     *****
 
     Private Attributes:
@@ -69,7 +70,7 @@ class FIMS_Simulation:
 
         GARFIELDPATH (str): Filepath to the Garfield++ source script. Read from 'GARFIELDPATH' file.
 
-        geoemetry (geometryClass): A geometry class object representing the geometry and fields solvers.
+        geoemetry (geometryClass): A geometry class object representing the geometry and field solvers.
     """
 
 #***********************************************************************************#
@@ -422,6 +423,7 @@ class FIMS_Simulation:
         self._geometry.createGeometry()
 
         return
+        
     
 #***********************************************************************************#
     def _solveEFields(self, solveWeighting=True):
@@ -627,7 +629,71 @@ class FIMS_Simulation:
         self._resetParam()
         
         return runNo
+    
+#***********************************************************************************#
+    def runCapacitance(self):
+        """
+        Solves the capacitance matrix for the geometry using Elmer.
+        Solves for a hexagonal unit celll and all neightboring cells.
+
+        Elements are ordered as:
+            1. Cathode
+            2. Grid
+            3. CenterPad
+            4. TopPad
+            5. BottomPad
+            6. TopRightPad
+            7. BottomRightPad
+            8. TopLeftPad
+            9. BottomLeftPad
+
+        Returns:
+            capacitanceMatrix (np.array): The capacitance matrix in fF.
+        """
+
+        self._checkParam()
+
+        # Create surrounding-cell geometry
+        self._geometry = geometryClass(self._param)
+        self._geometry.createGeometry(hexagonal=True, neighborCells=True)
+
+        # Solve the capacitance matrix
+        self._geometry.calculateEFields(capacitance=True)
+
+        # Read the capacitance matrix from the Elmer output file
+        capacitanceMatrix = self._readCapacitanceMatrix()
+
+        return capacitanceMatrix
+
+
+#***********************************************************************************#
+    def _readCapacitanceMatrix(self):
+        """
+        Reads the capacitance matrix from the Elmer output file.
+
+        Returns:
+            capacitanceMatrix (np.array): The capacitance matrix in fF.
+
+        """
+        try:
+
+            capacitanceFile = '../Simulation/Geometry/elmerResults/capacitancematrix.dat'
+            capacitanceMatrix = np.loadtxt(capacitanceFile)
+
+            capacitanceMatrix *= 1e15 #Convert from F to fF
+
+        except FileNotFoundError:
+            raise FileNotFoundError('Error: Capacitance file not found.')
+        except Exception as e:
+            raise RuntimeError(f'An error occurred while reading the capacitance file: {e}')
         
+        return capacitanceMatrix
+
+
+
+
+        
+
 #***********************************************************************************#
 #***********************************************************************************#
 # METHODS FOR RUNNING MINIMUM FIELD
