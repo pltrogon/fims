@@ -56,8 +56,8 @@ class geometryClass:
             raise ValueError('Error - Hole larger than hexagon radius.')
         if self._param['padLength'] >= self._param['pitch'] / math.sqrt(3):
             raise ValueError('Error - Pad larger than hexagon radius.')
-        if self._param['pillarRadius'] >= (self._param['pitch']/2 - self._param['padLength']*math.sqrt(3)/2):
-            raise ValueError('Error - Pillar cannot fit.')
+        #if self._param['pillarRadius'] >= (self._param['pitch']/2 - self._param['padLength']*math.sqrt(3)/2):
+        #    raise ValueError('Error - Pillar cannot fit.')
         return
 
         
@@ -65,6 +65,8 @@ class geometryClass:
 #**********************************************************************#
     def createGeometry(self, runGUI=False, hexagonal=False, neighborCells=False):
         """TODO"""
+
+        print('Creating geometry...')
     
         self._checkParameters()
         self._gmshClass = gmshClass(self._param)
@@ -93,25 +95,29 @@ class geometryClass:
         else:
             self._numPads = 2
 
-        self._elmerClass = elmerClass(self._fileName, numPads=self._numPads, capacitance=False)
+        self._elmerClass = elmerClass(
+            self._fileName, numPads=self._numPads, capacitance=False
+        )
         self._elmerClass.writeAllSIF()
 
         if self._numPads == 7:
-            self._elmerClassCapacitance = elmerClass(self.fileName, numPads=self._numPads, capacitance=True)
+            self._elmerClassCapacitance = elmerClass(
+                self._fileName, numPads=self._numPads, capacitance=True
+            )
             self._elmerClassCapacitance.writeAllSIF()
         return
     
 #**********************************************************************#
 
-    def solveEFields(self, capacitance=False):
+    def calculateEFields(self, capacitance=False, solveWeighting=True):
 
         self._generateElmerFiles()
 
         if capacitance:
-            self._elmerClassCapacitance.runElmerSolver()
+            self._elmerClassCapacitance.runElmer()
         else:
             self._setVoltages()
-            self._elmerClass.runElmer()
+            self._elmerClass.runElmer(solveWeighting=solveWeighting)
 
         return
 
@@ -717,8 +723,8 @@ class gmshClass:
 #**********************************************************************#
 
     def _setMeshSizesHexagon(self):
-        fineMesh = self._param['gridThickness']
-        courseMesh = 10*fineMesh
+        fineMesh = self._param['gridThickness']*10
+        courseMesh = fineMesh*1
         transitionWidth = 2*self._param['holeRadius']
 
         largerHole = max(self._param['holeRadius'], self._param['padLength'])
@@ -803,6 +809,7 @@ class gmshClass:
         self._assignPhysicalGroupsHexagon(allCellsMap)
         self._setMeshSizesHexagon()
 
+        print('Creating mesh...')
         gmsh.model.mesh.generate(3)
         gmsh.write(filename)
 
@@ -848,6 +855,7 @@ class gmshClass:
         self._assignPhysicalGroups(allCellsMap)
         self._setMeshSizes()
 
+        print('Creating mesh...')
         gmsh.model.mesh.generate(3)
         gmsh.write(filename)
 
@@ -1239,15 +1247,14 @@ class elmerClass:
 
 #**********************************************************************#
 
-    def runElmer(self):
+    def runElmer(self, solveWeighting=True):
         """
         Runs the Elmer simulation using the generated SIF file and mesh.
         """
-
         self._runElmerGrid()
         self._runElmerSolver()
 
-        if not self.capacitance:
+        if not self.capacitance and solveWeighting:
             self._runElmerWeighting()
 
         return
