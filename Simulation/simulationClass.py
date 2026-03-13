@@ -21,6 +21,8 @@ import copy
 sys.path.insert(1, '../Analysis')
 from runDataClass import runData
 
+from geometryClass import geometryClass
+
 class FIMS_Simulation:
     """
     Class representing the FIMS simulation.
@@ -60,33 +62,9 @@ class FIMS_Simulation:
             - avalancheLimit: Limit of the number of electrons within a single avalanche.
             - gasCompAr: Percentage of Argon within gas volume.
             - gasCompCO2: Percentage of CO2 within gas volume.
-    
-    Methods defined in FIMS_Simulation:
-        defaultParam
-        _checkParam
-        getParam
-        _getGarfieldPath
-        _setupSimulation
-        _readParam
-        _writeFile
-        _writeRunControl
-        _readSIF
-        _calcPotentials
-        _writeSIF
-        _makeWeighting
-        _writeParam
-        resetParam
-        _getRunNumber
-        _runGmsh
-        _runElmer
-        _runElmerWeighting
-        _runGarfield
-        runSimulation
-        runForOptimizer         <----- NEW
-        _runGetEfficiency       <----- NEW
-        _readEfficiencyFile     <----- NEW
-        findFieldForEfficiency <----- NEW
-        findFieldForTransparency <------ Changed from findMinField
+            - gasCompCF4: Percentage of CF4 within gas volume.
+            - gasCompIsobutane: Percentage of Isobutane within gas volume.
+            - gasPenning: Penning transfer rate for the gas mixture.
     """
 
 #***********************************************************************************#
@@ -95,7 +73,7 @@ class FIMS_Simulation:
         Initializes a FIMS_Simulation object.
         """
         try:
-            self.param = self.defaultParam()
+            self._param = self.defaultParam()
             self._checkParam()
         except KeyError:
             raise RuntimeError('Error initializing parameters.')
@@ -114,7 +92,7 @@ class FIMS_Simulation:
         """
         Returns a formatted string containing all of the simulation parameters.
         """
-        paramList = [f'{key}: {value}' for key, value in self.param.items()]            
+        paramList = [f'{key}: {value}' for key, value in self._param.items()]            
         return "FIMS Simulation Parameters:\n\t" + "\n\t".join(paramList)
 
 #***********************************************************************************#    
@@ -155,13 +133,13 @@ class FIMS_Simulation:
         Ensures that values exist for all necessary parameters.
         """
         #Check that any parameters exist
-        if self.param is None or not self.param:
+        if self._param is None or not self._param:
             raise(KeyError('Parameter dictionary is empty.'))
 
         #Check that all parameters are present
         allParam = self.defaultParam()
         for inParam in allParam:
-            if inParam not in self.param:
+            if inParam not in self._param:
                 raise KeyError(f"Parameter '{inParam}' missing from parameter dictionary.")
             
         #Check gas composition 
@@ -191,10 +169,10 @@ class FIMS_Simulation:
         """
         Gets and returns a copy of the desired parameter.
         """
-        if parameter not in self.param:
+        if parameter not in self._param:
             raise KeyError(f'Error - Invalid parameter: {parameter}.')
             
-        return copy.copy(self.param[parameter])
+        return copy.copy(self._param[parameter])
 
 #***********************************************************************************#       
     def _getGarfieldPath(self):
@@ -394,7 +372,7 @@ class FIMS_Simulation:
         except Exception as e:
             raise RuntimeError(f"Error reading parameters from {filename}: {e}")
 
-        self.param = readInParam
+        self._param = readInParam
         self._checkParam()
         
         return
@@ -447,8 +425,8 @@ class FIMS_Simulation:
             parts = line.split('=', 1)
             if len(parts) == 2:
                 key = parts[0].strip()
-                if key in self.param:
-                    newLines.append(f"{key} = {self.param[key]};\n")  # Update value
+                if key in self._param:
+                    newLines.append(f"{key} = {self._param[key]};\n")  # Update value
                 else:
                     newLines.append(line + '\n') #keep original line
             else:
@@ -457,210 +435,7 @@ class FIMS_Simulation:
         #Write new runControl file
         self._writeFile(filename, newLines)
 
-        return
-
-#***********************************************************************************#        
-    def _readSIF(self, sifFile='FIMS.sif'):
-        """
-        Reads the solver input file and returns its content as a list of lines.
-        This file is assumed to be in the 'Geometry/' folder.
-
-        Args:
-            sifFile (str): The name of the .sif file to read.
-    
-        Returns:
-            list: A list of strings, each a line of file.
-                  Returns None if an error occurs.
-        """
-        filename = os.path.join('./Geometry', sifFile)
-    
-        try:
-            with open(filename, 'r') as file:
-                sifLines = file.readlines()  # Read all lines of the file
-                
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Error: File '{filename}' not found.") 
-        except Exception as e:
-            raise RuntimeError(f"An error occurred while reading the file '{filename}': {e}")
-    
-        return sifLines
-        
-#***********************************************************************************#
-    def _calcPotentials(self):
-        """
-        Calculates the required potentials to achieve a desired field ratio.
-    
-        Assumes that the drift field is defined as V/cm and distances are in microns.
-    
-        Returns:
-            dict: Dictionary containing the potentials for the cathode and grid (in V).
-                  Empty if necessary parameters are unavailable. 
-        """
-        self._checkParam()
-            
-
-        driftField = float(self.getParam('driftField'))/1e4 #V/micron
-        fieldRatio = float(self.getParam('fieldRatio'))
-        amplificationField = driftField*fieldRatio #V/micron
-        
-        # Calculate the voltage required to achieve amplification field
-        gridDistance = float(self.getParam('gridStandoff')) - float(self.getParam('gridThickness'))/2. #micron
-        gridVoltage = amplificationField*gridDistance
-    
-        # Calculate for drift field
-        cathodeDistance = float(self.getParam('cathodeHeight')) - float(self.getParam('gridThickness'))/2. #micron
-        cathodeVoltage = driftField*cathodeDistance + gridVoltage
-    
-        potentials = {
-            'cathodeVoltage': -cathodeVoltage,
-            'gridVoltage': -gridVoltage
-        }
-        
-        return potentials
-
-#***********************************************************************************#
-    def _writeSIF(self, sifFile='FIMS.sif'):
-        """
-        Rewrites the solver input file boundary conditons based on the given parameters.
-    
-        Assumes that 'Potential' is defined on the line following 'Name'.
-
-        Args:
-            sifFile (str): The name of the .sif file to read and rewrite.
-        """
-        self._checkParam()
-    
-        #Read old .sif file
-        sifLines = self._readSIF(sifFile=sifFile)
-    
-        potentials = self._calcPotentials()
-    
-        writeCathode = -1
-        writeGrid = -1
-        
-        # Find the cathode and grid naming lines
-        for i, line in enumerate(sifLines):
-            if 'Name = "Cathode"' in line:
-                writeCathode = i+1
-            if 'Name = "Grid"' in line:
-                writeGrid = i+1
-    
-        if writeCathode == -1 or 'Potential =' not in sifLines[writeCathode]:
-            raise RuntimeError('Error with cathode.')
-        if writeGrid == -1 or 'Potential =' not in sifLines[writeGrid]:
-            raise RuntimeError('Error with grid.')
-
-        #rewrite appropriate lines
-        sifLines[writeCathode] = f"\tPotential = {potentials['cathodeVoltage']}\n"
-        sifLines[writeGrid] = f"\tPotential = {potentials['gridVoltage']}\n"
-    
-        #Write new .sif file
-        filename = os.path.join('./Geometry', sifFile)
-        self._writeFile(filename, sifLines)
-
-        return
-
-#***********************************************************************************#
-    def _makeWeighting(self):
-        """
-        Writes a new .sif file for determining the weighting field.
-    
-        Sets all electrode boundary conditions to 0, then sets the pad potential to 1.
-
-        """
-        #Read original sif file
-        sifLines = self._readSIF()
-    
-        # Process lines one by one
-        sifLinesNew = []
-        centralPadBC = False
-
-        for line in sifLines:
-            #Replace all 'FIMS' with 'FIMSWeighting'
-            line = line.replace('FIMS', 'FIMSWeighting')
-
-            #Check if BC for Central Pad
-            if 'CentralPad' in line:
-                centralPadBC = True
-
-            #Set potentials -> 1 if Central Pad, 0 otherwise
-            if 'Potential = ' in line:
-                if centralPadBC:
-                    sifLinesNew.append('\tPotential = 1.0\n')
-                    centralPadBC = False
-                    continue
-                else:
-                    sifLinesNew.append('\tPotential = 0.0\n')
-                    continue
-
-            #Keep all other non-potential lines unchanged
-            sifLinesNew.append(line)
-
-        #Write new sif file
-        filename = 'Geometry/FIMSWeighting.sif'
-        self._writeFile(filename, sifLinesNew)
-
-        return
-    
-#***********************************************************************************#
-    def _makeWeightingSurrounding(self):
-        """
-        Writes a new .sif file for determining the weighting field for a given pad.
-    
-        Sets all electrode boundary conditions to 0, then sets the pad potential to 1.
-
-        Args:
-            targetPad (str): The name of the pad to set to 1.0 potential.
-
-        """
-
-        padNames = [
-            'CentralPad', 
-            'TopPad', 
-            'BottomPad', 
-            'RightTopPad', 
-            'RightBottomPad',
-            'LeftTopPad',
-            'LeftBottomPad'
-        ]
-
-        #Read original sif file
-        originalLines = self._readSIF(sifFile='FIMSSurrounding.sif')
-
-        for targetPad in padNames:
-
-            sifLines = originalLines.copy()
-        
-            # Process lines one by one
-            sifLinesNew = []
-            targetPadBC = False
-
-            for line in sifLines:
-                line = line.replace('FIMSSurrounding', f'FIMSSurroundingWeighting_{targetPad}')
-
-                #Check if BC for Central Pad
-                if f'{targetPad}' in line:
-                    targetPadBC = True
-
-                #Set potentials -> 1 if target Pad, 0 otherwise
-                if 'Potential = ' in line:
-                    if targetPadBC:
-                        sifLinesNew.append('\tPotential = 1.0\n')
-                        targetPadBC = False
-                        continue
-                    else:
-                        sifLinesNew.append('\tPotential = 0.0\n')
-                        continue
-
-                #Keep all other non-potential lines unchanged
-                sifLinesNew.append(line)
-
-            #Write new sif file
-            filename = f'Geometry/FIMSSurroundingWeighting_{targetPad}.sif'
-            self._writeFile(filename, sifLinesNew)
-
-        return
-        
+        return        
 
 #***********************************************************************************#
     def _writeParam(self):
@@ -671,8 +446,6 @@ class FIMS_Simulation:
         """
         self._checkParam()
         self._writeRunControl()
-        self._writeSIF()
-        self._writeSIF(sifFile='FIMSSurrounding.sif')
         
         return
 
@@ -684,7 +457,7 @@ class FIMS_Simulation:
         Args:
             verbose (bool): Option available to supress reset notification.
         """
-        self.param = self.defaultParam()
+        self._param = self.defaultParam()
         self._writeParam()
     
         if verbose:
@@ -717,209 +490,6 @@ class FIMS_Simulation:
             raise RuntimeError(f"An error occurred while reading the file '{filename}': {e}")
         
         return runNo
-
-#***********************************************************************************#
-    def _runGmsh(self, geoFile='FIMS.txt'):
-        """
-        Runs the Gmsh program to generate a 3D finite-element mesh of the simulation geometry.
-        Writes the output of Gmsh to 'log/logGmsh'.
-    
-        Utilizes several Gmsh options, including:
-            -order 2: Second-order meshing
-            -optimize_ho: Optimize the higher-order mesh
-            -clextend: Extends the characteristic lengths to the whole geometry
-            OptimizeNetgen: Enables Netgen algorithm optimization
-            MeshSizeFromPoints: Uses mesh sizes defined at specific points
-    
-        Args:
-            geoFile (str): The name of the geometry file to use for meshing, located in the 'Geometry/' folder.
-
-        """
-        try:
-            print('\tExecuting Gmsh...')
-
-            with open(os.path.join(os.getcwd(), 'log/logGmsh.txt'), 'w+') as gmshOutput:
-                startTime = time.monotonic()
-                subprocess.run(
-                    ['gmsh', os.path.join('./Geometry/', geoFile),
-                     '-order', '2', '-optimize_ho',
-                     '-clextend', '1',
-                     '-setnumber', 'Mesh.OptimizeNetgen', '1',
-                     '-setnumber', 'Mesh.MeshSizeFromPoints', '1',
-                     '-3',
-                     '-format', 'msh2'],
-                    stdout=gmshOutput, 
-                    check=True
-                )
-                endTime = time.monotonic()
-                gmshOutput.write(f'\n\nGmsh run time: {endTime - startTime} s')
-    
-    
-        except FileNotFoundError:
-            raise FileNotFoundError('Error: Gmsh log file not found.')
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f'Gmsh failed with exit code {e.returncode}.')
-            
-        return
-
-#***********************************************************************************#
-    def _runElmer(self, surrounding=False):
-        """
-        Runs Elmer to determine a finite-element Electric field solution.
-    
-        Converts a gmsh mesh to elmer format using ElmerGrid.
-        Calculates potentials and E fields for the mesh using ElmerSolver.
-        Output files are saved to a subdirectory called 'elmerResults/'.
-        Writes the output of the programs to 'log/logElmerGrid' and 'log/logElmerSolver'.
-
-        Args:
-            surrounding (bool): Option to run Elmer for the surrounding geometry.
-        """
-        originalCWD = os.getcwd()
-        os.chdir('./Geometry')
-
-        base = 'FIMSSurrounding' if surrounding else 'FIMS'
-
-        os.makedirs('elmerResults', exist_ok=True)
-            
-        try:
-            print('\tExecuting Elmer...')
-
-            with open(os.path.join(originalCWD, 'log/logElmerGrid.txt'), 'w+') as elmerOutput:
-                startTime = time.monotonic()
-                subprocess.run(
-                    ['ElmerGrid', '14', '2', f'{base}.msh', 
-                     '-names',
-                     '-out', 'elmerResults', 
-                     '-autoclean'], 
-                    stdout=elmerOutput,
-                    check=True
-                )
-                endTime = time.monotonic()
-                elmerOutput.write(f'\n\nElmerGrid run time: {endTime - startTime} s')
-
-                
-            with open(os.path.join(originalCWD, 'log/logElmerSolver.txt'), 'w+') as elmerOutput:
-                startTime = time.monotonic()
-                subprocess.run(
-                    ['ElmerSolver', f'{base}.sif'],
-                    stdout=elmerOutput,
-                    check=True
-                )
-                endTime = time.monotonic()
-                elmerOutput.write(f'\n\nElmerSolver run time: {endTime - startTime} s')
-
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f'Elmer failed with exit code {e.returncode}.')
-        
-        finally:
-            os.chdir(originalCWD)
-        return
-
-#***********************************************************************************#
-    def _runElmerWeighting(self):
-        """
-        Runs ElmerSolver to determine the weighing field for a simulation.
-    
-        Assumes that the Gmsh mesh has already been converted to 
-        Elmer format by ElmerGrid. Creates the appropriate .sif file.
-        Writes the ElmerSolver output to 'log/logElmerWeighting'.
-        """
-
-
-        self._makeWeighting()
-        
-        originalCWD = os.getcwd()
-        os.chdir('./Geometry')
-        try:
-            print('\tExecuting Elmer weighting...')
-
-            with open(os.path.join(originalCWD, 'log/logElmerWeighting.txt'), 'w+') as elmerOutput:
-                startTime = time.monotonic()
-                subprocess.run(
-                    ['ElmerSolver', 'FIMSWeighting.sif'],
-                    stdout=elmerOutput, 
-                    check=True
-                )
-                endTime = time.monotonic()
-                elmerOutput.write(f'\n\nElmerSolver run time: {endTime - startTime} s')
-    
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f'ElmerSolver weighting failed with exit code {e.returncode}.')
-        
-        finally:
-            os.chdir(originalCWD)
-
-        return
-    
-#***********************************************************************************#
-    def _runElmerWeightingSurrounding(self):
-        """
-        Runs ElmerSolver to determine the weighing field for a simulation.
-    
-        Assumes that the Gmsh mesh has already been converted to 
-        Elmer format by ElmerGrid. Creates the appropriate .sif file.
-        Writes the ElmerSolver output to 'log/logElmerWeighting'.
-        """
-
-        padNames = [
-            'CentralPad', 
-            'TopPad', 
-            'BottomPad', 
-            'RightTopPad', 
-            'RightBottomPad',
-            'LeftTopPad',
-            'LeftBottomPad'
-        ]
-
-        self._makeWeightingSurrounding()
-        
-        originalCWD = os.getcwd()
-        os.chdir('./Geometry')
-        try:
-            for targetPad in padNames:
-                print(f'\tExecuting Elmer weighting for {targetPad}...')
-
-                with open(os.path.join(originalCWD, 'log/logElmerWeighting.txt'), 'w+') as elmerOutput:
-                    subprocess.run(
-                        ['ElmerSolver', f'FIMSSurroundingWeighting_{targetPad}.sif'],
-                        stdout=elmerOutput, 
-                        check=True
-                    )
-    
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f'ElmerSolver weighting failed with exit code {e.returncode}.')
-        
-        finally:
-            os.chdir(originalCWD)
-
-        return
-    
-#***********************************************************************************#
-    def _runElmerCapacitance(self):
-        """
-        TODO
-        """
-
-        originalCWD = os.getcwd()
-        os.chdir('./Geometry')
-        try:
-            print(f'\tExecuting Elmer capacitance...')
-
-            with open(os.path.join(originalCWD, 'log/logElmerCapacitance.txt'), 'w+') as elmerOutput:
-                subprocess.run(
-                    ['ElmerSolver', f'FIMSCapacitance.sif'],
-                    stdout=elmerOutput, 
-                    check=True
-                )
-    
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f'ElmerSolver capacitance failed with exit code {e.returncode}.')
-        
-        finally:
-            os.chdir(originalCWD)
-
-        return
 
 #***********************************************************************************#
     def _runGarfield(self, surrounding=False):
@@ -1121,48 +691,6 @@ class FIMS_Simulation:
         self.resetParam()
         
         return runNo
-    
-#***********************************************************************************#
-    def runSimulationSurrounding(self):
-        """
-        Executes the full simulation process for a geometry consisting of the central
-        cell and half of all surrounding cells included.
-
-        This is a larger region to mesh/solve, but allows for neighbouring pads to be
-        individually chacterized, and allows for charge-buildup studies on the SiO2 
-        layer. Pillars are not included, but the weighing field for each pad is 
-        calculated. Capacitance matrix between all electrodes is also calculated.
-
-        """
-    
-        self._checkParam()
-
-        #get the run number for this simulation
-        runNo = self._getRunNumber()
-        print(f'Running simulation - Run number: {runNo}')
-        
-        #write parameters for sim
-        self._writeParam()
-    
-        #Generate mesh for surrounding geometry
-        self._runGmsh(geoFile='FIMSSurrounding.txt')
-
-        #Solve field and weighting field for surrounding geometry
-        self._runElmer(surrounding=True)
-        self._runElmerWeightingSurrounding()
-        self._runElmerCapacitance()
-    
-        #Run charge transport simulation for surrounding geometry
-        self._runGarfield(surrounding=True)
-    
-        #reset parameters to finish
-        self.resetParam()
-        
-        return runNo
-    
-
-
-
         
 #***********************************************************************************#
 #***********************************************************************************#
@@ -1375,7 +903,7 @@ class FIMS_Simulation:
 
         #Ensure all parameters exist and save them
         self._checkParam()
-        saveParam = self.param.copy()
+        saveParam = self._param.copy()
         
         print(f'Beginning search for minimum field to achieve {targetEfficiency*100:.0f}% efficiency...')
         
@@ -1389,8 +917,8 @@ class FIMS_Simulation:
         }        
 
         validEfficiency = False
-        self.param['numAvalanche'] = 3000
-        self.param['avalancheLimit'] = 20 #Limit can be low. Check is boolean - above threshold or not
+        self._param['numAvalanche'] = 3000
+        self._param['avalancheLimit'] = 20 #Limit can be low. Check is boolean - above threshold or not
         
         while not validEfficiency:
 
@@ -1402,7 +930,7 @@ class FIMS_Simulation:
             #Solve for the new electric field
             newField = self._getNextField(iterNo, efficiencyAtField, targetEfficiency)
             efficiencyAtField['field'].append(newField)
-            self.param['fieldRatio'] = newField
+            self._param['fieldRatio'] = newField
             self._solveEField()
 
             #Determine the efficiency and read results from file
@@ -1442,8 +970,8 @@ class FIMS_Simulation:
         #Reset parameters
         self.resetParam()
         #load saved parameters back into class.
-        self.param = saveParam
-        self.param['fieldRatio'] = finalField
+        self._param = saveParam
+        self._param['fieldRatio'] = finalField
 
         return finalField
 
@@ -1530,7 +1058,7 @@ class FIMS_Simulation:
 
         #Ensure all parameters exist and save them
         self._checkParam()
-        saveParam = self.param.copy()
+        saveParam = self._param.copy()
 
         print(f'Beginning search for minimum field to achieve >{targetTransparency}% transparency...')
        
@@ -1544,7 +1072,7 @@ class FIMS_Simulation:
         } 
 
         isTransparent = False
-        self.param['numFieldLine'] = 200
+        self._param['numFieldLine'] = 200
         
         while not isTransparent:
 
@@ -1556,7 +1084,7 @@ class FIMS_Simulation:
             #Solve the new electric field
             newField = self._getNextField(iterNo, transparencyAtField, targetTransparency)
             transparencyAtField['field'].append(newField)
-            self.param['fieldRatio'] = newField
+            self._param['fieldRatio'] = newField
             self._solveEField()
 
             #Generate field lines and read results from file
@@ -1587,8 +1115,8 @@ class FIMS_Simulation:
         #Reset parameters
         self.resetParam()
         #load saved parameters back into class.
-        self.param = saveParam
-        self.param['fieldRatio'] = finalField
+        self._param = saveParam
+        self._param['fieldRatio'] = finalField
 
         return finalField
     
@@ -1608,7 +1136,7 @@ class FIMS_Simulation:
 
         #Ensure all parameters exist and save them
         self._checkParam()
-        saveParam = self.param.copy()
+        saveParam = self._param.copy()
 
         #Get absolute drift field value
         driftField = self.getParam('driftField')
@@ -1618,7 +1146,7 @@ class FIMS_Simulation:
         opticalTransparency = self._calcOpticalTransparency()
         minFieldGuess = .9*(2/opticalTransparency - 1)
 
-        self.param['fieldRatio'] = minFieldGuess
+        self._param['fieldRatio'] = minFieldGuess
         print(f'\tInitial field ratio guess: {minFieldGuess}')
 
         #Generate the FEM geometry
@@ -1637,48 +1165,12 @@ class FIMS_Simulation:
         finalField = max(efficiencyField, transparencyField)
 
         #load saved parameters back into class.
-        self.param = saveParam
-        self.param['fieldRatio'] = finalField
+        self._param = saveParam
+        self._param['fieldRatio'] = finalField
         print(f'Solution for minimum field ratio: {finalField}')
 
         return finalField
     
-
-#***********************************************************************************#
-    def _generateGeometry(self):
-        """
-        Generates the finite-element mesh of the simulation geometry using Gmsh.
-        """
-
-        self._checkParam()
-        self._writeParam()
-        self._runGmsh()
-
-        return
-    
-#***********************************************************************************#
-    def _solveEField(self):
-        """
-        Solves the electric field in the simulation geometry using elmer.
-        """
-        
-        self._checkParam()
-        self._writeParam()
-        self._runElmer()
-
-        return
-    
-#***********************************************************************************#
-    def _solveWeightingField(self):
-        """
-        Solves the weighting field in the simulation geometry using elmer.
-        """
-        
-        self._checkParam()
-        self._writeParam()
-        self._runElmerWeighting()
-
-        return
     
 #***********************************************************************************#
     def _runElectronTransport(self):
@@ -1715,13 +1207,13 @@ class FIMS_Simulation:
         print(f'Running simulation - Run number: {runNo}')
 
         #Get the optimal drift field for this gas
-        self.param['driftField'] = self._getOptimalDriftField()
+        self._param['driftField'] = self._getOptimalDriftField()
 
         #Find the minimum field ratio for this geometry that satisfies:
         #  95% efficiency and 100% transparency
         minField = self.findMinFieldRatio()
 
-        self.param['fieldRatio'] = minField
+        self._param['fieldRatio'] = minField
 
         #Solve for the weighting field
         self._solveWeightingField()
@@ -1763,7 +1255,7 @@ class FIMS_Simulation:
         print(f'Running simulation - Run number: {runNo}')
 
         #Get the optimal drift field for this gas
-        self.param['driftField'] = self._getOptimalDriftField()
+        self._param['driftField'] = self._getOptimalDriftField()
 
         #Generate Geometry and solve the Electric and weighting fields
         self._generateGeometry()
@@ -1800,10 +1292,10 @@ class FIMS_Simulation:
         """
 
         self._checkParam()
-        saveParam = self.param.copy()
+        saveParam = self._param.copy()
 
-        self.param['numAvalanche'] = 3000
-        self.param['avalancheLimit'] = 20 #Limit can be low. Check is boolean - above threshold or not
+        self._param['numAvalanche'] = 3000
+        self._param['avalancheLimit'] = 20 #Limit can be low. Check is boolean - above threshold or not
 
         self._writeParam()
         self._runGetEfficiency(targetEfficiency=efficiencyGoal, threshold=efficiencyThreshold)
@@ -1811,7 +1303,7 @@ class FIMS_Simulation:
 
         print(f'\tDetection efficiency: {effResults['efficiency']:.3f} +/- {effResults['efficiencyErr']:.3f}')
 
-        self.param = saveParam
+        self._param = saveParam
 
         return effResults['efficiency']
     
@@ -1829,9 +1321,9 @@ class FIMS_Simulation:
         """
 
         self._checkParam()
-        saveParam = self.param.copy()
+        saveParam = self._param.copy()
 
-        self.param['numFieldLine'] = 200
+        self._param['numFieldLine'] = 200
 
         self._writeParam()
         self._runFieldLines()  
@@ -1839,7 +1331,7 @@ class FIMS_Simulation:
 
         print(f'\tField transparency: {transparencyResults['transparency']:.3f} +/- {transparencyResults['transparencyErr']:.3f}') 
 
-        self.param = saveParam
+        self._param = saveParam
 
         return transparencyResults['transparency']
 
@@ -2097,7 +1589,7 @@ class FIMS_Simulation:
         #Check that the number of avalanches is a reasonable number
         # too many = too much charge unaffected by new stucks
         # too few = not enough stuck charges to make a difference
-        numAvalanche = self.param('numAvalanche')
+        numAvalanche = self._param('numAvalanche')
         if ((numAvalanche < 10) | (numAvalanche > 100)):
             raise ValueError('Error: numAvalanche should be between 10 and 100 for charge buildup simulations.')
         
@@ -2121,9 +1613,9 @@ class FIMS_Simulation:
                 initialRun = False
                 
             #Run simulation - save parameters s reset at end of sim
-            saveParam = self.param.copy()
+            saveParam = self._param.copy()
             doneRun = self.runSimulation(changeGeometry=initialRun)
-            self.param = saveParam
+            self._param = saveParam
             
             #rGet the simulation data
             simData = runData(doneRun)
