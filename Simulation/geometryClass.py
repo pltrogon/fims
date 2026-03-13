@@ -11,6 +11,31 @@ import math
 import gmsh
 
 class geometryClass:
+    """
+    Class to handle the geometry for the FIMS simulation.
+     
+    Generates a geometry using Gmsh.
+    Solves the electric fields using Elmer.
+
+    Dedicated classes are utilized for these tasks.
+        These are: gmshClass and elmerClass.
+
+    The geometry is defined by the following parameters (in microns):
+        pitch: The distance between the centers of adjacent holes.
+        holeRadius: The radius of the holes in the grid.
+        padLength: The length of an outside edge of the pad.
+        gridStandoff: The distance from the grid to the cathode.
+        cathodeHeight: The distance from the grid to the cathode.
+        gridThickness: The thickness of the grid.
+        thicknessSiO2: The thickness of the SiO2 layer on the grid.
+        pillarRadius: The radius of the pillars supporting the grid.
+
+    The Fields are defined by the following parameters (in V/cm):
+        driftField: The electric field in the drift region.
+        fieldRatio: The ratio of the electric fields.
+
+    Output files are saved in /Geometry/ and /elmerResults/ directories.
+    """
 
 
 #**********************************************************************#
@@ -59,14 +84,29 @@ class geometryClass:
             raise ValueError('Error - Hole larger than Cell.')
         if self._param['padLength'] >= outRadius:
             raise ValueError('Error - Pad larger than Cell.')
-        #if self._param['pillarRadius'] >= (self._param['pitch']/2 - self._param['padLength']*math.sqrt(3)/2):
+        
+        #Pillars are currently not included in the geometry
+        #Check that pillars can fit in the remaining space
+        padInRadius = self._param['padLength']*math.sqrt(3)/2
+        padSpace = inRadius - padInRadius
+        #if self._param['pillarRadius'] >= padSpace:
         #    raise ValueError('Error - Pillar cannot fit.')
 
         return
 
 #**********************************************************************#
     def createGeometry(self, runGUI=False, hexagonal=False, neighborCells=False):
-        """TODO"""
+        """
+        Creates the geometry for the FIMS simulation using Gmsh.
+
+        Args:
+            runGUI: Run the Gmsh GUI to visualize the geometry and mesh.
+            hexagonal: Creates a hexagonal unit cell if True. 
+                       Otherwise creates a rectangular unit cell.
+                       This requires mirroring in x and y.
+            neighborCells: Creates the 6 adjacent cells.
+                           Requires hexagonal to be True.
+        """
 
         print('\tCreating geometry...')
     
@@ -90,7 +130,9 @@ class geometryClass:
     
 #**********************************************************************#
     def _generateElmerFiles(self):
-        """TODO"""
+        """
+        Generates the SIF files for Elmer based on the created geometry.
+        """
 
         if self._hexagonal:
             self._numPads = 7 if self._neighborCells else 1
@@ -127,7 +169,7 @@ class geometryClass:
 
     def _setVoltages(self):
         """
-        Sets the voltages on the grid and cathode based on the input parameters.
+        Sets the voltages on the grid and cathode electrodes.
         """
 
         gridVoltage, cathodeVoltage = self.findPotentials()
@@ -142,7 +184,8 @@ class geometryClass:
 
     def findPotentials(self):
         """
-        Calculates the grid and cathode potentials based on the input parameters.
+        Calculates the grid and cathode potentials to achieve the 
+        desired electric fields in the drift and amplification regions.
 
         Note these are negative.
 
@@ -157,28 +200,33 @@ class geometryClass:
 
         amplificationField = driftField*fieldRatio
 
-        driftGap = self._param['cathodeHeight']+self._param['gridThickness']/2
-        amplificationGap = self._param['gridStandoff']-self._param['gridThickness']/2
+        halfGrid = self._param['gridThickness']/2
+
+        driftGap = self._param['cathodeHeight']+halfGrid
+        amplificationGap = self._param['gridStandoff']-halfGrid
 
         gridVoltage = -1*amplificationField*amplificationGap*MICRONTOCM
         cathodeVoltage = -1*driftField*driftGap*MICRONTOCM + gridVoltage
 
         return gridVoltage, cathodeVoltage
 
-
-
-
-
+#**********************************************************************#
+#**********************************************************************#
+#**********************************************************************#
 
 class gmshClass:
     """
-    TODO
+    Class to handle the geometry creation using Gmsh.
     """
 
 #**********************************************************************#
     def __init__(self, inputParams=None):
         """
         Initializes the gmshClass instance with the given parameters.
+
+        Args:
+            inputParams (dict): A dictionary containing the parameters 
+                                defining the geometry.
         """
     
         self._occ = gmsh.model.occ
@@ -188,7 +236,18 @@ class gmshClass:
 #**********************************************************************#
     def _createUnitCell(self):
         """
-        TODO
+        Creates the geometry for a single unit cell of the FIMS geometry.
+
+        Note: Pillars are currently not included in the geometry.
+
+        Returns:
+            A dictionary containing the following parts of the unit cell:
+                Gas: The gas volume in the unit cell.
+                Dielectric: The dielectric volume in the unit cell.
+                Grid: The grid volume in the unit cell.
+                CenterPad: The center pad surface in the unit cell.
+                CornerPad: The corner pad surface in the unit cell.
+                Cathode: The cathode surface in the unit cell.
         """
 
         pitch = self._param['pitch']
@@ -424,7 +483,7 @@ class gmshClass:
             outRadius: The distance from the hexagon center to each vertex.
             z: The z-coordinate of the hexagon.
             zDist: The distance to extrude the hexagon in the z-direction. 
-                If None, the hexagon will remain a 2D surface.
+                   If None, the hexagon will remain a 2D surface.
         """
         
         points = []
@@ -549,8 +608,12 @@ class gmshClass:
                             validGrid.append((3, t))
                     
                     if validGrid:
-                        gridBoundary = gmsh.model.getBoundary(validGrid, oriented=False)
-                        allGridSurfaces.extend([b[1] for b in gridBoundary])
+                        gridBoundary = gmsh.model.getBoundary(
+                            validGrid, oriented=False
+                        )
+                        allGridSurfaces.extend(
+                            [b[1] for b in gridBoundary]
+                        )
 
         # Assign Volumes
         for name in ['Grid', 'Dielectric', 'Gas']:
@@ -638,8 +701,12 @@ class gmshClass:
                             validGrid.append((3, t))
                     
                     if validGrid:
-                        gridBoundary = gmsh.model.getBoundary(validGrid, oriented=False)
-                        allGridSurfaces.extend([b[1] for b in gridBoundary])
+                        gridBoundary = gmsh.model.getBoundary(
+                            validGrid, oriented=False
+                        )
+                        allGridSurfaces.extend(
+                            [b[1] for b in gridBoundary]
+                        )
 
         # Assign Volumes
         for name in ['Grid', 'Dielectric', 'Gas']:
@@ -685,28 +752,47 @@ class gmshClass:
         pitch = self._param['pitch']
         holeRadius = self._param['holeRadius']
 
-        largerHole = max(self._param['holeRadius'], self._param['padLength'])
+        largerHole = max(
+            self._param['holeRadius'],
+            self._param['padLength']
+        )
         pipeRadius = largerHole + self._param['gridThickness']
 
         xLength = pitch*math.sqrt(3)/2 + 5.0
         yLength = pitch/2 + 5.0
         
         # Center line below grid
-        padCenter = self._occ.addPoint(0, 0, -self._param['gridStandoff'])
-        holeCenter = self._occ.addPoint(0, 0, self._param['holeRadius']/2) 
+        padCenter = self._occ.addPoint(
+            0, 0, -self._param['gridStandoff']
+        )
+        holeCenter = self._occ.addPoint(
+            0, 0, self._param['holeRadius']/2
+        ) 
         amplificationLine = self._occ.addLine(padCenter, holeCenter)
         self._occ.synchronize()
 
         # --- FIELD 1: Below the Grid ---
         gmsh.model.mesh.field.add('Distance', 1)
-        gmsh.model.mesh.field.setNumbers(1, 'EdgesList', [amplificationLine])
+        gmsh.model.mesh.field.setNumbers(
+            1, 'EdgesList', [amplificationLine]
+        )
         
         gmsh.model.mesh.field.add('Threshold', 2)
-        gmsh.model.mesh.field.setNumber(2, 'InField', 1)
-        gmsh.model.mesh.field.setNumber(2, 'SizeMin', fineMesh)
-        gmsh.model.mesh.field.setNumber(2, 'SizeMax', courseMesh)
-        gmsh.model.mesh.field.setNumber(2, 'DistMin', pipeRadius)
-        gmsh.model.mesh.field.setNumber(2, 'DistMax', pipeRadius + transitionWidth)
+        gmsh.model.mesh.field.setNumber(
+            2, 'InField', 1
+        )
+        gmsh.model.mesh.field.setNumber(
+            2, 'SizeMin', fineMesh
+        )
+        gmsh.model.mesh.field.setNumber(
+            2, 'SizeMax', courseMesh
+        )
+        gmsh.model.mesh.field.setNumber(
+            2, 'DistMin', pipeRadius
+        )
+        gmsh.model.mesh.field.setNumber(
+            2, 'DistMax', pipeRadius + transitionWidth
+        )
 
         # --- FIELD 3: Above the Grid ---
         gmsh.model.mesh.field.add('Box', 3)
@@ -740,27 +826,48 @@ class gmshClass:
         courseMesh = fineMesh*1
         transitionWidth = 2*self._param['holeRadius']
 
-        largerHole = max(self._param['holeRadius'], self._param['padLength'])
-        pipeRadius = largerHole + self._param['gridThickness']
-        aboveGrid = self._param['gridThickness'] + self._param['holeRadius']
+        gridThick = self._param['gridThickness']
+
+        largerHole = max(
+            self._param['holeRadius'], 
+            self._param['padLength']
+        )
+        pipeRadius = largerHole + gridThick
+        aboveGrid = gridThick + self._param['holeRadius']
         hexLimit = self._param['pitch'] / math.sqrt(3) + 5.0
 
         # Center line below grid
-        padCenter = self._occ.addPoint(0, 0, -self._param['gridStandoff'])
-        holeCenter = self._occ.addPoint(0, 0, self._param['holeRadius']/2) 
+        padCenter = self._occ.addPoint(
+            0, 0, -self._param['gridStandoff']
+        )
+        holeCenter = self._occ.addPoint(
+            0, 0, self._param['holeRadius']/2
+        ) 
         amplificationLine = self._occ.addLine(padCenter, holeCenter)
         self._occ.synchronize()
 
         # --- FIELD 1: Below the Grid ---
         gmsh.model.mesh.field.add('Distance', 1)
-        gmsh.model.mesh.field.setNumbers(1, 'EdgesList', [amplificationLine])
+        gmsh.model.mesh.field.setNumbers(
+            1, 'EdgesList', [amplificationLine]
+        )
         
         gmsh.model.mesh.field.add('Threshold', 2)
-        gmsh.model.mesh.field.setNumber(2, 'InField', 1)
-        gmsh.model.mesh.field.setNumber(2, 'SizeMin', fineMesh)
-        gmsh.model.mesh.field.setNumber(2, 'SizeMax', courseMesh)
-        gmsh.model.mesh.field.setNumber(2, 'DistMin', pipeRadius)
-        gmsh.model.mesh.field.setNumber(2, 'DistMax', pipeRadius + transitionWidth)
+        gmsh.model.mesh.field.setNumber(
+            2, 'InField', 1
+        )
+        gmsh.model.mesh.field.setNumber(
+            2, 'SizeMin', fineMesh
+        )
+        gmsh.model.mesh.field.setNumber(
+            2, 'SizeMax', courseMesh
+        )
+        gmsh.model.mesh.field.setNumber(
+            2, 'DistMin', pipeRadius
+        )
+        gmsh.model.mesh.field.setNumber(
+            2, 'DistMax', pipeRadius + transitionWidth
+        )
 
         # --- FIELD 3: Above the Grid ---
         gmsh.model.mesh.field.add('Box', 3)
@@ -770,7 +877,7 @@ class gmshClass:
         gmsh.model.mesh.field.setNumber(3, 'XMax', hexLimit)
         gmsh.model.mesh.field.setNumber(3, 'YMin', -hexLimit)
         gmsh.model.mesh.field.setNumber(3, 'YMax', hexLimit)
-        gmsh.model.mesh.field.setNumber(3, 'ZMin', -self._param['gridThickness'])
+        gmsh.model.mesh.field.setNumber(3, 'ZMin', -gridThick)
         gmsh.model.mesh.field.setNumber(3, 'ZMax', aboveGrid)
         gmsh.model.mesh.field.setNumber(3, 'Thickness', transitionWidth)
 
@@ -844,7 +951,10 @@ class gmshClass:
 
     def createFIMSGeometry(self, runGUI=False):
         """
-        TODO
+        Generates a FEM of the FIMS geometry using Gmsh.
+
+        Args:
+            runGUI: Run the GUI to visualize the geometry and mesh.
         """
 
         filePath = 'Geometry'
@@ -886,13 +996,10 @@ class gmshClass:
 
         return fileBase
 
+#**********************************************************************#
+#**********************************************************************#
+#**********************************************************************#
     
-            
-
-#**********************************************************************#
-#**********************************************************************#
-#**********************************************************************#
-
 class elmerClass:
     """
     Class for generating Elmer SIF files and running Elmer simulations.
@@ -1089,17 +1196,49 @@ class elmerClass:
         """
 
         allMaterials = [
-            {'Name': '"Air (room temperature)"', 'Relative Permittivity': '1.0'},
-            {'Name': '"Aluminum (generic)"', 'Relative Permittivity': '1e10'},##Todo: 1e6 or 1e10?
-            {'Name': '"SiO2"', 'Relative Permittivity': '3.9'},
-            {'Name': '"Pillars"', 'Relative Permittivity': '3.0'},
+            {
+                'Name': '"Air (room temperature)"', 
+                'Relative Permittivity': '1.0'
+            },
+            {
+                'Name': '"Aluminum (generic)"', 
+                'Relative Permittivity': '1e10' #TODO - 1e6 instead (easier for solver)?
+            },
+            {
+                'Name': '"SiO2"', 
+                'Relative Permittivity': '3.9'
+            },
+            {
+                'Name': '"Pillars"',
+                'Relative Permittivity': '3.0'
+            },
         ]
 
         allBodies = [
-            {'Target Bodies(1)': 3, 'Name': '"Gas"', 'Equation': 1, 'Material': 1},
-            {'Target Bodies(1)': 1, 'Name': '"Amplification Grid"', 'Equation': 1, 'Material': 2},
-            {'Target Bodies(1)': 2, 'Name': '"SiO2"', 'Equation': 1, 'Material': 3},
-            {'Target Bodies(1)': 4, 'Name': '"Pillars"', 'Equation': 1, 'Material': 4},
+            {
+                'Target Bodies(1)': 3, 
+                'Name': '"Gas"', 
+                'Equation': 1, 
+                'Material': 1
+            },
+            {
+                'Target Bodies(1)': 1, 
+                'Name': '"Amplification Grid"', 
+                'Equation': 1, 
+                'Material': 2
+            },
+            {
+                'Target Bodies(1)': 2, 
+                'Name': '"SiO2"', 
+                'Equation': 1, 
+                'Material': 3
+            },
+            {
+                'Target Bodies(1)': 4, 
+                'Name': '"Pillars"', 
+                'Equation': 1, 
+                'Material': 4
+            },
         ]
 
 
@@ -1118,7 +1257,7 @@ class elmerClass:
 
     def _makeDielectricsFile(self):
         """
-        Writes the dielectric properties to a file for use in the Elmer simulation.
+        Writes the dielectric properties to a file.
         """
 
         dielectricValues = ['1e10', '3.9', '1.0', '3.0']
@@ -1200,7 +1339,7 @@ class elmerClass:
         """
         Writes the physics SIF file for the Elmer simulation.
 
-        Note that grid, cathode, and pad potentials are set to 0 by default.
+        Note that grid, cathode, and pad potentials are 0.0 by default.
         """
 
         with open(f'Geometry/{self.sifFilename}', 'w') as f:
@@ -1347,10 +1486,14 @@ class elmerClass:
                     check=True
                 )
                 endTime = time.monotonic()
-                elmerOutput.write(f'\n\nElmerSolver run time: {endTime - startTime} s')
+                elmerOutput.write(
+                    f'\n\nElmerSolver run time: {endTime - startTime} s'
+                )
 
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f'Elmer failed with exit code {e.returncode}.')
+            raise RuntimeError(
+                f'Elmer failed with exit code {e.returncode}.'
+            )
         
         finally:
             os.chdir(originalCWD)
@@ -1380,10 +1523,14 @@ class elmerClass:
                         check=True
                     )
                 endTime = time.monotonic()
-                elmerOutput.write(f'\n\nElmerSolverWeighting run time: {endTime - startTime} s')
+                elmerOutput.write(
+                    f'\n\nElmerSolverWeighting run time: {endTime - startTime} s'
+                )
 
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f'Elmer failed with exit code {e.returncode}.')
+            raise RuntimeError(
+                f'Elmer failed with exit code {e.returncode}.'
+            )
         
         finally:
             os.chdir(originalCWD)
@@ -1397,7 +1544,7 @@ class elmerClass:
         Sets the potential for a given electrode in the SIF file.
 
         Args:
-            electrode: The name of the electrode to set the potential for.
+            electrode: The name of the electrode to set the potential.
             potential: The potential value to set (in volts).
         """
 
