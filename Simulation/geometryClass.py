@@ -35,7 +35,7 @@ class geometryClass:
             'gridStandoff',
             'cathodeHeight',
             'gridThickness',
-            'dielectricThickness',
+            'thicknessSiO2',
             'pillarRadius',
             'driftField',
             'fieldRatio'
@@ -44,29 +44,31 @@ class geometryClass:
         if self._param is None:
             raise ValueError('Error - Invalid parameters.')
 
-        for inParam in self._param:
-            if inParam not in neededParameters:
-                raise ValueError(f"Error - Missing '{inParam}'")
-            if self._param[inParam] <= 0:
-                raise ValueError(f"Error - '{inParam}' must be positive.")
-            
+
+        for key in neededParameters:
+            if key not in self._param:
+                raise ValueError(f"Error - Missing '{key}'")
+            if self._param[key] <= 0:
+                raise ValueError(f"Error - '{key}' must be positive.")
 
         # Check geometric constraints
-        if self._param['holeRadius'] >= self._param['pitch'] / math.sqrt(3):
-            raise ValueError('Error - Hole larger than hexagon radius.')
-        if self._param['padLength'] >= self._param['pitch'] / math.sqrt(3):
-            raise ValueError('Error - Pad larger than hexagon radius.')
+        outRadius = self._param['pitch'] / math.sqrt(3)
+        inRadius = self._param['pitch']/2
+
+        if self._param['holeRadius'] >= inRadius:
+            raise ValueError('Error - Hole larger than Cell.')
+        if self._param['padLength'] >= outRadius:
+            raise ValueError('Error - Pad larger than Cell.')
         #if self._param['pillarRadius'] >= (self._param['pitch']/2 - self._param['padLength']*math.sqrt(3)/2):
         #    raise ValueError('Error - Pillar cannot fit.')
-        return
 
-        
+        return
 
 #**********************************************************************#
     def createGeometry(self, runGUI=False, hexagonal=False, neighborCells=False):
         """TODO"""
 
-        print('Creating geometry...')
+        print('\tCreating geometry...')
     
         self._checkParameters()
         self._gmshClass = gmshClass(self._param)
@@ -124,6 +126,9 @@ class geometryClass:
 #**********************************************************************#
 
     def _setVoltages(self):
+        """
+        Sets the voltages on the grid and cathode based on the input parameters.
+        """
 
         gridVoltage, cathodeVoltage = self.findPotentials()
 
@@ -136,7 +141,15 @@ class geometryClass:
 #**********************************************************************#
 
     def findPotentials(self):
-        """TODO"""
+        """
+        Calculates the grid and cathode potentials based on the input parameters.
+
+        Note these are negative.
+
+        Returns:
+            gridVoltage (float): The voltage to apply to the grid.
+            cathodeVoltage (float): The voltage to apply to the cathode.
+        """
 
         MICRONTOCM = 1e-4
         driftField = self._param['driftField']
@@ -147,8 +160,8 @@ class geometryClass:
         driftGap = self._param['cathodeHeight']+self._param['gridThickness']/2
         amplificationGap = self._param['gridStandoff']-self._param['gridThickness']/2
 
-        gridVoltage = amplificationField*amplificationGap*MICRONTOCM
-        cathodeVoltage = driftField*driftGap*MICRONTOCM + gridVoltage
+        gridVoltage = -1*amplificationField*amplificationGap*MICRONTOCM
+        cathodeVoltage = -1*driftField*driftGap*MICRONTOCM + gridVoltage
 
         return gridVoltage, cathodeVoltage
 
@@ -184,7 +197,7 @@ class gmshClass:
         gridStandoff = self._param['gridStandoff']
         cathodeHeight = self._param['cathodeHeight']
         gridThickness = self._param['gridThickness']
-        dielectricThickness = self._param['dielectricThickness']
+        thicknessSiO2 = self._param['thicknessSiO2']
         pillarRadius = self._param['pillarRadius']
 
         xLength = pitch*math.sqrt(3)/2
@@ -195,11 +208,11 @@ class gmshClass:
         ## Dielectric
         dielectricBox = self._occ.addBox(
             0, 0, -gridStandoff, 
-            xLength, yLength, dielectricThickness
+            xLength, yLength, thicknessSiO2
         )
         # Define holes for the pads
         centerPadHole = self._makeHexagon(
-            padLength, -gridStandoff, dielectricThickness
+            padLength, -gridStandoff, thicknessSiO2
         )
         cornerPadHole = self._occ.copy([(3, centerPadHole)])
         self._occ.translate(cornerPadHole, xLength, yLength, 0)
@@ -229,13 +242,13 @@ class gmshClass:
         '''
         ##Pillars
         xPillarFull = self._occ.addCylinder(
-            outRadius, 0, -gridStandoff+dielectricThickness,
-            0, 0, gridStandoff-dielectricThickness-gridThickness/2,
+            outRadius, 0, -gridStandoff+thicknessSiO2,
+            0, 0, gridStandoff-thicknessSiO2-gridThickness/2,
             pillarRadius
         )
         yPillarFull = self._occ.addCylinder(
-            xLength - outRadius, yLength, -gridStandoff+dielectricThickness,
-            0, 0, gridStandoff-dielectricThickness-gridThickness/2,
+            xLength - outRadius, yLength, -gridStandoff+thicknessSiO2,
+            0, 0, gridStandoff-thicknessSiO2-gridThickness/2,
             pillarRadius
         )
 
@@ -343,16 +356,16 @@ class gmshClass:
         gridStandoff = self._param['gridStandoff']
         cathodeHeight = self._param['cathodeHeight']
         gridThickness = self._param['gridThickness']
-        dielectricThickness = self._param['dielectricThickness']
+        thicknessSiO2 = self._param['thicknessSiO2']
 
         outRadius = pitch/math.sqrt(3)
 
         ## Dielectric
         hexagonBase = self._makeHexagon(
-            outRadius, -gridStandoff, dielectricThickness
+            outRadius, -gridStandoff, thicknessSiO2
         )
         padHole = self._makeHexagon(
-            padLength, -gridStandoff, dielectricThickness
+            padLength, -gridStandoff, thicknessSiO2
         )
         dielectricVolume, _ = self._occ.cut(
             [(3, hexagonBase)],
@@ -663,11 +676,11 @@ class gmshClass:
 #**********************************************************************#
 
     def _setMeshSizes(self):
-        #TODO - make this more robust and flexible for different geometries
-        fineMesh = self._param['gridThickness']*2 #Should be 1?
+        fineMesh = self._param['gridThickness']
         courseMesh = 5*fineMesh #Could be 10?
 
-        transitionWidth = self._param['holeRadius']
+        outRadius = self._param['pitch'] / math.sqrt(3)
+        transitionWidth = outRadius
 
         pitch = self._param['pitch']
         holeRadius = self._param['holeRadius']
@@ -809,7 +822,7 @@ class gmshClass:
         self._assignPhysicalGroupsHexagon(allCellsMap)
         self._setMeshSizesHexagon()
 
-        print('Creating mesh...')
+        print('\tCreating mesh...')
         gmsh.model.mesh.generate(3)
         gmsh.write(filename)
 
@@ -855,7 +868,7 @@ class gmshClass:
         self._assignPhysicalGroups(allCellsMap)
         self._setMeshSizes()
 
-        print('Creating mesh...')
+        print('\tCreating mesh...')
         gmsh.model.mesh.generate(3)
         gmsh.write(filename)
 
@@ -1077,7 +1090,7 @@ class elmerClass:
 
         allMaterials = [
             {'Name': '"Air (room temperature)"', 'Relative Permittivity': '1.0'},
-            {'Name': '"Aluminum (generic)"', 'Relative Permittivity': '1e10'},
+            {'Name': '"Aluminum (generic)"', 'Relative Permittivity': '1e10'},##Todo: 1e6 or 1e10?
             {'Name': '"SiO2"', 'Relative Permittivity': '3.9'},
             {'Name': '"Pillars"', 'Relative Permittivity': '3.0'},
         ]
@@ -1097,7 +1110,29 @@ class elmerClass:
             self.materials[f'Material {i+1}'] = allMaterials[i]
             self.bodies[f'Body {i+1}'] = allBodies[i]
 
+        self._makeDielectricsFile()
+
         return  
+    
+#**********************************************************************#
+
+    def _makeDielectricsFile(self):
+        """
+        Writes the dielectric properties to a file for use in the Elmer simulation.
+        """
+
+        dielectricValues = ['1e10', '3.9', '1.0', '3.0']
+
+        try:
+            with open('Geometry/Dielectrics.dat', 'w') as f:
+                f.write(self.numMaterials.__str__() + '\n')
+                for i in range(self.numMaterials):
+                    f.write(f'{i+1} {dielectricValues[i]}\n')
+
+        except Exception as e:
+            print(f"Error writing Dielectrics.dat: {e}")
+    
+        return
 
 #**********************************************************************#
 
@@ -1165,7 +1200,7 @@ class elmerClass:
         """
         Writes the physics SIF file for the Elmer simulation.
 
-        Note that grid and cathode potentials are set to 0 by default.
+        Note that grid, cathode, and pad potentials are set to 0 by default.
         """
 
         with open(f'Geometry/{self.sifFilename}', 'w') as f:
@@ -1381,6 +1416,7 @@ class elmerClass:
         newContent = ''
         lines = sifContent.splitlines()
         inBoundary = False
+        inElectrode = False
 
         for line in lines:
             strippedLine = line.strip()
@@ -1391,7 +1427,12 @@ class elmerClass:
             
             if inBoundary and strippedLine.startswith('Name') and f'"{electrode}"' in strippedLine:
                 newContent += line + '\n'
+                inElectrode = True
+                continue
+
+            if inElectrode and strippedLine.startswith('Potential'):
                 newContent += f'  Potential = {potential}\n'
+                inElectrode = False
                 inBoundary = False
                 continue
             

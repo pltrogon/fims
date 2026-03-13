@@ -119,12 +119,12 @@ class FIMS_Simulation:
             'pitch': 55.,
             'gridStandoff': 50.,
             'gridThickness': 1.,
-            'holeRadius': 20.,
+            'holeRadius': 15.,
             'cathodeHeight': 200.,
             'thicknessSiO2': 5.,
             'pillarRadius': 2.,
             'driftField': 280.,
-            'fieldRatio': 80.,
+            'fieldRatio': 100.,
             'numFieldLine': 25,
             'numAvalanche': 2000,
             'avalancheLimit': 600,
@@ -433,7 +433,7 @@ class FIMS_Simulation:
         Creates the geometry if it does not already exist, and then solves the E field for the mesh.
         
         Args:
-            solveWeighting (bool): Option to additonally solve for weighting fields.
+            solveWeighting (bool): Additonally solve for weighting fields.
 
         """
         if not hasattr(self, '_geometry'):
@@ -607,6 +607,9 @@ class FIMS_Simulation:
         Returns:
             int: The run number for this simulation.
         """
+        # Get the run number for this simulation
+        runNo = self._getRunNumber()
+        print(f'Running simulation - Run number: {runNo}')
     
         self._checkParam()
         self._makeRunControl()
@@ -617,10 +620,6 @@ class FIMS_Simulation:
         else:
             print('Warning: Skipping Gmsh. (Ignore if geometry unchanged.)')
             
-        #get the run number for this simulation
-        runNo = self._getRunNumber()
-        print(f'Running simulation - Run number: {runNo}')
-
         #Solve fields and run Garfield
         self._solveEFields()
         self._runGarfield()
@@ -1234,7 +1233,6 @@ class FIMS_Simulation:
         #Check and save parameters
         self._checkParam()
         
-
         #get the run number for this simulation
         runNo = self._getRunNumber()
         print(f'Running simulation - Run number: {runNo}')

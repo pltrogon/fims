@@ -348,7 +348,7 @@ int main(int argc, char * argv[]) {
 
   // Import the weighting field for the readout electrode.
   fieldFIMS.SetWeightingField(
-    elmerResultsPath+"FIMSCenterPadWeighting.result", 
+    elmerResultsPath+"FIMSCentralPadWeighting.result", 
     "centerPad"
   );
   fieldFIMS.SetWeightingField(
@@ -589,7 +589,14 @@ int main(int argc, char * argv[]) {
 
       //Link objects
       parallelFieldFIMS->SetGas(gasFIMS);
-      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSWeighting.result", "centerPad");
+      parallelFieldFIMS->SetWeightingField(
+        elmerResultsPath+"FIMSCentralPadWeighting.result", 
+        "centerPad"
+      );
+      parallelFieldFIMS->SetWeightingField(
+        elmerResultsPath+"FIMSCornerPadWeighting.result", 
+        "cornerPad"
+      );
       parallelFieldFIMS->EnableMirrorPeriodicityX();
       parallelFieldFIMS->EnableMirrorPeriodicityY();
       
