@@ -404,13 +404,8 @@ class FIMS_Simulation:
                 content = file.read().strip()
                 runNo = int(content)
 
-        #TODO - Generic exception handling?
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Error: File '{filename}' not found.")
-        except ValueError:
-            raise ValueError(f"Error: Invalid number format in '{filename}")
         except Exception as e:
-            raise RuntimeError(f"An error occurred while reading the file '{filename}': {e}")
+            raise RuntimeError(f'Error with runNo file: {e}')
         
         return runNo
 
@@ -1212,7 +1207,7 @@ class FIMS_Simulation:
 #***********************************************************************************#
     def runForOptimizerALT(self, efficiencyGoal=0.95, efficiencyThreshold=10, transparencyGoal=.99):
         """
-        ## TODO - This method is outdated with new capabilities. Update or remove as necessary.
+        #TODO - This is for if efficiency and transparency are incorperated into optimizer objective
         Executes a full avalanche simulation of the FIMS geometry at a given geometry and field ratio.
 
         Gets the detection efficiency and E field transparency at the current field ratio.
@@ -1242,8 +1237,7 @@ class FIMS_Simulation:
 
         #Generate Geometry and solve the Electric and weighting fields
         self._generateGeometry()
-        self._solveEField()
-        self._solveWeightingField()
+        self._solveEFields(solveWeighting=True)
 
         #Get the detection efficiency
         efficiency = self._getEfficiency(efficiencyGoal=efficiencyGoal, efficiencyThreshold=efficiencyThreshold)
@@ -1253,9 +1247,6 @@ class FIMS_Simulation:
 
         #Run the electron transport simulation
         self._runElectronTransport()
-
-        #Reset parameters
-        self._resetParam()
 
         return runNo, efficiency, transparency
 
