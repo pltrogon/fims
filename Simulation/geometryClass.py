@@ -93,7 +93,7 @@ class geometryClass:
         else:
             self._numPads = 2
 
-        self._elmerClass = elmerClass(self.fileName, numPads=self._numPads, capacitance=False)
+        self._elmerClass = elmerClass(self._fileName, numPads=self._numPads, capacitance=False)
         self._elmerClass.writeAllSIF()
 
         if self._numPads == 7:
@@ -111,16 +111,7 @@ class geometryClass:
             self._elmerClassCapacitance.runElmerSolver()
         else:
             self._setVoltages()
-            self._elmerClass._runElmerSolver()
-
-        return
-    
-    #**********************************************************************#
-
-    def solveWeightingFields(self):
-
-        
-        self._elmerClass.runElmerWeighting()
+            self._elmerClass.runElmer()
 
         return
 
@@ -792,7 +783,7 @@ class gmshClass:
         """
 
         filePath = 'Geometry'
-        fileBase = 'FIMSHexagonalCell'
+        fileBase = 'FIMSHexagonal'
         filename = os.path.join(filePath, f'{fileBase}.msh')
 
         gmsh.initialize()
@@ -936,7 +927,9 @@ class elmerClass:
         if self.numPads == 1:
             pass
         if self.numPads == 2:
-            self.electrodeMap[4] = 'CornerPad'
+            self.electrodeMap.update({
+                4: 'CornerPad'
+            })
         elif self.numPads == 7:
             self.electrodeMap.update({
                 4: 'TopPad', 5: 'BottomPad',
@@ -1005,9 +998,10 @@ class elmerClass:
             }
         }
 
-        for i in self.electrodeMap:
+        self.weighting = {}
+        for i, electrode in self.electrodeMap.items():
             #Dont need weighting for cathode or grid
-            if i == 'Cathode' or i == 'Grid':
+            if electrode == 'Cathode' or electrode == 'Grid':
                 continue
 
             self.weighting[i] = {
@@ -1019,8 +1013,8 @@ class elmerClass:
                 'Steady State Max Iterations': '1',
                 'Output Intervals(1)': '1',
                 'Coordinate Scaling': '1e-6',
-                'Solver Input File': f'{self.name}{i}.sif',
-                'Output file': f'"elmerResults/{self.name}+{i}.result"'
+                'Solver Input File': f'{self.name}{electrode}Weighting.sif',
+                'Output file': f'"elmerResults/{self.name}{electrode}Weighting.result"'
             }
         }
             
@@ -1199,12 +1193,12 @@ class elmerClass:
         Writes the SIF weighing files for the Elmer simulation.
         """
 
-        for i in self.electrodeMap:
-            if i == 'Cathode' or i == 'Grid':
+        for i, electrode in self.electrodeMap.items():
+            if electrode == 'Cathode' or electrode == 'Grid':
                 continue
             inElectrode = False
 
-            with open(f'Geometry/{self.name}{i}Weighting.sif', 'w') as f:
+            with open(f'Geometry/{self.name}{electrode}Weighting.sif', 'w') as f:
 
                 f.write(self.intro)
                 f.write(self.header)
@@ -1226,7 +1220,7 @@ class elmerClass:
                                 if key == 'File':
                                     f.write(f'  {key} {value}\n')
 
-                                elif key == 'Name' and f'"{self.electrodeMap[i]}"' in value:
+                                elif key == 'Name' and f'"{electrode}"' in value:
                                     f.write(f'  {key} = {value}\n')
                                     inElectrode = True
 
@@ -1335,11 +1329,11 @@ class elmerClass:
 
             with open(os.path.join(originalCWD, 'log/logElmerSolverWeighting.txt'), 'w+') as elmerOutput:
                 startTime = time.monotonic()
-                for i in self.electrodeMap:
-                    if i == 'Cathode' or i == 'Grid':
+                for i, electrode in self.electrodeMap.items():
+                    if electrode == 'Cathode' or electrode == 'Grid':
                         continue
                     subprocess.run(
-                        ['ElmerSolver', f'{self.name}{i}Weighting.sif'],
+                        ['ElmerSolver', f'{self.name}{electrode}Weighting.sif'],
                         stdout=elmerOutput,
                         check=True
                     )
