@@ -410,12 +410,12 @@ class FIMS_Simulation:
         return runNo
 
 #***********************************************************************************#
-    def _generateGeometry(self):
+    def _generateGeometry(self, surroundingCells=False):
         """
         Generates the geometry for the FIMS simulation using the geometryClass.
         """
         self._geometry = geometryClass(self._param)
-        self._geometry.createGeometry()
+        self._geometry.createGeometry(neighborCells=surroundingCells)
 
         return
         
@@ -439,7 +439,7 @@ class FIMS_Simulation:
         return
 
 #***********************************************************************************#
-    def _runGarfield(self):
+    def _runGarfield(self, surrounding=False):
         """
         Runs a Garfield++ executable to determine field lines and simulate 
         electron avalanches based on the parameters in 'runControl'.
@@ -450,11 +450,14 @@ class FIMS_Simulation:
         The information from this simulation is saved in .root format within 'Data/'.
 
         Args:
-            surrounding (bool): Option to run Garfield for the surrounding geometry.
+            surrounding (bool): Runs avalancheSurrounding executable instead.
         """
         originalCWD = os.getcwd()
 
         executable = 'runAvalanche'
+        
+        if surrounding:
+            executable += 'Surrounding'
         
         try:
             print('\tExecuting Garfield++...')
@@ -624,6 +627,37 @@ class FIMS_Simulation:
         
         return runNo
     
+#***********************************************************************************#
+    def runSurrounding(self):
+        """
+        Executes a simulation with the surrounding geometry.
+
+        Determines the induced signal in each adjacent pad.
+
+        Returns:
+            int: The run number for this simulation.
+        """
+
+        # Get the run number for this simulation
+        runNo = self._getRunNumber()
+        print(f'Running simulation - Run number: {runNo}')
+    
+        self._checkParam()
+        self._makeRunControl()
+    
+        #Generate geometry for surrounding cells
+        self._generateGeometry(surroundingCells=True)
+
+        #Solve fields and run Garfield
+        self._solveEFields(solveWeighting=True)
+        self.runGarfield(surrounding=True)
+        
+        return runNo
+        
+
+
+
+
 #***********************************************************************************#
     def runCapacitance(self):
         """

@@ -347,7 +347,10 @@ int main(int argc, char * argv[]) {
   fieldFIMS.SetGas(gasFIMS);
 
   // Import the weighting field for the readout electrode.
-  fieldFIMS.SetWeightingField(elmerResultsPath+"FIMSSurroundingWeighting_CentralPad.result", "CentralPad");
+  fieldFIMS.SetWeightingField(
+    elmerResultsPath+"FIMSSurroundingWeightingCentralPad.result", 
+    "CentralPad"
+  );
 
   //Create a sensor
   Sensor* sensorFIMS = new Sensor();
@@ -583,13 +586,13 @@ int main(int argc, char * argv[]) {
       //Link objects
       parallelFieldFIMS->SetGas(gasFIMS);
 
-      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeighting_CentralPad.result", "CentralPad");
-      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeighting_TopPad.result", "TopPad");
-      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeighting_BottomPad.result", "BottomPad");
-      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeighting_RightTopPad.result", "RightTopPad");
-      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeighting_RightBottomPad.result", "RightBottomPad");
-      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeighting_LeftTopPad.result", "LeftTopPad");
-      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeighting_LeftBottomPad.result", "LeftBottomPad");
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeightingCentralPad.result", "CentralPad");
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeightingTopPad.result", "TopPad");
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeightingBottomPad.result", "BottomPad");
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeightingRightTopPad.result", "RightTopPad");
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeightingRightBottomPad.result", "RightBottomPad");
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeightingLeftTopPad.result", "LeftTopPad");
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingWeightingLeftBottomPad.result", "LeftBottomPad");
 
       parallelFieldFIMS->EnableMirrorPeriodicityX();
       parallelFieldFIMS->EnableMirrorPeriodicityY();
