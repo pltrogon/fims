@@ -650,7 +650,7 @@ class FIMS_Simulation:
 
         #Solve fields and run Garfield
         self._solveEFields(solveWeighting=True)
-        self.runGarfield(surrounding=True)
+        self._runGarfield(surrounding=True)
         
         return runNo
         

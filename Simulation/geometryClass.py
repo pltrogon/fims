@@ -94,7 +94,7 @@ class geometryClass:
         #    raise ValueError('Error - Pillar cannot fit.')
 
         return
-
+    
 #**********************************************************************#
     def createGeometry(self, runGUI=False, hexagonal=False, neighborCells=False):
         """
@@ -116,47 +116,44 @@ class geometryClass:
         self._hexagonal = hexagonal
         self._neighborCells = neighborCells
 
-        runOption = 'FIMS'
+        self._runOption = 'FIMS'
         if self._hexagonal:
-            runOption += 'Hexagonal'
+            self._runOption += 'Hexagonal'
         if self._neighborCells:
-            runOption += 'Surrounding'
+            self._runOption += 'Surrounding'
 
-        self._fileName = self._gmshClass.createMesh(
-            runOption=runOption,
+
+        print('DEBUG: runOption =', self._runOption)
+
+        self._gmshClass.createMesh(
+            runOption=self._runOption,
             runGUI=runGUI
         )
 
         return
     
 #**********************************************************************#
-    def _generateElmerFiles(self):
+    def _generateElmerFiles(self, capacitance=False):
         """
         Generates the SIF files for Elmer based on the created geometry.
         """
 
-        if self._hexagonal:
-            self._numPads = 7 if self._neighborCells else 1
-        else:
-            self._numPads = 2
-
         self._elmerClass = elmerClass(
-            self._fileName, numPads=self._numPads, capacitance=False
+            self._runOption, capacitance=False
         )
-        self._elmerClass.writeAllSIF()
 
-        if self._numPads == 7:
+        if capacitance:
             self._elmerClassCapacitance = elmerClass(
-                self._fileName, numPads=self._numPads, capacitance=True
+                self._runOption, capacitance=True
             )
-            self._elmerClassCapacitance.writeAllSIF()
+
         return
     
 #**********************************************************************#
 
-    def calculateEFields(self, capacitance=False, solveWeighting=True):
+    def calculateEFields(self, solveWeighting=True, capacitance=False):
 
-        self._generateElmerFiles()
+        self._generateElmerFiles(capacitance=capacitance)
 
         if capacitance:
             self._elmerClassCapacitance.runElmer()
@@ -902,15 +899,15 @@ class gmshClass:
         TODO
         """
 
-        fileOptions = [
+        runOptions = [
             'FIMS',
             'FIMSSurrounding',
             'FIMSHexagonal',
             'FIMSHexagonalSurrounding'
         ]
 
-        if runOption not in fileOptions:
-            raise ValueError(f'Option must be one of {fileOptions}.')
+        if runOption not in runOptions:
+            raise ValueError(f'Option must be one of {runOptions}.')
 
         filePath = 'Geometry'
         filename = os.path.join(filePath, f'{runOption}.msh')
@@ -958,7 +955,7 @@ class gmshClass:
 
         gmsh.finalize()
 
-        return runOption
+        return
 
 
 #**********************************************************************#
@@ -974,32 +971,28 @@ class elmerClass:
     Can optionally calculate the capacitance matrix for the geometry.
     """
 
-    def __init__(self, name, numPads, capacitance=False):
+    def __init__(self, runOption, capacitance=False):
         """
         Initializes the elmerClass instance.
         
         Args:
-            name (str): The base name for the mesh and SIF files.
-            numPads (int): The number of pads in the geometry (1, 2 or 7).
-            capacitance (bool): Calculates the capacitance matrix if true.
+            runOption (str): The run option for the simulation.
+            capacitance (bool): Whether to calculate the capacitance matrix.
         """
 
-        self.capacitance = capacitance
-
-        self.meshFilename = f'{name}.msh'
-        if self.capacitance:
-            self.name = f'{name}Capacitance'
-        else:
-            self.name = name
-        self.sifFilename = f'{self.name}.sif'
-
-        self.numPads = numPads
-
+        self._runOption = runOption
         self._setElectrodeMap()
+            
+        self._capacitance = capacitance
+
+        self._meshFilename = f'{runOption}.msh'
+
+        self._elmerName = runOption
+        if self._capacitance:
+            self._elmerName += 'Capacitance'
         
-        self.numMaterials = 3
         #Currently not generating pillars
-        #self.numMaterials = 4 if self.numPads == 2 else 3
+        self._numMaterials = 3
         
         self._elmerBaseInfo()
         self._elmerSimulationInfo()
@@ -1007,30 +1000,42 @@ class elmerClass:
         self._addMaterials()
         self._assignBoundaryConditions()
 
+        self.writeAllSIF()
+
         return
     
 #**********************************************************************#
 
     def _setElectrodeMap(self):
-
-        self.electrodeMap = {
+        """
+        Sets the mapping from physical group numbers to electrode 
+        names based on the run option.
+        """        
+        self._electrodeMap = {
             1: 'Cathode', 2: 'Grid', 3: 'CentralPad'
         }
 
-        if self.numPads == 1:
-            pass
-        if self.numPads == 2:
-            self.electrodeMap.update({
-                4: 'CornerPad'
-            })
-        elif self.numPads == 7:
-            self.electrodeMap.update({
-                4: 'TopPad', 5: 'BottomPad',
-                6: 'RightTopPad', 7: 'RightBottomPad',
-                8: 'LeftTopPad', 9: 'LeftBottomPad'
-            })
-        else:
-            raise ValueError('Number of pads must be 1, 2 or 7.')
+        match self._runOption:
+            case 'FIMS':
+                self._electrodeMap.update({4: 'CornerPad'})
+            case 'FIMSSurrounding':
+                self._electrodeMap.update({
+                    4: 'TopPad', 5: 'BottomPad',
+                    6: 'RightTopPad', 7: 'RightBottomPad',
+                    8: 'LeftTopPad', 9: 'LeftBottomPad'
+                })
+            case 'FIMSHexagonal':
+                pass
+            case 'FIMSHexagonalSurrounding':
+                self._electrodeMap.update({
+                    4: 'TopPad', 5: 'BottomPad',
+                    6: 'RightTopPad', 7: 'RightBottomPad',
+                    8: 'LeftTopPad', 9: 'LeftBottomPad'
+                })
+            case _:
+                raise ValueError('Invalid run option.')
+            
+        return
 
 #**********************************************************************#
 
@@ -1039,12 +1044,12 @@ class elmerClass:
         Initializes the base information for the Elmer SIF file.
         """
         
-        self.intro = (
+        self._intro = (
             '! This file was generated by the FIMS code.\n'
             '! Do NOT edit manually.\n\n'
         )
 
-        self.header = (
+        self._header = (
             'Header\n'
             '  CHECK KEYWORDS Warn\n'
             '  Mesh DB "elmerResults" "."\n'
@@ -1053,7 +1058,7 @@ class elmerClass:
             'End\n\n'
         )
 
-        self.constants = {
+        self._constants = {
             'Constants': {
                 'Permittivity of Vacuum': '8.85418781e-12',
                 'Permeability of Vacuum': '1.25663706e-6',
@@ -1062,7 +1067,7 @@ class elmerClass:
             }
         }
 
-        self.equation = {
+        self._equation = {
             'Equation 1': {
                 'Name': '"EField"',
                 'Electric Field': 'Computed',
@@ -1076,7 +1081,7 @@ class elmerClass:
 
     def _elmerSimulationInfo(self): 
 
-        self.simulation = {
+        self._simulation = {
             'Simulation': {
                 'Max Output Level': '5',
                 'Coordinate System': 'Cartesian',
@@ -1085,13 +1090,13 @@ class elmerClass:
                 'Steady State Max Iterations': '1',
                 'Output Intervals(1)': '1',
                 'Coordinate Scaling': '1e-6',
-                'Solver Input File': self.sifFilename,
-                '! Post File': f'{self.name}.ep, {self.name}.vtu',
-                'Output file': f'"elmerResults/{self.name}.result"'
+                'Solver Input File': self._sifFilename,
+                '! Post File': f'{self._elmerName}.ep, {self._elmerName}.vtu',
+                'Output file': f'"elmerResults/{self._elmerName}.result"'
             }
         }
 
-        self.weighting = {}
+        self._weighting = {}
         for i, electrode in self.electrodeMap.items():
             #Dont need weighting for cathode or grid
             if electrode == 'Cathode' or electrode == 'Grid':
@@ -1106,8 +1111,8 @@ class elmerClass:
                 'Steady State Max Iterations': '1',
                 'Output Intervals(1)': '1',
                 'Coordinate Scaling': '1e-6',
-                'Solver Input File': f'{self.name}{electrode}Weighting.sif',
-                'Output file': f'"elmerResults/{self.name}{electrode}Weighting.result"'
+                'Solver Input File': f'{self._elmerName}{electrode}Weighting.sif',
+                'Output file': f'"elmerResults/{self._elmerName}{electrode}Weighting.result"'
             }
         }
             
@@ -1121,7 +1126,7 @@ class elmerClass:
         capacitance calculation is needed.
         """
 
-        self.solver = {
+        self._solver = {
             'Solver 1': {
                 'Equation': 'Electrostatics',
                 'Variable': 'Potential',
@@ -1145,8 +1150,8 @@ class elmerClass:
             }
         }
         
-        if self.capacitance:
-            self.solver['Solver 1'].update({
+        if self._capacitance:
+            self._solver['Solver 1'].update({
                 'Calculate Capacitance Matrix': 'True',
                 'Capacitance Matrix Filename': '"elmerResults/CapacitanceMatrix.dat"'
             })
@@ -1210,9 +1215,9 @@ class elmerClass:
         self.materials = {}
         self.bodies = {}
 
-        for i in range(self.numMaterials):
-            self.materials[f'Material {i+1}'] = allMaterials[i]
-            self.bodies[f'Body {i+1}'] = allBodies[i]
+        for i in range(self._numMaterials):
+            self._materials[f'Material {i+1}'] = allMaterials[i]
+            self._bodies[f'Body {i+1}'] = allBodies[i]
 
         self._makeDielectricsFile()
 
@@ -1229,8 +1234,9 @@ class elmerClass:
 
         try:
             with open('Geometry/Dielectrics.dat', 'w') as f:
-                f.write(self.numMaterials.__str__() + '\n')
-                for i in range(self.numMaterials):
+                f.write(self._numMaterials.__str__() + '\n')
+                
+                for i in range(self._numMaterials):
                     f.write(f'{i+1} {dielectricValues[i]}\n')
 
         except Exception as e:
@@ -1248,36 +1254,38 @@ class elmerClass:
         Adapts based on whether capacitance matrix is needed.
         """
 
-        self.boundaries = {}
+        self._boundaries = {}
+
+        numPads = len(self._electrodeMap) - 2 #Subtract cathode and grid
 
         for i in range(1, self.numPads+3):
-            name = self.electrodeMap[i]
+            name = self._electrodeMap[i]
             content = {
                 'Target Boundaries(1)': i,
                 'Name': f'"{name}"',
             }
 
-            if self.capacitance:
+            if self._capacitance:
                 content['Capacitance Body'] = i
             else:
                 content['Potential'] = '0.0'
 
-            self.boundaries[f'Boundary Condition {i}'] = content
+            self._boundaries[f'Boundary Condition {i}'] = content
 
         dielectricID = self.numPads+3
         boundaryID = self.numPads+4
 
-        self.boundaries[f'Boundary Condition {dielectricID}'] = {
+        self._boundaries[f'Boundary Condition {dielectricID}'] = {
             'Target Boundaries(1)': dielectricID,
             'Name': '"DielectricSurfaceCharge"'
         }
-        if not self.capacitance:
-            self.boundaries[f'Boundary Condition {dielectricID}'].update({
+        if not self._capacitance:
+            self._boundaries[f'Boundary Condition {dielectricID}'].update({
                 'Charge Density': 'Variable Coordinate 1, Coordinate 2, Coordinate 3',
                 'File': '"chargeBuildup.dat"'
             })
 
-        self.boundaries[f'Boundary Condition {boundaryID}'] = {
+        self._boundaries[f'Boundary Condition {boundaryID}'] = {
             'Target Boundaries(1)': boundaryID,
             'Name': '"MirrorBoundaries"',
             'Electric Flux': '0.0'
@@ -1293,6 +1301,7 @@ class elmerClass:
         
         Including the main file and the weighting files.
         """
+        print("writing SIFS...")
         self._writeSIF()
         self._writeSIFWeighting()
 
@@ -1309,13 +1318,13 @@ class elmerClass:
 
         with open(f'Geometry/{self.sifFilename}', 'w') as f:
 
-            f.write(self.intro)
-            f.write(self.header)
+            f.write(self._intro)
+            f.write(self._header)
 
             sections = [
-                self.simulation, self.constants,
-                self.solver, self.equation, self.materials,
-                self.bodies, self.boundaries
+                self._simulation, self._constants,
+                self._solver, self.equation, self._materials,
+                self._bodies, self._boundaries
             ]
 
             for section in sections:
@@ -1339,21 +1348,21 @@ class elmerClass:
         """
         Writes the SIF weighing files for the Elmer simulation.
         """
-
-        for i, electrode in self.electrodeMap.items():
+        print('Weightings:', list(self.electrodeMap.values()))
+        for i, electrode in self._electrodeMap.items():
             if electrode == 'Cathode' or electrode == 'Grid':
                 continue
             inElectrode = False
 
-            with open(f'Geometry/{self.name}{electrode}Weighting.sif', 'w') as f:
+            with open(f'Geometry/{self._elmerName}{electrode}Weighting.sif', 'w') as f:
 
-                f.write(self.intro)
-                f.write(self.header)
+                f.write(self._intro)
+                f.write(self._header)
 
                 sections = [
-                    self.weighting[i], self.constants,
-                    self.solver, self.equation, self.materials,
-                    self.bodies, self.boundaries
+                    self._weighting[i], self._constants,
+                    self._solver, self._equation, self._materials,
+                    self._bodies, self._boundaries
                 ]
 
                 for section in sections:
@@ -1393,7 +1402,7 @@ class elmerClass:
         self._runElmerGrid()
         self._runElmerSolver()
 
-        if not self.capacitance and solveWeighting:
+        if not self._capacitance and solveWeighting:
             self._runElmerWeighting()
 
         return
@@ -1413,7 +1422,7 @@ class elmerClass:
             with open(os.path.join(originalCWD, 'log/logElmerGrid.txt'), 'w+') as elmerOutput:
                 startTime = time.monotonic()
                 subprocess.run(
-                    ['ElmerGrid', '14', '2', self.meshFilename, 
+                    ['ElmerGrid', '14', '2', self._meshFilename, 
                     '-names',
                     '-out', 'elmerResults', 
                     '-autoclean'], 
@@ -1446,7 +1455,7 @@ class elmerClass:
             with open(os.path.join(originalCWD, 'log/logElmerSolver.txt'), 'w+') as elmerOutput:
                 startTime = time.monotonic()
                 subprocess.run(
-                    ['ElmerSolver', self.sifFilename],
+                    ['ElmerSolver', self._sifFilename],
                     stdout=elmerOutput,
                     check=True
                 )
@@ -1479,11 +1488,11 @@ class elmerClass:
 
             with open(os.path.join(originalCWD, 'log/logElmerSolverWeighting.txt'), 'w+') as elmerOutput:
                 startTime = time.monotonic()
-                for i, electrode in self.electrodeMap.items():
+                for i, electrode in self._electrodeMap.items():
                     if electrode == 'Cathode' or electrode == 'Grid':
                         continue
                     subprocess.run(
-                        ['ElmerSolver', f'{self.name}{electrode}Weighting.sif'],
+                        ['ElmerSolver', f'{self._elmerName}{electrode}Weighting.sif'],
                         stdout=elmerOutput,
                         check=True
                     )
@@ -1522,7 +1531,7 @@ class elmerClass:
         ]:
             raise ValueError('Invalid electrode name.')
 
-        with open(f'Geometry/{self.sifFilename}', 'r') as f:
+        with open(f'Geometry/{self._sifFilename}', 'r') as f:
             sifContent = f.read()
 
         newContent = ''
@@ -1550,7 +1559,7 @@ class elmerClass:
             
             newContent += line + '\n'
 
-        with open(f'Geometry/{self.sifFilename}', 'w') as f:
+        with open(f'Geometry/{self._sifFilename}', 'w') as f:
             f.write(newContent)
 
         return
@@ -1563,7 +1572,7 @@ class elmerClass:
         Resets the potentials for all electrodes in the SIF file.
         """
 
-        with open(f'Geometry/{self.sifFilename}', 'r') as f:
+        with open(f'Geometry/{self._sifFilename}', 'r') as f:
             sifContent = f.read()
 
         newContent = ''
@@ -1584,7 +1593,7 @@ class elmerClass:
             
             newContent += line + '\n'
 
-        with open(f'Geometry/{self.sifFilename}', 'w') as f:
+        with open(f'Geometry/{self._sifFilename}', 'w') as f:
             f.write(newContent)
 
         return
