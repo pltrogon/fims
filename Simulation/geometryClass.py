@@ -4,6 +4,7 @@
 from __future__ import annotations
 import time
 import subprocess
+from venv import create
 
 import numpy as np
 import os
@@ -105,7 +106,6 @@ class geometryClass:
                        Otherwise creates a rectangular unit cell.
                        This requires mirroring in x and y.
             neighborCells: Creates the 6 adjacent cells.
-                           Requires hexagonal to be True.
         """
 
         print('\tCreating geometry...')
@@ -116,15 +116,16 @@ class geometryClass:
         self._hexagonal = hexagonal
         self._neighborCells = neighborCells
 
+        runOption = 'FIMS'
         if self._hexagonal:
-            self._fileName = self._gmshClass.createHexagonalGeometry(
-                neighborCells=self._neighborCells, 
-                runGUI=runGUI
-            )
-        else:
-            self._fileName = self._gmshClass.createFIMSGeometry(
-                runGUI=runGUI
-            )
+            runOption += 'Hexagonal'
+        if self._neighborCells:
+            runOption += 'Surrounding'
+
+        self._fileName = self._gmshClass.createMesh(
+            runOption=runOption,
+            runGUI=runGUI
+        )
 
         return
     
@@ -378,6 +379,138 @@ class gmshClass:
         return cellParts
     
 #**********************************************************************#
+    def _createCellSurrounding(self):
+        """
+        """
+
+        pitch = self._param['pitch']
+        holeRadius = self._param['holeRadius']
+        padLength = self._param['padLength']
+        gridStandoff = self._param['gridStandoff']
+        cathodeHeight = self._param['cathodeHeight']
+        gridThickness = self._param['gridThickness']
+        thicknessSiO2 = self._param['thicknessSiO2']
+        pillarRadius = self._param['pillarRadius']
+
+        xLength = pitch*math.sqrt(3)/2
+        yLength = pitch
+
+        neighborCenters = [
+            (0, yLength), #Top
+            (0, -yLength), #Bottom
+            (xLength, yLength/2), #Top-Right
+            (xLength, -yLength/2), #Bottom-Right
+            (-xLength, yLength/2), #Top-Left
+            (-xLength, -yLength/2) #Bottom-Left
+        ]
+
+        ## Dielectric
+        dielectricBox = self._occ.addBox(
+            -1*xLength, -1*yLength, -gridStandoff, 
+            2*xLength, 2*yLength, thicknessSiO2
+        )
+
+        # Define holes for the pads
+        centerPadHole = self._makeHexagon(
+            padLength, -gridStandoff, thicknessSiO2
+        )
+        padHoleTools = [(3, centerPadHole)]
+        for x, y in neighborCenters:
+            newHole = self._occ.copy([(3, centerPadHole)])
+            self._occ.translate(newHole, x, y, 0)
+            padHoleTools.extend(newHole)
+        
+        # Cut holes in dielectric
+        dielectricVolume, _ = self._occ.cut(
+            [(3, dielectricBox)],
+            padHoleTools
+        )
+
+        ## Grid
+        gridBox = self._occ.addBox(
+            -1*xLength, -1*yLength, -gridThickness/2, 
+            2*xLength, 2*yLength, gridThickness
+        )
+        # Define holes
+        centerGridHole = self._occ.addCylinder(
+            0, 0, -gridThickness/2,
+            0, 0, gridThickness,
+            holeRadius
+        )
+        gridHoleTools = [(3, centerGridHole)]
+        for x, y in neighborCenters:
+            newHole = self._occ.copy([(3, centerGridHole)])
+            self._occ.translate(newHole, x, y, 0)
+            gridHoleTools.extend(newHole)
+
+        # Cut holes in grid
+        gridVolume, _ = self._occ.cut(
+            [(3, gridBox)],
+            gridHoleTools
+        )
+
+        ## Gas
+        gasHeight = cathodeHeight + gridStandoff
+        gasBox = self._occ.addBox(
+            -1*xLength, -1*yLength, -gridStandoff,
+            2*xLength, 2*yLength, gasHeight
+        )
+        gasVolume, _ = self._occ.cut(
+            [(3, gasBox)], 
+            [(3, dielectricVolume[0][1]), (3, gridVolume[0][1])], 
+            removeObject=True, removeTool=False
+        )
+
+        ## Pads
+        centerPadFull = self._makeHexagon(
+            padLength, -gridStandoff
+        )
+
+        padList = [(2, centerPadFull)]
+        for x, y in neighborCenters:
+
+            newPad = self._occ.copy([(2, centerPadFull)])
+            self._occ.translate(newPad, x, y, 0)
+            padList.extend(newPad)
+
+        padCutBox = self._occ.addBox(
+            -xLength, -yLength, -gridStandoff,
+            2*xLength, 2*yLength, 1.0
+        )
+
+        padSurfaces = []
+        for pad in padList:
+            padSurface, _ = self._occ.intersect(
+                [pad],
+                [(3, padCutBox)],
+                removeObject=True, removeTool=False
+            )
+            padSurfaces.append(padSurface[0])
+        
+
+        ## Cathode
+        cathodeSurface = self._occ.addRectangle(
+            -xLength, -yLength, cathodeHeight,
+            2*xLength, 2*yLength
+        )
+
+        cellParts = {
+            'Gas': gasVolume[0], 
+            'Dielectric': dielectricVolume[0],
+            'Grid': gridVolume[0],
+            'CenterPad': padSurfaces[0],
+            'TopPad': padSurfaces[1],
+            'BottomPad': padSurfaces[2],
+            'RightTopPad': padSurfaces[3],
+            'RightBottomPad': padSurfaces[4],
+            'LeftTopPad': padSurfaces[5],
+            'LeftBottomPad': padSurfaces[6],
+            'Cathode': (2, cathodeSurface)
+        }
+
+        return cellParts
+    
+#**********************************************************************#
 
     def _makeUnitCell(self):
 
@@ -385,6 +518,23 @@ class gmshClass:
         allObjects = []
 
         inCell = self._createUnitCell()
+
+        allCellData.append(inCell)
+        allObjects.extend(inCell.values())
+
+        _, entityMap = self._occ.fragment(allObjects, [])
+        self._occ.synchronize()
+
+        return allCellData, entityMap
+    
+#**********************************************************************#
+
+    def _makeCellSurrounding(self):
+
+        allCellData = []
+        allObjects = []
+
+        inCell = self._createCellSurrounding()
 
         allCellData.append(inCell)
         allObjects.extend(inCell.values())
@@ -564,252 +714,178 @@ class gmshClass:
         self._occ.synchronize()
 
         return allCellData, entityMap
-
-#**********************************************************************#
-
-    def _assignPhysicalGroups(self, entityMap):
-        """
-        """
-
-        padNames = [
-            'CentralPad', 'CornerPad'
-        ]
-
-        globalGroup = {
-            'Gas': [], 
-            'Dielectric': [], 
-            'Grid': [], 
-            'Cathode': []
-        }
-        allGridSurfaces = []
-        padTags = []
-
-        for i, fragments in enumerate(entityMap):
-            partKey = [
-                'Gas', 'Dielectric', 'Grid', 
-                'CenterPad', 'CornerPad', 'Cathode'
-            ]
-            partType = partKey[i]
-            
-            # 1. Filter out invalid tags (tags <= 0)
-            newTags = [f[1] for f in fragments if f[1] > 0]
-            if not newTags:
-                continue
-
-            if 'Pad' in partType:
-                padTags.append(newTags)
-            else:
-                globalGroup[partType].extend(newTags)
-                
-                if partType == 'Grid':
-                    validGrid = []
-                    for t in newTags:
-                        if gmsh.model.occ.getEntities(3).count((3, t)) > 0:
-                            validGrid.append((3, t))
-                    
-                    if validGrid:
-                        gridBoundary = gmsh.model.getBoundary(
-                            validGrid, oriented=False
-                        )
-                        allGridSurfaces.extend(
-                            [b[1] for b in gridBoundary]
-                        )
-
-        # Assign Volumes
-        for name in ['Grid', 'Dielectric', 'Gas']:
-            if globalGroup[name]:
-                gmsh.model.addPhysicalGroup(
-                    3, 
-                    globalGroup[name], 
-                    name=name
-                )
-
-        # Assign Surfaces
-        if globalGroup['Cathode']:
-            gmsh.model.addPhysicalGroup(
-                2, 
-                globalGroup['Cathode'], 
-                name='Cathode'
-            )
-        if allGridSurfaces:
-            gmsh.model.addPhysicalGroup(
-                2, 
-                list(set(allGridSurfaces)),
-                name='Grid'
-            )
-        # Assign Pads individually
-        for i in range(min(len(padTags), len(padNames))):
-            gmsh.model.addPhysicalGroup(
-                2, 
-                padTags[i], 
-                name=padNames[i]
-            )
-
-        return
     
 #**********************************************************************#
-    def _assignPhysicalGroupsHexagon(self, entityMap):
+
+    def _assignPhysicalGroups(self, entityMap, mode):
         """
-        Assigns physical groups to the entities in the geometry.
-
-        Assumes that the entities in entityMap are ordered as follows:
-            0: Gas
-            1: Dielectric
-            2: Grid
-            3: Pad
-            4: Cathode
-
-        Args:
-            entityMap: A mapping from the original entities to the 
-                    new entities after fragmentation.
+        TODO
         """
 
-        padNames = [
-            'CentralPad', 'TopPad', 'BottomPad',
-            'RightTopPad', 'RightBottomPad',
+        allPads = [
+            'CentralPad', 'TopPad', 'BottomPad', 
+            'RightTopPad', 'RightBottomPad', 
             'LeftTopPad', 'LeftBottomPad'
         ]
+        altPads = ['CentralPad', 'CornerPad']
 
-        globalGroup = {
-            'Gas': [], 
-            'Dielectric': [], 
-            'Grid': [], 
-            'Cathode': []
+        allVolumes = ['Gas', 'Dielectric', 'Grid']
+        otherSurfaces = ['Cathode']
+
+        configuration = {
+            'FIMS': {
+                'keys': allVolumes + altPads + otherSurfaces,
+                'pads': altPads
+            },
+            'FIMSSurrounding': {
+                'keys': allVolumes + allPads + otherSurfaces,
+                'pads': allPads
+            },
+            'FIMSHexagonal': {
+                'keys': allVolumes + ['Pad'] + otherSurfaces,
+                'pads': ['CentralPad']
+            },
+            'FIMSHexagonalSurrounding': {
+                'keys': allVolumes + ['Pad'] + otherSurfaces,
+                'pads': allPads
+            }
         }
-        allGridSurfaces = []
+
+
+        config = configuration[mode]
+
+        isHex = 'Hexagonal' in mode
+
+        partKey = config['keys']
+        padNames = config['pads']
+
+        globalGroup = {name: [] for name in ['Gas', 'Dielectric', 'Grid', 'Cathode']}
         padTags = []
-        numEntityPerCell = 5
+        allGridSurfaces = []
 
         for i, fragments in enumerate(entityMap):
-            partKey = ['Gas', 'Dielectric', 'Grid', 'Pad', 'Cathode']
-            partType = partKey[i % numEntityPerCell]
+            idx = i % len(partKey) if isHex else i
+            if idx >= len(partKey): continue
             
-            # 1. Filter out invalid tags (tags <= 0)
-            newTags = [f[1] for f in fragments if f[1] > 0]
-            if not newTags:
-                continue
+            partType = partKey[idx]
+            tags = [f[1] for f in fragments if f[1] > 0]
+            if not tags: continue
 
-            if partType == 'Pad':
-                padTags.append(newTags)
+            if 'Pad' in partType:
+                padTags.append(tags)
             else:
-                globalGroup[partType].extend(newTags)
-                
-                if partType == 'Grid':
-                    validGrid = []
-                    for t in newTags:
-                        if gmsh.model.occ.getEntities(3).count((3, t)) > 0:
-                            validGrid.append((3, t))
-                    
-                    if validGrid:
-                        gridBoundary = gmsh.model.getBoundary(
-                            validGrid, oriented=False
-                        )
-                        allGridSurfaces.extend(
-                            [b[1] for b in gridBoundary]
-                        )
+                globalGroup[partType].extend(tags)
 
-        # Assign Volumes
+                # Special boundary handling for the Grid
+                if partType == 'Grid':
+                    validVol = [(3, t) for t in tags if gmsh.model.occ.getEntities(3).count((3, t)) > 0]
+                    if validVol:
+                        boundary = gmsh.model.getBoundary(validVol, oriented=False)
+                        allGridSurfaces.extend([b[1] for b in boundary])
+
+
+        # --- Physical Group Assignments ---
+        
+        # Volumes
         for name in ['Grid', 'Dielectric', 'Gas']:
             if globalGroup[name]:
-                gmsh.model.addPhysicalGroup(
-                    3, 
-                    globalGroup[name], 
-                    name=name
-                )
+                gmsh.model.addPhysicalGroup(3, globalGroup[name], name=name)
 
-        # Assign Surfaces
+        # Surfaces (Dim 2)
         if globalGroup['Cathode']:
-            gmsh.model.addPhysicalGroup(
-                2, 
-                globalGroup['Cathode'], 
-                name='Cathode'
-            )
+            gmsh.model.addPhysicalGroup(2, globalGroup['Cathode'], name='Cathode')
         if allGridSurfaces:
-            gmsh.model.addPhysicalGroup(
-                2, 
-                list(set(allGridSurfaces)),
-                name='Grid'
-            )
-        # Assign Pads individually
-        for i in range(min(len(padTags), len(padNames))):
-            gmsh.model.addPhysicalGroup(
-                2, 
-                padTags[i], 
-                name=padNames[i]
-            )
+            gmsh.model.addPhysicalGroup(2, list(set(allGridSurfaces)), name='Grid')
+
+        # Individual Pads
+        for tags, name in zip(padTags, padNames):
+            gmsh.model.addPhysicalGroup(2, tags, name=name)
 
         return
-    
+
 #**********************************************************************#
 
-    def _setMeshSizes(self):
-        fineMesh = self._param['gridThickness']
-        courseMesh = 5*fineMesh #Could be 10?
+    def _setMeshSizes(self, runOption):
+        """
+        TODO
+        """
 
-        outRadius = self._param['pitch'] / math.sqrt(3)
-        transitionWidth = outRadius
-
+        # Cell dimensions
         pitch = self._param['pitch']
         holeRadius = self._param['holeRadius']
 
+        xLength = pitch*math.sqrt(3)/2
+        yLength = pitch/2
+        outRadius = self._param['pitch'] / math.sqrt(3)
+
+        meshSettings = {
+            'FIMS': {
+                'x': (0, xLength), 
+                'y': (0, yLength)
+            },
+            'FIMSSurrounding': {
+                'x': (-xLength, xLength), 
+                'y': (-yLength, yLength)
+            },
+            'FIMSHexagonal': {
+                'x': (-outRadius, outRadius), 
+                'y': (-yLength, yLength)
+            },
+            'FIMSHexagonalSurrounding': {
+                'x': (-outRadius, outRadius), 
+                'y': (-yLength, yLength)
+            }
+        }
+
+        bounds = meshSettings[runOption]
+
+        fineMesh = self._param['gridThickness']*2 #TODO - 1 here?
+        courseMesh = fineMesh*5
+        transitionWidth = pitch
+
+        # Define a high-res cylinder between central hole and pad
         largerHole = max(
             self._param['holeRadius'],
             self._param['padLength']
         )
         pipeRadius = largerHole + self._param['gridThickness']
-
-        xLength = pitch*math.sqrt(3)/2 + 5.0
-        yLength = pitch/2 + 5.0
         
-        # Center line below grid
-        padCenter = self._occ.addPoint(
+        pipeBottom = self._occ.addPoint(
             0, 0, -self._param['gridStandoff']
         )
-        holeCenter = self._occ.addPoint(
+        pipeTop = self._occ.addPoint(
             0, 0, self._param['holeRadius']/2
         ) 
-        amplificationLine = self._occ.addLine(padCenter, holeCenter)
+        amplificationLine = self._occ.addLine(pipeBottom, pipeTop)
         self._occ.synchronize()
 
-        # --- FIELD 1: Below the Grid ---
+        # Find distance from line
         gmsh.model.mesh.field.add('Distance', 1)
-        gmsh.model.mesh.field.setNumbers(
-            1, 'EdgesList', [amplificationLine]
-        )
+        gmsh.model.mesh.field.setNumbers(1, 'EdgesList', [amplificationLine])
         
+        # Define mesh size based on distance from line
         gmsh.model.mesh.field.add('Threshold', 2)
-        gmsh.model.mesh.field.setNumber(
-            2, 'InField', 1
-        )
-        gmsh.model.mesh.field.setNumber(
-            2, 'SizeMin', fineMesh
-        )
-        gmsh.model.mesh.field.setNumber(
-            2, 'SizeMax', courseMesh
-        )
-        gmsh.model.mesh.field.setNumber(
-            2, 'DistMin', pipeRadius
-        )
-        gmsh.model.mesh.field.setNumber(
-            2, 'DistMax', pipeRadius + transitionWidth
-        )
+        gmsh.model.mesh.field.setNumber(2, 'InField', 1)
+        gmsh.model.mesh.field.setNumber(2, 'SizeMin', fineMesh)
+        gmsh.model.mesh.field.setNumber(2, 'SizeMax', courseMesh)
+        gmsh.model.mesh.field.setNumber(2, 'DistMin', pipeRadius)
+        gmsh.model.mesh.field.setNumber(2, 'DistMax', pipeRadius + transitionWidth)
 
-        # --- FIELD 3: Above the Grid ---
+        # Keep fine-ish mesh around the entire grid
         gmsh.model.mesh.field.add('Box', 3)
         gmsh.model.mesh.field.setNumber(3, 'VIn', 2*fineMesh)
         gmsh.model.mesh.field.setNumber(3, 'VOut', courseMesh)
-        gmsh.model.mesh.field.setNumber(3, 'XMin', 0)
-        gmsh.model.mesh.field.setNumber(3, 'XMax', xLength)
-        gmsh.model.mesh.field.setNumber(3, 'YMin', 0)
-        gmsh.model.mesh.field.setNumber(3, 'YMax', yLength)
+        gmsh.model.mesh.field.setNumber(3, 'XMin', bounds['x'][0])
+        gmsh.model.mesh.field.setNumber(3, 'XMax', bounds['x'][1])
+        gmsh.model.mesh.field.setNumber(3, 'YMin', bounds['y'][0])
+        gmsh.model.mesh.field.setNumber(3, 'YMax', bounds['y'][1])
         gmsh.model.mesh.field.setNumber(3, 'ZMin', -holeRadius/2)
-        gmsh.model.mesh.field.setNumber(3, 'ZMax', holeRadius)
+        gmsh.model.mesh.field.setNumber(3, 'ZMax', holeRadius/2)
         gmsh.model.mesh.field.setNumber(3, 'Thickness', transitionWidth)
 
-        # --- FIELD 4: Combine ---
+        # Use the smallest mesh size
         gmsh.model.mesh.field.add('Min', 4)
         gmsh.model.mesh.field.setNumbers(4, 'FieldsList', [2, 3])
-        
         gmsh.model.mesh.field.setAsBackgroundMesh(4)
 
         # Final settings
@@ -821,96 +897,23 @@ class gmshClass:
     
 #**********************************************************************#
 
-    def _setMeshSizesHexagon(self):
-        fineMesh = self._param['gridThickness']*10
-        courseMesh = fineMesh*1
-        transitionWidth = 2*self._param['holeRadius']
-
-        gridThick = self._param['gridThickness']
-
-        largerHole = max(
-            self._param['holeRadius'], 
-            self._param['padLength']
-        )
-        pipeRadius = largerHole + gridThick
-        aboveGrid = gridThick + self._param['holeRadius']
-        hexLimit = self._param['pitch'] / math.sqrt(3) + 5.0
-
-        # Center line below grid
-        padCenter = self._occ.addPoint(
-            0, 0, -self._param['gridStandoff']
-        )
-        holeCenter = self._occ.addPoint(
-            0, 0, self._param['holeRadius']/2
-        ) 
-        amplificationLine = self._occ.addLine(padCenter, holeCenter)
-        self._occ.synchronize()
-
-        # --- FIELD 1: Below the Grid ---
-        gmsh.model.mesh.field.add('Distance', 1)
-        gmsh.model.mesh.field.setNumbers(
-            1, 'EdgesList', [amplificationLine]
-        )
-        
-        gmsh.model.mesh.field.add('Threshold', 2)
-        gmsh.model.mesh.field.setNumber(
-            2, 'InField', 1
-        )
-        gmsh.model.mesh.field.setNumber(
-            2, 'SizeMin', fineMesh
-        )
-        gmsh.model.mesh.field.setNumber(
-            2, 'SizeMax', courseMesh
-        )
-        gmsh.model.mesh.field.setNumber(
-            2, 'DistMin', pipeRadius
-        )
-        gmsh.model.mesh.field.setNumber(
-            2, 'DistMax', pipeRadius + transitionWidth
-        )
-
-        # --- FIELD 3: Above the Grid ---
-        gmsh.model.mesh.field.add('Box', 3)
-        gmsh.model.mesh.field.setNumber(3, 'VIn', 2*fineMesh)
-        gmsh.model.mesh.field.setNumber(3, 'VOut', courseMesh)
-        gmsh.model.mesh.field.setNumber(3, 'XMin', -hexLimit)
-        gmsh.model.mesh.field.setNumber(3, 'XMax', hexLimit)
-        gmsh.model.mesh.field.setNumber(3, 'YMin', -hexLimit)
-        gmsh.model.mesh.field.setNumber(3, 'YMax', hexLimit)
-        gmsh.model.mesh.field.setNumber(3, 'ZMin', -gridThick)
-        gmsh.model.mesh.field.setNumber(3, 'ZMax', aboveGrid)
-        gmsh.model.mesh.field.setNumber(3, 'Thickness', transitionWidth)
-
-        # --- FIELD 4: Combine ---
-        gmsh.model.mesh.field.add('Min', 4)
-        gmsh.model.mesh.field.setNumbers(4, 'FieldsList', [2, 3])
-        
-        gmsh.model.mesh.field.setAsBackgroundMesh(4)
-
-        # Final settings
-        gmsh.option.setNumber('Mesh.MeshSizeFromCurvature', 12)
-        gmsh.option.setNumber('Mesh.MeshSizeExtendFromBoundary', 0)
-        gmsh.option.setNumber('Mesh.MeshSizeFromPoints', 0)
-
-        return
-
-#**********************************************************************#
-
-    def createHexagonalGeometry(self, neighborCells=False, runGUI=False):
+    def createMesh(self, runOption, runGUI=False):
         """
-        Generates a FEM of the hexagonal cell geometry using Gmsh.
-
-        Args:
-            neighborCells: If True, also creates the 6 adjacent cells.
-            runGUI: Run the GUI to visualize the geometry and mesh.
-
-        Returns:
-            The base filename of the generated mesh.
+        TODO
         """
+
+        fileOptions = [
+            'FIMS',
+            'FIMSSurrounding',
+            'FIMSHexagonal',
+            'FIMSHexagonalSurrounding'
+        ]
+
+        if runOption not in fileOptions:
+            raise ValueError(f'Option must be one of {fileOptions}.')
 
         filePath = 'Geometry'
-        fileBase = 'FIMSHexagonal'
-        filename = os.path.join(filePath, f'{fileBase}.msh')
+        filename = os.path.join(filePath, f'{runOption}.msh')
 
         gmsh.initialize()
         gmsh.option.setNumber("General.Terminal", 0)
@@ -921,13 +924,24 @@ class gmshClass:
         gmsh.option.setNumber('Mesh.CharacteristicLengthExtendFromBoundary', 1)
         gmsh.option.setNumber('Mesh.OptimizeNetgen', 1)
         gmsh.option.setNumber('Mesh.MeshSizeFromPoints', 1)
-        #gmsh.option.setNumber('Mesh.MshFileVersion', 2.2)
 
         gmsh.model.add(filename)
 
-        _, allCellsMap = self._makeHexagonalCells(neighborCells)
-        self._assignPhysicalGroupsHexagon(allCellsMap)
-        self._setMeshSizesHexagon()
+        print('\tSetting up geometry...')
+        match runOption:
+            case 'FIMS':
+                _, allCellsMap = self._makeUnitCell()
+
+            case 'FIMSSurrounding':
+                _, allCellsMap = self._makeCellSurrounding()
+            
+            case 'FIMSHexagonal':
+                _, allCellsMap = self._makeHexagonalCells()
+            case 'FIMSHexagonalSurrounding':
+                _, allCellsMap = self._makeHexagonalCells(neighborCells=True)
+
+        self._assignPhysicalGroups(allCellsMap, runOption)
+        self._setMeshSizes(runOption)
 
         print('\tCreating mesh...')
         gmsh.model.mesh.generate(3)
@@ -938,63 +952,14 @@ class gmshClass:
         with open(logPath, 'w') as f:
             for msg in logMessages:
                 f.write(f"{msg}\n")
-
+            
         if runGUI:
             gmsh.fltk.run()
 
         gmsh.finalize()
 
-        return fileBase
-    
+        return runOption
 
-#**********************************************************************#
-
-    def createFIMSGeometry(self, runGUI=False):
-        """
-        Generates a FEM of the FIMS geometry using Gmsh.
-
-        Args:
-            runGUI: Run the GUI to visualize the geometry and mesh.
-        """
-
-        filePath = 'Geometry'
-        fileBase = 'FIMS'
-        filename = os.path.join(filePath, f'{fileBase}.msh')
-
-        gmsh.initialize()
-        gmsh.option.setNumber("General.Terminal", 0)
-        gmsh.logger.start()
-
-        gmsh.option.setNumber('Mesh.ElementOrder', 2)
-        gmsh.option.setNumber('Mesh.HighOrderOptimize', 1)
-        gmsh.option.setNumber('Mesh.CharacteristicLengthExtendFromBoundary', 1)
-        gmsh.option.setNumber('Mesh.OptimizeNetgen', 1)
-        gmsh.option.setNumber('Mesh.MeshSizeFromPoints', 1)
-        #gmsh.option.setNumber('Mesh.MshFileVersion', 2.2)
-
-        gmsh.model.add(filename)
-
-        _, allCellsMap = self._makeUnitCell()
-        self._assignPhysicalGroups(allCellsMap)
-        self._setMeshSizes()
-
-        print('\tCreating mesh...')
-        gmsh.model.mesh.generate(3)
-        gmsh.write(filename)
-
-
-        logPath = os.path.join(os.getcwd(), 'log/logGmsh.txt')
-        logMessages = gmsh.logger.get()
-        with open(logPath, 'w') as f:
-            for msg in logMessages:
-                f.write(f"{msg}\n")
-
-        if runGUI:
-            gmsh.fltk.run()
-
-        gmsh.finalize()
-
-        return fileBase
 
 #**********************************************************************#
 #**********************************************************************#
