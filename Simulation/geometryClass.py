@@ -122,9 +122,6 @@ class geometryClass:
         if self._neighborCells:
             self._runOption += 'Surrounding'
 
-
-        print('DEBUG: runOption =', self._runOption)
-
         self._gmshClass.createMesh(
             runOption=self._runOption,
             runGUI=runGUI
@@ -1000,7 +997,7 @@ class elmerClass:
         self._addMaterials()
         self._assignBoundaryConditions()
 
-        self.writeAllSIF()
+        self._writeAllSIF()
 
         return
     
@@ -1090,19 +1087,19 @@ class elmerClass:
                 'Steady State Max Iterations': '1',
                 'Output Intervals(1)': '1',
                 'Coordinate Scaling': '1e-6',
-                'Solver Input File': self._sifFilename,
+                'Solver Input File': f'{self._runOption}.sif',
                 '! Post File': f'{self._elmerName}.ep, {self._elmerName}.vtu',
                 'Output file': f'"elmerResults/{self._elmerName}.result"'
             }
         }
 
         self._weighting = {}
-        for i, electrode in self.electrodeMap.items():
+        for i, electrode in self._electrodeMap.items():
             #Dont need weighting for cathode or grid
             if electrode == 'Cathode' or electrode == 'Grid':
                 continue
 
-            self.weighting[i] = {
+            self._weighting[i] = {
             'Simulation': {
                 'Max Output Level': '5',
                 'Coordinate System': 'Cartesian',
@@ -1212,8 +1209,8 @@ class elmerClass:
         ]
 
 
-        self.materials = {}
-        self.bodies = {}
+        self._materials = {}
+        self._bodies = {}
 
         for i in range(self._numMaterials):
             self._materials[f'Material {i+1}'] = allMaterials[i]
@@ -1235,7 +1232,7 @@ class elmerClass:
         try:
             with open('Geometry/Dielectrics.dat', 'w') as f:
                 f.write(self._numMaterials.__str__() + '\n')
-                
+
                 for i in range(self._numMaterials):
                     f.write(f'{i+1} {dielectricValues[i]}\n')
 
@@ -1258,7 +1255,7 @@ class elmerClass:
 
         numPads = len(self._electrodeMap) - 2 #Subtract cathode and grid
 
-        for i in range(1, self.numPads+3):
+        for i in range(1, numPads+3):
             name = self._electrodeMap[i]
             content = {
                 'Target Boundaries(1)': i,
@@ -1272,8 +1269,8 @@ class elmerClass:
 
             self._boundaries[f'Boundary Condition {i}'] = content
 
-        dielectricID = self.numPads+3
-        boundaryID = self.numPads+4
+        dielectricID = numPads+3
+        boundaryID = numPads+4
 
         self._boundaries[f'Boundary Condition {dielectricID}'] = {
             'Target Boundaries(1)': dielectricID,
@@ -1295,13 +1292,12 @@ class elmerClass:
 
 #**********************************************************************#
 
-    def writeAllSIF(self):
+    def _writeAllSIF(self):
         """
         Writes all SIF files for the Elmer simulation.
         
         Including the main file and the weighting files.
         """
-        print("writing SIFS...")
         self._writeSIF()
         self._writeSIFWeighting()
 
@@ -1316,14 +1312,14 @@ class elmerClass:
         Note that grid, cathode, and pad potentials are 0.0 by default.
         """
 
-        with open(f'Geometry/{self.sifFilename}', 'w') as f:
+        with open(f'Geometry/{self._runOption}.sif', 'w') as f:
 
             f.write(self._intro)
             f.write(self._header)
 
             sections = [
                 self._simulation, self._constants,
-                self._solver, self.equation, self._materials,
+                self._solver, self._equation, self._materials,
                 self._bodies, self._boundaries
             ]
 
@@ -1348,7 +1344,6 @@ class elmerClass:
         """
         Writes the SIF weighing files for the Elmer simulation.
         """
-        print('Weightings:', list(self.electrodeMap.values()))
         for i, electrode in self._electrodeMap.items():
             if electrode == 'Cathode' or electrode == 'Grid':
                 continue
@@ -1455,7 +1450,7 @@ class elmerClass:
             with open(os.path.join(originalCWD, 'log/logElmerSolver.txt'), 'w+') as elmerOutput:
                 startTime = time.monotonic()
                 subprocess.run(
-                    ['ElmerSolver', self._sifFilename],
+                    ['ElmerSolver', f'{self._runOption}.sif'],
                     stdout=elmerOutput,
                     check=True
                 )
@@ -1531,7 +1526,7 @@ class elmerClass:
         ]:
             raise ValueError('Invalid electrode name.')
 
-        with open(f'Geometry/{self._sifFilename}', 'r') as f:
+        with open(f'Geometry/{self._runOption}.sif', 'r') as f:
             sifContent = f.read()
 
         newContent = ''
@@ -1559,7 +1554,7 @@ class elmerClass:
             
             newContent += line + '\n'
 
-        with open(f'Geometry/{self._sifFilename}', 'w') as f:
+        with open(f'Geometry/{self._runOption}.sif', 'w') as f:
             f.write(newContent)
 
         return
@@ -1572,7 +1567,7 @@ class elmerClass:
         Resets the potentials for all electrodes in the SIF file.
         """
 
-        with open(f'Geometry/{self._sifFilename}', 'r') as f:
+        with open(f'Geometry/{self._runOption}.sif', 'r') as f:
             sifContent = f.read()
 
         newContent = ''
@@ -1593,7 +1588,7 @@ class elmerClass:
             
             newContent += line + '\n'
 
-        with open(f'Geometry/{self._sifFilename}', 'w') as f:
+        with open(f'Geometry/{self._runOption}.sif', 'w') as f:
             f.write(newContent)
 
         return

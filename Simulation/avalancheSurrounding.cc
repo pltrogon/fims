@@ -701,12 +701,12 @@ int main(int argc, char * argv[]) {
     parallelSignalDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
     parallelSignalDataTree->Branch("Signal Time", &signalTime, "signalTime/D");
     parallelSignalDataTree->Branch("Signal Strength", &signalStrength, "signalStrength/D");
-    parallelSignalDataTree->Branch("Top Pad Signal", &signalTopPad, "signalTopPad/D");
-    parallelSignalDataTree->Branch("Bottom Pad Signal", &signalBottomPad, "signalBottomPad/D");
-    parallelSignalDataTree->Branch("Right Top Pad Signal", &signalRightTopPad, "signalRightTopPad/D");
-    parallelSignalDataTree->Branch("Right Bottom Pad Signal", &signalRightBottomPad, "signalRightBottomPad/D");
-    parallelSignalDataTree->Branch("Left Top Pad Signal", &signalLeftTopPad, "signalLeftTopPad/D");
-    parallelSignalDataTree->Branch("Left Bottom Pad Signal", &signalLeftBottomPad, "signalLeftBottomPad/D");
+    parallelSignalDataTree->Branch("Top Signal", &signalTopPad, "signalTopPad/D");
+    parallelSignalDataTree->Branch("Bottom Signal", &signalBottomPad, "signalBottomPad/D");
+    parallelSignalDataTree->Branch("TopRight Signal", &signalRightTopPad, "signalRightTopPad/D");
+    parallelSignalDataTree->Branch("BottomRight Signal", &signalRightBottomPad, "signalRightBottomPad/D");
+    parallelSignalDataTree->Branch("TopLeft Signal", &signalLeftTopPad, "signalLeftTopPad/D");
+    parallelSignalDataTree->Branch("BottomLeft Signal", &signalLeftBottomPad, "signalLeftBottomPad/D");
   
 
     //***** Parallel Avalanche Loop *****//
