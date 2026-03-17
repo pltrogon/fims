@@ -329,15 +329,7 @@ class runData:
                     'Final z',
                 ]
             
-            case 'electronTrackData':
-                dataToScale = [
-                    'Drift x', 
-                    'Drift y', 
-                    'Drift z'
-                ]
-
-            
-            case 'ionTrackData':
+            case 'electronTrackData' | 'ionTrackData':
                 dataToScale = [
                     'Drift x', 
                     'Drift y', 
@@ -460,23 +452,12 @@ class runData:
             self._calculatedData['Optical Transparency'] = opticalTransparency
             self._calculatedData['Field Transparency'] = fieldTransparency
 
-            #Average field bundle radius
+            #Field bundle radius - Nominal height defiend here.
+            ## TODO: Can get average ionization location for better definition?
             standoff = self.getRunParameter('Grid Standoff')
-            nominalBundleHeight = []
-            heights = [.9, .8, .7, .6, .5, .3, .2, .1]
-            for num in heights:
-                nominalBundleHeight.append(-num*standoff)
-            
-            bundleRadius = []
-            total = 0
-            for height in nominalBundleHeight:
-                bundleRadius.append(self.calcBundleRadius(height))
-            for radius in bundleRadius:
-                total += radius
-            avgBundleRadius = total/len(bundleRadius)
-            
-            self._calculatedData['Bundle z'] = -.5*standoff
-            self._calculatedData['Field Bundle Radius'] = avgBundleRadius
+            nominalBundleZ = -0.9*standoff
+            self._calculatedData['Bundle z'] = nominalBundleZ
+            self._calculatedData['Field Bundle Radius'] = self.calcBundleRadius(nominalBundleZ)
 
         if numAvalanche > 0:
             # Gains
@@ -562,7 +543,8 @@ class runData:
         #Hole for primary cell
         hole[0] = plt.Circle(
             (0, 0), holeRadius, 
-            facecolor='none', edgecolor='k', lw=1, label=f'Hole (r = {holeRadius:.0f} um)'
+            facecolor='none', edgecolor='k', lw=1,
+            label=f'Hole (r = {holeRadius:.0f} um)'
         )
         # Neighboring cell holes (#808080 = Grey)
         for i in range(len(neighborX)):
@@ -729,8 +711,10 @@ class runData:
                 axis.set_aspect('equal')
 
             case 'xz':
-                axis.plot(padX, padZ, 
-                        label='Pad', c='m', lw=2)
+                axis.plot(
+                    padX, padZ, 
+                    label='Pad', c='m', lw=2
+                )
                 axis.plot(
                     [cellX[3], cellX[0], cellX[0], cellX[3], cellX[3]], 
                     [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight],
@@ -832,17 +816,19 @@ class runData:
             facecolor='none', edgecolor='c', lw=2
         )
 
+        bundleXY = nominalBundleR*[-1, 1]
+        bundleZ = nominalBundleZ*[1, 1]
         match axes:
             case 'xy':
                 axis.add_patch(nominalFieldBundle)
             case 'xz':
                 axis.plot(
-                    [-nominalBundleR, nominalBundleR], [nominalBundleZ, nominalBundleZ], 
+                    bundleXY, bundleZ, 
                     lw=2, c='c'
                 )
             case 'yz':
                 axis.plot(
-                    [-nominalBundleR, nominalBundleR], [nominalBundleZ, nominalBundleZ], 
+                    bundleXY, bundleZ, 
                     lw=2, c='c'
                 )
             case _:
@@ -1239,8 +1225,7 @@ class runData:
         self._plotAddCellGeometry(subyz, 'yz')
         self._plotAddCellGeometry(subxy, 'xy')
         
-        #Add field bundle indicator (TODO: improve field bundle 
-        #calculation and overlay)
+        #Add field bundle indicator
         """
         self._plotAddFieldBundle(subxz, 'xz')
         self._plotAddFieldBundle(subyz, 'yz')
@@ -1334,7 +1319,7 @@ class runData:
             'electron',
             'posIon',
             'negIon'
-            ]
+        ]
         
         #Get run data
         padLength = self.getRunParameter('Pad Length')
@@ -1371,7 +1356,9 @@ class runData:
 
         #Plot drift data
         fig = plt.figure(figsize=(12, 4))
-        fig.suptitle(f"Total Drift of: {target}s ({avalancheNum} Avalanches)")
+        fig.suptitle(
+            f"Total Drift of: {target}s ({avalancheNum} Avalanches)"
+        )
         
         subZ = fig.add_subplot(121)
         subXY = fig.add_subplot(122)
@@ -1380,12 +1367,27 @@ class runData:
         subXY.hist(driftR, bins=100)
         
         #Add grid elements overlay
-        subZ.axvline(abs(driftZ.iloc[0]), c='r', ls=':', label='Initial Electron')
-        subZ.axvline(standoff, c='g', ls='--', label='Grid Height')
+        subZ.axvline(
+            abs(driftZ.iloc[0]), 
+            c='r', ls=':', label='Initial Electron'
+        )
+        subZ.axvline(
+            standoff, 
+            c='g', ls='--', label='Grid Height'
+        )
         
-        subXY.axvline(driftR.iloc[0], c='r', ls=':', label='Initial Electron')
-        subXY.axvline(holeRadius, c='g', ls='--', label='Hole Radius')
-        subXY.axvline(padLength, c='m', ls='--', label='Pad Length')
+        subXY.axvline(
+            driftR.iloc[0], 
+            c='r', ls=':', label='Initial Electron'
+        )
+        subXY.axvline(
+            holeRadius, 
+            c='g', ls='--', label='Hole Radius'
+        )
+        subXY.axvline(
+            padLength, 
+            c='m', ls='--', label='Pad Length'
+        )
         
         #Add plot labels
         subZ.set_title('Drift in z')
@@ -1777,12 +1779,11 @@ class runData:
     def plotIBNHistogram(self):
         """
         Creates a stacked double histogram of the distance from the field bundle 
-        edge of every ion created in an avalanche. The double histogram is divided 
-        by whether the ions are captured by the grid or if they escape into the 
-        drift volume.
+        edge of every ion created in an avalanche. 
         
-        Args:
-            color: list of color names given as strings
+        The double histogram is divided by whether the ions are 
+        captured by the grid or if they escape into the drift volume.
+
         Returns:
             matplotlib.figure. Figure: the generated IBN position histogram
         """
@@ -2316,7 +2317,7 @@ class runData:
 #********************************************************************************#
     def plotAvalancheSignal(self, avalancheID=0):
         """
-        TODO: add details here
+        TODO:
         """
 
         allData = self.getDataFrame('signalData')
