@@ -1,5 +1,5 @@
 /*
- * avalanche.cc
+ * avalancheSurrounding.cc
  * 
  * Garfield++ simulation of a single-electron avalanche.
  *    Requires an input electric field solved by elmer and geometry from gmsh.
@@ -323,7 +323,7 @@ int main(int argc, char * argv[]) {
     elmerResultsPath+"mesh.elements",
     elmerResultsPath+"mesh.nodes", 
     geometryPath+"dielectrics.dat",
-    elmerResultsPath+"FIMS.result", 
+    elmerResultsPath+"FIMSSurrounding.result", 
     "mum"
   );
 
@@ -348,12 +348,8 @@ int main(int argc, char * argv[]) {
 
   // Import the weighting field for the readout electrode.
   fieldFIMS.SetWeightingField(
-    elmerResultsPath+"FIMSCentralPadWeighting.result", 
-    "centerPad"
-  );
-  fieldFIMS.SetWeightingField(
-    elmerResultsPath+"FIMSCornerPadWeighting.result", 
-    "cornerPad"
+    elmerResultsPath+"FIMSSurroundingCentralPadWeighting.result", 
+    "CentralPad"
   );
 
   //Create a sensor
@@ -363,7 +359,7 @@ int main(int argc, char * argv[]) {
     xBoundary[0], yBoundary[0], zBoundary[0], 
     xBoundary[1], yBoundary[1], zBoundary[1]
   );
-  sensorFIMS->AddElectrode(&fieldFIMS, "centerPad");
+  sensorFIMS->AddElectrode(&fieldFIMS, "CentralPad");
 
   // ***** Draw field lines for visualization ***** //
   std::cout << "****************************************\n";
@@ -579,7 +575,7 @@ int main(int argc, char * argv[]) {
         elmerResultsPath+"mesh.elements",
         elmerResultsPath+"mesh.nodes", 
         geometryPath+"dielectrics.dat",
-        elmerResultsPath+"FIMS.result", 
+        elmerResultsPath+"FIMSSurrounding.result", 
         "mum"
       );
       parallelSensorFIMS = new Sensor();
@@ -589,14 +585,15 @@ int main(int argc, char * argv[]) {
 
       //Link objects
       parallelFieldFIMS->SetGas(gasFIMS);
-      parallelFieldFIMS->SetWeightingField(
-        elmerResultsPath+"FIMSCentralPadWeighting.result", 
-        "centerPad"
-      );
-      parallelFieldFIMS->SetWeightingField(
-        elmerResultsPath+"FIMSCornerPadWeighting.result", 
-        "cornerPad"
-      );
+
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingCentralPadWeighting.result", "CentralPad");
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingTopPadWeighting.result", "TopPad");
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingBottomPadWeighting.result", "BottomPad");
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingRightTopPadWeighting.result", "RightTopPad");
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingRightBottomPadWeighting.result", "RightBottomPad");
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingLeftTopPadWeighting.result", "LeftTopPad");
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingLeftBottomPadWeighting.result", "LeftBottomPad");
+
       parallelFieldFIMS->EnableMirrorPeriodicityX();
       parallelFieldFIMS->EnableMirrorPeriodicityY();
       
@@ -606,7 +603,14 @@ int main(int argc, char * argv[]) {
         xBoundary[1], yBoundary[1], zBoundary[1]
       );      
 
-      parallelSensorFIMS->AddElectrode(parallelFieldFIMS, "centerPad");
+      parallelSensorFIMS->AddElectrode(parallelFieldFIMS, "CentralPad");
+      parallelSensorFIMS->AddElectrode(parallelFieldFIMS, "TopPad");
+      parallelSensorFIMS->AddElectrode(parallelFieldFIMS, "BottomPad");
+      parallelSensorFIMS->AddElectrode(parallelFieldFIMS, "RightTopPad");
+      parallelSensorFIMS->AddElectrode(parallelFieldFIMS, "RightBottomPad");
+      parallelSensorFIMS->AddElectrode(parallelFieldFIMS, "LeftTopPad");
+      parallelSensorFIMS->AddElectrode(parallelFieldFIMS, "LeftBottomPad");
+      
       parallelSensorFIMS->SetTimeWindow(0., timeStep, nSignalBins);
 
       avalancheE->SetSensor(parallelSensorFIMS);
@@ -648,6 +652,7 @@ int main(int argc, char * argv[]) {
     int statIon;
     float electronDriftx, electronDrifty, electronDriftz;
     double signalTime, signalStrength;
+    double signalTopPad, signalBottomPad, signalRightTopPad, signalRightBottomPad, signalLeftTopPad, signalLeftBottomPad;
 
     TTree* parallelAvalancheDataTree = new TTree("avalancheDataTree", "Avalanche Results");
     parallelAvalancheDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
@@ -696,6 +701,12 @@ int main(int argc, char * argv[]) {
     parallelSignalDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
     parallelSignalDataTree->Branch("Signal Time", &signalTime, "signalTime/D");
     parallelSignalDataTree->Branch("Signal Strength", &signalStrength, "signalStrength/D");
+    parallelSignalDataTree->Branch("Top Signal", &signalTopPad, "signalTopPad/D");
+    parallelSignalDataTree->Branch("Bottom Signal", &signalBottomPad, "signalBottomPad/D");
+    parallelSignalDataTree->Branch("TopRight Signal", &signalRightTopPad, "signalRightTopPad/D");
+    parallelSignalDataTree->Branch("BottomRight Signal", &signalRightBottomPad, "signalRightBottomPad/D");
+    parallelSignalDataTree->Branch("TopLeft Signal", &signalLeftTopPad, "signalLeftTopPad/D");
+    parallelSignalDataTree->Branch("BottomLeft Signal", &signalLeftBottomPad, "signalLeftBottomPad/D");
   
 
     //***** Parallel Avalanche Loop *****//
@@ -781,7 +792,14 @@ int main(int argc, char * argv[]) {
       //Get signal for each timestep
       for(int inSignal = 0; inSignal < nSignalBins; inSignal++){
         signalTime = inSignal*timeStep;
-        signalStrength = parallelSensorFIMS->GetSignal("centerPad", inSignal);
+        signalStrength = parallelSensorFIMS->GetSignal("CentralPad", inSignal);
+
+        signalTopPad = parallelSensorFIMS->GetSignal("TopPad", inSignal);
+        signalBottomPad = parallelSensorFIMS->GetSignal("BottomPad", inSignal);
+        signalRightTopPad = parallelSensorFIMS->GetSignal("RightTopPad", inSignal);
+        signalRightBottomPad = parallelSensorFIMS->GetSignal("RightBottomPad", inSignal);
+        signalLeftTopPad = parallelSensorFIMS->GetSignal("LeftTopPad", inSignal);
+        signalLeftBottomPad = parallelSensorFIMS->GetSignal("LeftBottomPad", inSignal);
         
         //Fill tree
         parallelSignalDataTree->Fill();
