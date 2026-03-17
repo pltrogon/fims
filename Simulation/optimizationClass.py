@@ -59,10 +59,7 @@ class FIMS_Optimizer:
         except:
             raise FileNotFoundError('Unable to create log file for optimizer.')
         
-        self.iterationNumber = 0
-
-        self._lastOptimizerParams = None
-        self._lastOptimizerResults = (None, None, None)
+        self._optimizerLog = []
 
         return
                 
@@ -120,21 +117,13 @@ class FIMS_Optimizer:
 #***********************************************************************************#    
     def _getIBN(self):
         """
-        Orchestrates the process of running a simulation and calculating
+        Runs a simulation and calculates
         the Ion Backflow Number (IBN) from the results.
 
         Returns:
             IBN (float): The calculated Ion Backflow Number.
         """
 
-        #Print active parameter values for monitoring convergence
-        saveParam = self.simFIMS.getAllParam()
-        activeParams = [line[0] for line in self.params]
-        print('Testing Parameters:')
-        for element, value in saveParam.items():
-            if element in activeParams:
-                print(f'\t{element}: {value}')
-            
         runNumber = self.simFIMS.runForOptimizer()
         
         #Get the IBN
@@ -157,80 +146,58 @@ class FIMS_Optimizer:
             inputList (list): A list of parameter names, matching the order of optimizerParam.
         
         Returns:
-            float: The IBN value to be minimized.
+            resultIBN (float): The current IBN value.
         """
 
         #Upload the optimizer parameters into the simulation
         paramDict = dict(zip(inputList, optimizerParam))
         self.simFIMS.setParameters(paramDict)
         
-        # Get the Ion Backflow Number
+        # Run sim and get the IBN
         resultIBN = self._getIBN()
         
-        #Output to monitor convergence
-        with open('log/logOptimizer.txt', 'a') as log:
-            for line in optimizerParam:
-                log.write(f'{line} ')
-            log.write(f' {resultIBN}\n')
-        print(f'\n******************** IBN = {resultIBN} ********************')
+        self._optimizerLog.append({
+            'params': paramDict,
+            'IBN': resultIBN
+        })
         
         return resultIBN
 
 #***********************************************************************************#
-    def _checkConvergence(self):
+    def _checkConvergence(self, numIteration=5, precision=3):
         """
-        #TODO - Rather than open the log file every iteration, 
-        # could the previous values be stored in the class and checked
-        # against the new values at each iteration? This would be more efficient and allow
-        # for more flexible convergence conditions.
+        Checks for convergence of the optimization by looking 
+        for repeated parameter sets.
 
-        Check previous optimizer parameters to see if optimizer is stuck.
-        Terminate the optimizer if the input parameters have been repeated
-        five times in a row without change (within 1e-3).
+        Checks the last numIteration parameter sets for identical values 
+        (rounded to the specified precision).
+
+        Will raise a StopIteration exception if they are all the same.
+
+        Args:
+            numIteration (int): The number of recent iterations to check for convergence.
+            precision (int): The number of decimal places to round the parameters for comparison.
         """
-        data = []
-        num = 0
-        numOfRepeatedParams = 0
         
         #Ensure that at least 5 iterations have occurred before terminating
-        if self.iterationNumber < 5:
+        if len(self._optimizerLog) < numIteration:
             return
+        
+        recentData = self._optimizerLog[-numIteration:]
 
-        #Read data from optimizer log file
-        try:
-            with open('log/logOptimizer.txt', 'r') as log:
-                fullData = [line.rstrip('\n') for line in log]
-        except Exception as e:
-            print(f'Unable to access file: {e}')
-        
-        recentData = fullData[-4:]
-        
-        #Split data into separate, readable lists and determine the number of
-        #input parameters
-        for line in recentData:
-            rawData = map(float, line.split())
-            data.append(list(rawData))
+        history = []
+        for entry in recentData:
+            roundedParam = tuple(round(val, precision) for val in entry['params'].values())
+            history.append(roundedParam)
 
-        ## TODO: Check w/ James if I added this correctly
-        #numOfParams = len(data[0]) - 1 #- 1 to remove the IBN
-        numOfParams = len(data[0]) - 3 #remove the IBN, efficiency, and transparency
-        
-        #Calculate the number of input parameters that have not changed
-        while num <= numOfParams:
-            singleParam = []
-            for line in data:
-                paramValue = round(line[num], 3)
-                singleParam.append(paramValue)
-            if singleParam.count(singleParam[0]) == len(singleParam):
-                numOfRepeatedParams += 1
-            num += 1
-        
-        #Check the convergence condition
-        if numOfRepeatedParams == numOfParams:
-            print('Warning: series of identical input parameters detected\n'
-            'Terminating optimization...')
+        firstEntry = history[0]
+        if all(entry == firstEntry for entry in history):
+            print(
+                'Warning: 5 consecutive iterations with identical parameters\n.'
+                'Terminating optimization...'
+            )
             raise StopIteration
-            
+        
         return
 
 #***********************************************************************************#
@@ -261,24 +228,15 @@ class FIMS_Optimizer:
 
         print('Beginning optimization...')
         
-        if self.debug:
-            result = minimize(
-                fun=self._testObjective,
-                x0=initialGuess,
-                args=(inputList),
-                method='Nelder-Mead',
-                callback=self._checkConvergence,
-                bounds=optimizerBounds,
-            )
-        else:
-            result = minimize(
-                fun=self._IBNObjective,
-                x0=initialGuess,
-                args=(inputList),
-                method='Nelder-Mead',
-                callback=self._checkConvergence,
-                bounds=optimizerBounds,
-            )
+        optimizerResult = minimize(
+            fun=lambda x, args: self._optimizerMaster(x, args)[0],
+            x0=initialGuess,
+            args=(inputList,),
+            method='COBYQA',
+            callback=self._checkConvergence,
+            bounds=optimizerBounds,
+            constraints=constraints
+        )
 
         print('\n*************** Optimization Complete ***************')
 
