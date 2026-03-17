@@ -41,7 +41,8 @@ class FIMS_Optimizer:
         optimizeForIBN
     """
 
-#***********************************************************************************#
+#**********************************************************************#
+
     def __init__(self, params=None):
         """
         Initializes a FIMS_Optimization object.
@@ -57,20 +58,21 @@ class FIMS_Optimizer:
             with open('log/logOptimizer.txt', 'w') as file:
                 file.write('## FIMS Optimization Log ##\n')
         except:
-            raise FileNotFoundError('Unable to create log file for optimizer.')
+            raise FileNotFoundError('Unable to create log file.')
         
         self._optimizerLog = []
-        # TODO - Optimizer log should be saved to a file after each iteration, 
+        # TODO - Optimizer log should be saved to a file
         # in case of crashes or early termination. 
-        # Should also include timestamp for each entry.
+        # After each iteration?
+        # Should also include timestamp for each entry?
 
         self._lastRunParams = None
         self._lastRunResults = None
 
         return
                 
-#***********************************************************************************#
-    #String definition
+#**********************************************************************#
+
     def __str__(self):
         """
         String containing all of the optimization parameters,
@@ -85,7 +87,7 @@ class FIMS_Optimizer:
         
         return paramList
 
-#***********************************************************************************#
+#**********************************************************************#
     def _checkParameters(self):
         """
         Checks the input parameters for correct format.
@@ -102,32 +104,21 @@ class FIMS_Optimizer:
         if self.params is None:
             raise ValueError('Error - No parameters.')
 
-        if not isinstance(self.params, list):
-            print('Error: Input not a list')
-            return False
-        
-
-        #TODO - Im not sure of the format of params.
-        ## I think it's a list of lists, where each inner list has three entries:
-        ## [parameterName, minValue, maxValue]
-        ## Should make this more clear in a docstring somewhere.
-
         for element in self.params:
-            if not isinstance(element, list):
-                raise ValueError('Error - Parameter element not a list.')
+            if not isinstance(element, list) or len(element) != 3:
+                raise ValueError(f'Error: {element} is invalid.')
                 
-            if len(element) != 3:
-                raise ValueError('Error - Parameter element does not have three entries.')
-                
-            if element[1] >= element[2]:
-                raise ValueError('Error - Minimum bound is not less than maximum bound.')
-                
-            if element[0] not in allowedParams:
-                raise ValueError('Error - Parameter element is not a valid parameter.')
+            name, minVal, maxVal = element
+            
+            if name not in allowedParams:
+                raise ValueError(f'Error: {name} not a valid parameter.')
+            if minVal >= maxVal:
+                raise ValueError(f'Error: Invalid bounds for {name}.')
 
         return 
     
-#***********************************************************************************#
+#**********************************************************************#
+
     def _checkConvergence(self, x):
         """
         Checks for convergence of the optimization by looking 
@@ -145,7 +136,7 @@ class FIMS_Optimizer:
         # Decimal precision for parameter comparison
         precision = 3
         
-        #Ensure that at least 5 iterations have occurred before terminating
+        #Ensure that at least 5 iterations have occurred
         if len(self._optimizerLog) < numIteration:
             return
         
@@ -153,16 +144,19 @@ class FIMS_Optimizer:
 
         history = []
         for entry in recentData:
-            roundedParam = tuple(round(val, precision) for val in entry['params'].values())
+            roundedParam = tuple(
+                round(val, precision) for val in entry['params'].values()
+            )
             history.append(roundedParam)
 
         if len(set(history)) == 1:
-            print(f'Warning: {numIteration} consecutive identical parameter sets.')
+            print(f'Warning: {numIteration} identical parameter sets.')
             raise StopIteration
         
         return
 
-#***********************************************************************************#    
+#**********************************************************************#
+#     
     def _getIBN(self):
         """
         Runs a simulation and calculates
@@ -180,18 +174,19 @@ class FIMS_Optimizer:
 
         return IBN
 
-#***********************************************************************************#
+#**********************************************************************#
+
     def _IBNObjective(self, optimizerParam, inputList):
         """
         Objective function to optimize for minimum IBN.
 
-        Updates the simulation's parameter dictionary using the values in the optimizer
-        parameter array. Then gets the current IBN, prints the value to monitor convergence,
-        and returns it for the optimizer to minimize.
+        Updates the simulation's parameter dictionary using the values
+        in the optimizer parameter array. Then gets the current IBN value 
+        from the simulation results and returns it for the optimizer.
         
         Args:
-            optimizerParam (np.array): The flat array of parameters from the optimizer.
-            inputList (list): A list of parameter names, matching the order of optimizerParam.
+            optimizerParam (np.array): Flat array of parameters from the optimizer.
+            inputList (list): List of parameter names, matching the order of optimizerParam.
         
         Returns:
             resultIBN (float): The current IBN value.
@@ -213,17 +208,18 @@ class FIMS_Optimizer:
         
         return resultIBN
 
-#***********************************************************************************#
+#**********************************************************************#
+
     def optimizeForIBN(self):
         """
-        Runs an optimization routine to find the FIMS parameters that minimize 
-        the Ion Backflow Number (IBN).
+        Runs an optimization routine to find the FIMS parameters that 
+        minimize the Ion Backflow Number (IBN).
 
         Returns:
             dict: A dictionary containing:
-                - params: Dictionary of optimal FIMS parameters.
-                - IBNValue: Final minimum IBN value.
-                - success: Boolean representing the success status of minimization.
+                - params (dict): Optimal FIMS parameters.
+                - IBNValue (float): Final minimum IBN value.
+                - success (bool): Success status of minimization.
         """
         activeParameters = self.params
         
@@ -266,10 +262,12 @@ class FIMS_Optimizer:
 
         return resultVals
 
-#***********************************************************************************#    
+#**********************************************************************#
+#     
     def _getIBNALT(self):
         """
-        TODO
+        Runs a FIMS simulation with the current parameters.
+        Gets the resulting IBN, efficiency, and transparency.
         """
 
         runNo, efficiency, transparency = self.simFIMS.runForOptimizerALT()
@@ -286,10 +284,24 @@ class FIMS_Optimizer:
 
         return simResults
 
-#***********************************************************************************#
+#**********************************************************************#
+
     def _IBNObjectiveALT(self, optimizerParam, inputList):
         """
-        TODO
+        Objective function to optimize for minimum IBN.
+
+        Assumes that field ratio is one of the input parameters, 
+        and that the simulation will return efficiency and transparency.
+        
+        Args:
+            optimizerParam (np.array): Flat array of parameters from the optimizer.
+            inputList (list): List of parameter names, matching the order of optimizerParam.
+        
+        Returns:
+            Tuple:
+                - resultIBN (float): The IBN value.
+                - resultEfficiency (float): The efficiency value.
+                - resultTransparency (float): The transparency value.
         """
 
         #Upload the optimizer parameters into the simulation
@@ -316,12 +328,22 @@ class FIMS_Optimizer:
         
         return (resultIBN, resultEfficiency, resultTransparency)
     
-#***********************************************************************************#
+#**********************************************************************#
+
     def optimizeForIBNALT(self):
         """
-        TODO
+        Runs an optimization routine to find the FIMS parameters that 
+        minimizes the Ion Backflow Number (IBN).
+
+        Requires that field ratio is one of the input parameters.
+
+        Returns:
+            dict: A dictionary containing:
+                - params (dict): Optimal FIMS parameters.
+                - IBNValue (float): Final minimum IBN value.
+                - success (bool): Success status of minimization.
         """
-        ## NOTE: Requires field ratio to be an input parameter
+
         #TODO: saw a suggestion to normalize parameter space to improve convergence. 
 
         activeParameters = self.params.copy()
@@ -329,7 +351,7 @@ class FIMS_Optimizer:
         self._lastRunResults = None
 
         if 'fieldRatio' not in [p[0] for p in activeParameters]:
-            raise ValueError('Error - fieldRatio must be an input parameter for this optimization.')
+            raise ValueError('Error - fieldRatio must be an input.')
         
         #Get optimizer parameters and bounds
         inputList = [line[0] for line in activeParameters]
@@ -390,11 +412,12 @@ class FIMS_Optimizer:
 
         return resultVals
     
-#***********************************************************************************#
+#**********************************************************************#
+
     def _optimizerMaster(self, x, inputList):
         """
-        Master function for optimizer that checks for repeated parameter sets 
-        to avoid repeat simulations.
+        Master function for optimizer that checks for repeated parameter
+        sets to avoid repeat simulations.
         """
 
         # Check if input parameters are the same as the last run
@@ -404,3 +427,5 @@ class FIMS_Optimizer:
             self._lastRunParams = np.copy(x)
         
         return self._lastRunResults
+    
+
