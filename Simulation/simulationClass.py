@@ -122,7 +122,7 @@ class FIMS_Simulation:
             'holeRadius': 15.,
             'cathodeHeight': 200.,
             'thicknessSiO2': 5.,
-            'pillarRadius': 2.,
+            'pillarRadius': 5.,
             'driftField': 280.,
             'fieldRatio': 100.,
             'numFieldLine': 25,
@@ -1159,7 +1159,6 @@ class FIMS_Simulation:
         self._param['fieldRatio'] = finalField
 
         return finalField
-    
 
 
 #***********************************************************************************#
@@ -1188,7 +1187,7 @@ class FIMS_Simulation:
 
         #Choose initial field ratio guess
         opticalTransparency = self._calcOpticalTransparency()
-        minFieldGuess = .9*(2/opticalTransparency - 1)
+        minFieldGuess = math.floor(0.9*(2/opticalTransparency - 1))
 
         self._param['fieldRatio'] = minFieldGuess
         print(f'\tInitial field ratio guess: {minFieldGuess}')
@@ -1209,7 +1208,196 @@ class FIMS_Simulation:
         print(f'Solution for minimum field ratio: {finalField}')
 
         return finalField
-    
+
+#***********************************************************************************#
+    def _findCombinedMinField(self, targetTransparency=0.99, targetEfficiency=0.95, threshold=10):
+        """
+        Performs an iterative search to find the minimum Electric Field Ratio that 
+        simultaneously satisfies both of the input conditions:
+            - targetTransparency
+            - targetEfficiency
+
+        Once a condition is first met, only the other condition is further iterated on.
+
+        Process:
+            1 - Solves an electric field using Elmer. 
+            2 - Executes Garfield++ to draw field lines to determine a transparency.
+            3 - Executes Garfield++ avalanches to determine a detection efficiency.
+            4 - Repeats steps 1-3, increasing the field ratio using a modified 
+                secant method until both conditions are satisfied.
+
+        Note that this assumes that the field strength is monotonically increasing.
+
+        Args:
+            targetTransparency (float): The target electric field line transparency.
+            targetEfficiency (float): The target electron detection efficiency.
+            threshold (int): The minimum avalanche size required for an event to 
+                             be counted as 'detected'.
+
+        Returns:
+            float: The minimum field ratio required to achieve both conditions.
+                   This value is also loaded into the class parameters upon completion.
+        """
+
+        # Ensure geometry exists
+        if self._geometry is None:
+            self._generateGeometry()
+
+        print('\n'.join([
+            'Beginning search for minimum field to achieve:',
+            f'\tTransparency >= {targetTransparency*100:.0f}%',
+            f'\tEfficiency >= {targetEfficiency*100:.0f}%'
+        ]))
+       
+        iterNo = 0
+        iterNoLimit = 25
+
+        transparencyAtField = {
+            'field': [],
+            'transparency': [],
+            'transparencyErr': []
+        }
+        efficiencyAtField = {
+            'field': [],
+            'efficiency': [],
+            'efficiencyErr': []
+        }
+
+        isTransparent = False
+        isEfficient = False
+
+        self.param['numFieldLine'] = 200
+        self.param['numAvalanche'] = 3000
+        self.param['avalancheLimit'] = 20 #Limit can be low. Check is boolean - above threshold or not
+
+
+        #Loop until both conditions are satisfied
+        while not (isTransparent and isEfficient):
+
+            iterNo += 1
+            if iterNo > iterNoLimit:
+                print(f'Warning - Iteration limit reached ({iterNoLimit})')
+                break
+
+            
+            #Solve for the new transparency electric field if not transparent
+            if not isTransparent:
+                newTransparencyField = self._getNextField(iterNo, transparencyAtField, targetTransparency)
+
+            #Solve for the new efficiency electric field if not efficient
+            if not isEfficient:
+                newEfficiencyField = self._getNextField(iterNo, efficiencyAtField, targetEfficiency)
+
+            # Set field ratio to the maximum of the two new fields to attempt to satisfy both conditions
+            ## Note if already transparent or efficient, only one of the fields will be updated, 
+            ## so this will not affect the other condition.
+
+            newField = max(newTransparencyField, newEfficiencyField)
+            self.param['fieldRatio'] = newField
+            print(f'Iteration {iterNo}: Field ratio = {newField}')
+
+            #Solve the electric field for the new field ratio
+            self._solveEFields(solveWeighting=False)
+
+            #Generate field lines and read results from file if not already transparent
+            if not isTransparent:
+
+                self._runFieldLines()  
+                transparencyResults = self._readTransparencyFile()
+
+                transparencyAtField['field'].append(newField)
+                transparencyAtField['transparency'].append(transparencyResults['transparency'])
+                transparencyAtField['transparencyErr'].append(transparencyResults['transparencyErr'])
+                
+                    
+                #Check transparency to terminate loop
+                if transparencyAtField['transparency'][-1] >= targetTransparency:
+                    isTransparent = True
+                    print(f'Transparent at field ratio = {transparencyAtField['field'][-1]}:')
+                else:
+                    print(f'\tTransparency condition not satisfied.')
+
+            #Determine the efficiency and read results from file if not already efficient
+            if not isEfficient:
+
+                self._runGetEfficiency(targetEfficiency=targetEfficiency, threshold=threshold)
+                effResults = self._readEfficiencyFile()
+
+                efficiencyAtField['field'].append(newField)
+                efficiencyAtField['efficiency'].append(effResults['efficiency'])
+                efficiencyAtField['efficiencyErr'].append(effResults['efficiencyErr'])
+
+                match effResults['stopCondition']:
+                    
+                    case 'DID NOT CONVERGE' | 'EXCLUDED':
+                        print(f'\tEfficiency condition not satisfied.')
+
+                    case 'CONVERGED':
+                        isEfficient = True
+                        print(f'Eficiency condition satisfied at field ratio = {efficiencyAtField["field"][-1]}.')
+            
+                    case _:
+                        raise ValueError('Error - Malformed efficiency file.')
+        #End of find combined min field loop
+
+        #Print solution
+        finalField = self.getParam('fieldRatio')
+        print(f'Solution found: Field ratio = {finalField}')
+
+        #print(transparencyAtField)
+        #print(efficiencyAtField)
+
+        self.param['fieldRatio'] = finalField
+
+        return finalField
+
+
+#***********************************************************************************#
+    def runCombinedMinFieldRatio(self):
+        """
+        Executes an avalanche simulation of the FIMS geometry at the minimum field 
+        ratio required to achieve both:
+            - 95% detection efficiency, and
+            - 100% electric field line transparency. 
+
+        Returns:
+            int: The run number of the simulation that was executed.   
+        """
+
+        #Ensure all parameters exist
+        self._checkParam()
+
+        #get the run number for this simulation
+        runNo = self._getRunNumber()
+        print(f'Running simulation - Run number: {runNo}')
+
+        #Get absolute drift field value
+        driftField = self.getParam('driftField')
+        print(f'Finding minimum field ratio for geometry with drift field: {driftField} V/cm')
+
+        #Choose initial field ratio guess
+        opticalTransparency = self._calcOpticalTransparency()
+        minFieldGuess = math.floor(0.9*(2/opticalTransparency - 1))
+
+        self.param['fieldRatio'] = minFieldGuess
+        print(f'\tInitial field ratio guess: {minFieldGuess}')
+
+        #Generate the FEM geometry
+        self._generateGeometry()
+
+        # Determine minimum field ratio for default conditions
+        combinedMinField = self._findCombinedMinField()
+        self.param['fieldRatio'] = combinedMinField
+
+        #Solve for the weighting field
+        self._solveEFields(solveWeighting=True)
+        
+        #Run the electron transport simulation
+        self._runGarfield()
+
+
+        return runNo
+
 #***********************************************************************************#
     def runForOptimizer(self):
         """
