@@ -444,9 +444,12 @@ int main(int argc, char * argv[]) {
       fieldLineDataTree->Fill();
     }
 
-    //Calculate lines from grid - only do those outside of hole and the pillar
+    //Calculate lines from grid - only do those outside of hole
     double lineRadius2 = std::pow(xStart[inFieldLine], 2.) + std::pow(yStart[inFieldLine], 2.);
     double holeRadius2 = std::pow(holeRadius, 2.);
+
+    // Make sure lines do not start within a pillar (Note pillars not currently implemented)
+    //TODO: Note pillars will only be an issue in x-axis and edge-lines (I.e. Corners)
     double pillarStart = std::pow(pitch*sqrt(3.)/2., 2.) - std::pow(pillarRadius, 2.);
     double gridLineSeparation = 2.0;
 
@@ -471,8 +474,8 @@ int main(int argc, char * argv[]) {
     gridFieldLineLocation = -1;
     fieldLines.clear();
   
-    //TODO: verify that pillar position implemented correctly
-    if(lineRadius2 >= holeRadius2 && lineRadius2 < pillarStart){
+    //TODO: Exclude pillars when implemented.
+    if(lineRadius2 >= holeRadius2){
       driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], -gridLineSeparation*gridThickness/2., fieldLines);
 
       //Get coordinates of every point along field line and fill the tree
