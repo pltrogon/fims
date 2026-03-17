@@ -1224,7 +1224,7 @@ class FIMS_Simulation:
         Returns:
             int: The run number of the simulation that was executed.
         """
-        
+
         #get the run number for this simulation
         runNo = self._getRunNumber()
         print(f'Running simulation - Run number: {runNo}')
@@ -1243,12 +1243,6 @@ class FIMS_Simulation:
         #Solve fields and run Garfield
         self._solveEFields(solveWeighting=True)
         self._runGarfield()
-
-        #TODO - check how optimizer runs. is it changing the class elements 
-        # or instantiating a new class for each run? 
-        # if the latter, may not need to reset parameters here since they will be reloaded for each run.
-        self._resetParam()
-
         
         return runNo
     
