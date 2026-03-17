@@ -194,15 +194,30 @@ class FIMS_Simulation:
         
         return
 
+
+
 #***********************************************************************************#
     def getParam(self, parameter):
         """
         Gets a copy of the desired parameter.
+
+        Args:
+            parameter (str): The name of the parameter to retrieve. 
+
+        Returns:
+            A copy of the requested parameter.
         """
         if parameter not in self._param:
             raise KeyError(f'Error - Invalid parameter: {parameter}.')
             
         return copy.copy(self._param[parameter])
+    
+#***********************************************************************************#
+    def getAllParam(self):
+        """
+        Gets a copy of the entire parameter dictionary.
+        """
+        return copy.deepcopy(self._param)
 
 #***********************************************************************************#       
     def _getGarfieldPath(self):
@@ -1209,8 +1224,7 @@ class FIMS_Simulation:
         Returns:
             int: The run number of the simulation that was executed.
         """
-
-
+        
         #get the run number for this simulation
         runNo = self._getRunNumber()
         print(f'Running simulation - Run number: {runNo}')
@@ -1228,7 +1242,7 @@ class FIMS_Simulation:
 
         #Solve fields and run Garfield
         self._solveEFields(solveWeighting=True)
-        self._runElectronTransport()
+        self._runGarfield()
 
         #TODO - check how optimizer runs. is it changing the class elements 
         # or instantiating a new class for each run? 
@@ -1258,9 +1272,6 @@ class FIMS_Simulation:
                 - float: The detection efficiency at the current field ratio.
                 - float: The field transparency at the current field ratio.
         """
-
-        #Check and save parameters
-        self._checkParam()
         
         #get the run number for this simulation
         runNo = self._getRunNumber()
@@ -1280,7 +1291,7 @@ class FIMS_Simulation:
         transparency = self._getTransparency(transparencyGoal=transparencyGoal)
 
         #Run the electron transport simulation
-        self._runElectronTransport()
+        self._runGarfield()
 
         return runNo, efficiency, transparency
 

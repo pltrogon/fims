@@ -70,7 +70,7 @@ class FIMS_Optimizer:
     #String definition
     def __str__(self):
         """
-            Returns a formatted string containing all of the optimization parameters,
+        String containing all of the optimization parameters,
         along with their minimum and maximum values.
         """
         singleParam = []
@@ -84,9 +84,16 @@ class FIMS_Optimizer:
 
 #***********************************************************************************#
     def _checkParameters(self):
-        """Checks the input parameters to make sure they have the correct format."""
+        """
+        Checks the input parameters for correct format.
+        """
         
-        allowedParams = ['holeRadius', 'gridStandoff', 'padLength', 'pitch']
+        allowedParams = [
+            'holeRadius', 
+            'gridStandoff', 
+            'padLength', 
+            'pitch'
+        ]
         
         if self.params is None:
             raise ValueError('Error - No parameters.')
@@ -115,25 +122,20 @@ class FIMS_Optimizer:
         """
         Orchestrates the process of running a simulation and calculating
         the Ion Backflow Number (IBN) from the results.
-        
-        Args:
-            None.
 
         Returns:
-            float: The calculated Ion Backflow Number.
+            IBN (float): The calculated Ion Backflow Number.
         """
-        #Acquire list of parameters and the names of the active parameters
-        saveParam = self.simFIMS.param.copy()
+
+        #Print active parameter values for monitoring convergence
+        saveParam = self.simFIMS.getAllParam()
         activeParams = [line[0] for line in self.params]
-        
-        print('\n********************************')
         print('Testing Parameters:')
         for element, value in saveParam.items():
             if element in activeParams:
-                print(f'{element}: {value}')
-        print('********************************\n')
+                print(f'\t{element}: {value}')
             
-        runNumber = self.runForOptimizer()
+        runNumber = self.simFIMS.runForOptimizer()
         
         #Get the IBN
         simData = runData(runNumber)
@@ -157,10 +159,10 @@ class FIMS_Optimizer:
         Returns:
             float: The IBN value to be minimized.
         """
-        # Unpack the optimizer array into the simulation's parameter dictionary.
-        for i, inParam in enumerate(inputList):
-            self.simFIMS.param[inParam] = optimizerParam[i]
-        #self.simFIMS._writeParam()#This should not be necessary - runing the sim itself will write
+
+        #Upload the optimizer parameters into the simulation
+        paramDict = dict(zip(inputList, optimizerParam))
+        self.simFIMS.setParameters(paramDict)
         
         # Get the Ion Backflow Number
         resultIBN = self._getIBN()
@@ -175,8 +177,13 @@ class FIMS_Optimizer:
         return resultIBN
 
 #***********************************************************************************#
-    def _checkConvergence(self, optimizerResult):
+    def _checkConvergence(self):
         """
+        #TODO - Rather than open the log file every iteration, 
+        # could the previous values be stored in the class and checked
+        # against the new values at each iteration? This would be more efficient and allow
+        # for more flexible convergence conditions.
+
         Check previous optimizer parameters to see if optimizer is stuck.
         Terminate the optimizer if the input parameters have been repeated
         five times in a row without change (within 1e-3).
@@ -225,35 +232,6 @@ class FIMS_Optimizer:
             raise StopIteration
             
         return
-
-#***********************************************************************************#
-    def _testObjective(self, optimizerParam, inputList):
-        # Unpack the optimizer array into the simulation's parameter dictionary.
-        for i, inParam in enumerate(inputList):
-            self.simFIMS.param[inParam] = optimizerParam[i]
-        radius = self.simFIMS.getParam('holeRadius')
-        padLength = self.simFIMS.getParam('padLength')
-        standoff = self.simFIMS.getParam('gridStandoff')
-        pitch = self.simFIMS.getParam('pitch')
-        
-        #Calculate dummy IBN value
-        IBN = 100*(((radius-50)/11.25)**2 - (padLength/225)**2 + abs(standoff - 100)/225)*(.95 + random.random()/10)
-        self.iterationNumber += 1
-        print(
-            'test, radius, standoff, IBN: ', 
-            self.iterationNumber, 
-            round(radius, 2), 
-            round(standoff, 2),
-            round(padLength, 2),
-            ' | ',
-            round(IBN, 4)
-            )
-        
-        #Append iteration values to log
-        with open('log/logOptimizer.txt', 'a') as log:
-            log.write(f'{radius} {standoff} {padLength} {pitch} {IBN}\n')
-        
-        return IBN
 
 #***********************************************************************************#
     def optimizeForIBN(self):
