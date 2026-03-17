@@ -20,6 +20,9 @@
  * Tanner Polischuk & James Harrison IV
  */
 
+//My includes
+#include "SilenceConsole.h"
+
 //Garfield includes
 #include "Garfield/ComponentElmer.hh"
 #include "Garfield/AvalancheMicroscopic.hh"
@@ -296,24 +299,10 @@ int main(int argc, char * argv[]) {
     "iC4H10", gasCompIsobutane
   );
   
-  //Enable penning transfer while suppressing warning message about using microscopic tracking
-  auto enablePenningWithoutWarning = [&gasFIMS, &gasPenning]() -> bool {
-    
-    // Create dummy buffer for warning messages to fall into the void
-    std::ofstream nullStream("/dev/null"); //Note: only works on Unix systems (linux/Mac)
-
-    // Swap the buffer of cerr to the dummy buffer
-    std::streambuf* oldBuffer = std::cerr.rdbuf(nullStream.rdbuf());
-
-    bool ret = gasFIMS->EnablePenningTransfer(gasPenning, 0.0, "ar");
-
-    // Restore the original buffer
-    std::cerr.rdbuf(oldBuffer);
-
-    return ret;
-  };
-  
-  enablePenningWithoutWarning();
+  {
+    SilenceCerr guard; // Mute any Cerr's
+    gasFIMS->EnablePenningTransfer(gasPenning, 0.0, "ar");
+  }
 
   //STP gas parameters:
   double gasTemperature = 293.15; //K
