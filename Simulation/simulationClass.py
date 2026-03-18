@@ -834,11 +834,11 @@ class FIMS_Simulation:
         self._checkParam()
 
         # Create surrounding-cell geometry
-        self._geometry = geometryClass(self._param)
-        self._geometry.createGeometry(hexagonal=True, neighborCells=True)
+        self._geometryCapacitance = geometryClass(self._param)
+        self._geometryCapacitance.createGeometry(hexagonal=True, neighborCells=True)
 
         # Solve the capacitance matrix
-        self._geometry.calculateEFields(capacitance=True)
+        self._geometryCapacitance.calculateEFields(capacitance=True)
 
         # Read the capacitance matrix from the Elmer output file
         capacitanceMatrix = self._readCapacitanceMatrix()
@@ -2000,7 +2000,22 @@ class FIMS_Simulation:
 
         return optimalFieldData
 
+#***********************************************************************************#
+    def visualizeGeometry(self, surroundingCells=False, hexagonal=False):
+        """
+        Generates the geometry for the FIMS simulation 
+        and visualizes it using the Gmsh GUI.
 
+        Args:
+            surroundingCells (bool): Whether to include surrounding cells.
+            hexagonal (bool): Whether to use a hexagonal unit cell.
+        """
+        self._geometry = geometryClass(self._param)
+        self._geometry.createGeometry(
+            neighborCells=surroundingCells, 
+            hexagonal=hexagonal, 
+            runGui=True
+        )
 
     
 

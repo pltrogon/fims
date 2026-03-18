@@ -805,12 +805,20 @@ int main(int argc, char * argv[]) {
         std::vector<std::array<float, 3> > ionDriftLines;
         viewIonDrift->GetDriftLine(0, ionDriftLines, isIon);
         
-        //Only save every 5th point along the drift line
-        for(int ionPoint = 0; ionPoint < ionDriftLines.size(); ionPoint+=4){ 
+        //Only save every 10th point along the drift line
+        for(int ionPoint = 0; ionPoint < ionDriftLines.size(); ionPoint+=10){ 
           ionDriftx = ionDriftLines[ionPoint][0];
           ionDrifty = ionDriftLines[ionPoint][1];
           ionDriftz = ionDriftLines[ionPoint][2];
           //Fill tree with data for this point
+          parallelIonTrackDataTree->Fill();
+        }
+        // Check if the very last point was skipped
+        if ((ionDriftLines.size() - 1) % 10 != 0 && ionDriftLines.size() > 0){
+          int lastIdx = ionDriftLines.size() - 1;
+          ionDriftx = ionDriftLines[lastIdx][0];
+          ionDrifty = ionDriftLines[lastIdx][1];
+          ionDriftz = ionDriftLines[lastIdx][2];
           parallelIonTrackDataTree->Fill();
         }
         viewIonDrift->Clear();

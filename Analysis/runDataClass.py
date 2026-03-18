@@ -570,8 +570,10 @@ class runData:
         ax1 = fig.add_subplot(111)
 
         #Add the pad
-        ax1.plot(padX, padY, 
-                label='Pad', c='m', lw=1)
+        ax1.plot(
+            padX, padY, 
+            label='Pad', c='m', lw=1
+        )
 
         #Add the cell boundary
         ax1.plot(
@@ -816,8 +818,8 @@ class runData:
             facecolor='none', edgecolor='c', lw=2
         )
 
-        bundleXY = nominalBundleR*[-1, 1]
-        bundleZ = nominalBundleZ*[1, 1]
+        bundleXY = nominalBundleR*np.array([-1, 1])
+        bundleZ = nominalBundleZ*np.array([1, 1])
         match axes:
             case 'xy':
                 axis.add_patch(nominalFieldBundle)
@@ -1274,9 +1276,9 @@ class runData:
     
         #Plot each ion drift line in each subplot
         for electronID, driftLine in groupedData:
-            subxz.plot(driftLine['Drift x'], driftLine['Drift z'])
-            subyz.plot(driftLine['Drift y'], driftLine['Drift z'])
-            subxy.plot(driftLine['Drift x'], driftLine['Drift y'])
+            subxz.plot(driftLine['Drift x'], driftLine['Drift z'], lw=.5)
+            subyz.plot(driftLine['Drift y'], driftLine['Drift z'], lw=.5)
+            subxy.plot(driftLine['Drift x'], driftLine['Drift y'], lw=.5)
 
         #Add initial electron location to each subplot
         subxz.plot(xInit, zInit, 'rx', label='Initial')
