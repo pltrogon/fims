@@ -771,22 +771,6 @@ int main(int argc, char * argv[]) {
 
           totalIons++;
         }
-        
-        //get ion drift lines
-        bool isIon;
-        std::vector<std::array<float, 3> > ionDriftLines;
-        viewIonDrift->GetDriftLine(0, ionDriftLines, isIon);
-        
-        //Only save every 5th point along the drift line
-        for(int ionPoint = 0; ionPoint < ionDriftLines.size(); ionPoint += 4){ 
-          ionDriftx = ionDriftLines[ionPoint][0];
-          ionDrifty = ionDriftLines[ionPoint][1];
-          ionDriftz = ionDriftLines[ionPoint][2];
-          //Fill tree with data for this point
-          parallelIonTrackDataTree->Fill();
-        }
-        viewIonDrift->Clear();
-
 
         // Get electron drift line data
         int numElectronDrift = viewElectronDrift->GetNumberOfDriftLines();
@@ -801,6 +785,21 @@ int main(int argc, char * argv[]) {
           //Fill tree with data from this point
           parallelElectronTrackDataTree->Fill();
         }
+
+        //Get ion drift line data
+        bool isIon;
+        std::vector<std::array<float, 3> > ionDriftLines;
+        viewIonDrift->GetDriftLine(0, ionDriftLines, isIon);
+        
+        //Only save every 5th point along the drift line
+        for(int ionPoint = 0; ionPoint < ionDriftLines.size(); ionPoint+=4){ 
+          ionDriftx = ionDriftLines[ionPoint][0];
+          ionDrifty = ionDriftLines[ionPoint][1];
+          ionDriftz = ionDriftLines[ionPoint][2];
+          //Fill tree with data for this point
+          parallelIonTrackDataTree->Fill();
+        }
+        viewIonDrift->Clear();
 
         //*** TODO ***/
         //Can insert any per-electron analysis/data here.
