@@ -14,7 +14,7 @@ import matplotlib.cm as cm
 
 
 from polyaClass import myPolya
-from functionsFIMS import withinHex, withinNeighborHex, xyInterpolate
+import functionsFIMS
 
 CMTOMICRON = 1e4
 
@@ -1837,7 +1837,7 @@ class runData:
         )
 
         #Determine what lines initiate within the unit cell
-        withinUnitCell = withinHex(
+        withinUnitCell = functionsFIMS.withinHex(
             atCathode['Field Line x'], 
             atCathode['Field Line y'], 
             unitCellLength
@@ -1896,14 +1896,14 @@ class runData:
             if pointAbove is not None and pointBelow is not None:
                 # Linearly interpolate x and y values for z = zSiO2Top
                 try:
-                    newPoint = xyInterpolate(pointAbove, pointBelow, zSiO2Top)             
+                    newPoint = functionsFIMS.xyInterpolate(pointAbove, pointBelow, zSiO2Top)             
                 except ValueError as e:
                     print(f'Error for Electron {electronID} during interpolation: {e}')
 
                 #Check if this point is above the central or neighbor pad
                 if (
-                    withinHex(newPoint['x'], newPoint['y'], padLength)
-                    or withinNeighborHex(newPoint['x'], newPoint['y'], padLength, pitch)
+                    functionsFIMS.withinHex(newPoint['x'], newPoint['y'], padLength)
+                    or functionsFIMS.withinNeighborHex(newPoint['x'], newPoint['y'], padLength, pitch)
                 ):
                     continue
                 
@@ -2066,14 +2066,14 @@ class runData:
 
 
         #Check if the last datapoint is above the central pad
-        abovePad = withinHex(
+        abovePad = functionsFIMS.withinHex(
             outerFieldLine['Field Line x'], 
             outerFieldLine['Field Line y'], 
             self.getRunParameter('Pad Length')
         )
 
         #Check if the last datapoint is above the neighbor pad
-        aboveNeighbor = withinNeighborHex(
+        aboveNeighbor = functionsFIMS.withinNeighborHex(
             outerFieldLine['Field Line x'], 
             outerFieldLine['Field Line y'], 
             self.getRunParameter('Pad Length'),

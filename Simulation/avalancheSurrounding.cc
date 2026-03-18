@@ -1,5 +1,5 @@
 /*
- * avalanche.cc
+ * avalancheSurrounding.cc
  * 
  * Garfield++ simulation of a single-electron avalanche.
  *    Requires an input electric field solved by elmer and geometry from gmsh.
@@ -14,14 +14,10 @@
  *        electronDataTree
  *        ionDataTree
  *        electronTrackDataTree
- *        ionTrackDataTree  (WIP)
  *        signalDataTree
  * 
  * Tanner Polischuk & James Harrison IV
  */
-
-//My includes
-#include "SilenceConsole.h"
 
 //Garfield includes
 #include "Garfield/ComponentElmer.hh"
@@ -298,11 +294,8 @@ int main(int argc, char * argv[]) {
     "cf4", gasCompCF4,
     "iC4H10", gasCompIsobutane
   );
-  
-  {
-    SilenceCerr guard; // Mute any Cerr's
-    gasFIMS->EnablePenningTransfer(gasPenning, 0.0, "ar");
-  }
+  gasFIMS->EnablePenningTransfer(gasPenning, .0, "ar");
+
 
   //STP gas parameters:
   double gasTemperature = 293.15; //K
@@ -330,7 +323,7 @@ int main(int argc, char * argv[]) {
     elmerResultsPath+"mesh.elements",
     elmerResultsPath+"mesh.nodes", 
     geometryPath+"dielectrics.dat",
-    elmerResultsPath+"FIMS.result", 
+    elmerResultsPath+"FIMSSurrounding.result", 
     "mum"
   );
 
@@ -355,12 +348,8 @@ int main(int argc, char * argv[]) {
 
   // Import the weighting field for the readout electrode.
   fieldFIMS.SetWeightingField(
-    elmerResultsPath+"FIMSCentralPadWeighting.result", 
-    "centerPad"
-  );
-  fieldFIMS.SetWeightingField(
-    elmerResultsPath+"FIMSCornerPadWeighting.result", 
-    "cornerPad"
+    elmerResultsPath+"FIMSSurroundingCentralPadWeighting.result", 
+    "CentralPad"
   );
 
   //Create a sensor
@@ -370,7 +359,7 @@ int main(int argc, char * argv[]) {
     xBoundary[0], yBoundary[0], zBoundary[0], 
     xBoundary[1], yBoundary[1], zBoundary[1]
   );
-  sensorFIMS->AddElectrode(&fieldFIMS, "centerPad");
+  sensorFIMS->AddElectrode(&fieldFIMS, "CentralPad");
 
   // ***** Draw field lines for visualization ***** //
   std::cout << "****************************************\n";
@@ -454,10 +443,6 @@ int main(int argc, char * argv[]) {
     //Calculate lines from grid - only do those outside of hole
     double lineRadius2 = std::pow(xStart[inFieldLine], 2.) + std::pow(yStart[inFieldLine], 2.);
     double holeRadius2 = std::pow(holeRadius, 2.);
-
-    // Make sure lines do not start within a pillar (Note pillars not currently implemented)
-    //TODO: Note pillars will only be an issue in x-axis and edge-lines (I.e. Corners)
-    double pillarStart = std::pow(pitch*sqrt(3.)/2., 2.) - std::pow(pillarRadius, 2.);
     double gridLineSeparation = 2.0;
 
     //Do above grid
@@ -480,8 +465,7 @@ int main(int argc, char * argv[]) {
     //Do below grid
     gridFieldLineLocation = -1;
     fieldLines.clear();
-  
-    //TODO: Exclude pillars when implemented.
+
     if(lineRadius2 >= holeRadius2){
       driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], -gridLineSeparation*gridThickness/2., fieldLines);
 
@@ -578,7 +562,6 @@ int main(int argc, char * argv[]) {
     AvalancheMicroscopic* avalancheE = nullptr;
     AvalancheMC* driftIon = nullptr;
     ViewDrift* viewElectronDrift = nullptr;
-    ViewDrift* viewIonDrift = nullptr;
     TFile* parallelDataFile = nullptr;
     std::string parallelFilename;
 
@@ -592,25 +575,25 @@ int main(int argc, char * argv[]) {
         elmerResultsPath+"mesh.elements",
         elmerResultsPath+"mesh.nodes", 
         geometryPath+"dielectrics.dat",
-        elmerResultsPath+"FIMS.result", 
+        elmerResultsPath+"FIMSSurrounding.result", 
         "mum"
       );
       parallelSensorFIMS = new Sensor();
       avalancheE = new AvalancheMicroscopic;
       driftIon = new AvalancheMC;
       viewElectronDrift = new ViewDrift();
-      viewIonDrift = new ViewDrift();
 
       //Link objects
       parallelFieldFIMS->SetGas(gasFIMS);
-      parallelFieldFIMS->SetWeightingField(
-        elmerResultsPath+"FIMSCentralPadWeighting.result", 
-        "centerPad"
-      );
-      parallelFieldFIMS->SetWeightingField(
-        elmerResultsPath+"FIMSCornerPadWeighting.result", 
-        "cornerPad"
-      );
+
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingCentralPadWeighting.result", "CentralPad");
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingTopPadWeighting.result", "TopPad");
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingBottomPadWeighting.result", "BottomPad");
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingRightTopPadWeighting.result", "RightTopPad");
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingRightBottomPadWeighting.result", "RightBottomPad");
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingLeftTopPadWeighting.result", "LeftTopPad");
+      parallelFieldFIMS->SetWeightingField(elmerResultsPath+"FIMSSurroundingLeftBottomPadWeighting.result", "LeftBottomPad");
+
       parallelFieldFIMS->EnableMirrorPeriodicityX();
       parallelFieldFIMS->EnableMirrorPeriodicityY();
       
@@ -620,29 +603,28 @@ int main(int argc, char * argv[]) {
         xBoundary[1], yBoundary[1], zBoundary[1]
       );      
 
-      parallelSensorFIMS->AddElectrode(parallelFieldFIMS, "centerPad");
+      parallelSensorFIMS->AddElectrode(parallelFieldFIMS, "CentralPad");
+      parallelSensorFIMS->AddElectrode(parallelFieldFIMS, "TopPad");
+      parallelSensorFIMS->AddElectrode(parallelFieldFIMS, "BottomPad");
+      parallelSensorFIMS->AddElectrode(parallelFieldFIMS, "RightTopPad");
+      parallelSensorFIMS->AddElectrode(parallelFieldFIMS, "RightBottomPad");
+      parallelSensorFIMS->AddElectrode(parallelFieldFIMS, "LeftTopPad");
+      parallelSensorFIMS->AddElectrode(parallelFieldFIMS, "LeftBottomPad");
+      
       parallelSensorFIMS->SetTimeWindow(0., timeStep, nSignalBins);
 
       avalancheE->SetSensor(parallelSensorFIMS);
       avalancheE->EnableAvalancheSizeLimit(avalancheLimit);
 
       driftIon->SetSensor(parallelSensorFIMS);
-      driftIon->SetDistanceSteps(MICRONTOCM);
-      driftIon->EnableDriftLines(true);
-      
+      driftIon->SetDistanceSteps(MICRONTOCM/10.);
       viewElectronDrift->SetArea(
         xBoundary[0], yBoundary[0], zBoundary[0], 
         xBoundary[1], yBoundary[1], zBoundary[1]
       );
-      viewIonDrift->SetArea(
-        xBoundary[0], yBoundary[0], zBoundary[0], 
-        xBoundary[1], yBoundary[1], zBoundary[1]
-      );
-      
-      
       avalancheE->EnablePlotting(viewElectronDrift, 250);
-      driftIon->EnablePlotting(viewIonDrift);
-      
+
+
       //Filename
       int threadID = omp_get_thread_num();
       std::string parallelDataPath = "parallelData/";
@@ -669,8 +651,8 @@ int main(int argc, char * argv[]) {
     double xfIon, yfIon, zfIon, tfIon;
     int statIon;
     float electronDriftx, electronDrifty, electronDriftz;
-    float ionDriftx, ionDrifty, ionDriftz, ionDriftt;
     double signalTime, signalStrength;
+    double signalTopPad, signalBottomPad, signalRightTopPad, signalRightBottomPad, signalLeftTopPad, signalLeftBottomPad;
 
     TTree* parallelAvalancheDataTree = new TTree("avalancheDataTree", "Avalanche Results");
     parallelAvalancheDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
@@ -714,18 +696,17 @@ int main(int argc, char * argv[]) {
     parallelElectronTrackDataTree->Branch("Drift x", &electronDriftx, "electronDriftx/F");
     parallelElectronTrackDataTree->Branch("Drift y", &electronDrifty, "electronDrifty/F");
     parallelElectronTrackDataTree->Branch("Drift z", &electronDriftz, "electronDriftz/F");
-  
-    TTree* parallelIonTrackDataTree = new TTree("ionTrackDataTree", "Ion Tracks");
-    parallelIonTrackDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
-    parallelIonTrackDataTree->Branch("Electron ID", &electronID, "electronID/I");
-    parallelIonTrackDataTree->Branch("Drift x", &ionDriftx, "ionDriftx/F");
-    parallelIonTrackDataTree->Branch("Drift y", &ionDrifty, "ionDrifty/F");
-    parallelIonTrackDataTree->Branch("Drift z", &ionDriftz, "ionDriftz/F");
 
     TTree* parallelSignalDataTree = new TTree("signalDataTree", "Induced Signal");
     parallelSignalDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
     parallelSignalDataTree->Branch("Signal Time", &signalTime, "signalTime/D");
     parallelSignalDataTree->Branch("Signal Strength", &signalStrength, "signalStrength/D");
+    parallelSignalDataTree->Branch("Top Signal", &signalTopPad, "signalTopPad/D");
+    parallelSignalDataTree->Branch("Bottom Signal", &signalBottomPad, "signalBottomPad/D");
+    parallelSignalDataTree->Branch("TopRight Signal", &signalRightTopPad, "signalRightTopPad/D");
+    parallelSignalDataTree->Branch("BottomRight Signal", &signalRightBottomPad, "signalRightBottomPad/D");
+    parallelSignalDataTree->Branch("TopLeft Signal", &signalLeftTopPad, "signalLeftTopPad/D");
+    parallelSignalDataTree->Branch("BottomLeft Signal", &signalLeftBottomPad, "signalLeftBottomPad/D");
   
 
     //***** Parallel Avalanche Loop *****//
@@ -764,25 +745,24 @@ int main(int argc, char * argv[]) {
         avalancheE->GetElectronEndpoint(inElectron, xi, yi, zi, ti, Ei, xf, yf, zf, tf, Ef, stat);
           
         totalElectrons++;
-        
-        //Begin extraction of individual ion data
+
         ionCharge = 1;
         driftIon->DriftIon(xi, yi, zi, ti);
         driftIon->GetIonEndpoint(0, xiIon, yiIon, ziIon, tiIon, xfIon, yfIon, zfIon, tfIon, statIon);
-        
-        //Fill tree with end points from this positive ion
+        //Fill tree with data from this positive ion
         parallelIonDataTree->Fill();
-        totalIons++;
-        
-        //Check for electron attachment
+        totalIons++;  
+
+        //Check for electron attatchment
         if(stat == -7){
           attachedElectrons++;
 
-          //Drift negative ion from end of electron tracks that attach
+          //Drift negative ion from end of electron tracks that attatch
           ionCharge = -1;
           driftIon->DriftNegativeIon(xf, yf, zf, tf);
           driftIon->GetNegativeIonEndpoint(0, xiIon, yiIon, ziIon, tiIon, xfIon, yfIon, zfIon, tfIon, statIon);
-
+          //Fill tree with data from this negative ion
+          parallelIonDataTree->Fill();
           totalIons++;
         }
 
@@ -800,21 +780,6 @@ int main(int argc, char * argv[]) {
           parallelElectronTrackDataTree->Fill();
         }
 
-        //Get ion drift line data
-        bool isIon;
-        std::vector<std::array<float, 3> > ionDriftLines;
-        viewIonDrift->GetDriftLine(0, ionDriftLines, isIon);
-        
-        //Only save every 5th point along the drift line
-        for(int ionPoint = 0; ionPoint < ionDriftLines.size(); ionPoint+=4){ 
-          ionDriftx = ionDriftLines[ionPoint][0];
-          ionDrifty = ionDriftLines[ionPoint][1];
-          ionDriftz = ionDriftLines[ionPoint][2];
-          //Fill tree with data for this point
-          parallelIonTrackDataTree->Fill();
-        }
-        viewIonDrift->Clear();
-
         //*** TODO ***/
         //Can insert any per-electron analysis/data here.
         // --Velocity?
@@ -827,7 +792,14 @@ int main(int argc, char * argv[]) {
       //Get signal for each timestep
       for(int inSignal = 0; inSignal < nSignalBins; inSignal++){
         signalTime = inSignal*timeStep;
-        signalStrength = parallelSensorFIMS->GetSignal("centerPad", inSignal);
+        signalStrength = parallelSensorFIMS->GetSignal("CentralPad", inSignal);
+
+        signalTopPad = parallelSensorFIMS->GetSignal("TopPad", inSignal);
+        signalBottomPad = parallelSensorFIMS->GetSignal("BottomPad", inSignal);
+        signalRightTopPad = parallelSensorFIMS->GetSignal("RightTopPad", inSignal);
+        signalRightBottomPad = parallelSensorFIMS->GetSignal("RightBottomPad", inSignal);
+        signalLeftTopPad = parallelSensorFIMS->GetSignal("LeftTopPad", inSignal);
+        signalLeftBottomPad = parallelSensorFIMS->GetSignal("LeftBottomPad", inSignal);
         
         //Fill tree
         parallelSignalDataTree->Fill();
@@ -836,7 +808,7 @@ int main(int argc, char * argv[]) {
 
       //*** TODO ***/
       //Can insert any other per-avalanche analysis/data here.
-      // -- Histograms of energy loss/collision, time between collisions,
+      // -- Histograms of energy loss/collison, time between collisions,
 
       //Fill tree with data from this avalanche
       parallelAvalancheDataTree->Fill();
@@ -854,7 +826,6 @@ int main(int argc, char * argv[]) {
     delete avalancheE;
     delete driftIon;
     delete viewElectronDrift;
-    delete viewIonDrift;
     delete parallelDataFile;
 
   }//End parallization
@@ -966,7 +937,6 @@ int main(int argc, char * argv[]) {
     "electronDataTree",
     "ionDataTree",
     "electronTrackDataTree",
-    "ionTrackDataTree",
     "signalDataTree"
   };
 

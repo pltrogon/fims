@@ -1,7 +1,11 @@
 cmake_minimum_required(VERSION 3.12)
 project(runAvalanche C CXX)
 
-# Ensure Homebrew paths are considered on macOS for common libraries
+# Standard C++ version for Garfield++
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Ensure Homebrew paths are considered on macOS
 if(APPLE)
     list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew")
 endif()
@@ -12,75 +16,37 @@ find_package(Garfield REQUIRED)
 find_package(ROOT REQUIRED COMPONENTS Hist Tree MathCore)
 find_package(OpenMP REQUIRED)
 
-# Add the executable
-add_executable(runAvalanche avalanche.cc)
-add_executable(runFieldLines checkTransparency.cc)
-add_executable(runEfficiency checkEfficiency.cc)
-add_executable(runMagboltz magboltz.cc)
-add_executable(runParallelPlate parallelPlate.cc)
-add_executable(runParallelPlateEfficiency parallelPlateEfficiency.cc)
-
-
-# Link libraries and include directories
-target_include_directories(runAvalanche PRIVATE
-    $<TARGET_PROPERTY:GSL::gsl,INTERFACE_INCLUDE_DIRECTORIES>
-    $<TARGET_PROPERTY:Garfield::Garfield,INTERFACE_INCLUDE_DIRECTORIES>
-    $<TARGET_PROPERTY:ROOT::Hist,INTERFACE_INCLUDE_DIRECTORIES>
+# --- Define common dependencies ---
+set(COMMON_LIBS
+    GSL::gsl
+    GSL::gslcblas
+    Garfield::Garfield
+    ROOT::Hist
+    ROOT::Tree
+    ROOT::MathCore
+    OpenMP::OpenMP_CXX
 )
 
-target_link_libraries(runAvalanche
-    PRIVATE
-        GSL::gsl
-        GSL::gslcblas
-        Garfield::Garfield
-        ROOT::Hist
-        ROOT::Tree
-        ROOT::MathCore
-	OpenMP::OpenMP_CXX
+# --- Define executables ---
+# Format: executable_name source_file.cc
+set(EXECUTABLES
+    runAvalanche            	avalanche.cc
+    runFieldLines           	checkTransparency.cc
+    runEfficiency           	checkEfficiency.cc
+    runMagboltz             	magboltz.cc
+    runParallelPlate        	parallelPlate.cc
+    runParallelPlateEfficiency 	parallelPlateEfficiency.cc
+    runAvalancheSurrounding 	avalancheSurrounding.cc
 )
 
-target_include_directories(runFieldLines PRIVATE
-    $<TARGET_PROPERTY:GSL::gsl,INTERFACE_INCLUDE_DIRECTORIES>
-    $<TARGET_PROPERTY:Garfield::Garfield,INTERFACE_INCLUDE_DIRECTORIES>
-    $<TARGET_PROPERTY:ROOT::Hist,INTERFACE_INCLUDE_DIRECTORIES>
-)
+# --- Loop to create and link everything ---
+while(EXECUTABLES)
+    # Pop the first two items off the list
+    list(GET EXECUTABLES 0 EXE_NAME)
+    list(GET EXECUTABLES 1 EXE_SRC)
+    list(REMOVE_AT EXECUTABLES 0 1)
 
-target_link_libraries(runFieldLines
-    PRIVATE
-        GSL::gsl
-        GSL::gslcblas
-        Garfield::Garfield
-	OpenMP::OpenMP_CXX
-)
-
-
-target_include_directories(runEfficiency PRIVATE
-    $<TARGET_PROPERTY:GSL::gsl,INTERFACE_INCLUDE_DIRECTORIES>
-    $<TARGET_PROPERTY:Garfield::Garfield,INTERFACE_INCLUDE_DIRECTORIES>
-    $<TARGET_PROPERTY:ROOT::Hist,INTERFACE_INCLUDE_DIRECTORIES>
-)
-
-target_link_libraries(runEfficiency
-    PRIVATE
-        GSL::gsl
-        GSL::gslcblas
-        Garfield::Garfield
-	OpenMP::OpenMP_CXX
-)
-
-target_include_directories(runMagboltz PRIVATE
-    $<TARGET_PROPERTY:GSL::gsl,INTERFACE_INCLUDE_DIRECTORIES>
-    $<TARGET_PROPERTY:Garfield::Garfield,INTERFACE_INCLUDE_DIRECTORIES>
-    $<TARGET_PROPERTY:ROOT::Hist,INTERFACE_INCLUDE_DIRECTORIES>
-)
-
-target_link_libraries(runMagboltz
-    PRIVATE
-        GSL::gsl
-        GSL::gslcblas
-        Garfield::Garfield
-	OpenMP::OpenMP_CXX
-)
-
-target_link_libraries(runParallelPlate Garfield::Garfield)
-target_link_libraries(runParallelPlateEfficiency Garfield::Garfield)
+    add_executable(${EXE_NAME} ${EXE_SRC})
+    
+    target_link_libraries(${EXE_NAME} PRIVATE ${COMMON_LIBS})
+endwhile()
