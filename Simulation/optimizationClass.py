@@ -11,12 +11,14 @@ import uproot
 import random
 import warnings
 
-from scipy.optimize import Bounds, minimize, NonLinearConstraint
+from scipy.optimize import Bounds, minimize, NonLinearConstraint, LinearConstraint
 
 simDir = os.getcwd()
 analysisDir = os.path.join(simDir, '..', 'Analysis')
 sys.path.append(analysisDir)
+
 from simulationClass import FIMS_Simulation
+
 from runDataClass import runData
 
 #Define a unique warning to terminate the optimizer
@@ -32,13 +34,6 @@ class FIMS_Optimizer:
 
     Class representing the FIMS Optimization.
 
-    Methods defined in FIMS_Optimizer:
-        _checkParameters
-        _getIBN
-        _IBNObjective
-        _checkConvergence
-        _testObjective
-        optimizeForIBN
     """
 
 #**********************************************************************#
@@ -46,14 +41,22 @@ class FIMS_Optimizer:
     def __init__(self, params=None):
         """
         Initializes a FIMS_Optimization object.
+
+        The input parameters should be a list of lists.
+        Each inner list must contain:
+        - The name of the parameter (string)
+        - The minimum value for the parameter (float)
+        - The maximum value for the parameter (float)
+        
+        Args:
+            params (list of lists): List of parameters with bounds.
         """
-        self.debug = False
         self.params = params
         self.simFIMS = FIMS_Simulation()
         
         self._checkParameters()
 
-        #Create log file for optimizer
+        # Create log file for optimizer
         try:
             with open('log/logOptimizer.txt', 'w') as file:
                 file.write('## FIMS Optimization Log ##\n')
@@ -66,6 +69,7 @@ class FIMS_Optimizer:
         # After each iteration?
         # Should also include timestamp for each entry?
 
+        # Maintain a record of previous trials and results
         self._lastRunParams = None
         self._lastRunResults = None
 
@@ -104,11 +108,11 @@ class FIMS_Optimizer:
         if self.params is None:
             raise ValueError('Error - No parameters.')
 
-        for element in self.params:
-            if not isinstance(element, list) or len(element) != 3:
-                raise ValueError(f'Error: {element} is invalid.')
+        for inParam in self.params:
+            if not isinstance(inParam, list) or len(inParam) != 3:
+                raise ValueError(f'Error: {inParam} is invalid.')
                 
-            name, minVal, maxVal = element
+            name, minVal, maxVal = inParam
             
             if name not in allowedParams:
                 raise ValueError(f'Error: {name} not a valid parameter.')
@@ -136,7 +140,7 @@ class FIMS_Optimizer:
         # Decimal precision for parameter comparison
         precision = 3
         
-        #Ensure that at least 5 iterations have occurred
+        # Ensure that at least 5 iterations have occurred
         if len(self._optimizerLog) < numIteration:
             return
         
@@ -159,7 +163,7 @@ class FIMS_Optimizer:
 #     
     def _getIBN(self):
         """
-        Runs a simulation and calculates
+        Runs a FIMS simulation and calculates
         the Ion Backflow Number (IBN) from the results.
 
         Returns:
@@ -168,7 +172,7 @@ class FIMS_Optimizer:
 
         runNumber = self.simFIMS.runForOptimizer()
         
-        #Get the IBN
+        # Get the IBN
         simData = runData(runNumber)
         IBN = simData.getCalcParameter('Average IBN')
 
@@ -180,30 +184,37 @@ class FIMS_Optimizer:
         """
         Objective function to optimize for minimum IBN.
 
-        Updates the simulation's parameter dictionary using the values
-        in the optimizer parameter array. Then gets the current IBN value 
-        from the simulation results and returns it for the optimizer.
+        Updates the FIMS simulation with the given parameters, 
+        runs the simulation, and returns the resulting IBN.
+
+        Assumes that field ratio is not one of the input parameters.
+        I.e. The efficiency and transparency conditions are being 
+        satified internally by the simulation.
+
+        Note that optimizerParam and inputList must be in the same order.
         
         Args:
-            optimizerParam (np.array): Flat array of parameters from the optimizer.
-            inputList (list): List of parameter names, matching the order of optimizerParam.
+            optimizerParam (np.array): Flat array of parameters.
+            inputList (list): List of parameter names (in order).
         
         Returns:
             resultIBN (float): The current IBN value.
         """
 
-        #Upload the optimizer parameters into the simulation
+        # Upload the optimizer parameters into the simulation
         paramDict = dict(zip(inputList, optimizerParam))
         self.simFIMS.setParameters(paramDict)
         
-        # Run sim and get the IBN
+        # Run simulation and get the IBN
         resultIBN = self._getIBN()
         
+        # Update the optimizer log
         self._optimizerLog.append({
             'params': paramDict,
             'IBN': resultIBN
         })
 
+        # Print the current IBN value for this iteration
         print(f'Iteration {len(self._optimizerLog)}: IBN = {resultIBN:.6f}')
         
         return resultIBN
@@ -215,39 +226,51 @@ class FIMS_Optimizer:
         Runs an optimization routine to find the FIMS parameters that 
         minimize the Ion Backflow Number (IBN).
 
+        Utilizes the COBYQA optimization method (derivative-free).
+        Bounds are set based on the input parameters. 
+        Terminated based on criteria in _checkConvergence.
+        Parameters are constrained to prevent unphysical combinations.
+
         Returns:
             dict: A dictionary containing:
                 - params (dict): Optimal FIMS parameters.
                 - IBNValue (float): Final minimum IBN value.
                 - success (bool): Success status of minimization.
         """
-        activeParameters = self.params
         
-        #Get optimizer parameters and bounds
-        inputList = [line[0] for line in activeParameters]
-        minBounds = [line[1] for line in activeParameters]
-        maxBounds = [line[2] for line in activeParameters]
+        # Get optimizer parameters and bounds
+        activeParameters = self.params.copy()
+        inputList, minBounds, maxBounds = map(list, zip(*activeParameters))
 
-        #Set bounds for variables
+        # Set bounds for variables
         optimizerBounds = Bounds(minBounds, maxBounds)
 
-        #Set initial guess as default values
-        optimizerParams = [self.simFIMS.param[parameterName] for parameterName in inputList]
+        # Set initial guess as default values
+        optimizerParams = self.simFIMS.getAllParam()
         initialGuess = np.array(optimizerParams)
 
         print('Beginning optimization...')
-        
-        optimizerResult = minimize(
-            fun=self._IBNObjective,
-            x0=initialGuess,
-            args=(inputList,),
-            method='COBYQA', #'Nelder-Mead'
-            callback=self._checkConvergence,
-            bounds=optimizerBounds,
-        )
+        try:
+            optimizerResult = minimize(
+                fun=self._IBNObjective,
+                x0=initialGuess,
+                args=(inputList,),
+                method='COBYQA', #or 'Nelder-Mead'
+                constraints=self._getGeometryConstraints(),
+                callback=self._checkConvergence,
+                bounds=optimizerBounds,
+            )
+            finalParams = optimizerResult.x
+            finalFunction = optimizerResult.fun
+            finalStatus = optimizerResult.success
+
+        except StopIteration:
+            print('Optimization terminated due to convergence.')
+            print(finalParams, finalFunction, finalStatus)
+            
 
         print('\n*************** Optimization Complete ***************')
-        #Put results into simulation instance
+        # Put results into simulation instance
         finalParams = dict(zip(inputList, optimizerResult.x))
         self.simFIMS.setParameters(finalParams)
         
@@ -257,7 +280,7 @@ class FIMS_Optimizer:
             'success': optimizerResult.success
         }
         
-        print(f'Optimal IBN value = {resultVals["IBNValue"]}')
+        print(f"Optimal IBN value = {resultVals['IBNValue']}")
         print(self.simFIMS)
 
         return resultVals
@@ -268,11 +291,17 @@ class FIMS_Optimizer:
         """
         Runs a FIMS simulation with the current parameters.
         Gets the resulting IBN, efficiency, and transparency.
+
+        Returns:
+            dict: A dictionary containing:
+                - IBN (float): The calculated Ion Backflow Number.
+                - efficiency (float): The calculated efficiency.
+                - transparency (float): The calculated transparency.
         """
 
         runNo, efficiency, transparency = self.simFIMS.runForOptimizerALT()
         
-        #Get the IBN
+        # Get the IBN
         simData = runData(runNo)
         IBN = simData.getCalcParameter('Average IBN')
 
@@ -290,21 +319,27 @@ class FIMS_Optimizer:
         """
         Objective function to optimize for minimum IBN.
 
-        Assumes that field ratio is one of the input parameters, 
-        and that the simulation will return efficiency and transparency.
+        Updates the FIMS simulation with the given parameters, 
+        runs the simulation, and returns the resulting IBN, field 
+        transparency, and detection efficiency.
+
+        Assumes that field ratio is one of the input parameters.
+        I.e. The efficiency and transparency are external constraints.
+
+        Note that optimizerParam and inputList must be in the same order.
         
         Args:
-            optimizerParam (np.array): Flat array of parameters from the optimizer.
-            inputList (list): List of parameter names, matching the order of optimizerParam.
+            optimizerParam (np.array): Flat array of parameters.
+            inputList (list): List of parameter names (in order).
         
         Returns:
-            Tuple:
+            Tuple containing:
                 - resultIBN (float): The IBN value.
                 - resultEfficiency (float): The efficiency value.
                 - resultTransparency (float): The transparency value.
         """
 
-        #Upload the optimizer parameters into the simulation
+        # Upload the optimizer parameters into the simulation
         paramDict = dict(zip(inputList, optimizerParam))
         self.simFIMS.setParameters(paramDict)
         
@@ -315,6 +350,7 @@ class FIMS_Optimizer:
         resultEfficiency = simResults['efficiency']
         resultTransparency = simResults['transparency']
         
+        # Update the optimizer log
         self._optimizerLog.append({
             'params': paramDict,
             'IBN': resultIBN,
@@ -322,6 +358,7 @@ class FIMS_Optimizer:
             'transparency': resultTransparency
         })
 
+        # Print the resulting values for this iteration
         print(f"Iteration {len(self._optimizerLog)}: IBN = {resultIBN:.6f}")
         print(f"\tEfficiency = {resultEfficiency:.6f}")
         print(f"\tTransparency = {resultTransparency:.6f}")
@@ -333,9 +370,14 @@ class FIMS_Optimizer:
     def optimizeForIBNALT(self):
         """
         Runs an optimization routine to find the FIMS parameters that 
-        minimizes the Ion Backflow Number (IBN).
+        minimize the Ion Backflow Number (IBN).
 
         Requires that field ratio is one of the input parameters.
+
+        Utilizes the COBYQA optimization method (derivative-free).
+        Bounds are set based on the input parameters. 
+        Terminated based on criteria in _checkConvergence.
+        Parameters are constrained to prevent unphysical combinations. 
 
         Returns:
             dict: A dictionary containing:
@@ -346,33 +388,26 @@ class FIMS_Optimizer:
 
         #TODO: saw a suggestion to normalize parameter space to improve convergence. 
 
+        # Get optimizer parameters and bounds
         activeParameters = self.params.copy()
-        self._lastRunParams = None
-        self._lastRunResults = None
-
         if 'fieldRatio' not in [p[0] for p in activeParameters]:
             raise ValueError('Error - fieldRatio must be an input.')
+        inputList, minBounds, maxBounds = map(list, zip(*activeParameters))
         
-        #Get optimizer parameters and bounds
-        inputList = [line[0] for line in activeParameters]
-        minBounds = [line[1] for line in activeParameters]
-        maxBounds = [line[2] for line in activeParameters]
-        
-
-        #Set bounds for variables
+        # Set bounds for variables
         optimizerBounds = Bounds(minBounds, maxBounds)
 
-        #Set constraints for efficiency and transparency
+        # Set constraints for efficiency and transparency
         efficiencyTarget = 0.95
         transparencyTarget = 0.99
-        constraints = [
+        fieldConstraints = [
             NonLinearConstraint(lambda x: self._optimizerMaster(x, inputList)[1], efficiencyTarget, 1.1),
             NonLinearConstraint(lambda x: self._optimizerMaster(x, inputList)[2], transparencyTarget, 1.1)
         ]
-        #TODO: geometry constraints to avoid unphysical parameter combinations?
+        #TODO: Find a way to incorporate the geometry constraints of _getGeometryConstraints here
 
-        #Set initial guess as default values
-        optimizerParams = [self.simFIMS.param[parameterName] for parameterName in inputList]
+        # Set initial guess as default values
+        optimizerParams = self.simFIMS.getAllParam()
         initialGuess = np.array(optimizerParams)
 
         print('Beginning optimization...')
@@ -384,7 +419,7 @@ class FIMS_Optimizer:
                 method='COBYQA',
                 callback=self._checkConvergence,
                 bounds=optimizerBounds,
-                constraints=constraints
+                constraints=fieldConstraints
             )
             finalParams = optimizerResult.x
             finalFunction = optimizerResult.fun
@@ -397,12 +432,12 @@ class FIMS_Optimizer:
 
         print('\n*************** Optimization Complete ***************')
 
-        #Put results into simulation instance
-        for i, parameterName in enumerate(inputList):
-            self.simFIMS.param[parameterName] = optimizerResult.x[i] 
+        # Put results into simulation instance
+        finalParams = dict(zip(inputList, optimizerResult.x))
+        self.simFIMS.setParameters(finalParams)
         
         resultVals = {
-            'params': self.simFIMS.param, 
+            'params': self.simFIMS.getAllParam(), 
             'IBNValue': optimizerResult.fun, 
             'success': optimizerResult.success
         }
@@ -427,5 +462,59 @@ class FIMS_Optimizer:
             self._lastRunParams = np.copy(x)
         
         return self._lastRunResults
-    
 
+#**********************************************************************#
+
+    def _getGeometryConstraints(self):
+        """
+        Define the geometry constraints based on the physical 
+        requirements of the FIMS design.
+
+        Ensure that the pillars can fit in the space between holes in 
+        the grid and the region between pads.
+        Ensure that the grid standoff is not too small to prevent arcing.
+
+        Returns:
+            LinearConstraint: Object representing the geometry constraints.
+
+        """
+
+        paramName = {p[0]: i for i, p in enumerate(self.params)}
+        
+        pillarRadius = self.simFIMS.getParam('pillarRadius')
+        dielectricThickness = self.simFIMS.getParam('thicknessSiO2')
+        numParam = len(self.params)
+
+        minPillar = 5 # Min pillar height
+
+        # Geometry constraints:
+        # Ensure that there is enough room for the pillars:
+        ##  pitch - 2*holeRadius >= pillarRadius
+        ##  pitch - sqrt(3)*padLength >= 2*pillarRadius
+        # Ensure that the grid standoff is not too small
+        ##  gridStandoff >= dielectricThickness + minPillar
+
+        constraints = [
+            ({'pitch': 1, 'holeRadius': -2}, pillarRadius),
+            ({'pitch': 1, 'padLength': -1*np.sqrt(3)}, 2*pillarRadius),
+            ({'gridStandoff': 1}, dielectricThickness+minPillar)
+        ]
+
+        matrix = []
+        lowerBound = []
+        upperBound = np.inf
+
+        for coeffs, limit in constraints:
+            row = np.zeros(numParam)
+            for name, value in coeffs.items():
+                row[paramName[name]] = value
+            
+            matrix.append(row)
+            lowerBound.append(limit)
+
+        geometryConstraints = LinearConstraint(
+            matrix, lowerBound, upperBound
+        )
+
+        return geometryConstraints
+    
