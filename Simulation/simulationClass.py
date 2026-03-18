@@ -91,6 +91,8 @@ class FIMS_Simulation:
         self._setupSimulation()
 
         self._geometry = None
+        
+        self._iterationNumberLimit = 50
 
         return
 
@@ -115,19 +117,19 @@ class FIMS_Simulation:
             dict: Dictionary of default parameters and values.
         """
         defaultParameters = {
-            'padLength': 12.,
+            'padLength': 20.,
             'pitch': 55.,
             'gridStandoff': 50.,
             'gridThickness': 1.,
-            'holeRadius': 15.,
+            'holeRadius': 20.,
             'cathodeHeight': 200.,
             'thicknessSiO2': 5.,
             'pillarRadius': 5.,
             'driftField': 280.,
             'fieldRatio': 100.,
             'numFieldLine': 25,
-            'numAvalanche': 2000,
-            'avalancheLimit': 600,
+            'numAvalanche': 3000,
+            'avalancheLimit': 500,
             'gasCompAr': 0.95,
             'gasCompCO2': 0.00,
             'gasCompCF4': 0.03,
@@ -183,18 +185,16 @@ class FIMS_Simulation:
         Ensures that the gas composition percentages sum to 1.0.
         """
         totalComp = (
-            float(self.getParam('gasCompAr')) +
-            float(self.getParam('gasCompCO2')) +
-            float(self.getParam('gasCompCF4')) +
-            float(self.getParam('gasCompIsobutane'))
+            float(self.getParam('gasCompAr'))
+            + float(self.getParam('gasCompCO2'))
+            + float(self.getParam('gasCompCF4'))
+            + float(self.getParam('gasCompIsobutane'))
         )
         
         if not math.isclose(totalComp, 1.0, rel_tol=1e-3):
-            raise ValueError(f'Gas composition percentages must sum to 1.0. Current sum: {totalComp}')
+            raise ValueError(f'Gas composition incomplete. ({totalComp})')
         
         return
-
-
 
 #***********************************************************************************#
     def getParam(self, parameter):
@@ -238,7 +238,7 @@ class FIMS_Simulation:
             with open(filename, 'r') as file:
                 garfieldPath = file.read().strip()
                 if not os.path.exists(garfieldPath):
-                    print(f"Error: File 'setupGarfield.sh' not found at '{garfieldPath}'.")
+                    print(f"Error: File '{garfieldPath}' not found.")
                     return None
     
         except FileNotFoundError:
@@ -280,19 +280,11 @@ class FIMS_Simulation:
         self._makeRunControl()
 
         # Get garfield path into environment
-        envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
-        try:
-            envOutput = subprocess.check_output(envCommand, shell=True, universal_newlines=True)
-            newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line)
-            os.environ.update(newEnv)
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f'ERROR - Failed to source Garfield++ environment: {e.stderr}')
-
+        newEnv = self._getGarfieldEnvironment()
+        os.environ.update(newEnv)
+        
         #Make executables
-        makeBuild = (
-            f'cmake .. && '
-            f'make'
-        )
+        makeBuild = ('cmake .. && make')
 
         # Change to the build directory and run cmake and make
         originalCWD = os.getcwd()
@@ -317,8 +309,40 @@ class FIMS_Simulation:
             self.setRunNumber()
                 
         return
+    
+#**********************************************************************#
 
-#***********************************************************************************#
+    def _getGarfieldEnvironment(self):
+        """
+        Sourced the Garfield++ environment via bash.
+
+        Returns:
+            dict: Dictionary of environment variables.
+        """
+        garfieldEnv = {}
+        envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
+        
+        try:
+            envOutput = subprocess.check_output(
+                envCommand, 
+                shell=True, 
+                universal_newlines=True,
+                stderr=subprocess.STDOUT
+            )
+            
+            for line in envOutput.strip().splitlines():
+                if '=' in line:
+                    key, value = line.split('=', 1)
+                    garfieldEnv[key.strip()] = value.strip()
+        
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(
+                f'ERROR - Failed to source Garfield++: {e.output}'
+            )
+
+        return garfieldEnv
+    
+#**********************************************************************#
 
 ## TODO - This form may no longer be necessary with geometry class. 
 ## Check if can be better aligned with garfield++ file needs.
@@ -505,12 +529,11 @@ class FIMS_Simulation:
             os.chdir('./build/')
 
             # Get garfield path into environment
-            envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
-            envOutput = subprocess.check_output(envCommand, shell=True, universal_newlines=True)
-            newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line)
+            newEnv = self._getGarfieldEnvironment()
             os.environ.update(newEnv)
 
-            with open(os.path.join(originalCWD, 'log/logGarfieldAvalanche.txt'), 'w+') as garfieldOutput:
+            garfieldLog = os.path.join(originalCWD, 'log/logGarfieldAvalanche.txt')
+            with open(garfieldLog, 'w+') as garfieldOutput:
                 startTime = time.monotonic()
                 setupAvalanche = (
                     f'./{executable}'
@@ -549,16 +572,13 @@ class FIMS_Simulation:
             os.chdir('./build/')
 
             # Get garfield path into environment
-            envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
-            envOutput = subprocess.check_output(envCommand, shell=True, universal_newlines=True)
-            newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line)
+            newEnv = self._getGarfieldEnvironment()
             os.environ.update(newEnv)
 
-            with open(os.path.join(originalCWD, 'log/logGarfieldFieldLines.txt'), 'w+') as garfieldOutput:
+            fieldLineLog = os.path.join(originalCWD, 'log/logGarfieldFieldLines.txt')
+            with open(fieldLineLog, 'w+') as garfieldOutput:
                 startTime = time.monotonic()
-                setupFieldLines = (
-                    f'./runFieldLines'
-                )
+                setupFieldLines = ('./runFieldLines')
                 subprocess.run(
                     setupFieldLines, 
                     stdout = garfieldOutput, 
@@ -586,7 +606,7 @@ class FIMS_Simulation:
 
         Args:
             targetEfficiency (float): The target efficiency to compare to.
-            threshold: The minimum number of electrons required to be considered a 'success'.
+            threshold (int): The minimum number of electrons required to be considered a 'success'.
         """
         originalCWD = os.getcwd()
         try:
@@ -594,12 +614,11 @@ class FIMS_Simulation:
             os.chdir('./build/')
 
             # Get garfield path into environment
-            envCommand = f'bash -c "source {self._GARFIELDPATH} && env"'
-            envOutput = subprocess.check_output(envCommand, shell=True, universal_newlines=True)
-            newEnv = dict(line.split('=', 1) for line in envOutput.strip().split('\n') if '=' in line)
+            newEnv = self._getGarfieldEnvironment()
             os.environ.update(newEnv)
 
-            with open(os.path.join(originalCWD, 'log/logGarfieldGetEfficiency.txt'), 'w+') as garfieldOutput:
+            efficiencyLog = os.path.join(originalCWD, 'log/logGarfieldGetEfficiency.txt')
+            with open(efficiencyLog, 'w+') as garfieldOutput:
                 startTime = time.monotonic()
                 setupGetEfficiency = (
                     f'./runEfficiency {targetEfficiency} {threshold}'
@@ -662,9 +681,6 @@ class FIMS_Simulation:
         #Solve fields and run Garfield
         self._solveEFields()
         self._runGarfield()
-    
-        #TODO - is resetting parameters necessary anymore? 
-        self._resetParam()
         
         return runNo
     
@@ -694,10 +710,105 @@ class FIMS_Simulation:
         self._runGarfield(surrounding=True)
         
         return runNo
+    
+
+
+#**********************************************************************#
+
+    def _calcMinFieldEfficiency(self):
+        """
+        Calculates the minimum field ratio to achieve 95% Efficiency.
+
+        Calculation is based off of exponential fits to simulated data
+        of padLength and grid standoff vs field ratio.
+
+        Returns:
+            minField (float): Numerical solution to the minimum field for 
+                              95% efficiency.
+        """
+        #Get geometry variables
+        standoff = self._getParam('gridStandoff')
+        pad = self._getParam('padLength')
+        pitch = self._getParam('pitch')
         
+        #Convert to dimensionless variables - TODO: These are unused?
+        standoffRatio = standoff/pad
+        padRatio = pad/pitch
+        
+        #Insert values into fitted equations
+        #Ar+CO2 (depreciated)
+        #standEffField = 53.21*np.exp(-0.38*standoffRatio) 23.47
+        
+        #T2K gas
+        padEffField = 371.4*np.exp(-0.16*pad) + 50
+        standEffField = 190.6*np.exp(-0.02*standoff) + 50
+        
+        #Minimum field for 95% efficiency
+        minField = max(padEffField, standEffField)
+        
+        return minField
 
+#**********************************************************************#
 
+    def _calcTransparencyMinField(self):
+        """
+        Calculates the minimum field ratio to achieve 100% transparency.
 
+        Calculation is based off of exponential fits to simulated data
+        of hole radius, pad length, and grid standoff vs field ratio.
+        
+        Returns:
+            minField (float): Numerical solution to the minimum field for
+                              100% transparency.
+        """
+        #Get geometry variables
+        standoff = self._getParam('gridStandoff')
+        pad = self._getParam('padLength')
+        pitch = self._getParam('pitch')
+        
+        #Convert to dimensionless variables
+        optTrans = self._calcOpticalTransparency()
+        standoffRatio = standoff/pad
+        padRatio = pad/pitch
+        
+        #Insert values into fitted equations
+        radialMinField = 532.105*np.exp(-14.03*optTrans) + 9.2
+        standoffMinField = 26.85*np.exp(-4.46*standoffRatio) + 2
+        padMinField = 143.84*np.exp(-15.17*padRatio) + 2
+        
+        #Minimum field for 100% transparency
+        minField = max(
+            radialMinField, 
+            standoffMinField, 
+            padMinField
+        )
+        
+        return minField
+
+#**********************************************************************#
+
+    def _calcMinField(self): 
+        """
+        Calculates the minimum field required for 
+        95% efficiency and 100% transparency.
+
+        Note: Field is rounded down to nearest integer.
+        
+        Returns:
+            minField (float): Numerical solution to the minimum field for 
+                              100% transparency and 95% efficiency.
+        """
+        #Minimum field for 100% transparency
+        minFieldTrans = self._calcTransparencyMinField()
+        
+        #Minimum field for 95% efficiency
+        minFieldEff = self._calcEfficiencyMinField()
+        
+        #Choose the larger of the two fields so that both 
+        #conditions are satisfied simultaneously.
+        netMinField = max(minFieldTrans, minFieldEff)
+        
+        return math.floor(netMinField)
 
 #***********************************************************************************#
     def runCapacitance(self):
@@ -758,11 +869,6 @@ class FIMS_Simulation:
         
         return capacitanceMatrix
 
-
-
-
-        
-
 #***********************************************************************************#
 #***********************************************************************************#
 # METHODS FOR RUNNING MINIMUM FIELD
@@ -821,15 +927,15 @@ class FIMS_Simulation:
         if len(allLines) < 2:
             raise IndexError('Malformed file.')
         
-        findTransparencyValues = {}
+        getTransparencyValues = {}
         try:
-            findTransparencyValues['transparency'] = float(allLines[3].strip())
-            findTransparencyValues['transparencyErr'] = float(allLines[4].strip())
+            getTransparencyValues['transparency'] = float(allLines[3].strip())
+            getTransparencyValues['transparencyErr'] = float(allLines[4].strip())
 
         except (IndexError, ValueError) as e:
             raise RuntimeError(f'Error parsing transparency file: {e}')
                 
-        return findTransparencyValues
+        return getTransparencyValues
     
     
 #***********************************************************************************#
@@ -855,30 +961,29 @@ class FIMS_Simulation:
         """
 
         curField, prevField = fields
-        curEff, prevEff, targetEff = values
+        curVal, prevVal, targetVal = values
 
         fieldDiff = curField - prevField
 
         #If errors exist, use the maximum possible slope
         if valuesErr is not None:
-            curEffErr, prevEffErr = valuesErr
-            prevEffMin = prevEff - prevEffErr
-            curEffMax = curEff + curEffErr
+            curValErr, prevValErr = valuesErr
+            prevValMin = prevVal - prevValErr
+            curValMax = curVal + curValErr
 
-            effDiff = curEffMax - prevEffMin
-            targetDiff = targetEff - curEffMax
+            valDiff = curValMax - prevValMin
+            targetDiff = targetVal - curValMax
 
         else:
-            effDiff = curEff - prevEff
-            targetDiff = targetEff - curEff
+            valDiff = curVal - prevVal
+            targetDiff = targetVal - curVal 
 
 
-        if abs(effDiff) < 0.001:
+        if abs(valDiff) < 0.001:
                 print(f'Warning: Slope near zero. Using heuristic step of 1.')
                 return curField+1
 
-        fieldStep = damping*targetDiff*fieldDiff/effDiff
-
+        fieldStep = damping*targetDiff*fieldDiff/valDiff
         #Limit step size for stability
         stepSizeLimit = 10
         if fieldStep > stepSizeLimit:
@@ -910,7 +1015,7 @@ class FIMS_Simulation:
                 - 'field': Array of previous field ratios.
                 - 'value': Array of previous values.
                 - 'valueErr': Array of previous value errors.
-            verbose (bool): Optional parameter for displaying the intermediate results
+            targetValue (float): The target value to achieve.
 
         Returns:
             float: Calculated field ratio for target value
@@ -920,7 +1025,7 @@ class FIMS_Simulation:
         dataKeys = [k for k in valueAtField.keys() if k != 'field' and not k.endswith('Err')]
     
         if not dataKeys:
-            raise KeyError("Could not find a valid data key in the dictionary.")
+            raise KeyError('Could not find a valid data key in the dictionary.')
         
         valueKey = dataKeys[0]
         errorKey = f'{valueKey}Err'
@@ -933,7 +1038,7 @@ class FIMS_Simulation:
 
         # Take constant step of 2 for 2nd iteration
         elif iterNo == 2:
-            newField = valueAtField['field'][0] + 2
+            newField = valueAtField['field'][0] + 2 #TODO - This can be adjusted
 
         # Use secant method to determine new field
         else:
@@ -979,7 +1084,7 @@ class FIMS_Simulation:
             self._generateGeometry()
         
         iterNo = 0
-        iterNoLimit = 20
+        iterNoLimit = self._iterationNumberLimit
 
         efficiencyAtField = {
             'field': [],
@@ -1041,44 +1146,6 @@ class FIMS_Simulation:
         self._param['fieldRatio'] = finalField
 
         return finalField
-
-#***********************************************************************************#
-    def _calcMinField(self): 
-        """
-        Calculates an initial guess for the minimum field ratio to achieve 100%
-        field transparency.
-
-        Calculation is based off of exponential fits to simulated data.
-
-        Returns:
-            float: Numerical solution to the minimum field for 100% transparency.
-        """
-        #Get geometry variables
-        standoff = self.getParam('gridStandoff')
-        pad = self.getParam('padLength')
-        pitch = self.getParam('pitch')
-    
-        optTrans = self._calcOpticalTransparency()
-        
-        standoffRatio = standoff/pitch
-        padRatio = pad/pitch
-        
-        #Do calculation using values from fits
-        '''Values come from exponential fits to data - 
-            grid standoff ratio, pad length ratio, and 
-            optical transparency vs minField.
-          Results are then added together.'''
-        radialMinField = 570.580*np.exp(-12.670*optTrans)
-        standoffMinField = 27.121*np.exp(-15.9*standoffRatio)
-        padMinField = 143.84*np.exp(-15.17*padRatio)
-        
-        #TODO for James - should this not be max(minFields)?
-        minField = radialMinField + standoffMinField + padMinField + 3
-
-        #Round down to nearest integer
-        minFieldRounded = math.floor(minField)
-        
-        return minFieldRounded
     
 #***********************************************************************************#
     def _calcOpticalTransparency(self):
@@ -1130,10 +1197,13 @@ class FIMS_Simulation:
         if self._geometry is None:
             self._generateGeometry()
 
+        if targetTransparency >= 0.99 or targetTransparency <= 0.0:
+            raise ValueError('Error: Target transparency must be between 0 and 0.99')
+
         print(f'Beginning search for minimum field to achieve >{targetTransparency}% transparency...')
        
         iterNo = 0
-        iterNoLimit = 10
+        iterNoLimit = self._iterationNumberLimit
 
         transparencyAtField = {
             'field': [],
@@ -1142,7 +1212,7 @@ class FIMS_Simulation:
         } 
 
         isTransparent = False
-        self._param['numFieldLine'] = 200
+        self._param['numFieldLine'] = 400 #More is better. Adjust as needed.
         
         while not isTransparent:
 
@@ -1158,15 +1228,16 @@ class FIMS_Simulation:
             self._solveEFields(solveWeighting=False)
 
             #Generate field lines and read results from file
-            self._runFieldLines()  
+            self._runFieldLines()
             transparencyResults = self._readTransparencyFile()
 
             transparencyAtField['transparency'].append(transparencyResults['transparency'])
             transparencyAtField['transparencyErr'].append(transparencyResults['transparencyErr'])
                 
-
+            twoSigmaTransparency = transparencyAtField['transparency'][-1] + 2*transparencyAtField['transparencyErr'][-1]
+            
             #Check transparency to terminate loop
-            if transparencyAtField['transparency'][-1] >= targetTransparency:
+            if twoSigmaTransparency >= targetTransparency:
                 isTransparent = True
                 print(f'Transparent at field ratio = {transparencyAtField['field'][-1]}:')
                 print(f'\tTransparency = {transparencyAtField['transparency'][-1]:.3f} +/- {transparencyAtField['transparencyErr'][-1]:.3f}')
@@ -1212,8 +1283,8 @@ class FIMS_Simulation:
         print(f'Finding minimum field ratio for geometry with drift field: {driftField} V/cm')
 
         #Choose initial field ratio guess
-        opticalTransparency = self._calcOpticalTransparency()
-        minFieldGuess = math.floor(0.9*(2/opticalTransparency - 1))
+        minFieldGuess = self._calcOpticalTransparency()
+        #minFieldGuess = math.floor(0.9*(2/self._calcOpticalTransparency() - 1))
 
         self._param['fieldRatio'] = minFieldGuess
         print(f'\tInitial field ratio guess: {minFieldGuess}')
@@ -1276,7 +1347,7 @@ class FIMS_Simulation:
         ]))
        
         iterNo = 0
-        iterNoLimit = 25
+        iterNoLimit = self._iterationNumberLimit
 
         transparencyAtField = {
             'field': [],
@@ -1376,7 +1447,6 @@ class FIMS_Simulation:
         self.param['fieldRatio'] = finalField
 
         return finalField
-
 
 #***********************************************************************************#
     def runCombinedMinFieldRatio(self):
