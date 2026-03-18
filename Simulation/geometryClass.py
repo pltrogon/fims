@@ -807,10 +807,11 @@ class gmshClass:
         # Cell dimensions
         pitch = self._param['pitch']
         holeRadius = self._param['holeRadius']
+        gridThickness = self._param['gridThickness']
 
         xLength = pitch*math.sqrt(3)/2
         yLength = pitch/2
-        outRadius = self._param['pitch'] / math.sqrt(3)
+        outRadius = pitch/math.sqrt(3)
 
         meshSettings = {
             'FIMS': {
@@ -833,16 +834,21 @@ class gmshClass:
 
         bounds = meshSettings[runOption]
 
-        fineMesh = self._param['gridThickness']*2 #TODO - 1 here?
-        courseMesh = fineMesh*5
-        transitionWidth = pitch
+        fineMesh = gridThickness*2
+        coarseMesh = gridThickness*4
+        backgroundMesh = pitch/10
+        transitionWidth = pitch/2
 
-        # Define a high-res cylinder between central hole and pad
-        largerHole = max(
+        smallHole = min(
             self._param['holeRadius'],
             self._param['padLength']
         )
-        pipeRadius = largerHole + self._param['gridThickness']
+        largeHole = max(
+            self._param['holeRadius'],
+            self._param['padLength']
+        )
+        smallRadius = smallHole + self._param['gridThickness']
+        largeRadius = largeHole + self._param['gridThickness']
         
         pipeBottom = self._occ.addPoint(
             0, 0, -self._param['gridStandoff']
@@ -857,35 +863,44 @@ class gmshClass:
         gmsh.model.mesh.field.add('Distance', 1)
         gmsh.model.mesh.field.setNumbers(1, 'EdgesList', [amplificationLine])
         
-        # Define mesh size based on distance from line
+        # Define fine mesh within smallRadius
         gmsh.model.mesh.field.add('Threshold', 2)
         gmsh.model.mesh.field.setNumber(2, 'InField', 1)
         gmsh.model.mesh.field.setNumber(2, 'SizeMin', fineMesh)
-        gmsh.model.mesh.field.setNumber(2, 'SizeMax', courseMesh)
-        gmsh.model.mesh.field.setNumber(2, 'DistMin', pipeRadius)
-        gmsh.model.mesh.field.setNumber(2, 'DistMax', pipeRadius + transitionWidth)
+        gmsh.model.mesh.field.setNumber(2, 'SizeMax', backgroundMesh)
+        gmsh.model.mesh.field.setNumber(2, 'DistMin', smallRadius)
+        gmsh.model.mesh.field.setNumber(2, 'DistMax', smallRadius + transitionWidth)
 
-        # Keep fine-ish mesh around the entire grid
-        gmsh.model.mesh.field.add('Box', 3)
-        gmsh.model.mesh.field.setNumber(3, 'VIn', 2*fineMesh)
-        gmsh.model.mesh.field.setNumber(3, 'VOut', courseMesh)
-        gmsh.model.mesh.field.setNumber(3, 'XMin', bounds['x'][0])
-        gmsh.model.mesh.field.setNumber(3, 'XMax', bounds['x'][1])
-        gmsh.model.mesh.field.setNumber(3, 'YMin', bounds['y'][0])
-        gmsh.model.mesh.field.setNumber(3, 'YMax', bounds['y'][1])
-        gmsh.model.mesh.field.setNumber(3, 'ZMin', -holeRadius/2)
-        gmsh.model.mesh.field.setNumber(3, 'ZMax', holeRadius/2)
-        gmsh.model.mesh.field.setNumber(3, 'Thickness', transitionWidth)
+        # Define coarse mesh within largeRadius
+        gmsh.model.mesh.field.add('Threshold', 3)
+        gmsh.model.mesh.field.setNumber(3, 'InField', 1)
+        gmsh.model.mesh.field.setNumber(3, 'SizeMin', coarseMesh)
+        gmsh.model.mesh.field.setNumber(3, 'SizeMax', backgroundMesh)
+        gmsh.model.mesh.field.setNumber(3, 'DistMin', largeRadius)
+        gmsh.model.mesh.field.setNumber(3, 'DistMax', largeRadius + transitionWidth)
+
+        # Keep coarse mesh around the entire grid
+        gmsh.model.mesh.field.add('Box', 4)
+        gmsh.model.mesh.field.setNumber(4, 'VIn', coarseMesh)
+        gmsh.model.mesh.field.setNumber(4, 'VOut', backgroundMesh)
+        gmsh.model.mesh.field.setNumber(4, 'XMin', bounds['x'][0])
+        gmsh.model.mesh.field.setNumber(4, 'XMax', bounds['x'][1])
+        gmsh.model.mesh.field.setNumber(4, 'YMin', bounds['y'][0])
+        gmsh.model.mesh.field.setNumber(4, 'YMax', bounds['y'][1])
+        gmsh.model.mesh.field.setNumber(4, 'ZMin', -holeRadius)
+        gmsh.model.mesh.field.setNumber(4, 'ZMax', holeRadius)
+        gmsh.model.mesh.field.setNumber(4, 'Thickness', transitionWidth)
 
         # Use the smallest mesh size
-        gmsh.model.mesh.field.add('Min', 4)
-        gmsh.model.mesh.field.setNumbers(4, 'FieldsList', [2, 3])
-        gmsh.model.mesh.field.setAsBackgroundMesh(4)
+        gmsh.model.mesh.field.add('Min', 5)
+        gmsh.model.mesh.field.setNumbers(5, 'FieldsList', [2, 3, 4])
+        gmsh.model.mesh.field.setAsBackgroundMesh(5)
 
         # Final settings
-        gmsh.option.setNumber('Mesh.MeshSizeFromCurvature', 12)
-        gmsh.option.setNumber('Mesh.MeshSizeExtendFromBoundary', 0)
-        gmsh.option.setNumber('Mesh.MeshSizeFromPoints', 0)
+        gmsh.option.setNumber('Mesh.MeshSizeFromCurvature', 36)
+        gmsh.option.setNumber('Mesh.MeshSizeExtendFromBoundary', 1)
+        gmsh.option.setNumber('Mesh.MeshSizeFromPoints', 1)
+        gmsh.option.setNumber('Mesh.MeshSizeMax', backgroundMesh)
 
         return
     
