@@ -2014,7 +2014,7 @@ class FIMS_Simulation:
         self._geometry.createGeometry(
             neighborCells=surroundingCells, 
             hexagonal=hexagonal, 
-            runGui=True
+            runGUI=True
         )
 
     
