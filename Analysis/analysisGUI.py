@@ -247,11 +247,16 @@ class App(tk.Tk):
             )
         self.showEnergy.pack(side=tk.TOP)
 
-        self.showAvalancheTrack = tk.Button(
-            self.buttonFrame, text='Avalanche Tracks', 
-            command=lambda: self.plotButton('AvalancheTracks')
+        self.showElectronTracks = tk.Button(
+            self.buttonFrame, text='Electron Tracks', 
+            command=lambda: self.plotButton('ElectronTracks')
             )
-        self.showAvalancheTrack.pack(side=tk.TOP)
+        self.showElectronTracks.pack(side=tk.TOP)
+        self.showIonTracks = tk.Button(
+            self.buttonFrame, text='Ion Tracks', 
+            command=lambda: self.plotButton('IonTracks')
+            )
+        self.showIonTracks.pack(side=tk.TOP)
 
         self.showHeatmap = tk.Button(
             self.buttonFrame, text='Particle Heatmap', 
@@ -402,8 +407,11 @@ class App(tk.Tk):
                 case 'BelowGrid':
                     self.currentFig = self.simData.plot2DFieldLines('BelowGrid')
 
-                case 'AvalancheTracks':
-                    self.currentFig = self.simData.plotAvalanche2D(avalancheID=self.curAvalancheID.get())
+                case 'ElectronTracks':
+                    self.currentFig = self.simData.plotElectronAvalanche(avalancheID=self.curAvalancheID.get())
+
+                case 'IonTracks':
+                    self.currentFig = self.simData.plotIonAvalanche(avalancheID=self.curAvalancheID.get())
 
                 case 'Heatmap':
                     self.currentFig = self.simData.plotParticleHeatmaps(self.curParticle.get())

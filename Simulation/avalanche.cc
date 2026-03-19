@@ -14,10 +14,14 @@
  *        electronDataTree
  *        ionDataTree
  *        electronTrackDataTree
+ *        ionTrackDataTree  (WIP)
  *        signalDataTree
  * 
  * Tanner Polischuk & James Harrison IV
  */
+
+//My includes
+#include "SilenceConsole.h"
 
 //Garfield includes
 #include "Garfield/ComponentElmer.hh"
@@ -294,8 +298,11 @@ int main(int argc, char * argv[]) {
     "cf4", gasCompCF4,
     "iC4H10", gasCompIsobutane
   );
-  gasFIMS->EnablePenningTransfer(gasPenning, .0, "ar");
-
+  
+  {
+    SilenceCerr guard; // Mute any Cerr's
+    gasFIMS->EnablePenningTransfer(gasPenning, 0.0, "ar");
+  }
 
   //STP gas parameters:
   double gasTemperature = 293.15; //K
@@ -447,6 +454,10 @@ int main(int argc, char * argv[]) {
     //Calculate lines from grid - only do those outside of hole
     double lineRadius2 = std::pow(xStart[inFieldLine], 2.) + std::pow(yStart[inFieldLine], 2.);
     double holeRadius2 = std::pow(holeRadius, 2.);
+
+    // Make sure lines do not start within a pillar (Note pillars not currently implemented)
+    //TODO: Note pillars will only be an issue in x-axis and edge-lines (I.e. Corners)
+    double pillarStart = std::pow(pitch*sqrt(3.)/2., 2.) - std::pow(pillarRadius, 2.);
     double gridLineSeparation = 2.0;
 
     //Do above grid
@@ -469,7 +480,8 @@ int main(int argc, char * argv[]) {
     //Do below grid
     gridFieldLineLocation = -1;
     fieldLines.clear();
-
+  
+    //TODO: Exclude pillars when implemented.
     if(lineRadius2 >= holeRadius2){
       driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], -gridLineSeparation*gridThickness/2., fieldLines);
 
@@ -566,6 +578,7 @@ int main(int argc, char * argv[]) {
     AvalancheMicroscopic* avalancheE = nullptr;
     AvalancheMC* driftIon = nullptr;
     ViewDrift* viewElectronDrift = nullptr;
+    ViewDrift* viewIonDrift = nullptr;
     TFile* parallelDataFile = nullptr;
     std::string parallelFilename;
 
@@ -586,6 +599,7 @@ int main(int argc, char * argv[]) {
       avalancheE = new AvalancheMicroscopic;
       driftIon = new AvalancheMC;
       viewElectronDrift = new ViewDrift();
+      viewIonDrift = new ViewDrift();
 
       //Link objects
       parallelFieldFIMS->SetGas(gasFIMS);
@@ -613,14 +627,22 @@ int main(int argc, char * argv[]) {
       avalancheE->EnableAvalancheSizeLimit(avalancheLimit);
 
       driftIon->SetSensor(parallelSensorFIMS);
-      driftIon->SetDistanceSteps(MICRONTOCM/10.);
+      driftIon->SetDistanceSteps(MICRONTOCM);
+      driftIon->EnableDriftLines(true);
+      
       viewElectronDrift->SetArea(
         xBoundary[0], yBoundary[0], zBoundary[0], 
         xBoundary[1], yBoundary[1], zBoundary[1]
       );
+      viewIonDrift->SetArea(
+        xBoundary[0], yBoundary[0], zBoundary[0], 
+        xBoundary[1], yBoundary[1], zBoundary[1]
+      );
+      
+      
       avalancheE->EnablePlotting(viewElectronDrift, 250);
-
-
+      driftIon->EnablePlotting(viewIonDrift);
+      
       //Filename
       int threadID = omp_get_thread_num();
       std::string parallelDataPath = "parallelData/";
@@ -647,6 +669,7 @@ int main(int argc, char * argv[]) {
     double xfIon, yfIon, zfIon, tfIon;
     int statIon;
     float electronDriftx, electronDrifty, electronDriftz;
+    float ionDriftx, ionDrifty, ionDriftz, ionDriftt;
     double signalTime, signalStrength;
 
     TTree* parallelAvalancheDataTree = new TTree("avalancheDataTree", "Avalanche Results");
@@ -691,6 +714,13 @@ int main(int argc, char * argv[]) {
     parallelElectronTrackDataTree->Branch("Drift x", &electronDriftx, "electronDriftx/F");
     parallelElectronTrackDataTree->Branch("Drift y", &electronDrifty, "electronDrifty/F");
     parallelElectronTrackDataTree->Branch("Drift z", &electronDriftz, "electronDriftz/F");
+  
+    TTree* parallelIonTrackDataTree = new TTree("ionTrackDataTree", "Ion Tracks");
+    parallelIonTrackDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
+    parallelIonTrackDataTree->Branch("Electron ID", &electronID, "electronID/I");
+    parallelIonTrackDataTree->Branch("Drift x", &ionDriftx, "ionDriftx/F");
+    parallelIonTrackDataTree->Branch("Drift y", &ionDrifty, "ionDrifty/F");
+    parallelIonTrackDataTree->Branch("Drift z", &ionDriftz, "ionDriftz/F");
 
     TTree* parallelSignalDataTree = new TTree("signalDataTree", "Induced Signal");
     parallelSignalDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
@@ -734,24 +764,25 @@ int main(int argc, char * argv[]) {
         avalancheE->GetElectronEndpoint(inElectron, xi, yi, zi, ti, Ei, xf, yf, zf, tf, Ef, stat);
           
         totalElectrons++;
-
+        
+        //Begin extraction of individual ion data
         ionCharge = 1;
         driftIon->DriftIon(xi, yi, zi, ti);
         driftIon->GetIonEndpoint(0, xiIon, yiIon, ziIon, tiIon, xfIon, yfIon, zfIon, tfIon, statIon);
-        //Fill tree with data from this positive ion
+        
+        //Fill tree with end points from this positive ion
         parallelIonDataTree->Fill();
-        totalIons++;  
-
-        //Check for electron attatchment
+        totalIons++;
+        
+        //Check for electron attachment
         if(stat == -7){
           attachedElectrons++;
 
-          //Drift negative ion from end of electron tracks that attatch
+          //Drift negative ion from end of electron tracks that attach
           ionCharge = -1;
           driftIon->DriftNegativeIon(xf, yf, zf, tf);
           driftIon->GetNegativeIonEndpoint(0, xiIon, yiIon, ziIon, tiIon, xfIon, yfIon, zfIon, tfIon, statIon);
-          //Fill tree with data from this negative ion
-          parallelIonDataTree->Fill();
+
           totalIons++;
         }
 
@@ -768,6 +799,29 @@ int main(int argc, char * argv[]) {
           //Fill tree with data from this point
           parallelElectronTrackDataTree->Fill();
         }
+
+        //Get ion drift line data
+        bool isIon;
+        std::vector<std::array<float, 3> > ionDriftLines;
+        viewIonDrift->GetDriftLine(0, ionDriftLines, isIon);
+        
+        //Only save every 10th point along the drift line
+        for(int ionPoint = 0; ionPoint < ionDriftLines.size(); ionPoint+=10){ 
+          ionDriftx = ionDriftLines[ionPoint][0];
+          ionDrifty = ionDriftLines[ionPoint][1];
+          ionDriftz = ionDriftLines[ionPoint][2];
+          //Fill tree with data for this point
+          parallelIonTrackDataTree->Fill();
+        }
+        // Check if the very last point was skipped
+        if ((ionDriftLines.size() - 1) % 10 != 0 && ionDriftLines.size() > 0){
+          int lastIdx = ionDriftLines.size() - 1;
+          ionDriftx = ionDriftLines[lastIdx][0];
+          ionDrifty = ionDriftLines[lastIdx][1];
+          ionDriftz = ionDriftLines[lastIdx][2];
+          parallelIonTrackDataTree->Fill();
+        }
+        viewIonDrift->Clear();
 
         //*** TODO ***/
         //Can insert any per-electron analysis/data here.
@@ -790,7 +844,7 @@ int main(int argc, char * argv[]) {
 
       //*** TODO ***/
       //Can insert any other per-avalanche analysis/data here.
-      // -- Histograms of energy loss/collison, time between collisions,
+      // -- Histograms of energy loss/collision, time between collisions,
 
       //Fill tree with data from this avalanche
       parallelAvalancheDataTree->Fill();
@@ -808,6 +862,7 @@ int main(int argc, char * argv[]) {
     delete avalancheE;
     delete driftIon;
     delete viewElectronDrift;
+    delete viewIonDrift;
     delete parallelDataFile;
 
   }//End parallization
@@ -919,6 +974,7 @@ int main(int argc, char * argv[]) {
     "electronDataTree",
     "ionDataTree",
     "electronTrackDataTree",
+    "ionTrackDataTree",
     "signalDataTree"
   };
 

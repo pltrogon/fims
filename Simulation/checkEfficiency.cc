@@ -17,6 +17,9 @@
  * December 2025
  */
 
+// My includes
+#include "SilenceConsole.h"
+
 //Garfield includes
 #include "Garfield/ComponentElmer.hh"
 #include "Garfield/AvalancheMicroscopic.hh"
@@ -183,7 +186,11 @@ int main(int argc, char * argv[]) {
     "cf4", gasCompCF4,
     "iC4H10", gasCompIsobutane
   );
-  gasFIMS->EnablePenningTransfer(gasPenning, .0, "ar");
+
+  {
+	SilenceCerr guard; 
+    gasFIMS->EnablePenningTransfer(gasPenning, 0.0, "ar");
+  }
 
   //gas parameters:
   double gasTemperature = 293.15; //K
