@@ -14,7 +14,7 @@ import matplotlib.cm as cm
 
 
 from polyaClass import myPolya
-from functionsFIMS import withinHex, withinNeighborHex, xyInterpolate
+import functionsFIMS
 
 CMTOMICRON = 1e4
 
@@ -51,6 +51,7 @@ class runData:
             _ionData: Information for each individual simulated ion.
             _avalancheData: Information for each simulated avalanche.
             _electronTrackData: Information for the full tracks of each electron.
+            _ionTrackData:  Information for the full tracks of each ion (Note: WIP).
             _calculatedData: Information calculated from simulation resutls, including
                              gain, IBN, IBF, etc.
             
@@ -60,11 +61,11 @@ class runData:
         getTreeNames
         printMetaData
         getMetaData
-        getCalculatedData        <----- NEW
+        getCalculatedData
         printColumns
         getDataFrame
         getRunParameter
-        getCalcParameter        <----- NEW
+        getCalcParameter
         getRunNumber
         plotCellGeometry
         _plotAddCellGeometry
@@ -73,14 +74,15 @@ class runData:
         _trimAvalanche
         _histAvalanche
         plotAvalancheSize
-        plotAvalanche2D
+        plotElectronAvalanche   <----------renamed
+        plotIonAvalanche        <----------new
         plotDiffusion
         plotParticleHeatmaps
         _fitAvalancheSize
         plotAvalancheFits
         calcBundleRadius
-        getNumIonOutside        <---------New
-        getNumIonsEscapedOutside    <----------New
+        _getIonEdgeDistance     <----------renamed
+        plotIBNHistogram        <----------new
         _getOutermostLineID
         findStuckElectrons
         _calcIBF
@@ -112,6 +114,7 @@ class runData:
             'ionData',
             'avalancheData',
             'electronTrackData',
+            'ionTrackData',
             'signalData'
         ]
 
@@ -326,7 +329,7 @@ class runData:
                     'Final z',
                 ]
             
-            case 'electronTrackData':
+            case 'electronTrackData' | 'ionTrackData':
                 dataToScale = [
                     'Drift x', 
                     'Drift y', 
@@ -449,9 +452,10 @@ class runData:
             self._calculatedData['Optical Transparency'] = opticalTransparency
             self._calculatedData['Field Transparency'] = fieldTransparency
 
-            #Field bundle radius
+            #Field bundle radius - Nominal height defiend here.
+            ## TODO: Can get average ionization location for better definition?
             standoff = self.getRunParameter('Grid Standoff')
-            nominalBundleZ = -.9*standoff                       #TODO - Nominal bundle Z defined here
+            nominalBundleZ = -0.9*standoff
             self._calculatedData['Bundle z'] = nominalBundleZ
             self._calculatedData['Field Bundle Radius'] = self.calcBundleRadius(nominalBundleZ)
 
@@ -537,26 +541,26 @@ class runData:
         #    (Must be done as separate patches)
         hole = {}
         #Hole for primary cell
-        hole[0] = plt.Circle((0, 0), holeRadius, 
-                            facecolor='none', edgecolor='k', lw=1, 
-                            label=f'Hole (r = {holeRadius:.0f} um)')
+        hole[0] = plt.Circle(
+            (0, 0), holeRadius, 
+            facecolor='none', edgecolor='k', lw=1,
+            label=f'Hole (r = {holeRadius:.0f} um)'
+        )
         # Neighboring cell holes (#808080 = Grey)
         for i in range(len(neighborX)):
             hole[i+1] = plt.Circle(
-                (neighborX[i], 
-                 neighborY[i]), 
-                 holeRadius, 
-                 facecolor='none', edgecolor='#808080', ls=':', lw=1)
+                (neighborX[i], neighborY[i]), holeRadius, 
+                 facecolor='none', edgecolor='#808080', ls=':', lw=1
+            )
 
         # Define circles representing the pillars.
         #    (Must be done as separate patches)
         pillar = {}
         for i in range(6):
             pillar[i] = plt.Circle(
-                (outRadius*hexCornerX[i], 
-                 outRadius*hexCornerY[i]), 
-                 pillarRadius,
-                 facecolor='none', edgecolor='#808080', ls='--', lw=1)
+                (outRadius*hexCornerX[i], outRadius*hexCornerY[i]), pillarRadius,
+                 facecolor='none', edgecolor='#808080', ls='--', lw=1
+            )
 
         pillar[0].set_label(f'Pillar  (r = {pillarRadius:.0f} um)')
 
@@ -566,19 +570,27 @@ class runData:
         ax1 = fig.add_subplot(111)
 
         #Add the pad
-        ax1.plot(padX, padY, 
-                label='Pad', c='m', lw=1)
+        ax1.plot(
+            padX, padY, 
+            label='Pad', c='m', lw=1
+        )
 
         #Add the cell boundary
-        ax1.plot(cellX, cellY, 
-                label='Unit Cell Boundary', c='b', ls='--', lw=1)
+        ax1.plot(
+            cellX, cellY, 
+            label='Unit Cell Boundary', c='b', ls='--', lw=1
+        )
         
         #Add boundaries of neighboring cells and pads
         for i in range(6):
-            ax1.plot(neighborX[i]+cellX, neighborY[i]+cellY,
-                    c='b', ls=':', lw=1)
-            ax1.plot(neighborX[i]+padX, neighborY[i]+padY,
-                    c='m', ls=':', lw=1)
+            ax1.plot(
+                neighborX[i]+cellX, neighborY[i]+cellY,
+                c='b', ls=':', lw=1
+            )
+            ax1.plot(
+                neighborX[i]+padX, neighborY[i]+padY,
+                c='m', ls=':', lw=1
+            )
         
         #Add the holes in the grid
         for i in range(len(hole)):
@@ -590,23 +602,11 @@ class runData:
 
         #Add markers to center of cells
         ax1.plot(0., 0., marker='x', c='r')
-        ax1.plot(neighborX, neighborY,
-                marker='.', c='r', ls='')
-        '''
-        #Add geometry cell
-        geoX = 3./2.*outRadius*np.array([0, 1, 1, 0, 0])
-        geoY = inRadius*np.array([1, 1, 0, 0, 1])
-        ax1.plot(geoX, geoY,
-                c='g', ls=':', lw=1, label='Geometry Boundary')
-
-        #Add simulation boundary
-        #simX = 3./2.*outRadius*np.array([-1, 1, 1, -1, -1])
-        #simY = inRadius*np.array([1, 1, -1, -1, 1])
-        simX = pitch*np.array([-1, 1, 1, -1, -1])
-        simY = pitch*np.array([1, 1, -1, -1, 1])
-        ax1.plot(simX, simY,
-                c='g', ls='--', lw=1, label='Simulation Boundary')
-        '''
+        ax1.plot(
+            neighborX, neighborY,
+            marker='.', c='r', ls=''
+        )
+        
         #Add dimensions
         ax1.plot(
             [0, neighborX[4]], [0, neighborY[4]],
@@ -673,10 +673,13 @@ class runData:
         cellY = hexCornerY*outRadius
 
         # Define the hole in the grid.
-        hole = plt.Circle((0, 0), holeRadius,
-                        facecolor='none', edgecolor='k', lw=1, label='Hole')
-        holeXY = holeRadius*np.array([-1, -1, 1, 1, -1])
-        holeZ = halfGrid*np.array([1, 1, -1, -1, 1])
+        hole = plt.Circle(
+            (0, 0), holeRadius,
+            facecolor='none', edgecolor='k', lw=1, label='Hole'
+        )
+        holeXY1 = np.array([-pitch, -holeRadius, -holeRadius, -pitch])
+        holeXY2 = np.array([pitch, holeRadius, holeRadius, pitch])
+        holeZ = halfGrid*np.array([-1, -1, 1, 1])
 
         #Corners of the geometry cell
         #geoX = 3./2.*outRadius*np.array([-1, 1, 1, -1, -1])
@@ -689,13 +692,19 @@ class runData:
         
         match axes:
             case 'xy':
-                axis.plot(padX, padY, 
-                        label='Pad', c='m', lw=1)
-                axis.plot(cellX, cellY, 
-                        label='Cell', c='b', ls='--', lw=1)
+                axis.plot(
+                    padX, padY, 
+                    label='Pad', c='m', lw=1
+                )
+                axis.plot(
+                    cellX, cellY, 
+                    label='Cell', c='b', ls='--', lw=1
+                )
                 axis.add_patch(hole)
-                axis.plot(geoX, geoY,
-                        c='g', ls='--', lw=1, label='Simulation Boundary')
+                axis.plot(
+                    geoX, geoY,
+                    c='g', ls='--', lw=1, label='Simulation Boundary'
+                )
 
                 axis.set_xlabel('x (um)')
                 axis.set_ylabel('y (um)')
@@ -704,22 +713,39 @@ class runData:
                 axis.set_aspect('equal')
 
             case 'xz':
-                axis.plot(padX, padZ, 
-                        label='Pad', c='m', lw=2)
-                axis.plot([cellX[3], cellX[0], cellX[0], cellX[3], cellX[3]], 
-                        [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight],
-                        label='Cell', c='b', ls='--', lw=1)
-                axis.plot([cellX[2], cellX[1], cellX[1], cellX[2], cellX[2]], 
-                        [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight], 
-                        c='b', ls='--', lw=1)
-                axis.plot(holeXY, holeZ, 
-                        label='Hole', c='k', ls='-')
-                axis.plot([geoX[0], geoX[1], geoX[1], geoX[0], geoX[0]], 
-                        [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight], 
-                        c='g', ls='--', lw=1, label='Simulation Boundary')
-                axis.plot([geoX[0], geoX[1]],
-                         [0, 0],
-                         c='#808080', ls=':', lw=1, label='Grid')
+                axis.plot(
+                    padX, padZ, 
+                    label='Pad', c='m', lw=2
+                )
+                axis.plot(
+                    [cellX[3], cellX[0], cellX[0], cellX[3], cellX[3]], 
+                    [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight],
+                    label='Cell', c='b', ls='--', lw=1
+                )
+                axis.plot(
+                    [cellX[2], cellX[1], cellX[1], cellX[2], cellX[2]], 
+                    [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight], 
+                    c='b', ls='--', lw=1
+                )
+                axis.plot(
+                    holeXY1, holeZ, 
+                    label='Grid', c='k', ls='-', lw=2
+                )
+                axis.plot(
+                    holeXY2, holeZ, 
+                    c='k', ls='-', lw=2
+                )
+                        
+                axis.plot(
+                    [geoX[0], geoX[1], geoX[1], geoX[0], geoX[0]], 
+                    [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight], 
+                    c='g', ls='--', lw=1, label='Simulation Boundary'
+                )
+                axis.plot(
+                    [geoX[0], geoX[1]],
+                    [0, 0],
+                    c='#808080', ls=':', lw=1, label='Grid'
+                )
                 
                 axis.set_xlabel('x (um)')
                 axis.set_ylabel('z (um)')
@@ -727,22 +753,38 @@ class runData:
                 axis.set_ylim(padHeight, cathodeHeight)
 
             case 'yz':
-                axis.plot(padY, padZ, 
-                        label='Pad', c='m', lw=2)
-                axis.plot([cellY[4], cellY[1], cellY[1], cellY[4], cellY[4]], 
-                        [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight],
-                        label='Cell', c='b', ls='--', lw=1)
-                axis.plot([0, 0], 
-                        [padHeight, cathodeHeight],
-                        label='Cell', c='b', ls='--', lw=1)
-                axis.plot(holeXY, holeZ, 
-                        label='Hole', c='k', ls='-')
-                axis.plot([geoY[1], geoY[2], geoY[2], geoY[1], geoY[1]], 
-                        [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight], 
-                        c='g', ls='--', lw=1, label='Simulation Boundary')
-                axis.plot([geoY[0], geoY[2]],
-                         [0, 0],
-                         c='#808080', ls=':', lw=1, label='Grid')
+                axis.plot(
+                    padY, padZ, 
+                    label='Pad', c='m', lw=2
+                )
+                axis.plot(
+                    [cellY[4], cellY[1], cellY[1], cellY[4], cellY[4]], 
+                    [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight],
+                    label='Cell', c='b', ls='--', lw=1
+                )
+                axis.plot(
+                    [0, 0], 
+                    [padHeight, cathodeHeight],
+                    label='Cell', c='b', ls='--', lw=1
+                )
+                axis.plot(
+                    holeXY1, holeZ, 
+                    label='Grid', c='k', ls='-', lw=2
+                )
+                axis.plot(
+                    holeXY2, holeZ, 
+                    c='k', ls='-', lw=2
+                )
+                axis.plot(
+                    [geoY[1], geoY[2], geoY[2], geoY[1], geoY[1]], 
+                    [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight], 
+                    c='g', ls='--', lw=1, label='Simulation Boundary'
+                )
+                axis.plot(
+                    [geoY[0], geoY[2]],
+                    [0, 0],
+                    c='#808080', ls=':', lw=1, label='Grid'
+                )
 
                 axis.set_xlabel('y (um)')
                 axis.set_ylabel('z (um)')
@@ -763,7 +805,7 @@ class runData:
         Adds field bundle to 2D plots
 
         Args:
-            axis (matplotlib subplot): Axes object where field bunlde is to be added 
+            axis (matplotlib subplot): Axes object where field bundle is to be added 
             axes (str): String defining the cartesian dimensions of 'axes'.
         """
 
@@ -776,17 +818,19 @@ class runData:
             facecolor='none', edgecolor='c', lw=2
         )
 
+        bundleXY = nominalBundleR*np.array([-1, 1])
+        bundleZ = nominalBundleZ*np.array([1, 1])
         match axes:
             case 'xy':
                 axis.add_patch(nominalFieldBundle)
             case 'xz':
                 axis.plot(
-                    [-nominalBundleR, nominalBundleR], [nominalBundleZ, nominalBundleZ], 
+                    bundleXY, bundleZ, 
                     lw=2, c='c'
                 )
             case 'yz':
                 axis.plot(
-                    [-nominalBundleR, nominalBundleR], [nominalBundleZ, nominalBundleZ], 
+                    bundleXY, bundleZ, 
                     lw=2, c='c'
                 )
             case _:
@@ -794,15 +838,17 @@ class runData:
 
         return
 
-
 #********************************************************************************#   
-    def plot2DFieldLines(self, target):
+    def plot2DFieldLines(self, target='All'):
         """
         Generates 2D plots of the simulated field lines. Options include:
             Cathode - Field lines initiated near the cathode.
             AboveGrid - Field lines initiated just above the grid.
             BelowGrid - Field lines initiated just below the grid.
-            Edge - Field Lines initiated along the edge of the unit cell, at the cathode.
+            All - Field lines initiated near the cathode as well as those 
+            above and below the grid.
+            Edge - Field Lines initiated along the edge of the unit cell, 
+            at the cathode.
 
         These plots display the field lines, and include 
         the pad geometry and hole in the grid.
@@ -817,6 +863,7 @@ class runData:
             'Cathode',
             'AboveGrid',
             'BelowGrid',
+            'All',
             'Edge'
         ]
     
@@ -834,6 +881,10 @@ class runData:
             
             case 'Edge':
                 fieldLineData = self.getDataFrame('edgeFieldLineData')
+                
+            case 'All':
+                self.plotAllFieldLines()
+                return
     
             case _:
                 print(f'Error: Plot options are: {plotOptions}')
@@ -865,7 +916,6 @@ class runData:
         
         return fig2D
     
-
 #********************************************************************************#   
     def add2DFieldLines(self, axes, fieldLineData, target):
         """
@@ -1007,18 +1057,18 @@ class runData:
     def _trimAvalanche(self):
         """
         Removes any avalanches that have either:
-            Only a single electron (so no avalanching occured), or
+            Only a single electron (so no avalanching occurred), or
             that reached the simulation avalanche limit.
 
         Note that these situations, either no avalanching or an avalanche
         that was exactly the limit size, can occur. 
-        However, it is much more likely that the intial electron attached or drifted
+        However, it is much more likely that the initial electron attached or drifted
         outside of the simulation bounds before causing an avalanche for the e=1 case. 
-        For the avalanche-limit case, it is impossible to tell if this was exacly the
+        For the avalanche-limit case, it is impossible to tell if this was exactly the
         limit, or if there should be more electrons.
 
         Returns:
-            dataframe: The avalancheData dataframe with the 1 and limitting sizes removed.
+            dataframe: The avalancheData dataframe with the 1 and limiting sizes removed.
         """
         avalancheData = self.getDataFrame('avalancheData')
 
@@ -1113,8 +1163,7 @@ class runData:
         ax.bar(
             histData['binCenters'], 
             histData['prob'], 
-            width=binWidth,
-            label='Simulation'
+            width=binWidth, label='Simulation'
         )  
         ax.axvline(
             histData['gain'], 
@@ -1130,9 +1179,9 @@ class runData:
         return fig
 
 #********************************************************************************#   
-    def plotAvalanche2D(self, avalancheID=0, plotName=''):
+    def plotElectronAvalanche(self, avalancheID=0, plotName=''):
         """
-        Generates 2D plots of a single electron avalanche.
+        Generates 2D plots of the electrons in a single electron avalanche.
 
         Includes individual electron tracks and geometry components.
     
@@ -1140,63 +1189,122 @@ class runData:
             avalancheID (int): Index of avalanche within simulation.
     
         """
-    
+        #Acquire avalanche data
         allData = self.getDataFrame('electronTrackData')
-        singleData = allData[allData['Avalanche ID']==avalancheID]
-        
         gain = self._getAvalancheGain(avalancheID)
-    
-        groupedData = singleData.groupby('Electron ID')
-    
-        if groupedData is None:
-            print(f"An error occured plotting ID='{avalancheID}'.")
-            return
-
-        # Create figure and subplots for different projections.
-        fig2D = plt.figure(figsize=(14, 7))
-        fig2D.suptitle(f'Avalanche: {plotName} (ID #{avalancheID}) Gain = {gain}')
-        ax11 = fig2D.add_subplot(221)
-        ax12 = fig2D.add_subplot(223)
-        ax13 = fig2D.add_subplot(122)
-    
-        # iterate through all lines
-        for electronID, driftLine in groupedData:
-            ax11.plot(driftLine['Drift x'], 
-                      driftLine['Drift z'], 
-                      lw=.5)
-            ax12.plot(driftLine['Drift y'], 
-                      driftLine['Drift z'], 
-                      lw=.5)
-            ax13.plot(driftLine['Drift x'], 
-                      driftLine['Drift y'], 
-                      lw=.5)
-
-        # Plot the initial electron location
+        
+        #Reduce data to a single avalanche
+        singleData = allData[allData['Avalanche ID']==avalancheID]
         xInit = singleData['Drift x'].iloc[0]
         yInit = singleData['Drift y'].iloc[0]
         zInit = singleData['Drift z'].iloc[0]
-        
-        ax11.plot(xInit, 
-                  zInit, 
-                  label='Initial', marker='x', c='r')
-        ax12.plot(yInit, 
-                  zInit, 
-                  label='Initial', marker='x', c='r')
-        ax13.plot(xInit, 
-                  yInit, 
-                  label='Initial', marker='x', c='r')
+        groupedData = singleData.groupby('Electron ID')
     
-        self._plotAddCellGeometry(ax11, 'xz')
-        self._plotAddCellGeometry(ax12, 'yz')
-        self._plotAddCellGeometry(ax13, 'xy')
-        self._plotAddFieldBundle(ax11, 'xz')
-        self._plotAddFieldBundle(ax12, 'yz')
-        self._plotAddFieldBundle(ax13, 'xy')
+        if groupedData is None:
+            print(f"An error occurred plotting ID='{avalancheID}'.")
+            return
+
+        #Create figure and subplots for different projections.
+        fig2D = plt.figure(figsize=(14, 7))
+        fig2D.suptitle(f'Avalanche: {plotName} (ID #{avalancheID}) Gain = {gain}')
+        subxz = fig2D.add_subplot(221)
+        subyz = fig2D.add_subplot(223)
+        subxy = fig2D.add_subplot(122)
+    
+        #Plot field lines on each subplot
+        for electronID, driftLine in groupedData:
+            subxz.plot(driftLine['Drift x'], driftLine['Drift z'], lw=.5)
+            subyz.plot(driftLine['Drift y'], driftLine['Drift z'], lw=.5)
+            subxy.plot(driftLine['Drift x'], driftLine['Drift y'], lw=.5)
+
+        #Plot the location of the initial electron
+        subxz.plot(xInit, zInit, 'rx', label='Initial')
+        subyz.plot(yInit, zInit, 'rx', label='Initial')
+        subxy.plot(xInit, yInit, 'rx', label='Initial')
+        
+        #Add cell geometry overlay to each subplot
+        self._plotAddCellGeometry(subxz, 'xz')
+        self._plotAddCellGeometry(subyz, 'yz')
+        self._plotAddCellGeometry(subxy, 'xy')
+        
+        #Add field bundle indicator
+        """
+        self._plotAddFieldBundle(subxz, 'xz')
+        self._plotAddFieldBundle(subyz, 'yz')
+        self._plotAddFieldBundle(subxy, 'xy')
+        """
         plt.tight_layout()   
         
         return fig2D
         
+#********************************************************************************#
+    def plotIonAvalanche(self, avalancheID=0, plotName=''):
+        """
+        Generates 2D plots of the ions in a single electron avalanche.
 
+        Includes individual ion tracks and geometry components.
+    
+        Args:
+            avalancheID (int): Index of avalanche within simulation.
+        """
+        
+        #Get avalanche information
+        zLimit = self.getRunParameter('Grid Standoff')
+        allData = self.getDataFrame('ionTrackData')
+        gain = self._getAvalancheGain(avalancheID)
+        singleData = allData[allData['Avalanche ID']==avalancheID]
+        
+        #Initial electron location
+        xInit = singleData['Drift x'].iloc[0]
+        yInit = singleData['Drift y'].iloc[0]
+        zInit = singleData['Drift z'].iloc[0]
+        
+        #Group each drift line by its electron id
+        groupedData = singleData.groupby('Electron ID')
+        
+        if groupedData is None:
+            print(f"An error occurred plotting ID='{avalancheID}'.")
+            return
+
+        #Create figure and subplots for different projections.
+        fig2D = plt.figure(figsize=(14, 7))
+        fig2D.suptitle(f'Avalanche: {plotName} (ID #{avalancheID}) Gain = {gain}')
+        
+        subxz = fig2D.add_subplot(221)
+        subyz = fig2D.add_subplot(223)
+        subxy = fig2D.add_subplot(122)
+    
+        #Plot each ion drift line in each subplot
+        for electronID, driftLine in groupedData:
+            subxz.plot(driftLine['Drift x'], driftLine['Drift z'], lw=.5)
+            subyz.plot(driftLine['Drift y'], driftLine['Drift z'], lw=.5)
+            subxy.plot(driftLine['Drift x'], driftLine['Drift y'], lw=.5)
+
+        #Add initial electron location to each subplot
+        subxz.plot(xInit, zInit, 'rx', label='Initial')
+        subyz.plot(yInit, zInit, 'rx', label='Initial')
+        subxy.plot(xInit, yInit, 'rx', label='Initial')
+        
+        #Add cell Geometry overlay to each subplot
+        self._plotAddCellGeometry(subxz, 'xz')
+        self._plotAddCellGeometry(subyz, 'yz')
+        self._plotAddCellGeometry(subxy, 'xy')
+        
+        #Add field bundle indicator (TODO: improve field bundle 
+        #calculation and overlay)
+        """
+        self._plotAddFieldBundle(subxz, 'xz')
+        self._plotAddFieldBundle(subyz, 'yz')
+        self._plotAddFieldBundle(subxy, 'xy')
+        """
+        
+        #Zoom in the plot to focus on the region under the grid
+        subxz.set_ylim(-zLimit, zLimit)
+        subyz.set_ylim(-zLimit, zLimit)
+        plt.tight_layout()
+        
+        return fig2D
+        
 #********************************************************************************#   
     def plotDiffusion(self, target):
         """
@@ -1214,6 +1322,13 @@ class runData:
             'posIon',
             'negIon'
         ]
+        
+        #Get run data
+        padLength = self.getRunParameter('Pad Length')
+        standoff = self.getRunParameter('Grid Standoff')
+        holeRadius = self.getRunParameter('Hole Radius')
+        avalancheNum = self.getRunParameter('Number of Avalanches')
+
         match target:
             case 'electron':
                 particleData = self.getDataFrame('electronData')
@@ -1233,54 +1348,60 @@ class runData:
         if particleData is None:
             print(f"An error occured plotting '{target}'.")
             return
-
+        
+        #Calculate drift distance
         driftX = particleData['Final x'] - particleData['Initial x']
         driftY = particleData['Final y'] - particleData['Initial y']
         driftZ = particleData['Final z'] - particleData['Initial z']
 
         driftR = np.sqrt(driftX**2 + driftY**2)
 
+        #Plot drift data
         fig = plt.figure(figsize=(12, 4))
-        fig.suptitle(f"Total Drift of: {target}s ({self.getRunParameter('Number of Avalanches')} Avalanches)")
+        fig.suptitle(
+            f"Total Drift of: {target}s ({avalancheNum} Avalanches)"
+        )
         
-        ax1 = fig.add_subplot(121)
-        ax2 = fig.add_subplot(122)
+        subZ = fig.add_subplot(121)
+        subXY = fig.add_subplot(122)
 
-        ax1.hist(abs(driftZ), bins=100)
-        ax2.hist(driftR, bins=100)
-
-        ax1.axvline(
+        subZ.hist(abs(driftZ), bins=100)
+        subXY.hist(driftR, bins=100)
+        
+        #Add grid elements overlay
+        subZ.axvline(
             abs(driftZ.iloc[0]), 
             c='r', ls=':', label='Initial Electron'
         )
-        ax1.axvline(
-            self.getRunParameter('Grid Standoff'), 
+        subZ.axvline(
+            standoff, 
             c='g', ls='--', label='Grid Height'
         )
-
-        ax2.axvline(
+        
+        subXY.axvline(
             driftR.iloc[0], 
             c='r', ls=':', label='Initial Electron'
         )
-        ax2.axvline(
-            self.getRunParameter('Hole Radius'), 
+        subXY.axvline(
+            holeRadius, 
             c='g', ls='--', label='Hole Radius'
         )
-        ax2.axvline(
-            self.getRunParameter('Pad Length'), 
+        subXY.axvline(
+            padLength, 
             c='m', ls='--', label='Pad Length'
         )
-    
-        ax1.set_title('Drift in z')
-        ax2.set_title('Drift in xy Plane')
-    
-        ax1.set_xlabel('Drift in z (um)')
-        ax2.set_xlabel('Drift in r (um)')
+        
+        #Add plot labels
+        subZ.set_title('Drift in z')
+        subZ.set_xlabel('Drift in z (um)')
+        
+        subXY.set_title('Drift in xy Plane')
+        subXY.set_xlabel('Drift in r (um)')
 
-        ax1.legend()
-        ax2.legend()
-        ax1.grid()
-        ax2.grid()
+        subZ.legend()
+        subXY.legend()
+        subZ.grid()
+        subXY.grid()
         plt.tight_layout()   
         
         return fig
@@ -1288,7 +1409,7 @@ class runData:
 #********************************************************************************#   
     def plotParticleHeatmaps(self, target, numBins=51):
         """
-        Plots 2D histograms displaying heatmaps of the intial and final locations 
+        Plots 2D histograms displaying heatmaps of the initial and final locations 
         of simulated particles.
 
         Options to plot include: electrons, positive ions, and negative ions.
@@ -1333,18 +1454,26 @@ class runData:
         ax4 = fig.add_subplot(224)
     
         # Plot data
-        ax1.hist2d(particleData['Initial x'], 
-                   particleData['Initial y'], 
-                   bins=numBins, cmin=1)
-        ax2.hist2d(particleData['Final x'], 
-                   particleData['Final y'], 
-                   bins=numBins, cmin=1)
-        ax3.hist2d(particleData['Initial x'], 
-                   particleData['Initial z'], 
-                   bins=numBins, cmin=1)
-        ax4.hist2d(particleData['Final x'], 
-                   particleData['Final z'], 
-                   bins=numBins, cmin=1)
+        ax1.hist2d(
+            particleData['Initial x'], 
+            particleData['Initial y'], 
+            bins=numBins, cmin=1
+        )
+        ax2.hist2d(
+            particleData['Final x'], 
+            particleData['Final y'], 
+            bins=numBins, cmin=1
+        )
+        ax3.hist2d(
+            particleData['Initial x'], 
+            particleData['Initial z'], 
+            bins=numBins, cmin=1
+        )
+        ax4.hist2d(
+            particleData['Final x'], 
+            particleData['Final z'], 
+            bins=numBins, cmin=1
+        )
     
         #Add geometry Pieces
         self._plotAddCellGeometry(ax1, 'xy')
@@ -1391,11 +1520,11 @@ class runData:
         aveFinal = electronData['Final Energy'].mean()
 
         ax1.axvline(
-            x=aveInit, 
+            aveInit, 
             c='r', ls='--', label=f'Average = {aveInit:.1f}'
         )
         ax2.axvline(
-            x=aveFinal, 
+            aveFinal, 
             c='r', ls='--', label=f'Average = {aveFinal:.1f}'
         )
 
@@ -1495,30 +1624,40 @@ class runData:
         ax.bar(
             histData['binCenters'], 
             histData['prob'],
-            width=binWidth,
-            label='Simulation'
+            width=binWidth, label='Simulation'
         ) 
 
-        ax.plot(fitResults['xVal'], 
-                polyaResults, 
-                'm-', lw=3, 
-                label=r'Fitted Polya ($\theta$' 
-                    + f" = {fitResults['fitPolya'].theta:.2})")
-        ax.axvline(x=fitResults['fitPolya'].gain, 
-               c='m', ls=':', label=f"Polya Gain = {fitResults['fitPolya'].gain:.0f}e")
+        ax.plot(
+            fitResults['xVal'], polyaResults, 
+            'm-', lw=3, 
+            label=r'Fitted Polya ($\theta$' + f" = {fitResults['fitPolya'].theta:.2})"
+        )
+        ax.axvline(
+            fitResults['fitPolya'].gain, 
+            c='m', ls=':', label=f"Polya Gain = {fitResults['fitPolya'].gain:.0f}e"
+        )
         
         '''For plotting an exponential
-        ax.plot(fitResults['xVal'], 
-                fitResults['fitExpo'].calcPolya(fitResults['xVal']), 
-                'r', lw=2, label=f'Fitted Exponential')
-        ax.axvline(x=fitResults['fitExpo'].gain, 
-               c='r', ls=':', label=f"Expo Gain = {fitResults['fitExpo'].gain:.0f}e")
+        ax.plot(
+            fitResults['xVal'], 
+            fitResults['fitExpo'].calcPolya(fitResults['xVal']), 
+            c='r', lw=2, label=f'Fitted Exponential'
+        )
+        ax.axvline(
+            fitResults['fitExpo'].gain, 
+            c='r', ls=':', label=f"Expo Gain = {fitResults['fitExpo'].gain:.0f}e"
+        )
         '''
 
         rawGain = self.getCalcParameter('Raw Gain')
-        ax.axvline(x=rawGain, c='g', ls='--', label=f"Raw Gain = {rawGain:.0f}e")
-        ax.axvline(x=fitResults['dataGain'], 
-               c='g', ls=':', label=f"Trimmed Gain = {fitResults['dataGain']:.0f}e")
+        ax.axvline(
+            rawGain, 
+            c='g', ls='--', label=f"Raw Gain = {rawGain:.0f}e"
+        )
+        ax.axvline(
+            fitResults['dataGain'], 
+            c='g', ls=':', label=f"Trimmed Gain = {fitResults['dataGain']:.0f}e"
+        )
 
 
         polyaStats = f'Polya Fit Statistics\nChi2 = {polyaChi2['chi2']:.4f}\nrChi2 = {polyaChi2['rChi2']:.4f}'
@@ -1529,7 +1668,7 @@ class runData:
             horizontalalignment='center',
             verticalalignment='center', 
             transform=ax.transAxes,
-            bbox=dict(facecolor='none', edgecolor='black', boxstyle='round,pad=1')
+            bbox=dict(facecolor='none', edgecolor='k', boxstyle='round,pad=1')
         )
         '''
         plt.xlabel('Numer of Electrons in Avalanche: n')
@@ -1546,7 +1685,7 @@ class runData:
         Calculates the radius of the outermost electric field line
         at a specified z-coordinate.
 
-        Does a linear interpolation between available datapoints.
+        Does a linear interpolation between available data points.
 
         Args:
             zTarget (float): z-coordinate of desired field bundle radius.
@@ -1557,7 +1696,7 @@ class runData:
         """
         zMax = self.getRunParameter('Cathode Height')
         zMin = -1.*self.getRunParameter('Grid Standoff')
-        if not (zMin < zTarget < zMax):
+        if not (zMin <= zTarget <= zMax):
             raise ValueError('Invalid target z.')
         
         lineID = self._getOutermostLineID()
@@ -1582,15 +1721,27 @@ class runData:
         return targetRadius
 
 #********************************************************************************#
-    def getIonsCapturedInside(self):
+    def _getIonEdgeDistance(self):
         """
+        Uses the ionData data frame to calculate the position of each ion relative
+        to the edge of the field bundle at the height it was created. Ions created
+        inside the field bundle will therefore have a negative position while those
+        created outside will have a positive position. The zero point changes based
+        on the height of the ion.
+        
         Returns:
-            list containing the distance from the edge of the field bundle of 
-            each ion that was captured by the grid despite being inside the field 
-            bundle.
+            dictionary of two lists which contain the distance of each ion from the
+            edge of the field bundle
+                -escaped: only ions which escaped into the drift volume
+                -captured: only ions which were captured by the grid
         """
+        
+        edgeDistance = []
+        bundleSize = []
         capturedList = []
-        bundleSize = self.getCalcParameter('Field Bundle Radius')
+        escapedList = []
+        
+        stand = -1*self.getRunParameter('Grid Standoff')
         
         #Get the radius of the initial position of each ion
         particleData = self.getDataFrame('ionData')
@@ -1599,39 +1750,67 @@ class runData:
         initialX = particleData['Initial x']
         initialR = (initialY**2 + initialX**2)**.5
         
+        #find the bundle size at the initial height of each ion
+        initialZ = particleData['Initial z']
+        for height in initialZ:
+            if height < stand:
+                height = stand
+            bundleSize.append(self.calcBundleRadius(height))
+    
         finalZ = particleData['Final z']
         
-        for ionZ, ionR in zip(finalZ, initialR):
-            if ionZ  < 1 and ionZ > -1 and ionR < bundleSize:
-                capturedList.append(ionR - bundleSize)
-
-        return capturedList
+        #calculate the distance each ion is from the edge of the bundle
+        for radius, bundle in zip(initialR, bundleSize):
+            edgeDistance.append(radius - bundle)
+        
+        #Check to see if the ions inside the bundle terminate on the grid
+        for ionZ, dist in zip(finalZ, edgeDistance):
+            if ionZ  < 1 and ionZ > -1:
+                capturedList.append(dist)
+            if ionZ > 1:
+                escapedList.append(dist)
+        
+        ionLists = {
+            'escaped': escapedList,
+            'captured': capturedList
+            }
+        
+        return ionLists
 
 #********************************************************************************#
-    def getIonsEscapedOutside(self):
+    def plotIBNHistogram(self):
         """
+        Creates a stacked double histogram of the distance from the field bundle 
+        edge of every ion created in an avalanche. 
+        
+        The double histogram is divided by whether the ions are 
+        captured by the grid or if they escape into the drift volume.
+
         Returns:
-            list containing the distance from the edge of the field bundle
-            of each ion that escaped the grid despite being outside the field bundle.
+            matplotlib.figure. Figure: the generated IBN position histogram
         """
-        escapedList = []
-        bundleSize = self.getCalcParameter('Field Bundle Radius')
         
-        #Get the radius of the initial position of each ion
-        particleData = self.getDataFrame('ionData')
-        particleData = particleData[particleData['Ion Charge']==1]
-        initialY = particleData['Initial y']
-        initialX = particleData['Initial x']
-        initialR = (initialY**2 + initialX**2)**.5
+        ionLists = self._getIonEdgeDistance()
+        captured = ionLists['captured']
+        backflowing = ionLists['escaped']
         
-        finalZ = particleData['Final z']
+        ionHistogram = plt.figure()
+        plt.hist(
+            [backflowing, captured], 
+            bins='auto', stacked=True, c=['r', 'g'],
+            label =['Backflowing', 'Captured'], 
+        )
         
-        for ionZ, ionR in zip(finalZ, initialR):
-            if ionZ  > 1 and ionR > bundleSize:
-                escapedList.append(ionR - bundleSize)
+        #include a vertical line at the nominal bundle edge (x = 0)
+        plt.axvline(0, c='k', lw=2, label='Bundle Edge')
         
-        return escapedList
-    
+        plt.xlabel('Distance Ions Originate from Edge of Field Bundle')
+        plt.ylabel('Number of Ions')
+        plt.title('Ions Created Inside vs Ions Created Outside of the Field Bundle')
+        plt.legend()
+        
+        return ionHistogram
+
 #********************************************************************************#
     def _getOutermostLineID(self):
         """
@@ -1660,11 +1839,11 @@ class runData:
         )
 
         #Determine what lines initiate within the unit cell
-        withinUnitCell = withinHex(
+        withinUnitCell = functionsFIMS.withinHex(
             atCathode['Field Line x'], 
             atCathode['Field Line y'], 
             unitCellLength
-            )
+        )
         cellLines = atCathode[withinUnitCell]
 
         #Find line with max radius
@@ -1719,14 +1898,14 @@ class runData:
             if pointAbove is not None and pointBelow is not None:
                 # Linearly interpolate x and y values for z = zSiO2Top
                 try:
-                    newPoint = xyInterpolate(pointAbove, pointBelow, zSiO2Top)             
+                    newPoint = functionsFIMS.xyInterpolate(pointAbove, pointBelow, zSiO2Top)             
                 except ValueError as e:
                     print(f'Error for Electron {electronID} during interpolation: {e}')
 
                 #Check if this point is above the central or neighbor pad
                 if (
-                    withinHex(newPoint['x'], newPoint['y'], padLength)
-                    or withinNeighborHex(newPoint['x'], newPoint['y'], padLength, pitch)
+                    functionsFIMS.withinHex(newPoint['x'], newPoint['y'], padLength)
+                    or functionsFIMS.withinNeighborHex(newPoint['x'], newPoint['y'], padLength, pitch)
                 ):
                     continue
                 
@@ -1889,19 +2068,19 @@ class runData:
 
 
         #Check if the last datapoint is above the central pad
-        abovePad = withinHex(
+        abovePad = functionsFIMS.withinHex(
             outerFieldLine['Field Line x'], 
             outerFieldLine['Field Line y'], 
             self.getRunParameter('Pad Length')
-            )
+        )
 
         #Check if the last datapoint is above the neighbor pad
-        aboveNeighbor = withinNeighborHex(
+        aboveNeighbor = functionsFIMS.withinNeighborHex(
             outerFieldLine['Field Line x'], 
             outerFieldLine['Field Line y'], 
             self.getRunParameter('Pad Length'),
             self.getRunParameter('Pitch')
-            )
+        )
 
         isTransparent = (abovePad.iloc[-1] or aboveNeighbor.iloc[-1])
 
@@ -2025,7 +2204,7 @@ class runData:
         """
         Generates a histogram of the avalanche size distribution; The data is split
         based on a given threshold, and the resulting efficiency is indicated.
-        Also includes a fitted Polya function, also split to distiguish the PDF both
+        Also includes a fitted Polya function, also split to distinguish the PDF both
         above and below threshold.
 
         Args:
@@ -2035,14 +2214,12 @@ class runData:
         Returns:
             matplotlib.figure.Figure: The generated efficiency plot.
         """
-
+        gain = self.getCalcParameter('Trimmed Gain')
         fitResults = self._fitAvalancheSize(binWidth=1)
-        fitPolya = fitResults['fitPolya']
-
         histData = self._histAvalanche(trim=True, binWidth=binWidth)
 
+        fitPolya = fitResults['fitPolya']
         cutMask = histData['binCenters'] <= threshold
-       
         xData = histData['binCenters']
         yData = histData['prob']
 
@@ -2067,21 +2244,20 @@ class runData:
         ax = fig.add_subplot(111)
 
         ax.bar(
-            xDataCut,
-            yDataCut,
-            width=binWidth,
-            label='Data Below Threshold', color='r', alpha=0.5
+            xDataCut, yDataCut, 
+            width=binWidth, label='Data Below Threshold', color='r', alpha=0.5
         )
+                
         ax.bar(
-            xDataPass,
-            yDataPass,
-            width=binWidth,
-            label='Detected Data', color='g', alpha=0.5
-        ) 
+            xDataPass, yDataPass,
+            width=binWidth, label='Detected Data', color='g', alpha=0.5
+        )
+                
         ax.axvline(
-            x=threshold, 
+            threshold, 
             c='r', ls='--', label=f'{threshold}-electron Threshold'
         )
+        
         ax.plot(
             xPolyaCut, polyaCut, 
             label='Cut Polya', c='m', ls=':'
@@ -2090,25 +2266,22 @@ class runData:
             xPolya, polyaData, 
             label='Remaining Polya', c='m', ls='-'
         )
-
-        gain = self.getCalcParameter('Trimmed Gain')
+        
         ax.axvline(
-            x=gain,
+            gain, 
             c='g', ls='--', label=f'Mean Avalanche Size (Gain) = {gain:.1f}'
         )
-
+        
         polyaEff = fitPolya.calcEfficiency(threshold)
         efficiencyText = f'Polya Efficiency = {polyaEff:.4f}'
 
         ax.text(
-            0.8, 0.5, efficiencyText, 
-            fontsize=10, 
-            horizontalalignment='center',
-            verticalalignment='center', 
+            0.8, 0.5, efficiencyText, fontsize=10, 
+            horizontalalignment='center', verticalalignment='center', 
             transform=ax.transAxes,
-            bbox=dict(facecolor='w', edgecolor='black', boxstyle='round,pad=1')
+            bbox=dict(facecolor='w', edgecolor='k', boxstyle='round,pad=1')
         )
-
+        
         plt.xlabel('Number of Electrons in Avalanche')
         plt.ylabel('Probability of Avalanche Size')
         plt.legend()
@@ -2146,6 +2319,7 @@ class runData:
 #********************************************************************************#
     def plotAvalancheSignal(self, avalancheID=0):
         """
+        TODO:
         """
 
         allData = self.getDataFrame('signalData')
@@ -2168,7 +2342,7 @@ class runData:
             singleData['Signal Time'], singleData['Signal Strength'].cumsum()
         )
         ax2.axhline(
-            y=totalCharge,
+            totalCharge,
             label=f'Total Charge = {totalCharge:.3f}', c='r', ls='--'
         )
 
@@ -2216,7 +2390,7 @@ class runData:
             averageSignal.index, averageCharge
         )
         ax2.axhline(
-            y=averageTotalCharge,
+            averageTotalCharge,
             label=f'Total Charge = {averageTotalCharge:.3f}', c='r', ls='--'
         )
 
@@ -2271,7 +2445,7 @@ class runData:
             c='r', label=f'Slope = {slope:.2e}'
         )
         ax.axvline(
-            x=allAvalanche['Gain'].mean(),
+            allAvalanche['Gain'].mean(),
             c='g', ls='--', label=f'Average Gain = {allAvalanche['Gain'].mean():.1f}'
         )
 
@@ -2282,3 +2456,5 @@ class runData:
         ax.legend()
 
         return fig
+
+#********************************************************************************#

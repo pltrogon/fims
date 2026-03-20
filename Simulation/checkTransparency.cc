@@ -8,6 +8,9 @@
  * Tanner Polischuk & James E. Harrison IV
  */
 
+//My includes
+#include "SilenceConsole.h"
+
 //Garfield includes
 #include "Garfield/ComponentElmer.hh"
 #include "Garfield/AvalancheMicroscopic.hh"
@@ -160,8 +163,12 @@ int main(int argc, char * argv[]) {
     "cf4", gasCompCF4,
     "iC4H10", gasCompIsobutane
   );
-  gasFIMS->EnablePenningTransfer(gasPenning, .0, "ar");
 
+  {
+	SilenceCerr guard; 
+	gasFIMS->EnablePenningTransfer(gasPenning, 0.0, "ar");
+  }
+  
   gasFIMS->SetTemperature(293.15); // Room temperature
   gasFIMS->SetPressure(760.);     // Atmospheric pressure
   gasFIMS->SetMaxElectronEnergy(200);
@@ -240,17 +247,50 @@ int main(int argc, char * argv[]) {
   double fieldCutoff = 0.2;
   double xRange = (xBoundary[1] - xBoundary[0])*rangeScale;
   double yRange = (yBoundary[1] - yBoundary[0])*rangeScale;
-  double xWidth = pitch*sqrt(3.)/3.;
+  double xWidth = rangeScale*pitch*sqrt(3.)/3.;
   double yWidth = rangeScale*pitch/2.;
 
   // ***** Generate field line start points ***** //
+  
+  /*
   //Lines generated radially from the center to corner of unit cell
   //The x-direction is the long axis of the geometry. 
   for(int i = 0; i < numFieldLine; i++){
-    xStart.push_back(padLength*i/(numFieldLine-1));
+    xStart.push_back(xWidth*i/(numFieldLine-1));
     yStart.push_back(0.);
   }
-  
+  */
+
+
+  //Rejection sampled points near the edge of the unit cell
+  double sampleWidth = std::sqrt(0.95); //Reject the inner portion of the unit cell
+  double halfPitch = pitch/2.;
+  double cellLength = halfPitch*2./std::sqrt(3.);
+
+  while(xStart.size() < numFieldLine){
+
+    // Generate random point in rectangle defined by cellLength (x) and halfPitch (y)
+    double sampleX =  ((double)std::rand()/RAND_MAX)*cellLength;
+    double sampleY =  ((double)std::rand()/RAND_MAX)*halfPitch;
+
+    //Determine if point is in unit cell - Skip if not
+    double unitY = (-2.*halfPitch/cellLength) * (sampleX-cellLength);
+    if(sampleY > unitY){
+      continue;
+    }
+
+    //Determine if point is near edge of cell - Skip if not
+    double checkY = sampleWidth*halfPitch;
+    double edgeY = (-2.*halfPitch/cellLength) * (sampleX-sampleWidth*cellLength);
+    if((sampleY < checkY) && (sampleY < edgeY)){
+      continue;
+    }
+
+    xStart.push_back(sampleX);
+    yStart.push_back(sampleY);
+  }
+
+
   // ***** Calculate field Lines ***** //
   std::vector<std::array<float, 3> > fieldLines;
   int totalFieldLines = xStart.size();
@@ -258,7 +298,7 @@ int main(int argc, char * argv[]) {
   int prevDriftLine = 0;
 
   double transparency = 0.;
-  double varience = 0.;
+  double variance = 0.;
   double transparencyErr = 0.;
 
   std::cout << "Computing field lines" << std::endl;
@@ -275,9 +315,9 @@ int main(int argc, char * argv[]) {
     fieldLineZ = fieldLines[lineEnd][2];
 
     //TODO: Find more elegant way to determine where a line terminates
-    // Currently is pad outer radius and below 50% of grid standoff
+    // Currently is pad outer radius and no more than 10% of the grid standoff away from the pad
     double lineRadius2 = std::pow(fieldLineX, 2.) + std::pow(fieldLineY, 2.);
-    if(sqrt(lineRadius2) <= padLength && fieldLineZ < -gridStandoff/2.){
+    if(sqrt(lineRadius2) <= padLength && fieldLineZ < -0.9*gridStandoff){
         numAtPad++;
     }
 
@@ -293,17 +333,17 @@ int main(int argc, char * argv[]) {
 
   std::cout << "Done " << totalFieldLines << " field lines; Determining transparency." << "\n";
 
-  //Determine transparency - Binomail Statistics
+  //Determine transparency - Binomial Statistics
   //transparency = (1.*numAtPad) / (1.*numFieldLine);
   //transparencyErr = sqrt(transparency*(1-transparency)/numFieldLine);
 
-  //Determine transparency - Baysian statistics
+  //Determine transparency - Bayesian statistics
   double success = 1.*numAtPad;
   double total = 1.*numFieldLine;
 
   transparency = (success + 1.) / (total + 2.);
-  varience = ((success+1.)*(success+2.))/((total+2.)*(total+3.)) - transparency*transparency;
-  transparencyErr = std::sqrt(varience);
+  variance = ((success+1.)*(success+2.))/((total+2.)*(total+3.)) - transparency*transparency;
+  transparencyErr = std::sqrt(variance);
 
 
   std::cout << "Transparency is " << transparency <<  "." << std::endl;
