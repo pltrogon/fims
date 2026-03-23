@@ -110,6 +110,7 @@ class runData:
             'fieldLineData',
             'gridFieldLineData',
             'edgeFieldLineData',
+            'eFieldData',
             'electronData',
             'ionData',
             'avalancheData',
@@ -317,6 +318,13 @@ class runData:
                     'Field Line x', 
                     'Field Line y', 
                     'Field Line z'
+                ]
+
+            case 'eFieldData':
+                dataToScale = [
+                    'E Field x', 
+                    'E Field y', 
+                    'E Field z'
                 ]
 
             case 'electronData' | 'ionData':

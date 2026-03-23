@@ -281,7 +281,23 @@ int main(int argc, char * argv[]) {
   edgeFieldLineDataTree->Branch("Field Line y", &edgeLineY, "edgeLineY/D");
   edgeFieldLineDataTree->Branch("Field Line z", &edgeLineZ, "edgeLineZ/D");
 
-  
+  //***** E Field Data Tree *****//
+  //Create
+  TTree *eFieldDataTree = new TTree("eFieldDataTree", "E Fields");
+
+  //Data to be saved.
+  double eFieldX, eFieldY, eFieldZ;
+  double eFieldXMag, eFieldYMag, eFieldZMag;
+  double eFieldMag;
+
+  //Add branches
+  eFieldDataTree->Branch("E Field x", &eFieldX, "eFieldX/D");
+  eFieldDataTree->Branch("E Field y", &eFieldY, "eFieldY/D");
+  eFieldDataTree->Branch("E Field z", &eFieldZ, "eFieldZ/D");
+  eFieldDataTree->Branch("E Field x Mag", &eFieldXMag, "eFieldXMag/D");
+  eFieldDataTree->Branch("E Field y Mag", &eFieldYMag, "eFieldYMag/D");
+  eFieldDataTree->Branch("E Field z Mag", &eFieldZMag, "eFieldZMag/D");
+  eFieldDataTree->Branch("E Field Mag", &eFieldMag, "eFieldMag/D");
   
   //*************** SIMULATION ***************//
   std::cout << "****************************************\n";
@@ -388,43 +404,39 @@ int main(int argc, char * argv[]) {
   double rangeScale = 0.99;
 
   // The x-direction is the long axis of the geometry. 
-  const double xLineLimit = pitch/sqrt(3.);
-  const double yLineLimit = pitch/2.;
+  const double xLineLimit = pitch/sqrt(3.)*rangeScale;
+  const double yLineLimit = pitch/2.*rangeScale;
   
   //Note that the total number of field lines is x2 the given number of field lines (x and y)
   // Field Lines along x:
   for(int i = 0; i < numFieldLine; i++){
-    xStart.push_back(rangeScale*xLineLimit*i/(numFieldLine-1));
+    xStart.push_back(xLineLimit*i/(numFieldLine-1));
     yStart.push_back(0.);
 
-    xStart.push_back(-rangeScale*xLineLimit*i/(numFieldLine-1));
+    xStart.push_back(-xLineLimit*i/(numFieldLine-1));
     yStart.push_back(0.);
   }
   
   // Field Lines along y:
   for(int i = 0; i < numFieldLine; i++){
     xStart.push_back(0.);
-    yStart.push_back(rangeScale*yLineLimit*i/(numFieldLine-1));
+    yStart.push_back(yLineLimit*i/(numFieldLine-1));
 
     xStart.push_back(0.);
-    yStart.push_back(-rangeScale*yLineLimit*i/(numFieldLine-1));
+    yStart.push_back(-yLineLimit*i/(numFieldLine-1));
   }
   
   // Lines generated along the perimeter of the unit cell
-  double xWidth = rangeScale*pitch*sqrt(3.)/2.;
-  double yWidth = rangeScale*pitch/2.;
-  
-  //Right edge of unit cell
+  //Upper edge
   for(int i = 0; i < numFieldLine; i++){
-    xEdgeStart.push_back(xWidth*(2./3. - (1./3.)*i/(numFieldLine-1)));
-    yEdgeStart.push_back(yWidth*i/(numFieldLine-1));
+    xEdgeStart.push_back(xLineLimit*(1.0*i/(numFieldLine-1)-0.5));
+    yEdgeStart.push_back(yLineLimit);
   }
-  //upper edge of unit cell  
-  for(int i = 0; i < numFieldLine; i++){  
-    xEdgeStart.push_back((1./3.)*xWidth*(1. - 1.*i/(numFieldLine-1)));
-    yEdgeStart.push_back(yWidth);
+  //Slanted edge
+  for(int i = 0; i < numFieldLine; i++){
+    xEdgeStart.push_back(xLineLimit*(1. - 0.5*i/(numFieldLine-1)));
+    yEdgeStart.push_back(yLineLimit*i/(numFieldLine-1));
   }
-
 
   // ***** Calculate field Lines ***** //
   std::vector<std::array<float, 3> > fieldLines;
@@ -532,13 +544,42 @@ int main(int argc, char * argv[]) {
   
   std::cout << "Done " << totalFieldLines << " field lines." << std::endl;
 
-  // ***** Deal with fieldline data trees ***** //
+  // ***** Calculate E fields ***** //
+  //Calculate E field at different z planes above and below grid
+  double eFieldPlanes[6] = {zmax*.95, cathodeHeight/2., 2.*gridThickness, -2.*gridThickness, -gridStandoff/2., -.95*(gridStandoff-thicknessSiO2)};
+
+  for(int inPlane = 0; inPlane < 6; inPlane++){
+    std::cout << "Calculating E field at z = " << eFieldPlanes[inPlane] << " ." << std::endl;
+
+    for(int inPoint = 0; inPoint < totalFieldLines; inPoint++){
+      int status;
+      Medium* inMedium;
+
+      eFieldX = xStart[inPoint];
+      eFieldY = yStart[inPoint];
+      eFieldZ = eFieldPlanes[inPlane];
+
+      //Get E field at point
+      fieldFIMS.ElectricField(eFieldX, eFieldY, eFieldZ, eFieldXMag, eFieldYMag, eFieldZMag, inMedium, status);
+
+      //Calculate magnitude of E field
+      eFieldMag = std::sqrt(std::pow(eFieldXMag, 2.) + std::pow(eFieldYMag, 2.) + std::pow(eFieldZMag, 2.));
+
+      //Fill tree
+      eFieldDataTree->Fill();
+    }
+  }
+
+  // ***** Deal with data trees ***** //
   fieldLineDataTree->Write();
   delete fieldLineDataTree;
   gridFieldLineDataTree->Write();
   delete gridFieldLineDataTree;
   edgeFieldLineDataTree->Write();
   delete edgeFieldLineDataTree;
+
+  eFieldDataTree->Write();
+  delete eFieldDataTree;
 
   dataFile->Close();
   delete dataFile;
