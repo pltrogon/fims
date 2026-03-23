@@ -402,6 +402,7 @@ int main(int argc, char * argv[]) {
   std::vector<double> xEdgeStart;
   std::vector<double> yEdgeStart;
   double rangeScale = 0.99;
+  double fieldLineScale = 1.*(numFieldLine-1);
 
   // The x-direction is the long axis of the geometry. 
   const double xLineLimit = pitch/sqrt(3.)*rangeScale;
@@ -410,32 +411,32 @@ int main(int argc, char * argv[]) {
   //Note that the total number of field lines is x2 the given number of field lines (x and y)
   // Field Lines along x:
   for(int i = 0; i < numFieldLine; i++){
-    xStart.push_back(xLineLimit*i/(numFieldLine-1));
+    xStart.push_back(xLineLimit*i/fieldLineScale);
     yStart.push_back(0.);
 
-    xStart.push_back(-xLineLimit*i/(numFieldLine-1));
+    xStart.push_back(-xLineLimit*i/fieldLineScale);
     yStart.push_back(0.);
   }
   
   // Field Lines along y:
   for(int i = 0; i < numFieldLine; i++){
     xStart.push_back(0.);
-    yStart.push_back(yLineLimit*i/(numFieldLine-1));
+    yStart.push_back(yLineLimit*i/fieldLineScale);
 
     xStart.push_back(0.);
-    yStart.push_back(-yLineLimit*i/(numFieldLine-1));
+    yStart.push_back(-yLineLimit*i/fieldLineScale);
   }
   
   // Lines generated along the perimeter of the unit cell
-  //Upper edge
+  //Upper edge from left to right
   for(int i = 0; i < numFieldLine; i++){
-    xEdgeStart.push_back(xLineLimit*(1.0*i/(numFieldLine-1)-0.5));
+    xEdgeStart.push_back(xLineLimit*(i/fieldLineScale - 0.5));
     yEdgeStart.push_back(yLineLimit);
   }
-  //Slanted edge
+  //Slanted edge - From right corner to top-right corner
   for(int i = 0; i < numFieldLine; i++){
-    xEdgeStart.push_back(xLineLimit*(1. - 0.5*i/(numFieldLine-1)));
-    yEdgeStart.push_back(yLineLimit*i/(numFieldLine-1));
+    xEdgeStart.push_back(xLineLimit*(1. - i/fieldLineScale/2.));
+    yEdgeStart.push_back(yLineLimit*i/fieldLineScale);
   }
 
   // ***** Calculate field Lines ***** //
