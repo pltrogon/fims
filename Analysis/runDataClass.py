@@ -2356,7 +2356,7 @@ class runData:
 
         ax1.set_title('Induced Signal')
         ax1.set_xlabel('Time (ns)')
-        ax1.set_ylabel('Signal Strength (fC/ns)')#TODO - The units here seem weird
+        ax1.set_ylabel('Signal Strength (fC/ns)')#TODO - The units here seem weird fC/ns should be uA?
 
         ax2.set_title('Integrated Signal')
         ax2.set_xlabel('Time (ns)')
@@ -2379,6 +2379,9 @@ class runData:
         allSignals = self.getDataFrame('signalData')
         
         averageSignal = allSignals.groupby('Signal Time')['Signal Strength'].mean()
+
+        adjacents = ['Top', 'Bottom', 'TopRight', 'BottomRight', 'TopLeft', 'BottomLeft']
+
         averageCharge = averageSignal.values.cumsum()
         averageTotalCharge = averageCharge[-1]
 
@@ -2390,21 +2393,58 @@ class runData:
         ax1 = fig.add_subplot(121)
         ax2 = fig.add_subplot(122)
         
+        #Plot signals for the central pad
         ax1.plot(
             averageSignal.index, averageSignal.values
         )
-
         ax2.plot(
             averageSignal.index, averageCharge
         )
         ax2.axhline(
             averageTotalCharge,
-            label=f'Total Charge = {averageTotalCharge:.3f}', c='r', ls='--'
+            label=f'Total Charge: {averageTotalCharge:.3f} fC', c='r', ls='--'
         )
+
+        #Plotting the averge signal in adjacent pads
+        '''
+        #Plotting each adjacent pad individually
+        for inPad in adjacents:
+            adjacentSignal = allSignals.groupby('Signal Time')[f'{inPad} Signal'].mean()
+            ax1.plot(
+                adjacentSignal.index, adjacentSignal.values, label=f'{inPad} Pad',
+            )
+            ax2.plot(
+                adjacentSignal.index, adjacentSignal.values.cumsum(), label=f'{inPad} Pad'
+            )
+        '''
+        #Plot average of all adjacent pads together
+        adjacentSignals = []
+        for inPad in adjacents:
+            adjacentSignal = allSignals.groupby('Signal Time')[f'{inPad} Signal'].mean()
+            adjacentSignals.append(adjacentSignal.values)
+
+        averageAdjacentSignal = np.mean(adjacentSignals, axis=0)
+        ax1.plot(
+            adjacentSignal.index, averageAdjacentSignal, 
+            label='Adjacent Pads - Average', c='m', ls='--'
+        )
+        ax2.plot(
+            adjacentSignal.index, np.cumsum(averageAdjacentSignal), 
+            label='Adjacent Pads - Average', c='m', ls='--'
+        )
+
+        #Plot ion signal for central pad
+        m, b = self._calcIonCurrent()
+        ionSignal = m*averageSignal.index + b
+        ax2.plot(
+            averageSignal.index, ionSignal,
+            label=f'Estimated Ion Current ({m*1e3:.1f} nA)', c='r', ls=':'
+        )
+
 
         ax1.set_title('Average Induced Signal')
         ax1.set_xlabel('Time (ns)')
-        ax1.set_ylabel('Signal Strength (fC/ns)')#TODO - The units here seem weird
+        ax1.set_ylabel('Signal Strength (fC/ns)')
 
         ax2.set_title('Average Integrated Signal')
         ax2.set_xlabel('Time (ns)')
@@ -2511,3 +2551,29 @@ class runData:
         ax.grid()
 
         return fig
+
+
+
+#********************************************************************************#
+
+    def _calcIonCurrent(self, ionTime=2.5):
+        """
+        TODO
+        """
+
+        allSignals = self.getDataFrame('signalData')
+        
+        averageSignal = allSignals.groupby('Signal Time')['Signal Strength'].mean()
+
+        averageCharge = averageSignal.values.cumsum()
+
+        timeMask = averageSignal.index >= ionTime
+        xIons = averageSignal.index[timeMask]
+        yIons = averageCharge[timeMask]
+
+        slope, intercept = np.polyfit(xIons, yIons, 1)
+
+        return slope, intercept
+
+
+
