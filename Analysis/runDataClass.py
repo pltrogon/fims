@@ -2380,8 +2380,6 @@ class runData:
         
         averageSignal = allSignals.groupby('Signal Time')['Signal Strength'].mean()
 
-        adjacents = ['Top', 'Bottom', 'TopRight', 'BottomRight', 'TopLeft', 'BottomLeft']
-
         averageCharge = averageSignal.values.cumsum()
         averageTotalCharge = averageCharge[-1]
 
@@ -2406,32 +2404,33 @@ class runData:
         )
 
         #Plotting the averge signal in adjacent pads
-        '''
-        #Plotting each adjacent pad individually
-        for inPad in adjacents:
-            adjacentSignal = allSignals.groupby('Signal Time')[f'{inPad} Signal'].mean()
+        if 'Top Signal' in allSignals.columns:
+            adjacents = ['Top', 'Bottom', 'TopRight', 'BottomRight', 'TopLeft', 'BottomLeft']
+            adjacentSignals = []
+            for inPad in adjacents:
+                adjacentSignal = allSignals.groupby('Signal Time')[f'{inPad} Signal'].mean()
+                adjacentSignals.append(adjacentSignal.values)
+
+            '''
+            #Plotting each adjacent pad individually
+            for i, inPad in enumerate(adjacents):
+                ax1.plot(
+                    adjacentSignals[i].index, adjacentSignals[i].values, label=f'{inPad} Pad',
+                )
+                ax2.plot(
+                    adjacentSignals[i].index, adjacentSignals[i].values.cumsum(), label=f'{inPad} Pad'
+                )
+            '''
+            #Plot average of all adjacent pads together
+            averageAdjacentSignal = np.mean(adjacentSignals, axis=0)
             ax1.plot(
-                adjacentSignal.index, adjacentSignal.values, label=f'{inPad} Pad',
+                adjacentSignal.index, averageAdjacentSignal, 
+                label='Adjacent Pads - Average', c='m', ls='--'
             )
             ax2.plot(
-                adjacentSignal.index, adjacentSignal.values.cumsum(), label=f'{inPad} Pad'
+                adjacentSignal.index, np.cumsum(averageAdjacentSignal), 
+                label='Adjacent Pads - Average', c='m', ls='--'
             )
-        '''
-        #Plot average of all adjacent pads together
-        adjacentSignals = []
-        for inPad in adjacents:
-            adjacentSignal = allSignals.groupby('Signal Time')[f'{inPad} Signal'].mean()
-            adjacentSignals.append(adjacentSignal.values)
-
-        averageAdjacentSignal = np.mean(adjacentSignals, axis=0)
-        ax1.plot(
-            adjacentSignal.index, averageAdjacentSignal, 
-            label='Adjacent Pads - Average', c='m', ls='--'
-        )
-        ax2.plot(
-            adjacentSignal.index, np.cumsum(averageAdjacentSignal), 
-            label='Adjacent Pads - Average', c='m', ls='--'
-        )
 
         #Plot ion signal for central pad
         m, b = self._calcIonCurrent()
