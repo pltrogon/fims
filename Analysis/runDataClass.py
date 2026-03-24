@@ -2466,3 +2466,48 @@ class runData:
         return fig
 
 #********************************************************************************#
+
+    def plotFieldStrength(self):
+        """
+        Plots the electric field strength along the central field line.
+        """
+
+        fieldStrength = self.getDataFrame('eFieldData')
+
+        alongX = fieldStrength['E Field y']==0 
+        alongY = fieldStrength['E Field x']==0
+        centralLine = fieldStrength[alongX & alongY]
+
+        driftField = self.getRunParameter('Drift Field')
+        ampField = self.getRunParameter('Amplification Field')
+        holeRadius = self.getRunParameter('Hole Radius')
+
+        fig = plt.figure(figsize=(10, 5))
+        fig.suptitle('Electric Field Strength Along Hole Axis')
+        ax = fig.add_subplot(111)
+
+        ax.scatter(
+            centralLine['E Field z'], centralLine['E Field Mag']/1000,
+            ls='', label='Simulated Field Strength', c='b', alpha=0.5
+        )
+
+        ax.axhline(
+            driftField/1000,
+            ls=':', c='r', label=f'Drift Field = {driftField:.0f} V/cm'
+        )
+        ax.axhline(
+            ampField/1000,
+            ls='--', c='r', label=f'Amplification Field = {ampField/1000:.1f} kV/cm'
+        )
+        ax.axvline(
+            holeRadius,
+            ls='--', c='k', label=f'Hole Radius = {holeRadius:.0f} um'
+        )
+
+        ax.set_xlabel('z (um)')
+        ax.set_ylabel('Electric Field Strength (kV/cm)')
+
+        ax.legend()
+        ax.grid()
+
+        return fig

@@ -576,7 +576,7 @@ int main(int argc, char * argv[]) {
 
     eFieldX = 0.;
     eFieldY = 0.;
-    eFieldZ = .95*(zmin + (zmax-zmin)*inPoint/1000.);
+    eFieldZ = .99*(zmin + (zmax-zmin)*inPoint/1000.);
 
     //Get E field at point
     fieldFIMS.ElectricField(eFieldX, eFieldY, eFieldZ, eFieldXMag, eFieldYMag, eFieldZMag, inMedium, status);

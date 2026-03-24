@@ -169,6 +169,11 @@ class geometryClass:
 
         gridVoltage, cathodeVoltage = self.findPotentials()
 
+        print('***********************')
+        print(f'\tSetting grid voltage to {gridVoltage:.2f} V')
+        print(f'\tSetting cathode voltage to {cathodeVoltage:.2f} V')
+        print('***********************')
+
         self._elmerClass.resetPotentials()
         self._elmerClass._setPotential('Grid', gridVoltage)
         self._elmerClass._setPotential('Cathode', cathodeVoltage)
@@ -197,11 +202,17 @@ class geometryClass:
 
         halfGrid = self._param['gridThickness']/2
 
-        driftGap = self._param['cathodeHeight']+halfGrid
+        driftGap = self._param['cathodeHeight']-halfGrid
         amplificationGap = self._param['gridStandoff']-halfGrid
 
         gridVoltage = -1*amplificationField*amplificationGap*MICRONTOCM
         cathodeVoltage = -1*driftField*driftGap*MICRONTOCM + gridVoltage
+
+
+        print(f'For a drift field of {driftField:.2f} and cathode height of {driftGap:.2f} um:')
+        print(f'\tCathode Voltage: {cathodeVoltage:.2f} V')
+        print(f'For a amplification field of {amplificationField:.2f} and grid height of {amplificationGap:.2f} um:')
+        print(f'\tGrid Voltage: {gridVoltage:.2f} V')
 
         return gridVoltage, cathodeVoltage
 
