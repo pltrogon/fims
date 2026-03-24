@@ -550,8 +550,6 @@ int main(int argc, char * argv[]) {
   double eFieldPlanes[6] = {zmax*.95, cathodeHeight/2., 2.*gridThickness, -2.*gridThickness, -gridStandoff/2., -.95*(gridStandoff-thicknessSiO2)};
 
   for(int inPlane = 0; inPlane < 6; inPlane++){
-    std::cout << "Calculating E field at z = " << eFieldPlanes[inPlane] << " ." << std::endl;
-
     for(int inPoint = 0; inPoint < totalFieldLines; inPoint++){
       int status;
       Medium* inMedium;
@@ -570,6 +568,26 @@ int main(int argc, char * argv[]) {
       eFieldDataTree->Fill();
     }
   }
+
+  //Calculate E field along central axis
+  for(int inPoint = 0; inPoint < 1001; inPoint++){
+    int status;
+    Medium* inMedium;
+
+    eFieldX = 0.;
+    eFieldY = 0.;
+    eFieldZ = .95*(zmin + (zmax-zmin)*inPoint/1000.);
+
+    //Get E field at point
+    fieldFIMS.ElectricField(eFieldX, eFieldY, eFieldZ, eFieldXMag, eFieldYMag, eFieldZMag, inMedium, status);
+
+    //Calculate magnitude of E field
+    eFieldMag = std::sqrt(std::pow(eFieldXMag, 2.) + std::pow(eFieldYMag, 2.) + std::pow(eFieldZMag, 2.));
+
+    //Fill tree
+    eFieldDataTree->Fill();
+  }
+
 
   // ***** Deal with data trees ***** //
   fieldLineDataTree->Write();
