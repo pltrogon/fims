@@ -108,7 +108,7 @@ class geometryClass:
             neighborCells: Creates the 6 adjacent cells.
         """
 
-        print('\tCreating geometry...')
+        print('\tBuilding geometry...')
     
         self._checkParameters()
         self._gmshClass = gmshClass(self._param)
@@ -169,11 +169,6 @@ class geometryClass:
 
         gridVoltage, cathodeVoltage = self.findPotentials()
 
-        print('***********************')
-        print(f'\tSetting grid voltage to {gridVoltage:.2f} V')
-        print(f'\tSetting cathode voltage to {cathodeVoltage:.2f} V')
-        print('***********************')
-
         self._elmerClass.resetPotentials()
         self._elmerClass._setPotential('Grid', gridVoltage)
         self._elmerClass._setPotential('Cathode', cathodeVoltage)
@@ -207,12 +202,6 @@ class geometryClass:
 
         gridVoltage = -1*amplificationField*amplificationGap*MICRONTOCM
         cathodeVoltage = -1*driftField*driftGap*MICRONTOCM + gridVoltage
-
-
-        print(f'For a drift field of {driftField:.2f} and cathode height of {driftGap:.2f} um:')
-        print(f'\tCathode Voltage: {cathodeVoltage:.2f} V')
-        print(f'For a amplification field of {amplificationField:.2f} and grid height of {amplificationGap:.2f} um:')
-        print(f'\tGrid Voltage: {gridVoltage:.2f} V')
 
         return gridVoltage, cathodeVoltage
 
@@ -932,7 +921,6 @@ class gmshClass:
 
         gmsh.model.add(filename)
 
-        print('\tSetting up geometry...')
         match runOption:
             case 'FIMS':
                 _, allCellsMap = self._makeUnitCell()

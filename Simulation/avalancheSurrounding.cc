@@ -19,6 +19,10 @@
  * Tanner Polischuk & James Harrison IV
  */
 
+
+//My includes
+#include "SilenceConsole.h"
+
 //Garfield includes
 #include "Garfield/ComponentElmer.hh"
 #include "Garfield/AvalancheMicroscopic.hh"
@@ -294,8 +298,11 @@ int main(int argc, char * argv[]) {
     "cf4", gasCompCF4,
     "iC4H10", gasCompIsobutane
   );
-  gasFIMS->EnablePenningTransfer(gasPenning, .0, "ar");
-
+  
+  {
+    SilenceCerr guard; // Mute any Cerr's
+    gasFIMS->EnablePenningTransfer(gasPenning, 0.0, "ar");
+  }
 
   //STP gas parameters:
   double gasTemperature = 293.15; //K
