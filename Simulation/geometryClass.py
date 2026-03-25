@@ -660,6 +660,44 @@ class gmshClass:
             return surface
         
 #**********************************************************************#
+    def _createOctagon(self, outRadius, z, zDist=None):
+        """
+        Makes an octagon in the xy-plane with the center at the origin.
+        Extrudes it in the z-direction if zDist is provided.
+
+        Args:
+            outRadius: The distance from the octagon center to each vertex.
+            z: The z-coordinate of the octagon.
+            zDist: The distance to extrude the octagon in the z-direction. 
+                   If None, the octagon will remain a 2D surface.
+        """
+        
+        points = []
+        for i in range(8):
+            angle = math.radians(i*45+22.5) # Rotate by 15 degrees to align flat sides with axes
+            x = outRadius*math.cos(angle)
+            y = outRadius*math.sin(angle)
+
+            inPoint = self._occ.addPoint(x, y, z)
+            points.append(inPoint)
+
+        lines = []
+        for i in range(8):
+            inLine = self._occ.addLine(points[i], points[(i+1)%8])
+            lines.append(inLine)
+
+        loop = self._occ.addCurveLoop(lines)
+        surface = self._occ.addPlaneSurface([loop])
+        if zDist is not None:
+            octagon = self._occ.extrude(
+                [(2, surface)],
+                0, 0, zDist
+            )
+            return octagon[1][1]
+        else:
+            return surface
+        
+#**********************************************************************#
     def _makeFIMSHexagonal(self, surrounding=False):
         """
         builds a hexagonal array of unit cells.
@@ -713,6 +751,129 @@ class gmshClass:
 
         return allCellData, entityMap
     
+
+#**********************************************************************#
+    def _buildGridPix(self):
+        """
+        Builds the geometry for a single unit cell of the gridPix geometry.
+
+        Returns:
+            A dictionary containing the following parts of the unit cell:
+                Gas: The gas volume in the unit cell.
+                Dielectric: The dielectric volume in the unit cell.
+                Grid: The grid volume in the unit cell.
+                CenterPad: The center pad surface in the unit cell.
+                Cathode: The cathode surface in the unit cell.
+        """
+
+        pitch = self._param['pitch']
+        holeRadius = self._param['holeRadius']
+        padLength = self._param['padLength']
+        gridStandoff = self._param['gridStandoff']
+        cathodeHeight = self._param['cathodeHeight']
+        gridThickness = self._param['gridThickness']
+        thicknessSiO2 = self._param['thicknessSiO2']
+        pillarRadius = self._param['pillarRadius']
+
+        xLength = pitch/2
+        yLength = pitch/2
+
+        ## Dielectric
+        dielectricBox = self._occ.addBox(
+            0, 0, -gridStandoff, 
+            xLength, yLength, thicknessSiO2
+        )
+        # Define holes for the pads
+        centerPadHole = self._createOctagon(
+            padLength, -gridStandoff, thicknessSiO2
+        )
+        #Cut holes in dielectric
+        dielectricVolume, _ = self._occ.cut(
+            [(3, dielectricBox)],
+            [(3, centerPadHole)]
+        )
+
+        ## Grid
+        gridBox = self._occ.addBox(
+            0, 0, -gridThickness/2,
+            xLength, yLength, gridThickness
+        )
+        centerGridHole = self._occ.addCylinder(
+            0, 0, -gridThickness/2,
+            0, 0, gridThickness,
+            holeRadius
+        )
+        gridVolume, _ = self._occ.cut(
+            [(3, gridBox)],
+            [(3, centerGridHole)]
+        )
+
+        
+        ## Gas
+        gasHeight = cathodeHeight + gridStandoff
+        gasBox = self._occ.addBox(
+            0, 0, -gridStandoff,
+            xLength, yLength, gasHeight
+        )
+        gasVolume, _ = self._occ.cut(
+            [(3, gasBox)], 
+            [(3, dielectricVolume[0][1]), (3, gridVolume[0][1])], 
+            removeObject=True, removeTool=False
+        )
+
+        ## Pads
+        centerPadFull = self._createOctagon(
+            padLength, -gridStandoff
+        )
+
+        padCutBox = self._occ.addBox(
+            0, 0, -gridStandoff,
+            xLength, yLength, 1.0
+        )
+
+        centerPadSurface, _ = self._occ.intersect(
+            [(2, centerPadFull)],
+            [(3, padCutBox)],
+            removeObject=True, removeTool=True
+        )
+
+        ## Cathode
+        cathodeSurface = self._occ.addRectangle(
+            0, 0, cathodeHeight,
+            xLength, yLength
+        )
+
+        cellParts = {
+            'Gas': (3, gasVolume[0][1]),
+            'Dielectric': (3, dielectricVolume[0][1]),
+            'Grid': (3, gridVolume[0][1]),
+            'Pad': centerPadSurface[0],
+            'Cathode': (2, cathodeSurface)
+        }
+
+        return cellParts
+    
+#**********************************************************************#
+
+    def _makeGridPix(self):
+        """
+        TODO
+        """
+
+        allCellData = []
+        allObjects = []
+
+
+        inCell = self._buildGridPix()
+
+        allCellData.append(inCell)
+        allObjects.extend(inCell.values())
+
+        _, entityMap = self._occ.fragment(allObjects, [])
+        self._occ.synchronize()
+
+        return allCellData, entityMap
+    
 #**********************************************************************#
 
     def _assignPhysicalGroups(self, entityMap, mode):
@@ -746,6 +907,10 @@ class gmshClass:
             'FIMSHexagonalSurrounding': {
                 'keys': allVolumes + ['Pad'] + otherSurfaces,
                 'pads': allPads
+            },
+            'GridPix': {
+                'keys': allVolumes + ['Pad'] + otherSurfaces,
+                'pads': ['CentralPad']
             }
         }
 
@@ -832,6 +997,10 @@ class gmshClass:
             'FIMSHexagonalSurrounding': {
                 'x': (-outRadius, outRadius), 
                 'y': (-yLength, yLength)
+            },
+            'GridPix': {
+                'x': (0, yLength), 
+                'y': (0, yLength)
             }
         }
 
@@ -904,7 +1073,8 @@ class gmshClass:
             'FIMS',
             'FIMSSurrounding',
             'FIMSHexagonal',
-            'FIMSHexagonalSurrounding'
+            'FIMSHexagonalSurrounding',
+            'GridPix'
         ]
 
         if runOption not in runOptions:
@@ -948,6 +1118,9 @@ class gmshClass:
 
             case 'FIMSHexagonalSurrounding':
                 _, allCellsMap = self._makeFIMSHexagonal(surrounding=True)
+
+            case 'GridPix':
+                _, allCellsMap = self._makeGridPix()
 
         self._assignPhysicalGroups(allCellsMap, runOption)
         self._setMeshSizes(runOption)
