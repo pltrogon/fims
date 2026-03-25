@@ -475,16 +475,16 @@ class FIMS_Simulation:
     
 
 #***********************************************************************************#
-    def _generateGeometry(self, surroundingCells=False):
+    def _generateGeometry(self, unitCell='FIMS', surroundingCells=False):
         """
-        Generates the geometry for the FIMS simulation using the geometryClass.
+        Generates the geometry for the simulation using the geometryClass.
         """
         self._geometry = geometryClass(self._param)
+        self._geometry.setUnitCell(unitCell)
         self._geometry.setSurroundingCells(surroundingCells)
         self._geometry.buildGeometry()
 
-        return
-        
+        return        
     
 #***********************************************************************************#
     def _solveEFields(self, solveWeighting=True):
@@ -505,39 +505,46 @@ class FIMS_Simulation:
         return
 
 #***********************************************************************************#
-    def _runGarfield(self, surrounding=False):
+    def _runGarfield(self, executable='runAvalanche', **kwargs):
         """
-        Runs a Garfield++ executable to determine field lines and simulate 
-        electron avalanches based on the parameters in 'runControl'.
-    
-        First links garfield libraries, creates the executable, and then runs the simulation.
-        The simulation is numbered based on the number found in 'runNo';
-        This also incremenmts this number.
-        The information from this simulation is saved in .root format within 'Data/'.
+        TODO
+        """
 
-        Args:
-            surrounding (bool): Runs avalancheSurrounding executable instead.
-        """
+        executables = [
+            'runAvalanche',
+            'runAvalancheSurrounding',
+            'runAvalancheGridPix',
+            'runTransparency',
+            'runEfficiency'
+        ]
+
+        if executable not in executables:
+            raise ValueError(f'Invalid executable.')
+        
+        # Handle inputs for runEfficiency
+        args = ''
+        if executable == 'runEfficiency':
+            targetEfficiency = kwargs.get('targetEfficiency', 0.95)
+            threshold = kwargs.get('threshold', 10)
+            args = f'{targetEfficiency} {threshold}'
+
         originalCWD = os.getcwd()
 
-        executable = 'runAvalanche'
-        
-        if surrounding:
-            executable += 'Surrounding'
-        
         try:
-            print('\tExecuting Garfield++...')
+            print(f'\tExecuting Garfield++ ({executable})...')
             os.chdir('./build/')
 
             # Get garfield path into environment
             newEnv = self._getGarfieldEnvironment()
             os.environ.update(newEnv)
 
-            garfieldLog = os.path.join(originalCWD, 'log/logGarfieldAvalanche.txt')
+            logFile = f'logGarfield{executable}.txt'
+            garfieldLog = os.path.join(originalCWD, 'log', logFile)
+
             with open(garfieldLog, 'w+') as garfieldOutput:
                 startTime = time.monotonic()
                 setupAvalanche = (
-                    f'./{executable}'
+                    f'./{executable} {args}'.strip()
                 )
                 subprocess.run(
                     setupAvalanche, 
@@ -550,96 +557,12 @@ class FIMS_Simulation:
                 garfieldOutput.write(f'\n\nGarfield run time: {endTime - startTime} s')
     
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f'Garfield++ avalanche execution failed with exit code {e.returncode}.')
+            raise RuntimeError(f'Garfield++ execution failed with exit code {e.returncode}.')
         
         finally:
             os.chdir(originalCWD)
 
-        return
-    
-
-#***********************************************************************************#
-    def _runFieldLines(self):
-        """
-        Runs a Garfield++ executable to determine field lines based on the parameters
-        in 'runControl'.
-    
-        First links garfield libraries, creates the executable, and then runs the simulation.
-        The information from this simulation is saved in .txt format within 'Data/'.
-        """
-        originalCWD = os.getcwd()
-        try:
-            print('\tGenerating field lines...')
-            os.chdir('./build/')
-
-            # Get garfield path into environment
-            newEnv = self._getGarfieldEnvironment()
-            os.environ.update(newEnv)
-
-            fieldLineLog = os.path.join(originalCWD, 'log/logGarfieldFieldLines.txt')
-            with open(fieldLineLog, 'w+') as garfieldOutput:
-                startTime = time.monotonic()
-                setupFieldLines = ('./runFieldLines')
-                subprocess.run(
-                    setupFieldLines, 
-                    stdout = garfieldOutput, 
-                    shell = True, 
-                    check = True,
-                    env = os.environ
-                )
-                endTime = time.monotonic()
-                garfieldOutput.write(f'\n\nGarfield run time: {endTime - startTime} s')
-
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f'Garfield++ fieldine execution failed with exit code {e.returncode}.')
-
-        finally:
-            os.chdir(originalCWD)
-
-        return
-    
-
-#***********************************************************************************#
-    def _runGetEfficiency(self, targetEfficiency=.95, threshold=10):
-        """
-        Runs a Garfield++ executable the generates electron avalanches until a target
-        efficiency is either excluded or surpassed with a 2-sigma confidence.
-
-        Args:
-            targetEfficiency (float): The target efficiency to compare to.
-            threshold (int): The minimum number of electrons required to be considered a 'success'.
-        """
-        originalCWD = os.getcwd()
-        try:
-            print('\tGetting efficiency...')
-            os.chdir('./build/')
-
-            # Get garfield path into environment
-            newEnv = self._getGarfieldEnvironment()
-            os.environ.update(newEnv)
-
-            efficiencyLog = os.path.join(originalCWD, 'log/logGarfieldGetEfficiency.txt')
-            with open(efficiencyLog, 'w+') as garfieldOutput:
-                startTime = time.monotonic()
-                setupGetEfficiency = (
-                    f'./runEfficiency {targetEfficiency} {threshold}'
-                )
-                subprocess.run(
-                    setupGetEfficiency, 
-                    stdout = garfieldOutput, 
-                    shell = True, 
-                    check = True,
-                    env = os.environ
-                )
-                endTime = time.monotonic()
-                garfieldOutput.write(f'\n\nGarfield run time: {endTime - startTime} s')
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f'Garfield++ efficiency execution failed with exit code {e.returncode}.')
-            
-        finally:
-            os.chdir(originalCWD)
-
-        return
+        return  
     
 #***********************************************************************************#
     def runSimulation(self, changeGeometry=True):
@@ -708,7 +631,32 @@ class FIMS_Simulation:
 
         #Solve fields and run Garfield
         self._solveEFields(solveWeighting=True)
-        self._runGarfield(surrounding=True)
+        self._runGarfield(executable='runAvalancheSurrounding')
+        
+        return runNo
+    
+#***********************************************************************************#
+    def runGridPix(self):
+        """
+        Executes a simulation with the GridPix geometry.
+
+        Returns:
+            int: The run number for this simulation.
+        """
+
+        # Get the run number for this simulation
+        runNo = self._getRunNumber()
+        print('Running GridPix simulation...')
+        print(f'Running simulation - Run number: {runNo}')
+    
+        self._checkParam()
+        self._makeRunControl()
+    
+        self._generateGeometry(unitCell='GridPix')
+            
+        #Solve fields and run Garfield
+        self._solveEFields()
+        self._runGarfield(executable='runAvalancheGridPix')
         
         return runNo
     
@@ -1113,7 +1061,10 @@ class FIMS_Simulation:
             self._solveEFields(solveWeighting=False)
 
             #Determine the efficiency and read results from file
-            self._runGetEfficiency(targetEfficiency=targetEfficiency, threshold=threshold)
+            self._runGarfield(
+                executable='runEfficiency',
+                targetEfficiency=targetEfficiency, threshold=threshold
+            )
             effResults = self._readEfficiencyFile()
 
             efficiencyAtField['efficiency'].append(effResults['efficiency'])
@@ -1231,7 +1182,7 @@ class FIMS_Simulation:
             self._solveEFields(solveWeighting=False)
 
             #Generate field lines and read results from file
-            self._runFieldLines()
+            self._runGarfield(executable='runTransparency')
             transparencyResults = self._readTransparencyFile()
 
             transparencyAtField['transparency'].append(transparencyResults['transparency'])
@@ -1402,7 +1353,7 @@ class FIMS_Simulation:
             #Generate field lines and read results from file if not already transparent
             if not isTransparent:
 
-                self._runFieldLines()  
+                self._runGarfield(executable='runTransparency')  
                 transparencyResults = self._readTransparencyFile()
 
                 transparencyAtField['field'].append(newField)
@@ -1420,7 +1371,10 @@ class FIMS_Simulation:
             #Determine the efficiency and read results from file if not already efficient
             if not isEfficient:
 
-                self._runGetEfficiency(targetEfficiency=targetEfficiency, threshold=threshold)
+                self._runGarfield(
+                    executable='runEfficiency',
+                    targetEfficiency=targetEfficiency, threshold=threshold
+                )
                 effResults = self._readEfficiencyFile()
 
                 efficiencyAtField['field'].append(newField)
@@ -1597,7 +1551,10 @@ class FIMS_Simulation:
         self._param['avalancheLimit'] = 20 #Limit can be low. Check is boolean
 
         self._makeRunControl()
-        self._runGetEfficiency(targetEfficiency=efficiencyGoal, threshold=efficiencyThreshold)
+        self._runGarfield(
+            executable='runEfficiency', 
+            targetEfficiency=efficiencyGoal, threshold=efficiencyThreshold
+        )
         effResults = self._readEfficiencyFile()
 
         print(f'\tDetection efficiency: {effResults['efficiency']:.3f} +/- {effResults['efficiencyErr']:.3f}')
@@ -1624,7 +1581,7 @@ class FIMS_Simulation:
         self._param['numFieldLine'] = 200
 
         self._makeRunControl()
-        self._runFieldLines()  
+        self._runGarfield(executable='runTransparency')  
         transparencyResults = self._readTransparencyFile()
 
         print(f'\tField transparency: {transparencyResults['transparency']:.3f} +/- {transparencyResults['transparencyErr']:.3f}') 
