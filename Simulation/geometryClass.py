@@ -45,12 +45,19 @@ class geometryClass:
         self._param = inputParam
         self._checkParameters()
 
+        self._runOption = None
+
+        self._runGUI = False
+
+        self._unitCell = 'FIMS'
+        self._surroundingCells = False
+
         return
 
 #**********************************************************************#
     def _checkParameters(self):
         """
-        Checks that the parameters in self._param are valid
+        Checks that the parameters are valid
         for creating the geometry.
         """
 
@@ -96,16 +103,58 @@ class geometryClass:
         return
     
 #**********************************************************************#
-    def createGeometry(self, runGUI=False, hexagonal=False, neighborCells=False):
+    def toggleGUI(self):
         """
-        Creates the geometry for the FIMS simulation using Gmsh.
+        Toggles the Gmsh GUI running when creating the geometry.
+        """
+        self._runGUI = not self._runGUI
 
-        Args:
-            runGUI: Run the Gmsh GUI to visualize the geometry and mesh.
-            hexagonal: Creates a hexagonal unit cell if True. 
-                       Otherwise creates a rectangular unit cell.
-                       This requires mirroring in x and y.
-            neighborCells: Creates the 6 adjacent cells.
+        print('Gmsh GUI: ON' if self._runGUI else 'Gmsh GUI: OFF')
+
+        return
+    
+#**********************************************************************#
+    def setUnitCell(self, unitCell='FIMS'):
+        """
+        Sets the unit cell type.
+
+        Options are:
+            - FIMS: A single unit cell of the FIMS geometry.
+            - FIMSHexagonal: A single hexagonal unit cell of the FIMS geometry.
+            - GridPix: A single unit cell of the GridPix geometry.
+
+        Note: FIMS and GridPix require mirroring. FIMSHexagonal is standalone.
+        """
+
+        cellOptions = ['FIMS', 'FIMSHexagonal', 'GridPix']
+
+        if unitCell not in cellOptions:
+            raise ValueError(f'Error - Invalid unit cell type. Must be one of {cellOptions}.')
+        
+        self._unitCell = unitCell
+
+
+
+        return
+
+
+#**********************************************************************#
+    def setSurroundingCells(self, surrounding=False):
+        """
+        Sets whether to include the surrounding cells in the geometry.
+
+        In hexagonal geometry, this will be the entirety of each cell.
+        For FIMS, this will be half of each cell.
+        """
+
+        self._surroundingCells = surrounding
+
+        return
+
+#**********************************************************************#
+    def buildGeometry(self):
+        """
+        Builds the geometry for the FIMS simulation using Gmsh.
         """
 
         print('\tBuilding geometry...')
@@ -113,18 +162,12 @@ class geometryClass:
         self._checkParameters()
         self._gmshClass = gmshClass(self._param)
 
-        self._hexagonal = hexagonal
-        self._neighborCells = neighborCells
-
-        self._runOption = 'FIMS'
-        if self._hexagonal:
-            self._runOption += 'Hexagonal'
-        if self._neighborCells:
+        self._runOption = self._unitCell
+        if self._surroundingCells:
             self._runOption += 'Surrounding'
 
-        self._gmshClass.createMesh(
-            runOption=self._runOption,
-            runGUI=runGUI
+        self._gmshClass.generateMesh(
+            runOption=self._runOption
         )
 
         return
@@ -228,10 +271,11 @@ class gmshClass:
         self._param = inputParams
 
         return
+    
 #**********************************************************************#
-    def _createUnitCell(self):
+    def _buildFIMSCell(self):
         """
-        Creates the geometry for a single unit cell of the FIMS geometry.
+        Builds the geometry for a single unit cell of the FIMS geometry.
 
         Note: Pillars are currently not included in the geometry.
 
@@ -293,32 +337,6 @@ class gmshClass:
             [(3, centerGridHole), cornerGridHole[0]]
         )
 
-        '''
-        ##Pillars
-        xPillarFull = self._occ.addCylinder(
-            outRadius, 0, -gridStandoff+thicknessSiO2,
-            0, 0, gridStandoff-thicknessSiO2-gridThickness/2,
-            pillarRadius
-        )
-        yPillarFull = self._occ.addCylinder(
-            xLength - outRadius, yLength, -gridStandoff+thicknessSiO2,
-            0, 0, gridStandoff-thicknessSiO2-gridThickness/2,
-            pillarRadius
-        )
-
-        pillarCutBox = self._occ.addBox(
-            0, 0, -gridStandoff, 
-            xLength, yLength, gridStandoff
-        )
-        xPillar, _ = self._occ.intersect(
-            [(3, xPillarFull)], [(3, pillarCutBox)], 
-            removeObject=True, removeTool=False
-        )
-        yPillar, _ = self._occ.intersect(
-            [(3, yPillarFull)], [(3, pillarCutBox)], 
-            removeObject=True, removeTool=True
-        )
-        '''
         
         ## Gas
         gasHeight = cathodeHeight + gridStandoff
@@ -373,7 +391,7 @@ class gmshClass:
         return cellParts
     
 #**********************************************************************#
-    def _createCellSurrounding(self):
+    def _buildFIMSSurrounding(self):
         """
         """
 
@@ -506,12 +524,12 @@ class gmshClass:
     
 #**********************************************************************#
 
-    def _makeUnitCell(self):
+    def _makeFIMSCell(self):
 
         allCellData = []
         allObjects = []
 
-        inCell = self._createUnitCell()
+        inCell = self._buildFIMSCell()
 
         allCellData.append(inCell)
         allObjects.extend(inCell.values())
@@ -523,12 +541,12 @@ class gmshClass:
     
 #**********************************************************************#
 
-    def _makeCellSurrounding(self):
+    def _makeFIMSSurrounding(self):
 
         allCellData = []
         allObjects = []
 
-        inCell = self._createCellSurrounding()
+        inCell = self._buildFIMSSurrounding()
 
         allCellData.append(inCell)
         allObjects.extend(inCell.values())
@@ -540,9 +558,9 @@ class gmshClass:
 
 #**********************************************************************#
 
-    def _createHexagonalUnitCell(self):
+    def _buildHexagonalFIMSCell(self):
         """
-        Create the geometry for a single hexagonal unit cell 
+        build the geometry for a single hexagonal unit cell 
         of the FIMS geometry.
         
         Returns:
@@ -656,15 +674,15 @@ class gmshClass:
             return surface
         
 #**********************************************************************#
-    def _makeHexagonalCells(self, neighborCells=False):
+    def _makeHexagonalCells(self, surrounding=False):
         """
-        Creates a hexagonal array of unit cells.
+        builds a hexagonal array of unit cells.
 
         Central cell is always created.
-        If neighborCells is True, the 6 adjacent cells are also created.
+        The 6 adjacent cells are created if surrounding is True.
 
         Args:
-            neighborCells: If True, also creates the 6 adjacent cells.
+            surrounding (bool): Option to include the surrounding cells.
 
         Returns:
             A tuple containing:
@@ -680,7 +698,7 @@ class gmshClass:
         yShift = pitch/2.0
 
         cellCenters = [(0.0, 0.0)]
-        if neighborCells:
+        if surrounding:
             cellCenters = [
                 (0.0, 0.0), #Center
                 (0.0, pitch), #Top
@@ -696,7 +714,7 @@ class gmshClass:
 
         for dx, dy in cellCenters:
 
-            inCell = self._createHexagonalUnitCell()
+            inCell = self._buildHexagonalUnitCell()
 
             for inPart in inCell.values():
                 self._occ.translate([inPart], dx, dy, 0)
@@ -891,9 +909,9 @@ class gmshClass:
     
 #**********************************************************************#
 
-    def createMesh(self, runOption, runGUI=False):
+    def _checkRunOption(self, runOption):
         """
-        TODO
+        Checks that the run option is valid.
         """
 
         runOptions = [
@@ -905,6 +923,17 @@ class gmshClass:
 
         if runOption not in runOptions:
             raise ValueError(f'Option must be one of {runOptions}.')
+        
+        return
+
+#**********************************************************************#
+
+    def generateMesh(self, runOption):
+        """
+        TODO
+        """
+
+        self._checkRunOption(runOption)
 
         filePath = 'Geometry'
         filename = os.path.join(filePath, f'{runOption}.msh')
@@ -930,6 +959,7 @@ class gmshClass:
             
             case 'FIMSHexagonal':
                 _, allCellsMap = self._makeHexagonalCells()
+
             case 'FIMSHexagonalSurrounding':
                 _, allCellsMap = self._makeHexagonalCells(neighborCells=True)
 
@@ -946,7 +976,7 @@ class gmshClass:
             for msg in logMessages:
                 f.write(f"{msg}\n")
             
-        if runGUI:
+        if self._runGUI:
             gmsh.fltk.run()
 
         gmsh.finalize()
@@ -1229,14 +1259,14 @@ class elmerClass:
         dielectricValues = ['1e10', '3.9', '1.0', '3.0']
 
         try:
-            with open('Geometry/Dielectrics.dat', 'w') as f:
+            with open('Geometry/dielectrics.dat', 'w') as f:
                 f.write(self._numMaterials.__str__() + '\n')
 
                 for i in range(self._numMaterials):
                     f.write(f'{i+1} {dielectricValues[i]}\n')
 
         except Exception as e:
-            print(f"Error writing Dielectrics.dat: {e}")
+            print(f"Error writing dielectrics.dat: {e}")
     
         return
 
