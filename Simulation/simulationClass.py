@@ -41,11 +41,6 @@ class FIMS_Simulation:
         7. Execute Garfield++ to simulate electron multiplication effects.
         8. Reset parameters to defaults.
 
-    *****
-    IMPORTANT: The parameters are reset to defaults after every simulation.
-    TODO - Maybe not?
-    *****
-
     Private Attributes:
         param (dict): Parameter dictionary with the following entries:
             All dimensions are in microns. Electric field is in V/cm.
