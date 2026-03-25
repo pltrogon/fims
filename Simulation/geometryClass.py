@@ -93,8 +93,8 @@ class geometryClass:
         if self._param['padLength'] >= outRadius:
             raise ValueError('Error - Pad larger than Cell.')
         
-        #Pillars are currently not included in the geometry
-        #Check that pillars can fit in the remaining space
+        ## Pillars are currently not included in the geometry
+        # Check that pillars can fit in the remaining space
         padInRadius = self._param['padLength']*math.sqrt(3)/2
         padSpace = inRadius - padInRadius
         #if self._param['pillarRadius'] >= padSpace:
@@ -103,13 +103,11 @@ class geometryClass:
         return
     
 #**********************************************************************#
-    def toggleGUI(self):
+    def setGUI(self, runGUI=True):
         """
-        Toggles the Gmsh GUI running when creating the geometry.
+        Sets whether the Gmsh GUI runs when creating the geometry.
         """
-        self._runGUI = not self._runGUI
-
-        print('Gmsh GUI: ON' if self._runGUI else 'Gmsh GUI: OFF')
+        self._runGUI = runGUI
 
         return
     
@@ -133,8 +131,6 @@ class geometryClass:
         
         self._unitCell = unitCell
 
-
-
         return
 
 
@@ -144,7 +140,7 @@ class geometryClass:
         Sets whether to include the surrounding cells in the geometry.
 
         In hexagonal geometry, this will be the entirety of each cell.
-        For FIMS, this will be half of each cell.
+        For FIMS, this will only be half of each cell.
         """
 
         self._surroundingCells = surrounding
@@ -273,7 +269,7 @@ class gmshClass:
         return
     
 #**********************************************************************#
-    def _buildFIMSCell(self):
+    def _buildFIMS(self):
         """
         Builds the geometry for a single unit cell of the FIMS geometry.
 
@@ -309,7 +305,7 @@ class gmshClass:
             xLength, yLength, thicknessSiO2
         )
         # Define holes for the pads
-        centerPadHole = self._makeHexagon(
+        centerPadHole = self._createHexagon(
             padLength, -gridStandoff, thicknessSiO2
         )
         cornerPadHole = self._occ.copy([(3, centerPadHole)])
@@ -351,7 +347,7 @@ class gmshClass:
         )
 
         ## Pads
-        centerPadFull = self._makeHexagon(
+        centerPadFull = self._createHexagon(
             padLength, -gridStandoff
         )
         cornerPadFull = self._occ.copy([(2, centerPadFull)])
@@ -423,7 +419,7 @@ class gmshClass:
         )
 
         # Define holes for the pads
-        centerPadHole = self._makeHexagon(
+        centerPadHole = self._createHexagon(
             padLength, -gridStandoff, thicknessSiO2
         )
         padHoleTools = [(3, centerPadHole)]
@@ -474,7 +470,7 @@ class gmshClass:
         )
 
         ## Pads
-        centerPadFull = self._makeHexagon(
+        centerPadFull = self._createHexagon(
             padLength, -gridStandoff
         )
 
@@ -524,29 +520,18 @@ class gmshClass:
     
 #**********************************************************************#
 
-    def _makeFIMSCell(self):
+    def _makeFIMS(self, surrounding=False):
+        """
+        TODO
+        """
 
         allCellData = []
         allObjects = []
 
-        inCell = self._buildFIMSCell()
-
-        allCellData.append(inCell)
-        allObjects.extend(inCell.values())
-
-        _, entityMap = self._occ.fragment(allObjects, [])
-        self._occ.synchronize()
-
-        return allCellData, entityMap
-    
-#**********************************************************************#
-
-    def _makeFIMSSurrounding(self):
-
-        allCellData = []
-        allObjects = []
-
-        inCell = self._buildFIMSSurrounding()
+        if surrounding:
+            inCell = self._buildFIMSSurrounding()
+        else:
+            inCell = self._buildFIMS()
 
         allCellData.append(inCell)
         allObjects.extend(inCell.values())
@@ -582,10 +567,10 @@ class gmshClass:
         outRadius = pitch/math.sqrt(3)
 
         ## Dielectric
-        hexagonBase = self._makeHexagon(
+        hexagonBase = self._createHexagon(
             outRadius, -gridStandoff, thicknessSiO2
         )
-        padHole = self._makeHexagon(
+        padHole = self._createHexagon(
             padLength, -gridStandoff, thicknessSiO2
         )
         dielectricVolume, _ = self._occ.cut(
@@ -594,7 +579,7 @@ class gmshClass:
         )
 
         ## Grid
-        gridContainer = self._makeHexagon(
+        gridContainer = self._createHexagon(
             outRadius, -gridThickness/2, gridThickness
         )
         gridHole = self._occ.addCylinder(
@@ -609,7 +594,7 @@ class gmshClass:
 
         ## Gas
         gasHeight = cathodeHeight + gridStandoff
-        gasContainer = self._makeHexagon(
+        gasContainer = self._createHexagon(
             outRadius, -gridStandoff, gasHeight
         )
         gasVolume, _ = self._occ.cut(
@@ -618,10 +603,10 @@ class gmshClass:
             removeObject=True, removeTool=False
         )
         
-        padSurface = self._makeHexagon(
+        padSurface = self._createHexagon(
             padLength, -gridStandoff
         )
-        cathodeSurface = self._makeHexagon(
+        cathodeSurface = self._createHexagon(
             outRadius, cathodeHeight
         )
 
@@ -636,7 +621,7 @@ class gmshClass:
         return cellParts
     
 #**********************************************************************#
-    def _makeHexagon(self, outRadius, z, zDist=None):
+    def _createHexagon(self, outRadius, z, zDist=None):
         """
         Makes a hexagon in the xy-plane with the center at the origin.
         Extrudes it in the z-direction if zDist is provided.
@@ -674,7 +659,7 @@ class gmshClass:
             return surface
         
 #**********************************************************************#
-    def _makeHexagonalCells(self, surrounding=False):
+    def _makeFIMSHexagonal(self, surrounding=False):
         """
         builds a hexagonal array of unit cells.
 
@@ -952,16 +937,16 @@ class gmshClass:
 
         match runOption:
             case 'FIMS':
-                _, allCellsMap = self._makeUnitCell()
+                _, allCellsMap = self._makeFIMS()
 
             case 'FIMSSurrounding':
-                _, allCellsMap = self._makeCellSurrounding()
+                _, allCellsMap = self._makeFIMS(surrounding=True)
             
             case 'FIMSHexagonal':
-                _, allCellsMap = self._makeHexagonalCells()
+                _, allCellsMap = self._makeFIMSHexagonal()
 
             case 'FIMSHexagonalSurrounding':
-                _, allCellsMap = self._makeHexagonalCells(neighborCells=True)
+                _, allCellsMap = self._makeFIMSHexagonal(surrounding=True)
 
         self._assignPhysicalGroups(allCellsMap, runOption)
         self._setMeshSizes(runOption)
@@ -1044,20 +1029,24 @@ class elmerClass:
         match self._runOption:
             case 'FIMS':
                 self._electrodeMap.update({4: 'CornerPad'})
+
             case 'FIMSSurrounding':
                 self._electrodeMap.update({
                     4: 'TopPad', 5: 'BottomPad',
                     6: 'RightTopPad', 7: 'RightBottomPad',
                     8: 'LeftTopPad', 9: 'LeftBottomPad'
                 })
+
             case 'FIMSHexagonal':
                 pass
+
             case 'FIMSHexagonalSurrounding':
                 self._electrodeMap.update({
                     4: 'TopPad', 5: 'BottomPad',
                     6: 'RightTopPad', 7: 'RightBottomPad',
                     8: 'LeftTopPad', 9: 'LeftBottomPad'
                 })
+
             case _:
                 raise ValueError('Invalid run option.')
             

@@ -480,7 +480,8 @@ class FIMS_Simulation:
         Generates the geometry for the FIMS simulation using the geometryClass.
         """
         self._geometry = geometryClass(self._param)
-        self._geometry.createGeometry(neighborCells=surroundingCells)
+        self._geometry.setSurroundingCells(surroundingCells)
+        self._geometry.buildGeometry()
 
         return
         
@@ -835,7 +836,9 @@ class FIMS_Simulation:
 
         # Create surrounding-cell geometry
         self._geometryCapacitance = geometryClass(self._param)
-        self._geometryCapacitance.createGeometry(hexagonal=True, neighborCells=True)
+        self._geometryCapacitance.setUnitCell('FIMSHexagonal')
+        self._geometryCapacitance.setSurroundingCells(True)
+        self._geometryCapacitance.buildGeometry()
 
         # Solve the capacitance matrix
         self._geometryCapacitance.calculateEFields(capacitance=True)
@@ -2011,11 +2014,10 @@ class FIMS_Simulation:
             hexagonal (bool): Whether to use a hexagonal unit cell.
         """
         self._geometry = geometryClass(self._param)
-        self._geometry.createGeometry(
-            neighborCells=surroundingCells, 
-            hexagonal=hexagonal, 
-            runGUI=True
-        )
+
+        self._geometry.setGUI(runGUI=True)
+
+        self._geometry.buildGeometry()
 
     
 
