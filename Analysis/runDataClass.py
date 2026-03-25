@@ -476,21 +476,21 @@ class runData:
             self._calculatedData['Gain StdDev'] = gainStdDev
             
             #Calculate IBN - Includes initial Ion
-            IBN, meanIBN, meanIBNErr, meanIBNStdDev = self._calcIBN()
-            self._avalancheData['IBN'] = self._avalancheData['Avalanche ID'].map(IBN)
-            self._calculatedData['Average IBN'] = meanIBN
-            self._calculatedData['IBN Error'] = meanIBNErr
-            self._calculatedData['IBN StdDev'] = meanIBNStdDev
+            dataIBN = self._calcIBN()
+            self._avalancheData['IBN'] = self._avalancheData['Avalanche ID'].map(dataIBN['IBN'])
+            self._calculatedData['Average IBN'] = dataIBN['meanIBN']
+            self._calculatedData['IBN Error'] = dataIBN['meanIBNErr']
+            self._calculatedData['IBN StdDev'] = dataIBN['meanIBNStdDev']
 
             #Calculate IBF
-            IBF, meanIBF, meanIBFErr, meanIBFStdDev  = self._calcIBF()
-            self._avalancheData['IBF'] = self._avalancheData['Avalanche ID'].map(IBF)
-            self._calculatedData['Average IBF'] = meanIBF
-            self._calculatedData['IBF Error'] = meanIBFErr
-            self._calculatedData['IBF StdDev'] = meanIBFStdDev
+            dataIBF = self._calcIBF()
+            self._avalancheData['IBF'] = self._avalancheData['Avalanche ID'].map(dataIBF['IBF'])
+            self._calculatedData['Average IBF'] = dataIBF['meanIBF']
+            self._calculatedData['IBF Error'] = dataIBF['meanIBFErr']
+            self._calculatedData['IBF StdDev'] = dataIBF['meanIBFStdDev']
 
-            self._calculatedData['IBF * Raw Gain'] = meanIBF*rawGain
-            self._calculatedData['IBF * Trimmed Gain'] = meanIBF*trimmedGain
+            self._calculatedData['IBF * Raw Gain'] = dataIBF['meanIBF']*rawGain
+            self._calculatedData['IBF * Trimmed Gain'] = dataIBF['meanIBF']*trimmedGain
 
             # Efficiencies
             simRawEff, simRawEffErr = self._getRawEfficiency(threshold=10)
@@ -502,8 +502,9 @@ class runData:
             self._calculatedData['Efficiency Error'] = simEffErr
 
             #Fits
-            self._calculatedData['Fano Factor'] = gainStdDev**2/trimmedGain
-            self._calculatedData['Theta'] = trimmedGain/(self._calculatedData['Fano Factor']-1) - 1
+            polyaTheta, polyaGain = self._fitPolya()
+            self._calculatedData['Polya Theta'] = polyaTheta
+            self._calculatedData['Polya Gain'] = polyaGain
 
         return
 
@@ -983,7 +984,6 @@ class runData:
         
         return
 
-
 #********************************************************************************#   
     def plotAllFieldLines(self):
         """
@@ -1088,7 +1088,7 @@ class runData:
 
     
 #********************************************************************************#   
-    def _histAvalanche(self, trim, binWidth):
+    def _histAvalanche(self, trim=True, binWidth=1):
         """
         Calculates a histogram of the avalanche electron count data.
 
@@ -1551,7 +1551,7 @@ class runData:
 
 
 #********************************************************************************#   
-    def _fitAvalancheSize(self, binWidth):
+    def _fitAvalancheSize(self, binWidth=1):#TODO - no bin width here?
         """
         Fits the trimmed simulated avalanche size distribution 
         to Polya and exponential curves.
@@ -1955,7 +1955,7 @@ class runData:
             NOTE: This result INCLUDES the initial ion.
 
         Returns:
-            Tuple: A tuple containing:
+            dataIBN: A dictionary containing:
                    - IBN (pandas.series): The Ion Backflow Number for each simulated avalanche.
                    - meanIBN (float): The mean IBN for all avalanches.
                    - meanIBNErr (float): Standard error of the mean IBN
@@ -1974,7 +1974,14 @@ class runData:
         meanIBNStdDev = IBN.std(ddof=1)
         meanIBNErr = meanIBNStdDev / np.sqrt(numAvalanche)
 
-        return IBN, meanIBN, meanIBNErr, meanIBNStdDev
+        dataIBN = {
+            'IBN': IBN,
+            'meanIBN': meanIBN,
+            'meanIBNErr': meanIBNErr,
+            'meanIBNStdDev': meanIBNStdDev
+        }
+
+        return dataIBN
     
 #********************************************************************************#
     def _calcPerAvalancheIBF(self):
@@ -2018,7 +2025,7 @@ class runData:
             NOTE: This result EXCLUDES the initial ion.
 
         Returns:
-            Tuple: A tuple containing:
+            dataIBF: A dictionary containing:
                    - IBF (pandas.series): The Ion backflow fraction for each simulated avalanche.
                    - meanIBF (float): The mean IBF for all avalanches.
                    - meanIBFErr (float): Standard error of the mean IBF
@@ -2030,7 +2037,14 @@ class runData:
         meanIBFStdDev = IBF.std(ddof=1)
         meanIBFErr = meanIBFStdDev / np.sqrt(IBF.count())
 
-        return IBF, meanIBF, meanIBFErr, meanIBFStdDev
+        dataIBF = {
+            'IBF': IBF,
+            'meanIBF': meanIBF,
+            'meanIBFErr': meanIBFErr,
+            'meanIBFStdDev': meanIBFStdDev
+        }
+
+        return dataIBF
         
 #********************************************************************************#
     def _calcOpticalTransparency(self):
@@ -2206,6 +2220,17 @@ class runData:
         simEffErr = math.sqrt(varience)
 
         return simEff, simEffErr
+    
+#********************************************************************************#
+    def _fitPolya(self):
+        """TODO"""
+
+        fitResults = self._fitAvalancheSize(binWidth=1)
+
+        theta = fitResults['fitPolya'].theta
+        gain = fitResults['fitPolya'].gain
+
+        return theta, gain
 
 #********************************************************************************#
     def plotEfficiency(self, binWidth=1, threshold=0):
@@ -2539,8 +2564,16 @@ class runData:
             ls='--', c='r', label=f'Amplification Field = {ampField/1000:.1f} kV/cm'
         )
         ax.axvline(
+            0,
+            ls='-', c='k', label=f'Grid Plane'
+        )
+        ax.axvline(
             holeRadius,
-            ls='--', c='k', label=f'Hole Radius = {holeRadius:.0f} um'
+            ls='--', c='k', label=f'Hole Radius: {holeRadius:.0f} um'
+        )
+        ax.axvline(
+            -holeRadius,
+            ls='--', c='k'
         )
 
         ax.set_xlabel('z (um)')
