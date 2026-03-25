@@ -163,7 +163,8 @@ class geometryClass:
             self._runOption += 'Surrounding'
 
         self._gmshClass.generateMesh(
-            runOption=self._runOption
+            runOption=self._runOption,
+            runGUI=self._runGUI
         )
 
         return
@@ -699,7 +700,7 @@ class gmshClass:
 
         for dx, dy in cellCenters:
 
-            inCell = self._buildHexagonalUnitCell()
+            inCell = self._buildHexagonalFIMSCell()
 
             for inPart in inCell.values():
                 self._occ.translate([inPart], dx, dy, 0)
@@ -913,7 +914,7 @@ class gmshClass:
 
 #**********************************************************************#
 
-    def generateMesh(self, runOption):
+    def generateMesh(self, runOption, runGUI=False):
         """
         TODO
         """
@@ -961,7 +962,7 @@ class gmshClass:
             for msg in logMessages:
                 f.write(f"{msg}\n")
             
-        if self._runGUI:
+        if runGUI:
             gmsh.fltk.run()
 
         gmsh.finalize()
