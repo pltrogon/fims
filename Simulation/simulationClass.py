@@ -621,6 +621,7 @@ class FIMS_Simulation:
 
         # Get the run number for this simulation
         runNo = self._getRunNumber()
+        print('Running Surrounding simulation...')
         print(f'Running simulation - Run number: {runNo}')
     
         self._checkParam()
@@ -631,7 +632,7 @@ class FIMS_Simulation:
 
         #Solve fields and run Garfield
         self._solveEFields(solveWeighting=True)
-        self._runGarfield(executable='runAvalancheSurrounding')
+        self._runGarfield('runAvalancheSurrounding')
         
         return runNo
     
@@ -655,12 +656,10 @@ class FIMS_Simulation:
         self._generateGeometry(unitCell='GridPix')
             
         #Solve fields and run Garfield
-        self._solveEFields()
-        self._runGarfield(executable='runAvalancheGridPix')
+        self._solveEFields(solveWeighting=True)
+        self._runGarfield('runAvalancheGridPix')
         
         return runNo
-    
-
 
 #**********************************************************************#
 
@@ -1062,7 +1061,7 @@ class FIMS_Simulation:
 
             #Determine the efficiency and read results from file
             self._runGarfield(
-                executable='runEfficiency',
+                'runEfficiency',
                 targetEfficiency=targetEfficiency, threshold=threshold
             )
             effResults = self._readEfficiencyFile()
@@ -1182,7 +1181,7 @@ class FIMS_Simulation:
             self._solveEFields(solveWeighting=False)
 
             #Generate field lines and read results from file
-            self._runGarfield(executable='runTransparency')
+            self._runGarfield('runTransparency')
             transparencyResults = self._readTransparencyFile()
 
             transparencyAtField['transparency'].append(transparencyResults['transparency'])
@@ -1353,7 +1352,7 @@ class FIMS_Simulation:
             #Generate field lines and read results from file if not already transparent
             if not isTransparent:
 
-                self._runGarfield(executable='runTransparency')  
+                self._runGarfield('runTransparency')  
                 transparencyResults = self._readTransparencyFile()
 
                 transparencyAtField['field'].append(newField)
@@ -1372,7 +1371,7 @@ class FIMS_Simulation:
             if not isEfficient:
 
                 self._runGarfield(
-                    executable='runEfficiency',
+                    'runEfficiency',
                     targetEfficiency=targetEfficiency, threshold=threshold
                 )
                 effResults = self._readEfficiencyFile()
@@ -1552,7 +1551,7 @@ class FIMS_Simulation:
 
         self._makeRunControl()
         self._runGarfield(
-            executable='runEfficiency', 
+            'runEfficiency', 
             targetEfficiency=efficiencyGoal, threshold=efficiencyThreshold
         )
         effResults = self._readEfficiencyFile()
@@ -1581,7 +1580,7 @@ class FIMS_Simulation:
         self._param['numFieldLine'] = 200
 
         self._makeRunControl()
-        self._runGarfield(executable='runTransparency')  
+        self._runGarfield('runTransparency')  
         transparencyResults = self._readTransparencyFile()
 
         print(f'\tField transparency: {transparencyResults['transparency']:.3f} +/- {transparencyResults['transparencyErr']:.3f}') 
