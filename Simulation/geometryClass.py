@@ -1245,14 +1245,14 @@ class elmerClass:
         dielectricValues = ['1e10', '3.9', '1.0', '3.0']
 
         try:
-            with open('Geometry/Dielectrics.dat', 'w') as f:
+            with open('Geometry/dielectrics.dat', 'w') as f:
                 f.write(self._numMaterials.__str__() + '\n')
 
                 for i in range(self._numMaterials):
                     f.write(f'{i+1} {dielectricValues[i]}\n')
 
         except Exception as e:
-            print(f"Error writing Dielectrics.dat: {e}")
+            print(f"Error writing dielectrics.dat: {e}")
     
         return
 

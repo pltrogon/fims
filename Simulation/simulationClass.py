@@ -714,7 +714,6 @@ class FIMS_Simulation:
 
 
 #**********************************************************************#
-
     def _calcMinFieldEfficiency(self):
         """
         Calculates the minimum field ratio to achieve 95% Efficiency.
@@ -731,17 +730,15 @@ class FIMS_Simulation:
         pad = self._getParam('padLength')
         pitch = self._getParam('pitch')
         
-        #Convert to dimensionless variables - TODO: These are unused?
-        standoffRatio = standoff/pad
-        padRatio = pad/pitch
         
         #Insert values into fitted equations
         #Ar+CO2 (depreciated)
+        #standoffRatio = standoff/pad
         #standEffField = 53.21*np.exp(-0.38*standoffRatio) 23.47
         
         #T2K gas
         padEffField = 371.4*np.exp(-0.16*pad) + 50
-        standEffField = 190.6*np.exp(-0.02*standoff) + 50
+        standEffField = 496.2*np.exp(-0.05*standoff) + 103
         
         #Minimum field for 95% efficiency
         minField = max(padEffField, standEffField)
