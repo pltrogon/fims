@@ -1211,7 +1211,7 @@ class elmerClass:
                     8: 'LeftTopPad', 9: 'LeftBottomPad'
                 })
 
-            case 'FIMSHexagonal':
+            case 'FIMSHexagonal' | 'GridPix':
                 pass
 
             case 'FIMSHexagonalSurrounding':

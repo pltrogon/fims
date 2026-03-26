@@ -346,7 +346,7 @@ int main(int argc, char * argv[]) {
     elmerResultsPath+"mesh.elements",
     elmerResultsPath+"mesh.nodes", 
     geometryPath+"dielectrics.dat",
-    elmerResultsPath+"FIMS.result", 
+    elmerResultsPath+"GridPix.result", 
     "mum"
   );
 
@@ -401,7 +401,7 @@ int main(int argc, char * argv[]) {
   double fieldLineScale = 1.*(numFieldLine-1);
 
   // The x-direction is the long axis of the geometry. 
-  const double xLineLimit = pitch/sqrt(3.)*rangeScale;
+  const double xLineLimit = pitch/2.*rangeScale;
   const double yLineLimit = pitch/2.*rangeScale;
   
   //Note that the total number of field lines is x2 the given number of field lines (x and y)
@@ -424,15 +424,21 @@ int main(int argc, char * argv[]) {
   }
   
   // Lines generated along the perimeter of the unit cell
-  //Upper edge from left to right
+  //Upper edge
   for(int i = 0; i < numFieldLine; i++){
-    xEdgeStart.push_back(xLineLimit*(i/fieldLineScale - 0.5));
+    xEdgeStart.push_back(xLineLimit*i/fieldLineScale);
+    yEdgeStart.push_back(yLineLimit);
+
+    xEdgeStart.push_back(-xLineLimit*i/fieldLineScale);
     yEdgeStart.push_back(yLineLimit);
   }
-  //Slanted edge - From right corner to top-right corner
+  //Right edge
   for(int i = 0; i < numFieldLine; i++){
-    xEdgeStart.push_back(xLineLimit*(1. - i/fieldLineScale/2.));
+    xEdgeStart.push_back(xLineLimit);
     yEdgeStart.push_back(yLineLimit*i/fieldLineScale);
+
+    xEdgeStart.push_back(xLineLimit);
+    yEdgeStart.push_back(-yLineLimit*i/fieldLineScale);
   }
 
   // ***** Calculate field Lines ***** //
@@ -446,7 +452,7 @@ int main(int argc, char * argv[]) {
   for(int inFieldLine = 0; inFieldLine < totalFieldLines; inFieldLine++){
     
     fieldLineID = inFieldLine;
-
+    
     // Calculate from top of volume
     fieldLines.clear();
     driftLines.FieldLine(xStart[inFieldLine], yStart[inFieldLine], zmax*.95, fieldLines);
@@ -648,7 +654,7 @@ int main(int argc, char * argv[]) {
         elmerResultsPath+"mesh.elements",
         elmerResultsPath+"mesh.nodes", 
         geometryPath+"dielectrics.dat",
-        elmerResultsPath+"FIMS.result", 
+        elmerResultsPath+"GridPix.result", 
         "mum"
       );
       parallelSensorFIMS = new Sensor();

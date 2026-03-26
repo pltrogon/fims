@@ -87,7 +87,7 @@ class FIMS_Simulation:
 
         self._geometry = None
         
-        self._iterationNumberLimit = 50
+        self._iterationNumberLimit = 100
 
         return
 
@@ -171,6 +171,7 @@ class FIMS_Simulation:
             self._param[inParam] = inValue
 
         self._checkParam()
+        self._makeRunControl()
 
         return
     
@@ -589,7 +590,6 @@ class FIMS_Simulation:
         print(f'Running simulation - Run number: {runNo}')
     
         self._checkParam()
-        self._makeRunControl()
     
         # If geometry does not change, can skip Gmsh.
         if changeGeometry or self._geometry is None:
@@ -620,7 +620,6 @@ class FIMS_Simulation:
         print(f'Running simulation - Run number: {runNo}')
     
         self._checkParam()
-        self._makeRunControl()
     
         #Generate geometry for surrounding cells
         self._generateGeometry(surroundingCells=True)
@@ -646,7 +645,6 @@ class FIMS_Simulation:
         print(f'Running simulation - Run number: {runNo}')
     
         self._checkParam()
-        self._makeRunControl()
     
         self._generateGeometry(unitCell='GridPix')
             
@@ -1038,8 +1036,9 @@ class FIMS_Simulation:
         }        
 
         validEfficiency = False
-        self._param['numAvalanche'] = 3000
-        self._param['avalancheLimit'] = 20 #Limit can be low. Check is boolean
+        #Limit can be low. Check is boolean
+        saveParam = self.getAllParam()
+        self.setParameters({'numAvalanche': 3000, 'avalancheLimit': 20})
         
         while not validEfficiency:
 
@@ -1090,8 +1089,9 @@ class FIMS_Simulation:
         finalField = self.getParam('fieldRatio')
         print(f'Solution found for {targetEfficiency*100:.0f}% efficiency: Field ratio = {finalField}')
         print(efficiencyAtField)
-
-        self._param['fieldRatio'] = finalField
+        #Reset parameters to original values except for field ratio
+        saveParam['fieldRatio'] = finalField
+        self.setParameters(saveParam)
 
         return finalField
     
@@ -1118,10 +1118,7 @@ class FIMS_Simulation:
 
 #***********************************************************************************#
     def _findFieldForTransparency(self, targetTransparency=0.99):
-        """
-        ## TODO - The garfield code may be able to do the 2-sigma check instead of here.
-        ##Should be able to  do the same while-loop doing "bunches" of field lines
-    
+        """    
         Runs simulations to determine what the minimum electric field ratio
         needs to be in order to have >99% E-field transparency.
 
@@ -1145,10 +1142,10 @@ class FIMS_Simulation:
         if self._geometry is None:
             self._generateGeometry()
 
-        if targetTransparency >= 0.99 or targetTransparency <= 0.0:
+        if targetTransparency > 0.99 or targetTransparency <= 0.0:
             raise ValueError('Error: Target transparency must be between 0 and 0.99')
 
-        print(f'Beginning search for minimum field to achieve >{targetTransparency}% transparency...')
+        print(f'Beginning search for minimum field to achieve >{targetTransparency*100:.0f}% transparency...')
        
         iterNo = 0
         iterNoLimit = self._iterationNumberLimit
@@ -1160,7 +1157,9 @@ class FIMS_Simulation:
         } 
 
         isTransparent = False
-        self._param['numFieldLine'] = 400 #More is better. Adjust as needed.
+
+        saveParam = self.getAllParam()
+        self.setParameters({'numFieldLine': 1000}) #More is better. Adjust as needed.
         
         while not isTransparent:
 
@@ -1182,7 +1181,7 @@ class FIMS_Simulation:
             transparencyAtField['transparency'].append(transparencyResults['transparency'])
             transparencyAtField['transparencyErr'].append(transparencyResults['transparencyErr'])
                 
-            twoSigmaTransparency = transparencyAtField['transparency'][-1] + 2*transparencyAtField['transparencyErr'][-1]
+            twoSigmaTransparency = transparencyAtField['transparency'][-1] - 2*transparencyAtField['transparencyErr'][-1]
             
             #Check transparency to terminate loop
             if twoSigmaTransparency >= targetTransparency:
@@ -1201,7 +1200,9 @@ class FIMS_Simulation:
         print(f'Solution: Field ratio = {finalField}')
         #print(transparencyAtField)
         
-        self._param['fieldRatio'] = finalField
+        #Reset parameters to original values except for field ratio
+        saveParam['fieldRatio'] = finalField
+        self.setParameters(saveParam)
 
         return finalField
 
@@ -1234,7 +1235,7 @@ class FIMS_Simulation:
         minFieldGuess = self._calcOpticalTransparency()
         #minFieldGuess = math.floor(0.9*(2/self._calcOpticalTransparency() - 1))
 
-        self._param['fieldRatio'] = minFieldGuess
+        self.setParameters({'fieldRatio': minFieldGuess})
         print(f'\tInitial field ratio guess: {minFieldGuess}')
 
         ## Determine minimum field ratio for conditions
@@ -1249,7 +1250,8 @@ class FIMS_Simulation:
         # Set final field ratio to the maximum of the two found
         finalField = max(efficiencyField, transparencyField)
 
-        self._param['fieldRatio'] = finalField
+        #Reset parameters to original values except for field ratio
+        self.setParameters({'fieldRatio': finalField})
         print(f'Solution for minimum field ratio: {finalField}')
 
         return finalField
@@ -1465,7 +1467,7 @@ class FIMS_Simulation:
         print(f'Running simulation - Run number: {runNo}')
 
         #Get the optimal drift field for this gas
-        self._param['driftField'] = self._getOptimalDriftField()
+        self.setParameters({'driftField': self._getOptimalDriftField()})
 
         # Generate Geometry
         self._generateGeometry()
@@ -1473,7 +1475,7 @@ class FIMS_Simulation:
         #Find the minimum field ratio for this geometry that satisfies:
         #  95% efficiency and 100% transparency
         minField = self.findMinFieldRatio()
-        self._param['fieldRatio'] = minField
+        self.setParameters({'fieldRatio': minField})
 
         #Solve fields and run Garfield
         self._solveEFields(solveWeighting=True)
@@ -1507,7 +1509,7 @@ class FIMS_Simulation:
         print(f'Running simulation - Run number: {runNo}')
 
         #Get the optimal drift field for this gas
-        self._param['driftField'] = self._getOptimalDriftField()
+        self.setParameters({'driftField': self._getOptimalDriftField()})
 
         #Generate Geometry and solve the Electric and weighting fields
         self._generateGeometry()
@@ -1539,12 +1541,10 @@ class FIMS_Simulation:
             float: The detection efficiency at the current field ratio.
         """
 
-        saveParam = self._param.copy()
+        saveParam = self.getAllParam()
+        # Limit can be low. Check is boolean - above threshold or not
+        self.setParameters({'numAvalanche': 3000, 'avalancheLimit': 20})  
 
-        self._param['numAvalanche'] = 3000
-        self._param['avalancheLimit'] = 20 #Limit can be low. Check is boolean
-
-        self._makeRunControl()
         self._runGarfield(
             'runEfficiency', 
             targetEfficiency=efficiencyGoal, threshold=efficiencyThreshold
@@ -1553,7 +1553,7 @@ class FIMS_Simulation:
 
         print(f'\tDetection efficiency: {effResults['efficiency']:.3f} +/- {effResults['efficiencyErr']:.3f}')
 
-        self._param = saveParam
+        self.setParameters(saveParam)
 
         return effResults['efficiency']
     
@@ -1570,18 +1570,17 @@ class FIMS_Simulation:
             float: The field transparency at the current field ratio.
         """
 
-        saveParam = self._param.copy()
+        saveParam = self.getAllParam()
+        self.setParameters({'numFieldLine': 500}) #More is better. Adjust as needed.
+        
 
-        self._param['numFieldLine'] = 200
-
-        self._makeRunControl()
         self._runGarfield('runTransparency')  
         transparencyResults = self._readTransparencyFile()
 
         print(f'\tField transparency: {transparencyResults['transparency']:.3f} +/- {transparencyResults['transparencyErr']:.3f}') 
 
-        self._param = saveParam
-
+        self.setParameters(saveParam)
+        
         return transparencyResults['transparency']
 
 
