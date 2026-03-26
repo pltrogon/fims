@@ -1586,112 +1586,58 @@ class elmerClass:
         """
         Runs the Elmer simulation using the generated SIF file and mesh.
         """
-        self._runElmerGrid()
-        self._runElmerSolver()
+        self._executeElmer('ElmerGrid')
+        self._executeElmer('ElmerSolver')
 
         if not self._capacitance and solveWeighting:
-            self._runElmerWeighting()
+            self._executeElmer('ElmerWeighting')
 
         return
 
 #**********************************************************************#
 
-    def _runElmerGrid(self):
+    def _executeElmer(self, processName):
+        """
+        TODO
+        """
 
         originalCWD = os.getcwd()
         os.chdir('./Geometry')
 
         os.makedirs('elmerResults', exist_ok=True)
 
+        padList = [e for e in self._electrodeMap.values() if e not in {'Cathode', 'Grid'}]
+
+        elmerCommands = {
+            'ElmerGrid': [
+                ['ElmerGrid', '14', '2', self._meshFilename, '-names', '-out', 'elmerResults', '-autoclean']
+            ],
+            'ElmerSolver': [
+                ['ElmerSolver', f'{self._runOption}.sif']
+            ],
+            'ElmerWeighting': [
+                [f'ElmerSolver', f'{self._elmerName}{e}Weighting.sif'] for e in padList
+            ]
+        }
+
+
         try:
-            print('\tExecuting ElmerGrid...')
+            print(f'\tExecuting {processName}...')
+            logFile = f'log/log{processName}.txt'
             
-            with open(os.path.join(originalCWD, 'log/logElmerGrid.txt'), 'w+') as elmerOutput:
+            with open(os.path.join(originalCWD, logFile), 'w+') as elmerOutput:
                 startTime = time.monotonic()
-                subprocess.run(
-                    ['ElmerGrid', '14', '2', self._meshFilename, 
-                    '-names',
-                    '-out', 'elmerResults', 
-                    '-autoclean'], 
-                    stdout=elmerOutput,
-                    check=True
-                )
-                endTime = time.monotonic()
-                elmerOutput.write(f'\n\nElmerGrid run time: {endTime - startTime} s')
-
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f'Elmer failed with exit code {e.returncode}.')
-        
-        finally:
-            os.chdir(originalCWD)
-
-        return
-        
-#**********************************************************************#
-
-    def _runElmerSolver(self):
-        """
-        Runs the Elmer simulation using the generated SIF file and mesh.
-        """
-        originalCWD = os.getcwd()
-        os.chdir('./Geometry')
-            
-        try:
-            print('\tExecuting ElmerSolver...')
-
-            with open(os.path.join(originalCWD, 'log/logElmerSolver.txt'), 'w+') as elmerOutput:
-                startTime = time.monotonic()
-                subprocess.run(
-                    ['ElmerSolver', f'{self._runOption}.sif'],
-                    stdout=elmerOutput,
-                    check=True
-                )
-                endTime = time.monotonic()
-                elmerOutput.write(
-                    f'\n\nElmerSolver run time: {endTime - startTime} s'
-                )
-
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(
-                f'Elmer failed with exit code {e.returncode}.'
-            )
-        
-        finally:
-            os.chdir(originalCWD)
-
-        return
-    
-#**********************************************************************#
-
-    def _runElmerWeighting(self):
-        """
-        Runs the Elmer simulation using the weighting files.
-        """
-        originalCWD = os.getcwd()
-        os.chdir('./Geometry')
-            
-        try:
-            print('\tExecuting ElmerSolver for Weightings...')
-
-            with open(os.path.join(originalCWD, 'log/logElmerSolverWeighting.txt'), 'w+') as elmerOutput:
-                startTime = time.monotonic()
-                for i, electrode in self._electrodeMap.items():
-                    if electrode == 'Cathode' or electrode == 'Grid':
-                        continue
+                for cmd in elmerCommands[processName]:
                     subprocess.run(
-                        ['ElmerSolver', f'{self._elmerName}{electrode}Weighting.sif'],
+                        cmd,
                         stdout=elmerOutput,
                         check=True
                     )
                 endTime = time.monotonic()
-                elmerOutput.write(
-                    f'\n\nElmerSolverWeighting run time: {endTime - startTime} s'
-                )
-
+                elmerOutput.write(f'\n\n{processName} run time: {endTime - startTime} s')
+        
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(
-                f'Elmer failed with exit code {e.returncode}.'
-            )
+            raise RuntimeError(f'Elmer failed with exit code {e.returncode}.')
         
         finally:
             os.chdir(originalCWD)
