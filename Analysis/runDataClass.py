@@ -1800,12 +1800,12 @@ class runData:
         ionHistogram = plt.figure()
         plt.hist(
             [backflowing, captured], 
-            bins='auto', stacked=True, color=['r', 'g'], alpha=0.5,
+            bins='auto', stacked=True, color=['r', 'darkgreen'], alpha=0.75,
             label =['Backflowing', 'Captured'], 
         )
         
         #include a vertical line at the nominal bundle edge (x = 0)
-        plt.axvline(0, c='darkorange', lw=2, label='Bundle Edge')
+        plt.axvline(0, c='k', lw=2, label='Bundle Edge')
         
         plt.xlabel('Distance Ions Originate from Edge of Field Bundle')
         plt.ylabel('Number of Ions')

@@ -1148,6 +1148,12 @@ class elmerClass:
                 'Stabilize': 'True',
                 'Optimize Bandwidth': 'True',
                 'Steady State Convergence Tolerance': '1.0e-5',
+                #TODO: what do these do? Do we need them?
+                #'Nonlinear System Convergence Tolerance': '1.0e-7',
+                #'Nonlinear System Max Iterations': '400',
+                #'Nonlinear System Newton After Iterations': '3',
+                #'Nonlinear System Newton After Tolerance': '1.0e-3',
+                #'Nonlinear System Relaxation Factor': '1.0',
                 'Linear System Solver': 'Iterative',
                 'Linear System Iterative Method': 'BiCGStab',
                 'Linear System Max Iterations': '500',
