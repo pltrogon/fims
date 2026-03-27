@@ -224,9 +224,6 @@ int main(int argc, char * argv[]) {
   fieldFIMS.EnableMirrorPeriodicityY();
   fieldFIMS.SetGas(gasFIMS);
 
-  // Import the weighting field for the readout electrode.
-  fieldFIMS.SetWeightingField(elmerResultsPath+"FIMSWeighting.result", "wtlel");
-
   //Create a sensor
   Sensor* sensorFIMS = new Sensor();
   sensorFIMS->AddComponent(&fieldFIMS);
@@ -264,6 +261,7 @@ int main(int argc, char * argv[]) {
 
   //Rejection sampled points near the edge of the unit cell
   double sampleWidth = std::sqrt(0.95); //Reject the inner portion of the unit cell
+  double safetyWidth = std::sqrt(0.99); //Reject points very close to the edges of the unit cell
   double halfPitch = pitch/2.;
   double cellLength = halfPitch*2./std::sqrt(3.);
 
@@ -286,8 +284,13 @@ int main(int argc, char * argv[]) {
       continue;
     }
 
-    xStart.push_back(sampleX);
-    yStart.push_back(sampleY);
+    //Determine if point is not too close to edge of cell
+    double safetyY = safetyWidth*halfPitch;
+    double safetyEdgeY = (-2.*halfPitch/cellLength) * (sampleX-safetyWidth*cellLength);
+    if((sampleY < safetyY) && (sampleY < safetyEdgeY)){
+      xStart.push_back(sampleX);
+      yStart.push_back(sampleY);
+    }
   }
 
 
@@ -317,9 +320,15 @@ int main(int argc, char * argv[]) {
     //TODO: Find more elegant way to determine where a line terminates
     // Currently is pad outer radius and no more than 10% of the grid standoff away from the pad
     double lineRadius2 = std::pow(fieldLineX, 2.) + std::pow(fieldLineY, 2.);
-    if(sqrt(lineRadius2) <= padLength && fieldLineZ < -0.9*gridStandoff){
-        numAtPad++;
+    //if(sqrt(lineRadius2) <= padLength && fieldLineZ < -0.9*gridStandoff){
+    //    numAtPad++;
+    //}
+
+    //TODO: What about the lines the terminate on an adjacent pad?
+    if (fieldLineZ < -1.*(gridStandoff-thicknessSiO2)){
+      numAtPad++;
     }
+
 
     //Print a progress update every 10%
     int driftLineProgress = (100*(inFieldLine+1))/totalFieldLines;
