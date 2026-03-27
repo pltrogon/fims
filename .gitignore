@@ -1,0 +1,27 @@
+##### Ignore the following files: #####
+
+##### In this folder:
+.DS_Store
+testing.ipynb
+.ipynb_checkpoints/
+
+
+##### In Simulation/:
+.DS_Store
+runNo
+runControl
+GARFIELDPATH
+log/
+Geometry/
+build/
+__pycache__/
+.ipynb_checkpoints/
+
+
+##### In Analysis/:
+analysisRunNumbers
+__pycache__/
+.ipynb_checkpoints/
+
+##### In Data/:
+*
