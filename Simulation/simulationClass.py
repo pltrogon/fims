@@ -1981,7 +1981,7 @@ class FIMS_Simulation:
         return optimalFieldData
 
 #***********************************************************************************#
-    def visualizeGeometry(self, unitCell='FIMS', surroundingCells=False):
+    def visualizeGeometry(self):
         """
         Generates the geometry for the FIMS simulation 
         and visualizes it using the Gmsh GUI.
@@ -1993,9 +1993,9 @@ class FIMS_Simulation:
         self._geometry = geometryClass(self._param)
 
         self._geometry.setGUI(runGUI=True)
-
-        self._geometry.setUnitCell(unitCell)
-        self._geometry.setSurroundingCells(surroundingCells)
+        
+        self._geometry.setUnitCell(self._unitCell)
+        self._geometry.setSurroundingCells(self._surroundingCells)
 
         self._geometry.buildGeometry()
 

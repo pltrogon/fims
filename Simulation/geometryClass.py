@@ -1598,7 +1598,15 @@ class elmerClass:
 
     def _executeElmer(self, processName):
         """
-        TODO
+        Executes a given Elmer process.
+
+        Options are:
+        - 'ElmerGrid': Generates the Elmer mesh from the Gmsh mesh.
+        - 'ElmerSolver': Runs the main Elmer simulation.
+        - 'ElmerWeighting': Runs the weighting potential simulations for each pad.
+
+        Args:
+            processName: The name of the Elmer process to execute.
         """
 
         originalCWD = os.getcwd()
@@ -1619,7 +1627,6 @@ class elmerClass:
                 [f'ElmerSolver', f'{self._elmerName}{e}Weighting.sif'] for e in padList
             ]
         }
-
 
         try:
             print(f'\tExecuting {processName}...')
