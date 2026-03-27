@@ -523,7 +523,10 @@ class gmshClass:
 
     def _makeFIMS(self, surrounding=False):
         """
-        TODO
+        Builds the FIMS geometry.
+
+        Args:
+            surrounding (bool): Option to include the surrounding cells.
         """
 
         allCellData = []
@@ -857,7 +860,7 @@ class gmshClass:
 
     def _makeGridPix(self):
         """
-        TODO
+        Builds the GridPix geometry.
         """
 
         allCellData = []
@@ -878,7 +881,8 @@ class gmshClass:
 
     def _assignPhysicalGroups(self, entityMap, mode):
         """
-        TODO
+        Assigns physical groups to the geometry entities based 
+        on their type and location.
         """
 
         allPads = [
@@ -970,7 +974,7 @@ class gmshClass:
 
     def _setMeshSizes(self, runOption):
         """
-        TODO
+        Sets the mesh sizes for the geometry based on the run option.
         """
 
         # Cell dimensions
@@ -1086,7 +1090,11 @@ class gmshClass:
 
     def generateMesh(self, runOption, runGUI=False):
         """
-        TODO
+        Generates the mesh for the given run option using Gmsh.
+
+        Args:
+            runOption (str): The run option for the geometry.
+            runGUI (bool): Whether to launch the Gmsh GUI.
         """
 
         self._checkRunOption(runOption)

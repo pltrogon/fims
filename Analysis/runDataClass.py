@@ -2580,7 +2580,17 @@ class runData:
 
     def _calcIonCurrent(self, ionTime=2.5):
         """
-        TODO
+        Calculates the estimated ion current contribution to the average signal 
+        based on the average signal from all avalanches.
+
+        Args:
+            ionTime (float): The time at which the electron contribution is 
+                             assumed to be neglible.
+
+        Returns:
+            tuple: A tuple containing linear fit parameters:
+                   - slope (float): The slope of the estimated ion current.
+                   - intercept (float): The y-intercept of the estimated ion current.
         """
 
         allSignals = self.getDataFrame('signalData')

@@ -342,8 +342,6 @@ class FIMS_Simulation:
     
 #**********************************************************************#
 
-## TODO - This form may no longer be necessary with geometry class. 
-## Check if can be better aligned with garfield++ file needs.
     def _makeRunControl(self):
         """
         Creates a runControl file with the parameters.
@@ -427,14 +425,14 @@ class FIMS_Simulation:
 
 #***********************************************************************************#
     def _resetParam(self, verbose=True):
-        #TODO - This may no longer be necessary????????
         """
-        Rewrites the run control files with the default simulation parameters.
+        Resets the simulation to the default parameters.
     
         Args:
             verbose (bool): Option available to supress reset notification.
         """
         self._param = self._defaultParam()
+        self._makeRunControl()
     
         if verbose:
             print('Parameters have been reset.')
@@ -523,7 +521,18 @@ class FIMS_Simulation:
 #***********************************************************************************#
     def _runGarfield(self, executable='runAvalanche', **kwargs):
         """
-        TODO
+        Runs a Garfield++ simulation with the specified executable.
+
+        Args:
+            executable (str): The name of the Garfield++ executable to run. Options are:
+                - 'runAvalanche': Simulates electron avalanches for the central pad.
+                - 'runAvalancheSurrounding': Simulates electron avalanches for the surrounding pads.
+                - 'runAvalancheGridPix': Simulates electron avalanches for the GridPix geometry.
+                - 'runTransparency': Simulates the field transparency for the FIMS geometry.
+                - 'runTransparencyGridPix': Simulates the field transparency for the GridPix geometry.
+                - 'runEfficiency': Simulates the efficiency for a given field strength. Requires additional arguments:
+                    - targetEfficiency (float): The target efficiency to achieve (default: 0.95).
+                    - threshold (int): The number of electrons to consider an avalanche successful (default: 10).
         """
 
         if self._unitCell == 'GridPix':
@@ -1195,9 +1204,7 @@ class FIMS_Simulation:
                 break
 
             #Solve the new electric field
-            #newField = self._getNextField(iterNo, transparencyAtField, targetTransparency)
-            ##TODO- Tanner TEST
-            newField = self._param['fieldRatio'] + 1
+            newField = self._getNextField(iterNo, transparencyAtField, targetTransparency)
             transparencyAtField['field'].append(newField)
             self._param['fieldRatio'] = newField
             self._solveEFields(solveWeighting=False)
@@ -1513,7 +1520,6 @@ class FIMS_Simulation:
 #***********************************************************************************#
     def runForOptimizerALT(self, efficiencyGoal=0.95, efficiencyThreshold=10, transparencyGoal=.99):
         """
-        #TODO - This is for if efficiency and transparency are incorperated into optimizer objective
         Executes a full avalanche simulation of the FIMS geometry at a given geometry and field ratio.
 
         Gets the detection efficiency and E field transparency at the current field ratio.
