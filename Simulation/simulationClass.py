@@ -86,6 +86,8 @@ class FIMS_Simulation:
         self._setupSimulation()
 
         self._geometry = None
+        self._unitCell = 'FIMS'
+        self._surroundingCells = False
         
         self._iterationNumberLimit = 100
 
@@ -406,6 +408,24 @@ class FIMS_Simulation:
         return
 
 #***********************************************************************************#
+    def setGeometry(self, unitCell='FIMS', surrounding=False):
+        """
+        Sets the geometry for the simulation.
+
+        Args:
+            unitCell (str): The unit cell to use for the geometry.
+            surrounding (bool): Option to include surrounding cells in the geometry.
+        """
+
+        if unitCell not in ['FIMS', 'GridPix']:
+            raise ValueError('Error - Invalid unit cell. Options are "FIMS" and "GridPix".')
+        
+        self._unitCell = unitCell
+        self._surroundingCells = surrounding
+
+        return
+
+#***********************************************************************************#
     def _resetParam(self, verbose=True):
         #TODO - This may no longer be necessary????????
         """
@@ -471,13 +491,13 @@ class FIMS_Simulation:
     
 
 #***********************************************************************************#
-    def _generateGeometry(self, unitCell='FIMS', surroundingCells=False):
+    def _generateGeometry(self):
         """
         Generates the geometry for the simulation using the geometryClass.
         """
         self._geometry = geometryClass(self._param)
-        self._geometry.setUnitCell(unitCell)
-        self._geometry.setSurroundingCells(surroundingCells)
+        self._geometry.setUnitCell(self._unitCell)
+        self._geometry.setSurroundingCells(self._surroundingCells)
         self._geometry.buildGeometry()
 
         return        
@@ -506,16 +526,20 @@ class FIMS_Simulation:
         TODO
         """
 
+        if self._unitCell == 'GridPix':
+            executable += 'GridPix'
+
         executables = [
             'runAvalanche',
             'runAvalancheSurrounding',
             'runAvalancheGridPix',
             'runTransparency',
+            'runTransparencyGridPix',
             'runEfficiency'
         ]
 
         if executable not in executables:
-            raise ValueError(f'Invalid executable.')
+            raise ValueError(f'Invalid executable: {executable}')
         
         # Handle inputs for runEfficiency
         args = ''
@@ -622,7 +646,8 @@ class FIMS_Simulation:
         self._checkParam()
     
         #Generate geometry for surrounding cells
-        self._generateGeometry(surroundingCells=True)
+        self.setGeometry(surrounding=True)
+        self._generateGeometry()
 
         #Solve fields and run Garfield
         self._solveEFields(solveWeighting=True)
@@ -646,11 +671,12 @@ class FIMS_Simulation:
     
         self._checkParam()
     
-        self._generateGeometry(unitCell='GridPix')
+        self.setGeometry(unitCell='GridPix')
+        self._generateGeometry()
             
         #Solve fields and run Garfield
         self._solveEFields(solveWeighting=True)
-        self._runGarfield('runAvalancheGridPix')
+        self._runGarfield()
         
         return runNo
 
@@ -1169,12 +1195,13 @@ class FIMS_Simulation:
                 break
 
             #Solve the new electric field
-            newField = self._getNextField(iterNo, transparencyAtField, targetTransparency)
+            #newField = self._getNextField(iterNo, transparencyAtField, targetTransparency)
+            ##TODO- Tanner TEST
+            newField = self._param['fieldRatio'] + 1
             transparencyAtField['field'].append(newField)
             self._param['fieldRatio'] = newField
             self._solveEFields(solveWeighting=False)
 
-            #Generate field lines and read results from file
             self._runGarfield('runTransparency')
             transparencyResults = self._readTransparencyFile()
 
@@ -1186,12 +1213,12 @@ class FIMS_Simulation:
             #Check transparency to terminate loop
             if twoSigmaTransparency >= targetTransparency:
                 isTransparent = True
-                print(f'Transparent at field ratio = {transparencyAtField['field'][-1]}:')
-                print(f'\tTransparency = {transparencyAtField['transparency'][-1]:.3f} +/- {transparencyAtField['transparencyErr'][-1]:.3f}')
+                print(f"Transparent at field ratio = {transparencyAtField['field'][-1]}:")
+                print(f"\tTransparency = {transparencyAtField['transparency'][-1]:.3f} +/- {transparencyAtField['transparencyErr'][-1]:.3f}")
             else:
                 isTransparent = False
-                print(f'Not transparent at field ratio = {transparencyAtField['field'][-1]}:')
-                print(f'\tTransparency = {transparencyAtField['transparency'][-1]:.3f} +/- {transparencyAtField['transparencyErr'][-1]:.3f}')
+                print(f"Not transparent at field ratio = {transparencyAtField['field'][-1]}:")
+                print(f"\tTransparency = {transparencyAtField['transparency'][-1]:.3f} +/- {transparencyAtField['transparencyErr'][-1]:.3f}")
         #End of find field for transparency loop
 
 
