@@ -1800,7 +1800,7 @@ class runData:
         ionHistogram = plt.figure()
         plt.hist(
             [backflowing, captured], 
-            bins='auto', stacked=True, color=['r', 'g'], alpha=0.5,
+            bins='auto', stacked=True, c=['r', 'g'], alpha=0.5,
             label =['Backflowing', 'Captured'], 
         )
         

@@ -2,7 +2,6 @@
 # CLASS DEFINITION FOR SIMULATION #
 ###################################
 from __future__ import annotations
-from tabnanny import verbose
 
 import numpy as np
 import pandas as pd
@@ -1149,7 +1148,7 @@ class FIMS_Simulation:
 #***********************************************************************************#
     def _printFieldSolution(self, resultsAtField):
         """
-        TODO - For James'. Ive made this function to print in a box like you had. 
+        TODO - For James. Ive made this function to print in a box like you had. 
         However I think this is less useful than just printing effAtField.
         Printing directly allows for directly copy-pasting elsewhere where it is already set up for plotting.
 
