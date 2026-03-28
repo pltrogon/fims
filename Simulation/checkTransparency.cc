@@ -319,16 +319,11 @@ int main(int argc, char * argv[]) {
 
     //TODO: Find more elegant way to determine where a line terminates
     // Currently is pad outer radius and no more than 10% of the grid standoff away from the pad
+    //What about other pads?
     double lineRadius2 = std::pow(fieldLineX, 2.) + std::pow(fieldLineY, 2.);
-    //if(sqrt(lineRadius2) <= padLength && fieldLineZ < -0.9*gridStandoff){
-    //    numAtPad++;
-    //}
-
-    //TODO: What about the lines the terminate on an adjacent pad?
-    if (fieldLineZ < -1.*(gridStandoff-thicknessSiO2)){
-      numAtPad++;
+    if(sqrt(lineRadius2) <= padLength && fieldLineZ < -0.9*gridStandoff){
+        numAtPad++;
     }
-
 
     //Print a progress update every 10%
     int driftLineProgress = (100*(inFieldLine+1))/totalFieldLines;
