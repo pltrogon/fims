@@ -1751,7 +1751,7 @@ class runData:
         
         initialY = ionData['Initial y']
         initialX = ionData['Initial x']
-        initialR = (initialY**2 + initialX**2)**.5
+        initialR = math.sqrt(initialY**2 + initialX**2)
         
         #find the bundle size at the initial height of each ion
         initialZ = ionData['Initial z']
@@ -1800,7 +1800,7 @@ class runData:
         ionHistogram = plt.figure()
         plt.hist(
             [backflowing, captured], 
-            bins='auto', stacked=True, color=['r', 'darkgreen'], alpha=0.75,
+            bins='auto', stacked=True, color=['r', 'g'], alpha=0.5,
             label =['Backflowing', 'Captured'], 
         )
         

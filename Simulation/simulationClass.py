@@ -2,6 +2,7 @@
 # CLASS DEFINITION FOR SIMULATION #
 ###################################
 from __future__ import annotations
+from tabnanny import verbose
 
 import numpy as np
 import pandas as pd
@@ -989,7 +990,7 @@ class FIMS_Simulation:
 
         #Ensure step is at least 1
         elif fieldStep < 1:
-            #print(f'Warning: Field step small. Using heuristic step of 1.')
+            print(f'Warning: Field step small. Using heuristic step of 1.')
             newField = curField+1
 
         #Round step up to nearest integer
@@ -1051,7 +1052,7 @@ class FIMS_Simulation:
         return newField
 
 #***********************************************************************************#
-    def _findFieldForEfficiency(self, targetEff=.95, threshold=10):
+    def _findFieldForEfficiency(self, targetEfficiency=.95, threshold=10):
         """
         Performs an iterative search to find the minimum Electric Field Ratio 
         required to achieve a specified detection efficiency for electron avalanches.
@@ -1065,7 +1066,7 @@ class FIMS_Simulation:
         Note that this assumes that the field strength is monotonically increasing.
 
         Args:
-            targetEff (float): The target electron detection efficiency.
+            targetEfficiency (float): The target electron detection efficiency.
             threshold (int): The minimum avalanche size required for an event to 
                              be counted as 'detected'.
 
@@ -1074,7 +1075,7 @@ class FIMS_Simulation:
                    This value is also loaded into the class parameters upon completion.
         """
         
-        print(f'Beginning search for minimum field to achieve {targetEff*100:.0f}% efficiency...')
+        print(f'Beginning field search for {targetEfficiency*100:.0f}% efficiency...')
         
         # Ensure geometry exists
         if self._geometry is None:
@@ -1090,7 +1091,7 @@ class FIMS_Simulation:
         }        
 
         validEfficiency = False
-        self._param['numAvalanche'] = 4500
+        self._param['numAvalanche'] = 5000
         self._param['avalancheLimit'] = 20 #Limit can be low. Check is boolean
         
         while not validEfficiency:
@@ -1101,14 +1102,14 @@ class FIMS_Simulation:
                 break
 
             #Solve for the new electric field
-            newField = self._getNextField(iterNo, effAtField, targetEff)
+            newField = self._getNextField(iterNo, effAtField, targetEfficiency)
             effAtField['field'].append(newField)
             self._param['fieldRatio'] = newField
             print(f'Testing new field ratio: {newField}')
             self._solveEFields(solveWeighting=False)
 
             #Determine the efficiency and read results from file
-            self._runGetEfficiency(targetEfficiency=targetEff, threshold=threshold)
+            self._runGetEfficiency(targetEfficiency=targetEfficiency, threshold=threshold)
             effResults = self._readEfficiencyFile()
 
             effAtField['efficiency'].append(effResults['efficiency'])
@@ -1136,26 +1137,47 @@ class FIMS_Simulation:
                     raise ValueError('Error - Malformed efficiency file.')      
         #End of find field for efficiency loop
 
-        #Print solution
-        trial = 0
+        
         finalField = self.getParam('fieldRatio')
-        
-        print('\n\t_______________________________')
-        print('\t| # Efield  efficiency  error |')  
-        while trial < len(effAtField['field']):
-            fieldVal = effAtField['field'][trial]
-            fieldEff = effAtField['efficiency'][trial]
-            fieldErr = effAtField['efficiencyErr'][trial]
-            print(f'\t| {trial+1}. {fieldVal:.1f} -> {fieldEff:.3f} +/- {fieldErr:.3f} |')
-            trial += 1
-        print('\t_______________________________\n')
-        
-        print(f'Solution found for {targetEff*100:.0f}% efficiency: Field ratio = {finalField}')
-        
         self._param['fieldRatio'] = finalField
 
+        print(f'Solution for {targetEfficiency*100:.0f}% efficiency: Field ratio = {finalField}')
+        self._printFieldSolution(effAtField)
+
         return finalField
-    
+
+#***********************************************************************************#
+    def _printFieldSolution(self, resultsAtField):
+        """
+        TODO - For James'. Ive made this function to print in a box like you had. 
+        However I think this is less useful than just printing effAtField.
+        Printing directly allows for directly copy-pasting elsewhere where it is already set up for plotting.
+
+        Maybe rejig this funtion to actually make that plot. Or remove this entirely.
+
+        Prints the results of the field search in a box format.
+
+        Args:
+            resultsAtField (dict): Dictionary containing lists of:
+                - field ratios, values, and errors for each iteration. 
+        """
+
+        dataLabel = list(resultsAtField.keys())[1]
+
+        header = f'| #     Efield    {dataLabel:<15} Error    |'
+        boxWidth = len(header)
+
+        print('\n\t' + '-'*boxWidth)
+        print('\t' + header)
+        print('\t|' + '='*(boxWidth-2) + '|')
+
+        for i, (f, v, e) in enumerate(zip(*resultsAtField.values()), 1):
+            print(f'\t| {i:<6} {f:<9.1f} {v:<15.3f} {e:<8.3f} |')
+
+        print('\t' + '-'*boxWidth)
+
+        return
+
 #***********************************************************************************#
     def _calcOpticalTransparency(self):
         """
@@ -1178,7 +1200,7 @@ class FIMS_Simulation:
 
 
 #***********************************************************************************#
-    def _findFieldForTransparency(self, targetTrans=0.99):
+    def _findFieldForTransparency(self, targetTransparency=0.99):
         """
         ## TODO - The garfield code may be able to do the 2-sigma check instead of here.
         ##Should be able to  do the same while-loop doing "bunches" of field lines
@@ -1195,7 +1217,7 @@ class FIMS_Simulation:
         Note that this assumes that the field strength is monotonically increasing.
 
         Args:
-            targetTrans (float): The target electric field line transparency.
+            targetTransparency (float): The target electric field line transparency.
 
         Returns:            
             float: The minimum field ratio required to achieve the 100% transparency.
@@ -1206,10 +1228,10 @@ class FIMS_Simulation:
         if self._geometry is None:
             self._generateGeometry()
 
-        if targetTrans > 0.99 or targetTrans <= 0.0:
+        if targetTransparency > 0.99 or targetTransparency <= 0.0:
             raise ValueError('Error: Target transparency must be between 0 and 0.99')
 
-        print(f'Beginning search for minimum field to achieve >{targetTrans}% transparency...')
+        print(f'Beginning field search for >{targetTransparency*100:.0f}% transparency...')
        
         iterNo = 0
         iterNoLimit = self._iterationNumberLimit
@@ -1231,7 +1253,7 @@ class FIMS_Simulation:
                 break
 
             #Solve the new electric field
-            newField = self._getNextField(iterNo, transAtField, targetTrans)
+            newField = self._getNextField(iterNo, transAtField, targetTransparency)
             transAtField['field'].append(newField)
             self._param['fieldRatio'] = newField
             self._solveEFields(solveWeighting=False)
@@ -1250,7 +1272,7 @@ class FIMS_Simulation:
             fieldTrans = transAtField['transparency'][-1]
             transErr = transAtField['transparencyErr'][-1]
             
-            if twoSigmaTrans >= targetTrans:
+            if twoSigmaTrans >= targetTransparency:
                 isTransparent = True
                 print(f'Transparent at field ratio = {curField}:')
                 print(f'\tTransparency = {fieldTrans:.3f} +/- {transErr:.3f}')
@@ -1260,32 +1282,21 @@ class FIMS_Simulation:
         #End of find field for transparency loop
 
 
-        #Print solution
         finalField = self.getParam('fieldRatio')
-        trial = 0
-        
-        print('\n\t_______________________________')
-        print('\t|# Efield  transparency  error|')
-        while trial < len(transAtField['field']):
-            fieldVal = transAtField['field'][trial]
-            fieldTrans = transAtField['transparency'][trial]
-            fieldErr = transAtField['transparencyErr'][trial]
-            print(f'\t| {trial+1}. {fieldVal:.1f} -> {fieldTrans:.3f} +/- {fieldErr:.3f} |')
-            trial += 1
-        print('\t_______________________________\n')
-        print(f'Solution: Field ratio = {finalField}')
-        
         self._param['fieldRatio'] = finalField
+
+        print(f'Solution for {targetTransparency*100:.0f}% transparency: Field ratio = {finalField}')
+        self._printFieldSolution(transAtField)
 
         return finalField
 
 
 #***********************************************************************************#
-    def findMinFieldRatio(self, transMinStep = 1.1):
+    def findMinFieldRatio(self):
         """
         Determines the minimum Electric Field Ratio required to achieve:   
-        - 95% detection efficiency, and
-        - 100% electric field line transparency.
+            - 95% detection efficiency, and
+            - 100% electric field line transparency.
 
         This assumes that the field strength is monotonically increasing.
 
@@ -1305,8 +1316,7 @@ class FIMS_Simulation:
         print(f'Finding minimum field ratio for geometry with drift field: {driftField} V/cm')
 
         #Choose initial field ratio guess
-        minFieldGuess = self._calcOpticalTransparency()
-        #minFieldGuess = math.floor(0.9*(2/self._calcOpticalTransparency() - 1))
+        minFieldGuess = self._calcOpticalTransparency()#TODO - Better guess?
 
         self._param['fieldRatio'] = minFieldGuess
         print(f'\tInitial field ratio guess: {minFieldGuess}')
@@ -1317,7 +1327,7 @@ class FIMS_Simulation:
         print(f'\tMinimum field ratio for 95% efficiency: {efficiencyField}')
 
         # 100% transparency
-        transparencyField = self._findFieldForTransparency(transMinStep)
+        transparencyField = self._findFieldForTransparency()
         print(f'\tMinimum field ratio for 100% transparency: {transparencyField}')
 
         # Set final field ratio to the maximum of the two found
@@ -1459,11 +1469,10 @@ class FIMS_Simulation:
                         raise ValueError('Error - Malformed efficiency file.')
         #End of find combined min field loop
 
-        #Print solution
         finalField = self.getParam('fieldRatio')
-        print(f'Solution found: Field ratio = {finalField}')
-
         self.param['fieldRatio'] = finalField
+
+        print(f'Solution found: Field ratio = {finalField}')
 
         return finalField
 
