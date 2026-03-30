@@ -17,7 +17,8 @@ Simulation/runNo
 Simulation/runControl
 Simulation/GARFIELDPATH
 Simulation/log/
-Simulation/Geometry/
+Simulation/Geometry/*
+!Simulation/Geometry/.gitkeep
 Simulation/build/
 
 
