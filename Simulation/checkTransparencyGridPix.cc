@@ -191,7 +191,7 @@ int main(int argc, char * argv[]) {
     elmerResultsPath+"mesh.elements",
     elmerResultsPath+"mesh.nodes", 
     geometryPath+"dielectrics.dat",
-    elmerResultsPath+"FIMS.result", 
+    elmerResultsPath+"GridPix.result", 
     "mum"
   );
 
@@ -263,31 +263,23 @@ int main(int argc, char * argv[]) {
   double sampleWidth = std::sqrt(0.95); //Reject the inner portion of the unit cell
   double safetyWidth = std::sqrt(0.99); //Reject points very close to the edges of the unit cell
   double halfPitch = pitch/2.;
-  double cellLength = halfPitch*2./std::sqrt(3.);
+
+  double checkVal = sampleWidth*halfPitch;
+  double safetyVal = safetyWidth*halfPitch;
 
   while(xStart.size() < numFieldLine){
 
-    // Generate random point in rectangle defined by cellLength (x) and halfPitch (y)
-    double sampleX =  ((double)std::rand()/RAND_MAX)*cellLength;
+    // Generate random point in square defined by halfPitch (x and y)
+    double sampleX =  ((double)std::rand()/RAND_MAX)*halfPitch;
     double sampleY =  ((double)std::rand()/RAND_MAX)*halfPitch;
 
-    //Determine if point is in unit cell - Skip if not
-    double unitY = (-2.*halfPitch/cellLength) * (sampleX-cellLength);
-    if(sampleY > unitY){
-      continue;
-    }
-
     //Determine if point is near edge of cell - Skip if not
-    double checkY = sampleWidth*halfPitch;
-    double edgeY = (-2.*halfPitch/cellLength) * (sampleX-sampleWidth*cellLength);
-    if((sampleY < checkY) && (sampleY < edgeY)){
+    if((sampleX < checkVal) && (sampleY < checkVal)){
       continue;
     }
 
     //Ensure point is not too close to edge of cell
-    double safetyY = safetyWidth*halfPitch;
-    double safetyEdgeY = (-2.*halfPitch/cellLength) * (sampleX-safetyWidth*cellLength);
-    if((sampleY < safetyY) && (sampleY < safetyEdgeY)){
+    if((sampleX < safetyVal) && (sampleY < safetyVal)){
       xStart.push_back(sampleX);
       yStart.push_back(sampleY);
     }
@@ -319,11 +311,16 @@ int main(int argc, char * argv[]) {
 
     //TODO: Find more elegant way to determine where a line terminates
     // Currently is pad outer radius and no more than 10% of the grid standoff away from the pad
-    //What about other pads?
     double lineRadius2 = std::pow(fieldLineX, 2.) + std::pow(fieldLineY, 2.);
-    if(sqrt(lineRadius2) <= padLength && fieldLineZ < -0.9*gridStandoff){
-        numAtPad++;
+    //if(sqrt(lineRadius2) <= padLength && fieldLineZ < -0.9*gridStandoff){
+    //    numAtPad++;
+    //}
+
+    //TODO: What about the lines the terminate on an adjacent pad?
+    if (fieldLineZ < -1.*(gridStandoff-thicknessSiO2)){
+      numAtPad++;
     }
+
 
     //Print a progress update every 10%
     int driftLineProgress = (100*(inFieldLine+1))/totalFieldLines;

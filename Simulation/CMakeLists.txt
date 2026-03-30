@@ -31,7 +31,9 @@ set(COMMON_LIBS
 # Format: executable_name source_file.cc
 set(EXECUTABLES
     runAvalanche            	avalanche.cc
-    runFieldLines           	checkTransparency.cc
+    runAvalancheGridPix         avalancheGridPix.cc
+    runTransparency           	checkTransparency.cc
+    runTransparencyGridPix      checkTransparencyGridPix.cc
     runEfficiency           	checkEfficiency.cc
     runMagboltz             	magboltz.cc
     runParallelPlate        	parallelPlate.cc

@@ -110,6 +110,7 @@ class runData:
             'fieldLineData',
             'gridFieldLineData',
             'edgeFieldLineData',
+            'eFieldData',
             'electronData',
             'ionData',
             'avalancheData',
@@ -319,6 +320,13 @@ class runData:
                     'Field Line z'
                 ]
 
+            case 'eFieldData':
+                dataToScale = [
+                    'E Field x', 
+                    'E Field y', 
+                    'E Field z'
+                ]
+
             case 'electronData' | 'ionData':
                 dataToScale = [
                     'Initial x', 
@@ -468,21 +476,21 @@ class runData:
             self._calculatedData['Gain StdDev'] = gainStdDev
             
             #Calculate IBN - Includes initial Ion
-            IBN, meanIBN, meanIBNErr, meanIBNStdDev = self._calcIBN()
-            self._avalancheData['IBN'] = self._avalancheData['Avalanche ID'].map(IBN)
-            self._calculatedData['Average IBN'] = meanIBN
-            self._calculatedData['IBN Error'] = meanIBNErr
-            self._calculatedData['IBN StdDev'] = meanIBNStdDev
+            dataIBN = self._calcIBN()
+            self._avalancheData['IBN'] = self._avalancheData['Avalanche ID'].map(dataIBN['IBN'])
+            self._calculatedData['Average IBN'] = dataIBN['meanIBN']
+            self._calculatedData['IBN Error'] = dataIBN['meanIBNErr']
+            self._calculatedData['IBN StdDev'] = dataIBN['meanIBNStdDev']
 
             #Calculate IBF
-            IBF, meanIBF, meanIBFErr, meanIBFStdDev  = self._calcIBF()
-            self._avalancheData['IBF'] = self._avalancheData['Avalanche ID'].map(IBF)
-            self._calculatedData['Average IBF'] = meanIBF
-            self._calculatedData['IBF Error'] = meanIBFErr
-            self._calculatedData['IBF StdDev'] = meanIBFStdDev
+            dataIBF = self._calcIBF()
+            self._avalancheData['IBF'] = self._avalancheData['Avalanche ID'].map(dataIBF['IBF'])
+            self._calculatedData['Average IBF'] = dataIBF['meanIBF']
+            self._calculatedData['IBF Error'] = dataIBF['meanIBFErr']
+            self._calculatedData['IBF StdDev'] = dataIBF['meanIBFStdDev']
 
-            self._calculatedData['IBF * Raw Gain'] = meanIBF*rawGain
-            self._calculatedData['IBF * Trimmed Gain'] = meanIBF*trimmedGain
+            self._calculatedData['IBF * Raw Gain'] = dataIBF['meanIBF']*rawGain
+            self._calculatedData['IBF * Trimmed Gain'] = dataIBF['meanIBF']*trimmedGain
 
             # Efficiencies
             simRawEff, simRawEffErr = self._getRawEfficiency(threshold=10)
@@ -494,8 +502,9 @@ class runData:
             self._calculatedData['Efficiency Error'] = simEffErr
 
             #Fits
-            self._calculatedData['Fano Factor'] = gainStdDev**2/trimmedGain
-            self._calculatedData['Theta'] = trimmedGain/(self._calculatedData['Fano Factor']-1) - 1
+            polyaTheta, polyaGain = self._fitPolya()
+            self._calculatedData['Polya Theta'] = polyaTheta
+            self._calculatedData['Polya Gain'] = polyaGain
 
         return
 
@@ -975,7 +984,6 @@ class runData:
         
         return
 
-
 #********************************************************************************#   
     def plotAllFieldLines(self):
         """
@@ -1080,7 +1088,7 @@ class runData:
 
     
 #********************************************************************************#   
-    def _histAvalanche(self, trim, binWidth):
+    def _histAvalanche(self, trim=True, binWidth=1):
         """
         Calculates a histogram of the avalanche electron count data.
 
@@ -1543,7 +1551,7 @@ class runData:
 
 
 #********************************************************************************#   
-    def _fitAvalancheSize(self, binWidth):
+    def _fitAvalancheSize(self, binWidth=1):#TODO - no bin width here?
         """
         Fits the trimmed simulated avalanche size distribution 
         to Polya and exponential curves.
@@ -1950,7 +1958,7 @@ class runData:
             NOTE: This result INCLUDES the initial ion.
 
         Returns:
-            Tuple: A tuple containing:
+            dataIBN: A dictionary containing:
                    - IBN (pandas.series): The Ion Backflow Number for each simulated avalanche.
                    - meanIBN (float): The mean IBN for all avalanches.
                    - meanIBNErr (float): Standard error of the mean IBN
@@ -1969,7 +1977,14 @@ class runData:
         meanIBNStdDev = IBN.std(ddof=1)
         meanIBNErr = meanIBNStdDev / np.sqrt(numAvalanche)
 
-        return IBN, meanIBN, meanIBNErr, meanIBNStdDev
+        dataIBN = {
+            'IBN': IBN,
+            'meanIBN': meanIBN,
+            'meanIBNErr': meanIBNErr,
+            'meanIBNStdDev': meanIBNStdDev
+        }
+
+        return dataIBN
     
 #********************************************************************************#
     def _calcPerAvalancheIBF(self):
@@ -2013,7 +2028,7 @@ class runData:
             NOTE: This result EXCLUDES the initial ion.
 
         Returns:
-            Tuple: A tuple containing:
+            dataIBF: A dictionary containing:
                    - IBF (pandas.series): The Ion backflow fraction for each simulated avalanche.
                    - meanIBF (float): The mean IBF for all avalanches.
                    - meanIBFErr (float): Standard error of the mean IBF
@@ -2025,7 +2040,14 @@ class runData:
         meanIBFStdDev = IBF.std(ddof=1)
         meanIBFErr = meanIBFStdDev / np.sqrt(IBF.count())
 
-        return IBF, meanIBF, meanIBFErr, meanIBFStdDev
+        dataIBF = {
+            'IBF': IBF,
+            'meanIBF': meanIBF,
+            'meanIBFErr': meanIBFErr,
+            'meanIBFStdDev': meanIBFStdDev
+        }
+
+        return dataIBF
         
 #********************************************************************************#
     def _calcOpticalTransparency(self):
@@ -2201,6 +2223,17 @@ class runData:
         simEffErr = math.sqrt(varience)
 
         return simEff, simEffErr
+    
+#********************************************************************************#
+    def _fitPolya(self):
+        """TODO"""
+
+        fitResults = self._fitAvalancheSize(binWidth=1)
+
+        theta = fitResults['fitPolya'].theta
+        gain = fitResults['fitPolya'].gain
+
+        return theta, gain
 
 #********************************************************************************#
     def plotEfficiency(self, binWidth=1, threshold=0):
@@ -2351,7 +2384,7 @@ class runData:
 
         ax1.set_title('Induced Signal')
         ax1.set_xlabel('Time (ns)')
-        ax1.set_ylabel('Signal Strength (fC/ns)')#TODO - The units here seem weird
+        ax1.set_ylabel('Signal Strength (fC/ns)')#TODO - The units here seem weird fC/ns should be uA?
 
         ax2.set_title('Integrated Signal')
         ax2.set_xlabel('Time (ns)')
@@ -2374,6 +2407,7 @@ class runData:
         allSignals = self.getDataFrame('signalData')
         
         averageSignal = allSignals.groupby('Signal Time')['Signal Strength'].mean()
+
         averageCharge = averageSignal.values.cumsum()
         averageTotalCharge = averageCharge[-1]
 
@@ -2385,21 +2419,49 @@ class runData:
         ax1 = fig.add_subplot(121)
         ax2 = fig.add_subplot(122)
         
+        #Plot signals for the central pad
         ax1.plot(
             averageSignal.index, averageSignal.values
         )
-
         ax2.plot(
             averageSignal.index, averageCharge
         )
         ax2.axhline(
             averageTotalCharge,
-            label=f'Total Charge = {averageTotalCharge:.3f}', c='r', ls='--'
+            label=f'Total Charge: {averageTotalCharge:.3f} fC', c='r', ls='--'
         )
+
+        #Plotting the averge signal in adjacent pads
+        if 'Top Signal' in allSignals.columns:
+            adjacents = ['Top', 'Bottom', 'TopRight', 'BottomRight', 'TopLeft', 'BottomLeft']
+            adjacentSignals = []
+            for inPad in adjacents:
+                adjacentSignal = allSignals.groupby('Signal Time')[f'{inPad} Signal'].mean()
+                adjacentSignals.append(adjacentSignal.values)
+
+            #Plot average of all adjacent pads together
+            averageAdjacentSignal = np.mean(adjacentSignals, axis=0)
+            ax1.plot(
+                adjacentSignal.index, averageAdjacentSignal, 
+                label='Adjacent Pads - Average', c='m', ls='--'
+            )
+            ax2.plot(
+                adjacentSignal.index, np.cumsum(averageAdjacentSignal), 
+                label='Adjacent Pads - Average', c='m', ls='--'
+            )
+
+        #Plot ion signal for central pad
+        m, b = self._calcIonCurrent()
+        ionSignal = m*averageSignal.index + b
+        ax2.plot(
+            averageSignal.index, ionSignal,
+            label=f'Estimated Ion Current ({m*1e3:.1f} nA)', c='r', ls=':'
+        )
+
 
         ax1.set_title('Average Induced Signal')
         ax1.set_xlabel('Time (ns)')
-        ax1.set_ylabel('Signal Strength (fC/ns)')#TODO - The units here seem weird
+        ax1.set_ylabel('Signal Strength (fC/ns)')
 
         ax2.set_title('Average Integrated Signal')
         ax2.set_xlabel('Time (ns)')
@@ -2461,3 +2523,92 @@ class runData:
         return fig
 
 #********************************************************************************#
+
+    def plotFieldStrength(self):
+        """
+        Plots the electric field strength along the central field line.
+        """
+
+        fieldStrength = self.getDataFrame('eFieldData')
+
+        alongX = fieldStrength['E Field y']==0 
+        alongY = fieldStrength['E Field x']==0
+        centralLine = fieldStrength[alongX & alongY]
+
+        driftField = self.getRunParameter('Drift Field')
+        ampField = self.getRunParameter('Amplification Field')
+        holeRadius = self.getRunParameter('Hole Radius')
+
+        fig = plt.figure(figsize=(10, 5))
+        fig.suptitle('Electric Field Strength Along Hole Axis')
+        ax = fig.add_subplot(111)
+
+        ax.scatter(
+            centralLine['E Field z'], centralLine['E Field Mag']/1000,
+            ls='', label='Simulated Field Strength', c='b', alpha=0.5
+        )
+
+        ax.axhline(
+            driftField/1000,
+            ls=':', c='r', label=f'Drift Field = {driftField:.0f} V/cm'
+        )
+        ax.axhline(
+            ampField/1000,
+            ls='--', c='r', label=f'Amplification Field = {ampField/1000:.1f} kV/cm'
+        )
+        ax.axvline(
+            0,
+            ls='-', c='k', label=f'Grid Plane'
+        )
+        ax.axvline(
+            holeRadius,
+            ls='--', c='k', label=f'Hole Radius: {holeRadius:.0f} um'
+        )
+        ax.axvline(
+            -holeRadius,
+            ls='--', c='k'
+        )
+
+        ax.set_xlabel('z (um)')
+        ax.set_ylabel('Electric Field Strength (kV/cm)')
+
+        ax.legend()
+        ax.grid()
+
+        return fig
+
+
+
+#********************************************************************************#
+
+    def _calcIonCurrent(self, ionTime=2.5):
+        """
+        Calculates the estimated ion current contribution to the average signal 
+        based on the average signal from all avalanches.
+
+        Args:
+            ionTime (float): The time at which the electron contribution is 
+                             assumed to be neglible.
+
+        Returns:
+            tuple: A tuple containing linear fit parameters:
+                   - slope (float): The slope of the estimated ion current.
+                   - intercept (float): The y-intercept of the estimated ion current.
+        """
+
+        allSignals = self.getDataFrame('signalData')
+        
+        averageSignal = allSignals.groupby('Signal Time')['Signal Strength'].mean()
+
+        averageCharge = averageSignal.values.cumsum()
+
+        timeMask = averageSignal.index >= ionTime
+        xIons = averageSignal.index[timeMask]
+        yIons = averageCharge[timeMask]
+
+        slope, intercept = np.polyfit(xIons, yIons, 1)
+
+        return slope, intercept
+
+
+

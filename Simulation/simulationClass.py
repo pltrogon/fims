@@ -41,11 +41,6 @@ class FIMS_Simulation:
         7. Execute Garfield++ to simulate electron multiplication effects.
         8. Reset parameters to defaults.
 
-    *****
-    IMPORTANT: The parameters are reset to defaults after every simulation.
-    TODO - Maybe not?
-    *****
-
     Private Attributes:
         param (dict): Parameter dictionary with the following entries:
             All dimensions are in microns. Electric field is in V/cm.
@@ -91,8 +86,10 @@ class FIMS_Simulation:
         self._setupSimulation()
 
         self._geometry = None
+        self._unitCell = 'FIMS'
+        self._surroundingCells = False
         
-        self._iterationNumberLimit = 50
+        self._iterationNumberLimit = 100
 
         return
 
@@ -176,6 +173,7 @@ class FIMS_Simulation:
             self._param[inParam] = inValue
 
         self._checkParam()
+        self._makeRunControl()
 
         return
     
@@ -344,8 +342,6 @@ class FIMS_Simulation:
     
 #**********************************************************************#
 
-## TODO - This form may no longer be necessary with geometry class. 
-## Check if can be better aligned with garfield++ file needs.
     def _makeRunControl(self):
         """
         Creates a runControl file with the parameters.
@@ -410,15 +406,33 @@ class FIMS_Simulation:
         return
 
 #***********************************************************************************#
-    def _resetParam(self, verbose=True):
-        #TODO - This may no longer be necessary????????
+    def setGeometry(self, unitCell='FIMS', surrounding=False):
         """
-        Rewrites the run control files with the default simulation parameters.
+        Sets the geometry for the simulation.
+
+        Args:
+            unitCell (str): The unit cell to use for the geometry.
+            surrounding (bool): Option to include surrounding cells in the geometry.
+        """
+
+        if unitCell not in ['FIMS', 'GridPix']:
+            raise ValueError('Error - Invalid unit cell. Options are "FIMS" and "GridPix".')
+        
+        self._unitCell = unitCell
+        self._surroundingCells = surrounding
+
+        return
+
+#***********************************************************************************#
+    def _resetParam(self, verbose=True):
+        """
+        Resets the simulation to the default parameters.
     
         Args:
             verbose (bool): Option available to supress reset notification.
         """
         self._param = self._defaultParam()
+        self._makeRunControl()
     
         if verbose:
             print('Parameters have been reset.')
@@ -475,15 +489,16 @@ class FIMS_Simulation:
     
 
 #***********************************************************************************#
-    def _generateGeometry(self, surroundingCells=False):
+    def _generateGeometry(self):
         """
-        Generates the geometry for the FIMS simulation using the geometryClass.
+        Generates the geometry for the simulation using the geometryClass.
         """
         self._geometry = geometryClass(self._param)
-        self._geometry.createGeometry(neighborCells=surroundingCells)
+        self._geometry.setUnitCell(self._unitCell)
+        self._geometry.setSurroundingCells(self._surroundingCells)
+        self._geometry.buildGeometry()
 
-        return
-        
+        return        
     
 #***********************************************************************************#
     def _solveEFields(self, solveWeighting=True):
@@ -504,39 +519,61 @@ class FIMS_Simulation:
         return
 
 #***********************************************************************************#
-    def _runGarfield(self, surrounding=False):
+    def _runGarfield(self, executable='runAvalanche', **kwargs):
         """
-        Runs a Garfield++ executable to determine field lines and simulate 
-        electron avalanches based on the parameters in 'runControl'.
-    
-        First links garfield libraries, creates the executable, and then runs the simulation.
-        The simulation is numbered based on the number found in 'runNo';
-        This also incremenmts this number.
-        The information from this simulation is saved in .root format within 'Data/'.
+        Runs a Garfield++ simulation with the specified executable.
 
         Args:
-            surrounding (bool): Runs avalancheSurrounding executable instead.
+            executable (str): The name of the Garfield++ executable to run. Options are:
+                - 'runAvalanche': Simulates electron avalanches for the central pad.
+                - 'runAvalancheSurrounding': Simulates electron avalanches for the surrounding pads.
+                - 'runAvalancheGridPix': Simulates electron avalanches for the GridPix geometry.
+                - 'runTransparency': Simulates the field transparency for the FIMS geometry.
+                - 'runTransparencyGridPix': Simulates the field transparency for the GridPix geometry.
+                - 'runEfficiency': Simulates the efficiency for a given field strength. Requires additional arguments:
+                    - targetEfficiency (float): The target efficiency to achieve (default: 0.95).
+                    - threshold (int): The number of electrons to consider an avalanche successful (default: 10).
         """
+
+        if self._unitCell == 'GridPix':
+            executable += 'GridPix'
+
+        executables = [
+            'runAvalanche',
+            'runAvalancheSurrounding',
+            'runAvalancheGridPix',
+            'runTransparency',
+            'runTransparencyGridPix',
+            'runEfficiency'
+        ]
+
+        if executable not in executables:
+            raise ValueError(f'Invalid executable: {executable}')
+        
+        # Handle inputs for runEfficiency
+        args = ''
+        if executable == 'runEfficiency':
+            targetEfficiency = kwargs.get('targetEfficiency', 0.95)
+            threshold = kwargs.get('threshold', 10)
+            args = f'{targetEfficiency} {threshold}'
+
         originalCWD = os.getcwd()
 
-        executable = 'runAvalanche'
-        
-        if surrounding:
-            executable += 'Surrounding'
-        
         try:
-            print('\tExecuting Garfield++...')
+            print(f'\tExecuting Garfield++ ({executable})...')
             os.chdir('./build/')
 
             # Get garfield path into environment
             newEnv = self._getGarfieldEnvironment()
             os.environ.update(newEnv)
 
-            garfieldLog = os.path.join(originalCWD, 'log/logGarfieldAvalanche.txt')
+            logFile = f'logGarfield{executable}.txt'
+            garfieldLog = os.path.join(originalCWD, 'log', logFile)
+
             with open(garfieldLog, 'w+') as garfieldOutput:
                 startTime = time.monotonic()
                 setupAvalanche = (
-                    f'./{executable}'
+                    f'./{executable} {args}'.strip()
                 )
                 subprocess.run(
                     setupAvalanche, 
@@ -549,96 +586,12 @@ class FIMS_Simulation:
                 garfieldOutput.write(f'\n\nGarfield run time: {endTime - startTime} s')
     
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f'Garfield++ avalanche execution failed with exit code {e.returncode}.')
+            raise RuntimeError(f'Garfield++ execution failed with exit code {e.returncode}.')
         
         finally:
             os.chdir(originalCWD)
 
-        return
-    
-
-#***********************************************************************************#
-    def _runFieldLines(self):
-        """
-        Runs a Garfield++ executable to determine field lines based on the parameters
-        in 'runControl'.
-    
-        First links garfield libraries, creates the executable, and then runs the simulation.
-        The information from this simulation is saved in .txt format within 'Data/'.
-        """
-        originalCWD = os.getcwd()
-        try:
-            print('\tGenerating field lines...')
-            os.chdir('./build/')
-
-            # Get garfield path into environment
-            newEnv = self._getGarfieldEnvironment()
-            os.environ.update(newEnv)
-
-            fieldLineLog = os.path.join(originalCWD, 'log/logGarfieldFieldLines.txt')
-            with open(fieldLineLog, 'w+') as garfieldOutput:
-                startTime = time.monotonic()
-                setupFieldLines = ('./runFieldLines')
-                subprocess.run(
-                    setupFieldLines, 
-                    stdout = garfieldOutput, 
-                    shell = True, 
-                    check = True,
-                    env = os.environ
-                )
-                endTime = time.monotonic()
-                garfieldOutput.write(f'\n\nGarfield run time: {endTime - startTime} s')
-
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f'Garfield++ fieldine execution failed with exit code {e.returncode}.')
-
-        finally:
-            os.chdir(originalCWD)
-
-        return
-    
-
-#***********************************************************************************#
-    def _runGetEfficiency(self, targetEfficiency=.95, threshold=10):
-        """
-        Runs a Garfield++ executable the generates electron avalanches until a target
-        efficiency is either excluded or surpassed with a 2-sigma confidence.
-
-        Args:
-            targetEfficiency (float): The target efficiency to compare to.
-            threshold (int): The minimum number of electrons required to be considered a 'success'.
-        """
-        originalCWD = os.getcwd()
-        try:
-            print('\tGetting efficiency...')
-            os.chdir('./build/')
-
-            # Get garfield path into environment
-            newEnv = self._getGarfieldEnvironment()
-            os.environ.update(newEnv)
-
-            efficiencyLog = os.path.join(originalCWD, 'log/logGarfieldGetEfficiency.txt')
-            with open(efficiencyLog, 'w+') as garfieldOutput:
-                startTime = time.monotonic()
-                setupGetEfficiency = (
-                    f'./runEfficiency {targetEfficiency} {threshold}'
-                )
-                subprocess.run(
-                    setupGetEfficiency, 
-                    stdout = garfieldOutput, 
-                    shell = True, 
-                    check = True,
-                    env = os.environ
-                )
-                endTime = time.monotonic()
-                garfieldOutput.write(f'\n\nGarfield run time: {endTime - startTime} s')
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f'Garfield++ efficiency execution failed with exit code {e.returncode}.')
-            
-        finally:
-            os.chdir(originalCWD)
-
-        return
+        return  
     
 #***********************************************************************************#
     def runSimulation(self, changeGeometry=True):
@@ -670,7 +623,6 @@ class FIMS_Simulation:
         print(f'Running simulation - Run number: {runNo}')
     
         self._checkParam()
-        self._makeRunControl()
     
         # If geometry does not change, can skip Gmsh.
         if changeGeometry or self._geometry is None:
@@ -697,21 +649,45 @@ class FIMS_Simulation:
 
         # Get the run number for this simulation
         runNo = self._getRunNumber()
+        print('Running Surrounding simulation...')
         print(f'Running simulation - Run number: {runNo}')
     
         self._checkParam()
-        self._makeRunControl()
     
         #Generate geometry for surrounding cells
-        self._generateGeometry(surroundingCells=True)
+        self.setGeometry(surrounding=True)
+        self._generateGeometry()
 
         #Solve fields and run Garfield
         self._solveEFields(solveWeighting=True)
-        self._runGarfield(surrounding=True)
+        self._runGarfield('runAvalancheSurrounding')
         
         return runNo
     
+#***********************************************************************************#
+    def runGridPix(self):
+        """
+        Executes a simulation with the GridPix geometry.
 
+        Returns:
+            int: The run number for this simulation.
+        """
+
+        # Get the run number for this simulation
+        runNo = self._getRunNumber()
+        print('Running GridPix simulation...')
+        print(f'Running simulation - Run number: {runNo}')
+    
+        self._checkParam()
+    
+        self.setGeometry(unitCell='GridPix')
+        self._generateGeometry()
+            
+        #Solve fields and run Garfield
+        self._solveEFields(solveWeighting=True)
+        self._runGarfield()
+        
+        return runNo
 
 #**********************************************************************#
     def _calcMinFieldEfficiency(self):
@@ -832,7 +808,9 @@ class FIMS_Simulation:
 
         # Create surrounding-cell geometry
         self._geometryCapacitance = geometryClass(self._param)
-        self._geometryCapacitance.createGeometry(hexagonal=True, neighborCells=True)
+        self._geometryCapacitance.setUnitCell('FIMSHexagonal')
+        self._geometryCapacitance.setSurroundingCells(True)
+        self._geometryCapacitance.buildGeometry()
 
         # Solve the capacitance matrix
         self._geometryCapacitance.calculateEFields(capacitance=True)
@@ -1090,8 +1068,9 @@ class FIMS_Simulation:
         }        
 
         validEfficiency = False
-        self._param['numAvalanche'] = 5000
-        self._param['avalancheLimit'] = 20 #Limit can be low. Check is boolean
+        #Limit can be low. Check is boolean
+        saveParam = self.getAllParam()
+        self.setParameters({'numAvalanche': 3000, 'avalancheLimit': 20})
         
         while not validEfficiency:
 
@@ -1108,7 +1087,10 @@ class FIMS_Simulation:
             self._solveEFields(solveWeighting=False)
 
             #Determine the efficiency and read results from file
-            self._runGetEfficiency(targetEfficiency=targetEfficiency, threshold=threshold)
+            self._runGarfield(
+                'runEfficiency',
+                targetEfficiency=targetEfficiency, threshold=threshold
+            )
             effResults = self._readEfficiencyFile()
 
             effAtField['efficiency'].append(effResults['efficiency'])
@@ -1138,7 +1120,11 @@ class FIMS_Simulation:
 
         
         finalField = self.getParam('fieldRatio')
-        self._param['fieldRatio'] = finalField
+        print(f'Solution found for {targetEfficiency*100:.0f}% efficiency: Field ratio = {finalField}')
+        print(efficiencyAtField)
+        #Reset parameters to original values except for field ratio
+        saveParam['fieldRatio'] = finalField
+        self.setParameters(saveParam)
 
         print(f'Solution for {targetEfficiency*100:.0f}% efficiency: Field ratio = {finalField}')
         self._printFieldSolution(effAtField)
@@ -1200,10 +1186,7 @@ class FIMS_Simulation:
 
 #***********************************************************************************#
     def _findFieldForTransparency(self, targetTransparency=0.99):
-        """
-        ## TODO - The garfield code may be able to do the 2-sigma check instead of here.
-        ##Should be able to  do the same while-loop doing "bunches" of field lines
-    
+        """    
         Runs simulations to determine what the minimum electric field ratio
         needs to be in order to have >99% E-field transparency.
 
@@ -1242,7 +1225,9 @@ class FIMS_Simulation:
         } 
 
         isTransparent = False
-        self._param['numFieldLine'] = 400 #More is better. Adjust as needed.
+
+        saveParam = self.getAllParam()
+        self.setParameters({'numFieldLine': 1000}) #More is better. Adjust as needed.
         
         while not isTransparent:
 
@@ -1257,9 +1242,8 @@ class FIMS_Simulation:
             self._param['fieldRatio'] = newField
             self._solveEFields(solveWeighting=False)
 
-            #Generate field lines and read results from file
-            self._runFieldLines()
-            transResults = self._readTransparencyFile()
+            self._runGarfield('runTransparency')
+            transparencyResults = self._readTransparencyFile()
 
             transAtField['transparency'].append(transResults['transparency'])
             transAtField['transparencyErr'].append(transResults['transparencyErr'])
@@ -1282,7 +1266,12 @@ class FIMS_Simulation:
 
 
         finalField = self.getParam('fieldRatio')
-        self._param['fieldRatio'] = finalField
+        print(f'Solution: Field ratio = {finalField}')
+        #print(transparencyAtField)
+        
+        #Reset parameters to original values except for field ratio
+        saveParam['fieldRatio'] = finalField
+        self.setParameters(saveParam)
 
         print(f'Solution for {targetTransparency*100:.0f}% transparency: Field ratio = {finalField}')
         self._printFieldSolution(transAtField)
@@ -1318,7 +1307,7 @@ class FIMS_Simulation:
         optTrans = self._calcOpticalTransparency()#TODO - Better guess?
         minFieldGuess = math.floor(2/optTrans - 1)
 
-        self._param['fieldRatio'] = minFieldGuess
+        self.setParameters({'fieldRatio': minFieldGuess})
         print(f'\tInitial field ratio guess: {minFieldGuess}')
 
         ## Determine minimum field ratio for conditions
@@ -1333,7 +1322,8 @@ class FIMS_Simulation:
         # Set final field ratio to the maximum of the two found
         finalField = max(efficiencyField, transparencyField)
 
-        self._param['fieldRatio'] = finalField
+        #Reset parameters to original values except for field ratio
+        self.setParameters({'fieldRatio': finalField})
         print(f'Solution for minimum field ratio: {finalField}')
 
         return finalField
@@ -1431,7 +1421,7 @@ class FIMS_Simulation:
             #Generate field lines and read results from file if not already transparent
             if not isTransparent:
 
-                self._runFieldLines()  
+                self._runGarfield('runTransparency')  
                 transparencyResults = self._readTransparencyFile()
 
                 transparencyAtField['field'].append(newField)
@@ -1449,7 +1439,10 @@ class FIMS_Simulation:
             #Determine the efficiency and read results from file if not already efficient
             if not isEfficient:
 
-                self._runGetEfficiency(targetEfficiency=targetEfficiency, threshold=threshold)
+                self._runGarfield(
+                    'runEfficiency',
+                    targetEfficiency=targetEfficiency, threshold=threshold
+                )
                 effResults = self._readEfficiencyFile()
 
                 efficiencyAtField['field'].append(newField)
@@ -1542,7 +1535,7 @@ class FIMS_Simulation:
         print(f'Running simulation - Run number: {runNo}')
 
         #Get the optimal drift field for this gas
-        self._param['driftField'] = self._getOptimalDriftField()
+        self.setParameters({'driftField': self._getOptimalDriftField()})
 
         # Generate Geometry
         self._generateGeometry()
@@ -1550,7 +1543,7 @@ class FIMS_Simulation:
         #Find the minimum field ratio for this geometry that satisfies:
         #  95% efficiency and 100% transparency
         minField = self.findMinFieldRatio()
-        self._param['fieldRatio'] = minField
+        self.setParameters({'fieldRatio': minField})
 
         #Solve fields and run Garfield
         self._solveEFields(solveWeighting=True)
@@ -1561,7 +1554,6 @@ class FIMS_Simulation:
 #***********************************************************************************#
     def runForOptimizerALT(self, efficiencyGoal=0.95, efficiencyThreshold=10, transparencyGoal=.99):
         """
-        #TODO - This is for if efficiency and transparency are incorperated into optimizer objective
         Executes a full avalanche simulation of the FIMS geometry at a given geometry and field ratio.
 
         Gets the detection efficiency and E field transparency at the current field ratio.
@@ -1584,7 +1576,7 @@ class FIMS_Simulation:
         print(f'Running simulation - Run number: {runNo}')
 
         #Get the optimal drift field for this gas
-        self._param['driftField'] = self._getOptimalDriftField()
+        self.setParameters({'driftField': self._getOptimalDriftField()})
 
         #Generate Geometry and solve the Electric and weighting fields
         self._generateGeometry()
@@ -1616,18 +1608,19 @@ class FIMS_Simulation:
             float: The detection efficiency at the current field ratio.
         """
 
-        saveParam = self._param.copy()
+        saveParam = self.getAllParam()
+        # Limit can be low. Check is boolean - above threshold or not
+        self.setParameters({'numAvalanche': 3000, 'avalancheLimit': 20})  
 
-        self._param['numAvalanche'] = 3000
-        self._param['avalancheLimit'] = 20 #Limit can be low. Check is boolean
-
-        self._makeRunControl()
-        self._runGetEfficiency(targetEfficiency=efficiencyGoal, threshold=efficiencyThreshold)
+        self._runGarfield(
+            'runEfficiency', 
+            targetEfficiency=efficiencyGoal, threshold=efficiencyThreshold
+        )
         effResults = self._readEfficiencyFile()
 
         print(f'\tDetection efficiency: {effResults['efficiency']:.3f} +/- {effResults['efficiencyErr']:.3f}')
 
-        self._param = saveParam
+        self.setParameters(saveParam)
 
         return effResults['efficiency']
     
@@ -1644,18 +1637,17 @@ class FIMS_Simulation:
             float: The field transparency at the current field ratio.
         """
 
-        saveParam = self._param.copy()
+        saveParam = self.getAllParam()
+        self.setParameters({'numFieldLine': 500}) #More is better. Adjust as needed.
+        
 
-        self._param['numFieldLine'] = 200
-
-        self._makeRunControl()
-        self._runFieldLines()  
+        self._runGarfield('runTransparency')  
         transparencyResults = self._readTransparencyFile()
 
         print(f'\tField transparency: {transparencyResults['transparency']:.3f} +/- {transparencyResults['transparencyErr']:.3f}') 
 
-        self._param = saveParam
-
+        self.setParameters(saveParam)
+        
         return transparencyResults['transparency']
 
 
@@ -2026,20 +2018,22 @@ class FIMS_Simulation:
         return optimalFieldData
 
 #***********************************************************************************#
-    def visualizeGeometry(self, surroundingCells=False, hexagonal=False):
+    def visualizeGeometry(self):
         """
         Generates the geometry for the FIMS simulation 
         and visualizes it using the Gmsh GUI.
 
         Args:
+            unitCell (str): The type of unit cell to use.
             surroundingCells (bool): Whether to include surrounding cells.
-            hexagonal (bool): Whether to use a hexagonal unit cell.
         """
         self._geometry = geometryClass(self._param)
-        self._geometry.createGeometry(
-            neighborCells=surroundingCells, 
-            hexagonal=hexagonal, 
-            runGUI=True
-        )
+
+        self._geometry.setGUI(runGUI=True)
+        
+        self._geometry.setUnitCell(self._unitCell)
+        self._geometry.setSurroundingCells(self._surroundingCells)
+
+        self._geometry.buildGeometry()
 
     

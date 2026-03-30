@@ -45,12 +45,19 @@ class geometryClass:
         self._param = inputParam
         self._checkParameters()
 
+        self._runOption = None
+
+        self._runGUI = False
+
+        self._unitCell = 'FIMS'
+        self._surroundingCells = False
+
         return
 
 #**********************************************************************#
     def _checkParameters(self):
         """
-        Checks that the parameters in self._param are valid
+        Checks that the parameters are valid
         for creating the geometry.
         """
 
@@ -86,8 +93,8 @@ class geometryClass:
         if self._param['padLength'] >= outRadius:
             raise ValueError('Error - Pad larger than Cell.')
         
-        #Pillars are currently not included in the geometry
-        #Check that pillars can fit in the remaining space
+        ## Pillars are currently not included in the geometry
+        # Check that pillars can fit in the remaining space
         padInRadius = self._param['padLength']*math.sqrt(3)/2
         padSpace = inRadius - padInRadius
         #if self._param['pillarRadius'] >= padSpace:
@@ -96,35 +103,68 @@ class geometryClass:
         return
     
 #**********************************************************************#
-    def createGeometry(self, runGUI=False, hexagonal=False, neighborCells=False):
+    def setGUI(self, runGUI=True):
         """
-        Creates the geometry for the FIMS simulation using Gmsh.
+        Sets whether the Gmsh GUI runs when creating the geometry.
+        """
+        self._runGUI = runGUI
 
-        Args:
-            runGUI: Run the Gmsh GUI to visualize the geometry and mesh.
-            hexagonal: Creates a hexagonal unit cell if True. 
-                       Otherwise creates a rectangular unit cell.
-                       This requires mirroring in x and y.
-            neighborCells: Creates the 6 adjacent cells.
+        return
+    
+#**********************************************************************#
+    def setUnitCell(self, unitCell='FIMS'):
+        """
+        Sets the unit cell type.
+
+        Options are:
+            - FIMS: A single unit cell of the FIMS geometry.
+            - FIMSHexagonal: A single hexagonal unit cell of the FIMS geometry.
+            - GridPix: A single unit cell of the GridPix geometry.
+
+        Note: FIMS and GridPix require mirroring. FIMSHexagonal is standalone.
         """
 
-        print('\tCreating geometry...')
+        cellOptions = ['FIMS', 'FIMSHexagonal', 'GridPix']
+
+        if unitCell not in cellOptions:
+            raise ValueError(f'Error - Invalid unit cell type. Must be one of {cellOptions}.')
+        
+        self._unitCell = unitCell
+
+        return
+
+
+#**********************************************************************#
+    def setSurroundingCells(self, surrounding=False):
+        """
+        Sets whether to include the surrounding cells in the geometry.
+
+        In hexagonal geometry, this will be the entirety of each cell.
+        For FIMS, this will only be half of each cell.
+        """
+
+        self._surroundingCells = surrounding
+
+        return
+
+#**********************************************************************#
+    def buildGeometry(self):
+        """
+        Builds the geometry for the FIMS simulation using Gmsh.
+        """
+
+        print('\tBuilding geometry...')
     
         self._checkParameters()
         self._gmshClass = gmshClass(self._param)
 
-        self._hexagonal = hexagonal
-        self._neighborCells = neighborCells
-
-        self._runOption = 'FIMS'
-        if self._hexagonal:
-            self._runOption += 'Hexagonal'
-        if self._neighborCells:
+        self._runOption = self._unitCell
+        if self._surroundingCells:
             self._runOption += 'Surrounding'
 
-        self._gmshClass.createMesh(
+        self._gmshClass.generateMesh(
             runOption=self._runOption,
-            runGUI=runGUI
+            runGUI=self._runGUI
         )
 
         return
@@ -197,7 +237,7 @@ class geometryClass:
 
         halfGrid = self._param['gridThickness']/2
 
-        driftGap = self._param['cathodeHeight']+halfGrid
+        driftGap = self._param['cathodeHeight']-halfGrid
         amplificationGap = self._param['gridStandoff']-halfGrid
 
         gridVoltage = -1*amplificationField*amplificationGap*MICRONTOCM
@@ -228,10 +268,11 @@ class gmshClass:
         self._param = inputParams
 
         return
+    
 #**********************************************************************#
-    def _createUnitCell(self):
+    def _buildFIMS(self):
         """
-        Creates the geometry for a single unit cell of the FIMS geometry.
+        Builds the geometry for a single unit cell of the FIMS geometry.
 
         Note: Pillars are currently not included in the geometry.
 
@@ -265,7 +306,7 @@ class gmshClass:
             xLength, yLength, thicknessSiO2
         )
         # Define holes for the pads
-        centerPadHole = self._makeHexagon(
+        centerPadHole = self._createHexagon(
             padLength, -gridStandoff, thicknessSiO2
         )
         cornerPadHole = self._occ.copy([(3, centerPadHole)])
@@ -293,32 +334,6 @@ class gmshClass:
             [(3, centerGridHole), cornerGridHole[0]]
         )
 
-        '''
-        ##Pillars
-        xPillarFull = self._occ.addCylinder(
-            outRadius, 0, -gridStandoff+thicknessSiO2,
-            0, 0, gridStandoff-thicknessSiO2-gridThickness/2,
-            pillarRadius
-        )
-        yPillarFull = self._occ.addCylinder(
-            xLength - outRadius, yLength, -gridStandoff+thicknessSiO2,
-            0, 0, gridStandoff-thicknessSiO2-gridThickness/2,
-            pillarRadius
-        )
-
-        pillarCutBox = self._occ.addBox(
-            0, 0, -gridStandoff, 
-            xLength, yLength, gridStandoff
-        )
-        xPillar, _ = self._occ.intersect(
-            [(3, xPillarFull)], [(3, pillarCutBox)], 
-            removeObject=True, removeTool=False
-        )
-        yPillar, _ = self._occ.intersect(
-            [(3, yPillarFull)], [(3, pillarCutBox)], 
-            removeObject=True, removeTool=True
-        )
-        '''
         
         ## Gas
         gasHeight = cathodeHeight + gridStandoff
@@ -333,7 +348,7 @@ class gmshClass:
         )
 
         ## Pads
-        centerPadFull = self._makeHexagon(
+        centerPadFull = self._createHexagon(
             padLength, -gridStandoff
         )
         cornerPadFull = self._occ.copy([(2, centerPadFull)])
@@ -373,7 +388,7 @@ class gmshClass:
         return cellParts
     
 #**********************************************************************#
-    def _createCellSurrounding(self):
+    def _buildFIMSSurrounding(self):
         """
         """
 
@@ -405,7 +420,7 @@ class gmshClass:
         )
 
         # Define holes for the pads
-        centerPadHole = self._makeHexagon(
+        centerPadHole = self._createHexagon(
             padLength, -gridStandoff, thicknessSiO2
         )
         padHoleTools = [(3, centerPadHole)]
@@ -456,7 +471,7 @@ class gmshClass:
         )
 
         ## Pads
-        centerPadFull = self._makeHexagon(
+        centerPadFull = self._createHexagon(
             padLength, -gridStandoff
         )
 
@@ -506,43 +521,35 @@ class gmshClass:
     
 #**********************************************************************#
 
-    def _makeUnitCell(self):
-
-        allCellData = []
-        allObjects = []
-
-        inCell = self._createUnitCell()
-
-        allCellData.append(inCell)
-        allObjects.extend(inCell.values())
-
-        _, entityMap = self._occ.fragment(allObjects, [])
-        self._occ.synchronize()
-
-        return allCellData, entityMap
-    
-#**********************************************************************#
-
-    def _makeCellSurrounding(self):
-
-        allCellData = []
-        allObjects = []
-
-        inCell = self._createCellSurrounding()
-
-        allCellData.append(inCell)
-        allObjects.extend(inCell.values())
-
-        _, entityMap = self._occ.fragment(allObjects, [])
-        self._occ.synchronize()
-
-        return allCellData, entityMap
-
-#**********************************************************************#
-
-    def _createHexagonalUnitCell(self):
+    def _makeFIMS(self, surrounding=False):
         """
-        Create the geometry for a single hexagonal unit cell 
+        Builds the FIMS geometry.
+
+        Args:
+            surrounding (bool): Option to include the surrounding cells.
+        """
+
+        allCellData = []
+        allObjects = []
+
+        if surrounding:
+            inCell = self._buildFIMSSurrounding()
+        else:
+            inCell = self._buildFIMS()
+
+        allCellData.append(inCell)
+        allObjects.extend(inCell.values())
+
+        _, entityMap = self._occ.fragment(allObjects, [])
+        self._occ.synchronize()
+
+        return allCellData, entityMap
+
+#**********************************************************************#
+
+    def _buildHexagonalFIMSCell(self):
+        """
+        build the geometry for a single hexagonal unit cell 
         of the FIMS geometry.
         
         Returns:
@@ -564,10 +571,10 @@ class gmshClass:
         outRadius = pitch/math.sqrt(3)
 
         ## Dielectric
-        hexagonBase = self._makeHexagon(
+        hexagonBase = self._createHexagon(
             outRadius, -gridStandoff, thicknessSiO2
         )
-        padHole = self._makeHexagon(
+        padHole = self._createHexagon(
             padLength, -gridStandoff, thicknessSiO2
         )
         dielectricVolume, _ = self._occ.cut(
@@ -576,7 +583,7 @@ class gmshClass:
         )
 
         ## Grid
-        gridContainer = self._makeHexagon(
+        gridContainer = self._createHexagon(
             outRadius, -gridThickness/2, gridThickness
         )
         gridHole = self._occ.addCylinder(
@@ -591,7 +598,7 @@ class gmshClass:
 
         ## Gas
         gasHeight = cathodeHeight + gridStandoff
-        gasContainer = self._makeHexagon(
+        gasContainer = self._createHexagon(
             outRadius, -gridStandoff, gasHeight
         )
         gasVolume, _ = self._occ.cut(
@@ -600,10 +607,10 @@ class gmshClass:
             removeObject=True, removeTool=False
         )
         
-        padSurface = self._makeHexagon(
+        padSurface = self._createHexagon(
             padLength, -gridStandoff
         )
-        cathodeSurface = self._makeHexagon(
+        cathodeSurface = self._createHexagon(
             outRadius, cathodeHeight
         )
 
@@ -618,7 +625,7 @@ class gmshClass:
         return cellParts
     
 #**********************************************************************#
-    def _makeHexagon(self, outRadius, z, zDist=None):
+    def _createHexagon(self, outRadius, z, zDist=None):
         """
         Makes a hexagon in the xy-plane with the center at the origin.
         Extrudes it in the z-direction if zDist is provided.
@@ -656,15 +663,53 @@ class gmshClass:
             return surface
         
 #**********************************************************************#
-    def _makeHexagonalCells(self, neighborCells=False):
+    def _createOctagon(self, outRadius, z, zDist=None):
         """
-        Creates a hexagonal array of unit cells.
-
-        Central cell is always created.
-        If neighborCells is True, the 6 adjacent cells are also created.
+        Makes an octagon in the xy-plane with the center at the origin.
+        Extrudes it in the z-direction if zDist is provided.
 
         Args:
-            neighborCells: If True, also creates the 6 adjacent cells.
+            outRadius: The distance from the octagon center to each vertex.
+            z: The z-coordinate of the octagon.
+            zDist: The distance to extrude the octagon in the z-direction. 
+                   If None, the octagon will remain a 2D surface.
+        """
+        
+        points = []
+        for i in range(8):
+            angle = math.radians(i*45+22.5) # Rotate by 15 degrees to align flat sides with axes
+            x = outRadius*math.cos(angle)
+            y = outRadius*math.sin(angle)
+
+            inPoint = self._occ.addPoint(x, y, z)
+            points.append(inPoint)
+
+        lines = []
+        for i in range(8):
+            inLine = self._occ.addLine(points[i], points[(i+1)%8])
+            lines.append(inLine)
+
+        loop = self._occ.addCurveLoop(lines)
+        surface = self._occ.addPlaneSurface([loop])
+        if zDist is not None:
+            octagon = self._occ.extrude(
+                [(2, surface)],
+                0, 0, zDist
+            )
+            return octagon[1][1]
+        else:
+            return surface
+        
+#**********************************************************************#
+    def _makeFIMSHexagonal(self, surrounding=False):
+        """
+        builds a hexagonal array of unit cells.
+
+        Central cell is always created.
+        The 6 adjacent cells are created if surrounding is True.
+
+        Args:
+            surrounding (bool): Option to include the surrounding cells.
 
         Returns:
             A tuple containing:
@@ -680,7 +725,7 @@ class gmshClass:
         yShift = pitch/2.0
 
         cellCenters = [(0.0, 0.0)]
-        if neighborCells:
+        if surrounding:
             cellCenters = [
                 (0.0, 0.0), #Center
                 (0.0, pitch), #Top
@@ -696,7 +741,7 @@ class gmshClass:
 
         for dx, dy in cellCenters:
 
-            inCell = self._createHexagonalUnitCell()
+            inCell = self._buildHexagonalFIMSCell()
 
             for inPart in inCell.values():
                 self._occ.translate([inPart], dx, dy, 0)
@@ -709,11 +754,135 @@ class gmshClass:
 
         return allCellData, entityMap
     
+
+#**********************************************************************#
+    def _buildGridPix(self):
+        """
+        Builds the geometry for a single unit cell of the gridPix geometry.
+
+        Returns:
+            A dictionary containing the following parts of the unit cell:
+                Gas: The gas volume in the unit cell.
+                Dielectric: The dielectric volume in the unit cell.
+                Grid: The grid volume in the unit cell.
+                CenterPad: The center pad surface in the unit cell.
+                Cathode: The cathode surface in the unit cell.
+        """
+
+        pitch = self._param['pitch']
+        holeRadius = self._param['holeRadius']
+        padLength = self._param['padLength']
+        gridStandoff = self._param['gridStandoff']
+        cathodeHeight = self._param['cathodeHeight']
+        gridThickness = self._param['gridThickness']
+        thicknessSiO2 = self._param['thicknessSiO2']
+        pillarRadius = self._param['pillarRadius']
+
+        xLength = pitch/2
+        yLength = pitch/2
+
+        ## Dielectric
+        dielectricBox = self._occ.addBox(
+            0, 0, -gridStandoff, 
+            xLength, yLength, thicknessSiO2
+        )
+        # Define holes for the pads
+        centerPadHole = self._createOctagon(
+            padLength, -gridStandoff, thicknessSiO2
+        )
+        #Cut holes in dielectric
+        dielectricVolume, _ = self._occ.cut(
+            [(3, dielectricBox)],
+            [(3, centerPadHole)]
+        )
+
+        ## Grid
+        gridBox = self._occ.addBox(
+            0, 0, -gridThickness/2,
+            xLength, yLength, gridThickness
+        )
+        centerGridHole = self._occ.addCylinder(
+            0, 0, -gridThickness/2,
+            0, 0, gridThickness,
+            holeRadius
+        )
+        gridVolume, _ = self._occ.cut(
+            [(3, gridBox)],
+            [(3, centerGridHole)]
+        )
+
+        
+        ## Gas
+        gasHeight = cathodeHeight + gridStandoff
+        gasBox = self._occ.addBox(
+            0, 0, -gridStandoff,
+            xLength, yLength, gasHeight
+        )
+        gasVolume, _ = self._occ.cut(
+            [(3, gasBox)], 
+            [(3, dielectricVolume[0][1]), (3, gridVolume[0][1])], 
+            removeObject=True, removeTool=False
+        )
+
+        ## Pads
+        centerPadFull = self._createOctagon(
+            padLength, -gridStandoff
+        )
+
+        padCutBox = self._occ.addBox(
+            0, 0, -gridStandoff,
+            xLength, yLength, 1.0
+        )
+
+        centerPadSurface, _ = self._occ.intersect(
+            [(2, centerPadFull)],
+            [(3, padCutBox)],
+            removeObject=True, removeTool=True
+        )
+
+        ## Cathode
+        cathodeSurface = self._occ.addRectangle(
+            0, 0, cathodeHeight,
+            xLength, yLength
+        )
+
+        cellParts = {
+            'Gas': (3, gasVolume[0][1]),
+            'Dielectric': (3, dielectricVolume[0][1]),
+            'Grid': (3, gridVolume[0][1]),
+            'Pad': centerPadSurface[0],
+            'Cathode': (2, cathodeSurface)
+        }
+
+        return cellParts
+    
+#**********************************************************************#
+
+    def _makeGridPix(self):
+        """
+        Builds the GridPix geometry.
+        """
+
+        allCellData = []
+        allObjects = []
+
+
+        inCell = self._buildGridPix()
+
+        allCellData.append(inCell)
+        allObjects.extend(inCell.values())
+
+        _, entityMap = self._occ.fragment(allObjects, [])
+        self._occ.synchronize()
+
+        return allCellData, entityMap
+    
 #**********************************************************************#
 
     def _assignPhysicalGroups(self, entityMap, mode):
         """
-        TODO
+        Assigns physical groups to the geometry entities based 
+        on their type and location.
         """
 
         allPads = [
@@ -742,6 +911,10 @@ class gmshClass:
             'FIMSHexagonalSurrounding': {
                 'keys': allVolumes + ['Pad'] + otherSurfaces,
                 'pads': allPads
+            },
+            'GridPix': {
+                'keys': allVolumes + ['Pad'] + otherSurfaces,
+                'pads': ['CentralPad']
             }
         }
 
@@ -801,7 +974,7 @@ class gmshClass:
 
     def _setMeshSizes(self, runOption):
         """
-        TODO
+        Sets the mesh sizes for the geometry based on the run option.
         """
 
         # Cell dimensions
@@ -829,6 +1002,10 @@ class gmshClass:
             'FIMSHexagonalSurrounding': {
                 'x': (-outRadius, outRadius), 
                 'y': (-yLength, yLength)
+            },
+            'GridPix': {
+                'x': (0, yLength), 
+                'y': (0, yLength)
             }
         }
 
@@ -906,20 +1083,36 @@ class gmshClass:
     
 #**********************************************************************#
 
-    def createMesh(self, runOption, runGUI=False):
+    def _checkRunOption(self, runOption):
         """
-        TODO
+        Checks that the run option is valid.
         """
 
         runOptions = [
             'FIMS',
             'FIMSSurrounding',
             'FIMSHexagonal',
-            'FIMSHexagonalSurrounding'
+            'FIMSHexagonalSurrounding',
+            'GridPix'
         ]
 
         if runOption not in runOptions:
             raise ValueError(f'Option must be one of {runOptions}.')
+        
+        return
+
+#**********************************************************************#
+
+    def generateMesh(self, runOption, runGUI=False):
+        """
+        Generates the mesh for the given run option using Gmsh.
+
+        Args:
+            runOption (str): The run option for the geometry.
+            runGUI (bool): Whether to launch the Gmsh GUI.
+        """
+
+        self._checkRunOption(runOption)
 
         filePath = 'Geometry'
         filename = os.path.join(filePath, f'{runOption}.msh')
@@ -936,18 +1129,21 @@ class gmshClass:
 
         gmsh.model.add(filename)
 
-        print('\tSetting up geometry...')
         match runOption:
             case 'FIMS':
-                _, allCellsMap = self._makeUnitCell()
+                _, allCellsMap = self._makeFIMS()
 
             case 'FIMSSurrounding':
-                _, allCellsMap = self._makeCellSurrounding()
+                _, allCellsMap = self._makeFIMS(surrounding=True)
             
             case 'FIMSHexagonal':
-                _, allCellsMap = self._makeHexagonalCells()
+                _, allCellsMap = self._makeFIMSHexagonal()
+
             case 'FIMSHexagonalSurrounding':
-                _, allCellsMap = self._makeHexagonalCells(neighborCells=True)
+                _, allCellsMap = self._makeFIMSHexagonal(surrounding=True)
+
+            case 'GridPix':
+                _, allCellsMap = self._makeGridPix()
 
         self._assignPhysicalGroups(allCellsMap, runOption)
         self._setMeshSizes(runOption)
@@ -1030,20 +1226,24 @@ class elmerClass:
         match self._runOption:
             case 'FIMS':
                 self._electrodeMap.update({4: 'CornerPad'})
+
             case 'FIMSSurrounding':
                 self._electrodeMap.update({
                     4: 'TopPad', 5: 'BottomPad',
                     6: 'RightTopPad', 7: 'RightBottomPad',
                     8: 'LeftTopPad', 9: 'LeftBottomPad'
                 })
-            case 'FIMSHexagonal':
+
+            case 'FIMSHexagonal' | 'GridPix':
                 pass
+
             case 'FIMSHexagonalSurrounding':
                 self._electrodeMap.update({
                     4: 'TopPad', 5: 'BottomPad',
                     6: 'RightTopPad', 7: 'RightBottomPad',
                     8: 'LeftTopPad', 9: 'LeftBottomPad'
                 })
+
             case _:
                 raise ValueError('Invalid run option.')
             
@@ -1409,112 +1609,65 @@ class elmerClass:
         """
         Runs the Elmer simulation using the generated SIF file and mesh.
         """
-        self._runElmerGrid()
-        self._runElmerSolver()
+        self._executeElmer('ElmerGrid')
+        self._executeElmer('ElmerSolver')
 
         if not self._capacitance and solveWeighting:
-            self._runElmerWeighting()
+            self._executeElmer('ElmerWeighting')
 
         return
 
 #**********************************************************************#
 
-    def _runElmerGrid(self):
+    def _executeElmer(self, processName):
+        """
+        Executes a given Elmer process.
+
+        Options are:
+        - 'ElmerGrid': Generates the Elmer mesh from the Gmsh mesh.
+        - 'ElmerSolver': Runs the main Elmer simulation.
+        - 'ElmerWeighting': Runs the weighting potential simulations for each pad.
+
+        Args:
+            processName: The name of the Elmer process to execute.
+        """
 
         originalCWD = os.getcwd()
         os.chdir('./Geometry')
 
         os.makedirs('elmerResults', exist_ok=True)
 
+        padList = [e for e in self._electrodeMap.values() if e not in {'Cathode', 'Grid'}]
+
+        elmerCommands = {
+            'ElmerGrid': [
+                ['ElmerGrid', '14', '2', self._meshFilename, '-names', '-out', 'elmerResults', '-autoclean']
+            ],
+            'ElmerSolver': [
+                ['ElmerSolver', f'{self._runOption}.sif']
+            ],
+            'ElmerWeighting': [
+                [f'ElmerSolver', f'{self._elmerName}{e}Weighting.sif'] for e in padList
+            ]
+        }
+
         try:
-            print('\tExecuting ElmerGrid...')
+            print(f'\tExecuting {processName}...')
+            logFile = f'log/log{processName}.txt'
             
-            with open(os.path.join(originalCWD, 'log/logElmerGrid.txt'), 'w+') as elmerOutput:
+            with open(os.path.join(originalCWD, logFile), 'w+') as elmerOutput:
                 startTime = time.monotonic()
-                subprocess.run(
-                    ['ElmerGrid', '14', '2', self._meshFilename, 
-                    '-names',
-                    '-out', 'elmerResults', 
-                    '-autoclean'], 
-                    stdout=elmerOutput,
-                    check=True
-                )
-                endTime = time.monotonic()
-                elmerOutput.write(f'\n\nElmerGrid run time: {endTime - startTime} s')
-
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f'Elmer failed with exit code {e.returncode}.')
-        
-        finally:
-            os.chdir(originalCWD)
-
-        return
-        
-#**********************************************************************#
-
-    def _runElmerSolver(self):
-        """
-        Runs the Elmer simulation using the generated SIF file and mesh.
-        """
-        originalCWD = os.getcwd()
-        os.chdir('./Geometry')
-            
-        try:
-            print('\tExecuting ElmerSolver...')
-
-            with open(os.path.join(originalCWD, 'log/logElmerSolver.txt'), 'w+') as elmerOutput:
-                startTime = time.monotonic()
-                subprocess.run(
-                    ['ElmerSolver', f'{self._runOption}.sif'],
-                    stdout=elmerOutput,
-                    check=True
-                )
-                endTime = time.monotonic()
-                elmerOutput.write(
-                    f'\n\nElmerSolver run time: {endTime - startTime} s'
-                )
-
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(
-                f'Elmer failed with exit code {e.returncode}.'
-            )
-        
-        finally:
-            os.chdir(originalCWD)
-
-        return
-    
-#**********************************************************************#
-
-    def _runElmerWeighting(self):
-        """
-        Runs the Elmer simulation using the weighting files.
-        """
-        originalCWD = os.getcwd()
-        os.chdir('./Geometry')
-            
-        try:
-            print('\tExecuting ElmerSolver for Weightings...')
-
-            with open(os.path.join(originalCWD, 'log/logElmerSolverWeighting.txt'), 'w+') as elmerOutput:
-                startTime = time.monotonic()
-                for i, electrode in self._electrodeMap.items():
-                    if electrode == 'Cathode' or electrode == 'Grid':
-                        continue
+                for cmd in elmerCommands[processName]:
                     subprocess.run(
-                        ['ElmerSolver', f'{self._elmerName}{electrode}Weighting.sif'],
+                        cmd,
                         stdout=elmerOutput,
                         check=True
                     )
                 endTime = time.monotonic()
-                elmerOutput.write(
-                    f'\n\nElmerSolverWeighting run time: {endTime - startTime} s'
-                )
-
+                elmerOutput.write(f'\n\n{processName} run time: {endTime - startTime} s')
+        
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(
-                f'Elmer failed with exit code {e.returncode}.'
-            )
+            raise RuntimeError(f'Elmer failed with exit code {e.returncode}.')
         
         finally:
             os.chdir(originalCWD)
