@@ -714,7 +714,6 @@ class FIMS_Simulation:
 
 
 #**********************************************************************#
-
     def _calcMinFieldEfficiency(self):
         """
         Calculates the minimum field ratio to achieve 95% Efficiency.
@@ -731,17 +730,15 @@ class FIMS_Simulation:
         pad = self._getParam('padLength')
         pitch = self._getParam('pitch')
         
-        #Convert to dimensionless variables - TODO: These are unused?
-        standoffRatio = standoff/pad
-        padRatio = pad/pitch
         
         #Insert values into fitted equations
         #Ar+CO2 (depreciated)
+        #standoffRatio = standoff/pad
         #standEffField = 53.21*np.exp(-0.38*standoffRatio) 23.47
         
         #T2K gas
         padEffField = 371.4*np.exp(-0.16*pad) + 50
-        standEffField = 190.6*np.exp(-0.02*standoff) + 50
+        standEffField = 496.2*np.exp(-0.05*standoff) + 103
         
         #Minimum field for 95% efficiency
         minField = max(padEffField, standEffField)
@@ -1077,7 +1074,7 @@ class FIMS_Simulation:
                    This value is also loaded into the class parameters upon completion.
         """
         
-        print(f'Beginning search for minimum field to achieve {targetEfficiency*100:.0f}% efficiency...')
+        print(f'Beginning field search for {targetEfficiency*100:.0f}% efficiency...')
         
         # Ensure geometry exists
         if self._geometry is None:
@@ -1086,14 +1083,14 @@ class FIMS_Simulation:
         iterNo = 0
         iterNoLimit = self._iterationNumberLimit
 
-        efficiencyAtField = {
+        effAtField = {
             'field': [],
             'efficiency': [],
             'efficiencyErr': []
         }        
 
         validEfficiency = False
-        self._param['numAvalanche'] = 3000
+        self._param['numAvalanche'] = 5000
         self._param['avalancheLimit'] = 20 #Limit can be low. Check is boolean
         
         while not validEfficiency:
@@ -1104,49 +1101,82 @@ class FIMS_Simulation:
                 break
 
             #Solve for the new electric field
-            newField = self._getNextField(iterNo, efficiencyAtField, targetEfficiency)
-            efficiencyAtField['field'].append(newField)
+            newField = self._getNextField(iterNo, effAtField, targetEfficiency)
+            effAtField['field'].append(newField)
             self._param['fieldRatio'] = newField
+            print(f'Testing new field ratio: {newField}')
             self._solveEFields(solveWeighting=False)
 
             #Determine the efficiency and read results from file
             self._runGetEfficiency(targetEfficiency=targetEfficiency, threshold=threshold)
             effResults = self._readEfficiencyFile()
 
-            efficiencyAtField['efficiency'].append(effResults['efficiency'])
-            efficiencyAtField['efficiencyErr'].append(effResults['efficiencyErr'])
+            effAtField['efficiency'].append(effResults['efficiency'])
+            effAtField['efficiencyErr'].append(effResults['efficiencyErr'])
 
-
+            curField = effAtField['field'][-1]
+            effField = effAtField['efficiency'][-1]
+            errField = effAtField["efficiencyErr"][-1]
+            
             match effResults['stopCondition']:
                 
                 case 'DID NOT CONVERGE':
                     validEfficiency = False
-                    print(f'Did not converge at field ratio = {efficiencyAtField['field'][-1]}:')
-                    print(f'\tEfficiency = {efficiencyAtField['efficiency'][-1]:.3f} +/- {efficiencyAtField['efficiencyErr'][-1]:.3f}')
+                    print(f'Did not converge: Efficiency = {effField:.3f} +/- {errField:.3f}')
 
                 case 'CONVERGED':
                     validEfficiency = True
-                    print(f'Converged at field ratio = {efficiencyAtField['field'][-1]}:')
-                    print(f'\tEfficiency = {efficiencyAtField['efficiency'][-1]:.3f} +/- {efficiencyAtField['efficiencyErr'][-1]:.3f}')
+                    print(f'Converged: Efficiency = {effField:.3f} +/- {errField:.3f}')
             
                 case 'EXCLUDED':
                     validEfficiency = False
-                    print(f'Excluded at field ratio = {efficiencyAtField['field'][-1]}:')
-                    print(f'\tEfficiency = {efficiencyAtField['efficiency'][-1]:.3f} +/- {efficiencyAtField['efficiencyErr'][-1]:.3f}')
+                    print(f'Excluded: Efficiency = {effField:.3f} +/- {errField:.3f}')
 
                 case _:
                     raise ValueError('Error - Malformed efficiency file.')      
         #End of find field for efficiency loop
 
-        #Print solution
+        
         finalField = self.getParam('fieldRatio')
-        print(f'Solution found for {targetEfficiency*100:.0f}% efficiency: Field ratio = {finalField}')
-        print(efficiencyAtField)
-
         self._param['fieldRatio'] = finalField
 
+        print(f'Solution for {targetEfficiency*100:.0f}% efficiency: Field ratio = {finalField}')
+        self._printFieldSolution(effAtField)
+
         return finalField
-    
+
+#***********************************************************************************#
+    def _printFieldSolution(self, resultsAtField):
+        """
+        TODO - For James. Ive made this function to print in a box like you had. 
+        However I think this is less useful than just printing effAtField.
+        Printing directly allows for directly copy-pasting elsewhere where it is already set up for plotting.
+
+        Maybe rejig this funtion to actually make that plot. Or remove this entirely.
+
+        Prints the results of the field search in a box format.
+
+        Args:
+            resultsAtField (dict): Dictionary containing lists of:
+                - field ratios, values, and errors for each iteration. 
+        """
+
+        dataLabel = list(resultsAtField.keys())[1]
+
+        header = f'| #     Efield    {dataLabel:<15} Error    |'
+        boxWidth = len(header)
+
+        print('\n\t' + '-'*boxWidth)
+        print('\t' + header)
+        print('\t|' + '='*(boxWidth-2) + '|')
+
+        for i, (f, v, e) in enumerate(zip(*resultsAtField.values()), 1):
+            print(f'\t| {i:<6} {f:<9.1f} {v:<15.3f} {e:<8.3f} |')
+
+        print('\t' + '-'*boxWidth)
+
+        return
+
 #***********************************************************************************#
     def _calcOpticalTransparency(self):
         """
@@ -1197,15 +1227,15 @@ class FIMS_Simulation:
         if self._geometry is None:
             self._generateGeometry()
 
-        if targetTransparency >= 0.99 or targetTransparency <= 0.0:
+        if targetTransparency > 0.99 or targetTransparency <= 0.0:
             raise ValueError('Error: Target transparency must be between 0 and 0.99')
 
-        print(f'Beginning search for minimum field to achieve >{targetTransparency}% transparency...')
+        print(f'Beginning field search for >{targetTransparency*100:.0f}% transparency...')
        
         iterNo = 0
         iterNoLimit = self._iterationNumberLimit
 
-        transparencyAtField = {
+        transAtField = {
             'field': [],
             'transparency': [],
             'transparencyErr': []
@@ -1222,38 +1252,40 @@ class FIMS_Simulation:
                 break
 
             #Solve the new electric field
-            newField = self._getNextField(iterNo, transparencyAtField, targetTransparency)
-            transparencyAtField['field'].append(newField)
+            newField = self._getNextField(iterNo, transAtField, targetTransparency)
+            transAtField['field'].append(newField)
             self._param['fieldRatio'] = newField
             self._solveEFields(solveWeighting=False)
 
             #Generate field lines and read results from file
             self._runFieldLines()
-            transparencyResults = self._readTransparencyFile()
+            transResults = self._readTransparencyFile()
 
-            transparencyAtField['transparency'].append(transparencyResults['transparency'])
-            transparencyAtField['transparencyErr'].append(transparencyResults['transparencyErr'])
+            transAtField['transparency'].append(transResults['transparency'])
+            transAtField['transparencyErr'].append(transResults['transparencyErr'])
                 
-            twoSigmaTransparency = transparencyAtField['transparency'][-1] + 2*transparencyAtField['transparencyErr'][-1]
+            twoSigmaTrans = transAtField['transparency'][-1] + 2*transAtField['transparencyErr'][-1]
             
             #Check transparency to terminate loop
-            if twoSigmaTransparency >= targetTransparency:
+            curField = transAtField['field'][-1]
+            fieldTrans = transAtField['transparency'][-1]
+            transErr = transAtField['transparencyErr'][-1]
+            
+            if twoSigmaTrans >= targetTransparency:
                 isTransparent = True
-                print(f'Transparent at field ratio = {transparencyAtField['field'][-1]}:')
-                print(f'\tTransparency = {transparencyAtField['transparency'][-1]:.3f} +/- {transparencyAtField['transparencyErr'][-1]:.3f}')
+                print(f'Transparent at field ratio = {curField}:')
+                print(f'\tTransparency = {fieldTrans:.3f} +/- {transErr:.3f}')
             else:
                 isTransparent = False
-                print(f'Not transparent at field ratio = {transparencyAtField['field'][-1]}:')
-                print(f'\tTransparency = {transparencyAtField['transparency'][-1]:.3f} +/- {transparencyAtField['transparencyErr'][-1]:.3f}')
+                print(f'Not transparent: Transparency = {fieldTrans:.3f} +/- {transErr:.3f}')
         #End of find field for transparency loop
 
 
-        #Print solution
         finalField = self.getParam('fieldRatio')
-        print(f'Solution: Field ratio = {finalField}')
-        #print(transparencyAtField)
-        
         self._param['fieldRatio'] = finalField
+
+        print(f'Solution for {targetTransparency*100:.0f}% transparency: Field ratio = {finalField}')
+        self._printFieldSolution(transAtField)
 
         return finalField
 
@@ -1262,8 +1294,8 @@ class FIMS_Simulation:
     def findMinFieldRatio(self):
         """
         Determines the minimum Electric Field Ratio required to achieve:   
-        - 95% detection efficiency, and
-        - 100% electric field line transparency.
+            - 95% detection efficiency, and
+            - 100% electric field line transparency.
 
         This assumes that the field strength is monotonically increasing.
 
@@ -1283,8 +1315,8 @@ class FIMS_Simulation:
         print(f'Finding minimum field ratio for geometry with drift field: {driftField} V/cm')
 
         #Choose initial field ratio guess
-        minFieldGuess = self._calcOpticalTransparency()
-        #minFieldGuess = math.floor(0.9*(2/self._calcOpticalTransparency() - 1))
+        optTrans = self._calcOpticalTransparency()#TODO - Better guess?
+        minFieldGuess = math.floor(2/optTrans - 1)
 
         self._param['fieldRatio'] = minFieldGuess
         print(f'\tInitial field ratio guess: {minFieldGuess}')
@@ -1437,14 +1469,10 @@ class FIMS_Simulation:
                         raise ValueError('Error - Malformed efficiency file.')
         #End of find combined min field loop
 
-        #Print solution
         finalField = self.getParam('fieldRatio')
-        print(f'Solution found: Field ratio = {finalField}')
-
-        #print(transparencyAtField)
-        #print(efficiencyAtField)
-
         self.param['fieldRatio'] = finalField
+
+        print(f'Solution found: Field ratio = {finalField}')
 
         return finalField
 
@@ -1907,7 +1935,7 @@ class FIMS_Simulation:
             doneRun = self.runSimulation(changeGeometry=initialRun)
             self._param = saveParam
             
-            #rGet the simulation data
+            #Get the simulation data
             simData = runData(doneRun)
 
             #find locations of stuck electrons
@@ -1935,9 +1963,6 @@ class FIMS_Simulation:
             'totalCharge': totalElectrons,
         }
         return chargeBuildupSummary
-
-
-
         
 
 #***********************************************************************************#
@@ -2018,4 +2043,3 @@ class FIMS_Simulation:
         )
 
     
-

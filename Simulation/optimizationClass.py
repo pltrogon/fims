@@ -160,7 +160,6 @@ class FIMS_Optimizer:
         return
 
 #**********************************************************************#
-#     
     def _getIBN(self):
         """
         Runs a FIMS simulation and calculates
@@ -179,7 +178,6 @@ class FIMS_Optimizer:
         return IBN
 
 #**********************************************************************#
-
     def _IBNObjective(self, optimizerParam, inputList):
         """
         Objective function to optimize for minimum IBN.
@@ -282,7 +280,9 @@ class FIMS_Optimizer:
         
         print(f"Optimal IBN value = {resultVals['IBNValue']}")
         print(self.simFIMS)
-
+        
+        self.simFIMS.resetParam()
+        
         return resultVals
 
 #**********************************************************************#
