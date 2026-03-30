@@ -1751,21 +1751,24 @@ class runData:
         
         stand = -1*self.getRunParameter('Grid Standoff')
         
-        #Get the radius of the initial position of each ion
-        particleData = self.getDataFrame('ionData')
-        particleData = particleData[particleData['Ion Charge']==1]
-        initialY = particleData['Initial y']
-        initialX = particleData['Initial x']
-        initialR = (initialY**2 + initialX**2)**.5
+        # Get the radius of the initial position of each ion, excluding the 
+        # ion from the primary charge
+        allIonData = self.getDataFrame('ionData')
+        allIonData = allIonData[allIonData['Ion Charge']==1]
+        ionData = allIonData[allIonData['Electron ID']!=0]
+        
+        initialY = ionData['Initial y']
+        initialX = ionData['Initial x']
+        initialR = math.sqrt(initialY**2 + initialX**2)
         
         #find the bundle size at the initial height of each ion
-        initialZ = particleData['Initial z']
+        initialZ = ionData['Initial z']
         for height in initialZ:
             if height < stand:
                 height = stand
             bundleSize.append(self.calcBundleRadius(height))
     
-        finalZ = particleData['Final z']
+        finalZ = ionData['Final z']
         
         #calculate the distance each ion is from the edge of the bundle
         for radius, bundle in zip(initialR, bundleSize):
@@ -1805,7 +1808,7 @@ class runData:
         ionHistogram = plt.figure()
         plt.hist(
             [backflowing, captured], 
-            bins='auto', stacked=True, c=['r', 'g'],
+            bins='auto', stacked=True, c=['r', 'g'], alpha=0.5,
             label =['Backflowing', 'Captured'], 
         )
         
@@ -2307,7 +2310,7 @@ class runData:
         
         polyaEff = fitPolya.calcEfficiency(threshold)
         efficiencyText = f'Polya Efficiency = {polyaEff:.4f}'
-
+        
         ax.text(
             0.8, 0.5, efficiencyText, fontsize=10, 
             horizontalalignment='center', verticalalignment='center', 
