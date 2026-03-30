@@ -1315,7 +1315,8 @@ class FIMS_Simulation:
         print(f'Finding minimum field ratio for geometry with drift field: {driftField} V/cm')
 
         #Choose initial field ratio guess
-        minFieldGuess = self._calcOpticalTransparency()#TODO - Better guess?
+        optTrans = self._calcOpticalTransparency()#TODO - Better guess?
+        minFieldGuess = math.floor(2/optTrans - 1)
 
         self._param['fieldRatio'] = minFieldGuess
         print(f'\tInitial field ratio guess: {minFieldGuess}')
