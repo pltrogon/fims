@@ -1121,13 +1121,14 @@ class FIMS_Simulation:
         
         finalField = self.getParam('fieldRatio')
         print(f'Solution found for {targetEfficiency*100:.0f}% efficiency: Field ratio = {finalField}')
-        print(efficiencyAtField)
+        
         #Reset parameters to original values except for field ratio
         saveParam['fieldRatio'] = finalField
         self.setParameters(saveParam)
 
         print(f'Solution for {targetEfficiency*100:.0f}% efficiency: Field ratio = {finalField}')
         self._printFieldSolution(effAtField)
+        #print(effAtField)
 
         return finalField
 
@@ -1243,7 +1244,7 @@ class FIMS_Simulation:
             self._solveEFields(solveWeighting=False)
 
             self._runGarfield('runTransparency')
-            transparencyResults = self._readTransparencyFile()
+            transResults = self._readTransparencyFile()
 
             transAtField['transparency'].append(transResults['transparency'])
             transAtField['transparencyErr'].append(transResults['transparencyErr'])
@@ -1267,7 +1268,6 @@ class FIMS_Simulation:
 
         finalField = self.getParam('fieldRatio')
         print(f'Solution: Field ratio = {finalField}')
-        #print(transparencyAtField)
         
         #Reset parameters to original values except for field ratio
         saveParam['fieldRatio'] = finalField
@@ -1275,6 +1275,7 @@ class FIMS_Simulation:
 
         print(f'Solution for {targetTransparency*100:.0f}% transparency: Field ratio = {finalField}')
         self._printFieldSolution(transAtField)
+        #print(transAtField)
 
         return finalField
 
