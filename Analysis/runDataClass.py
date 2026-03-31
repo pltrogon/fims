@@ -1575,7 +1575,7 @@ class runData:
         gain = histData['gain']
 
         if gain < 5 or gain >= self.getRunParameter('Avalanche Limit'):
-            raise ValueError(f'Unable to fit to data. Gain is {gain:.2f}.')
+            raise ValueError(f'Unable to fit to data. Gain is {gain:.2f} ({self.runNumber}).')
 
         
         fitDataToPolya = myPolya()
