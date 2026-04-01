@@ -714,7 +714,8 @@ class FIMS_Simulation:
         
         #T2K gas
         padEffField = 371.4*np.exp(-0.16*pad) + 50
-        standEffField = 496.2*np.exp(-0.05*standoff) + 103
+        #standEffField = 342.0*np.exp(-0.04*standoff) + 83.7 # Chi2 = 5.75 p = 0.836
+        standEffField = 4358.0/standoff + 48.4 # Chi2 = 3.83 p = 0.955
         
         #Minimum field for 95% efficiency
         minField = max(padEffField, standEffField)
