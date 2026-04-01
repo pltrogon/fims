@@ -327,13 +327,13 @@ int main(int argc, char * argv[]) {
       isEfficient = false;
     }
     
-    //Efficiency is above target within confidence
-    if(lowerLimit >= targetEfficiency){
+    //Efficiency is above target within confidence after at least 50% of avalanches are completed
+    if(lowerLimit >= targetEfficiency && 1.*totalAvalanches/(1.*numAvalanche) > 0.5){
       runAvalanche = false;
       isEfficient = true;
     }
 
-		//occasionaly print values
+		//occasionally print values
 		if(totalAvalanches%100 == 0){
 			std::cout << "Total avalanches: " << totalAvalanches << "\n";
       std::cout << "\tEfficiency: " << efficiency << " +/- " << efficiencyErr << "\n";

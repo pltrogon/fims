@@ -923,7 +923,7 @@ class FIMS_Simulation:
 
         The resulting field ratio is rounded up to the nearest integer.
         
-        *TODO - Tested for when  current and prevoious values are both LESS than target. Behaviour when bracketing target unknown.*
+        *TODO - Tested for when  current and previous values are both LESS than target. Behavior when bracketing target unknown.*
 
         Args:
             fields (np.array): Numpy array of the field ratio. Has form: [current, previous]
@@ -1072,7 +1072,7 @@ class FIMS_Simulation:
         validEfficiency = False
         #Limit can be low. Check is boolean
         saveParam = self.getAllParam()
-        self.setParameters({'numAvalanche': 3000, 'avalancheLimit': 20})
+        self.setParameters({'numAvalanche': 3000, 'avalancheLimit': 15})
         
         while not validEfficiency:
 
@@ -1134,11 +1134,8 @@ class FIMS_Simulation:
 #***********************************************************************************#
     def _printFieldSolution(self, resultsAtField):
         """
-        TODO - For James. Ive made this function to print in a box like you had. 
-        However I think this is less useful than just printing effAtField.
-        Printing directly allows for directly copy-pasting elsewhere where it is already set up for plotting.
-
-        Maybe rejig this funtion to actually make that plot. Or remove this entirely.
+        TODO - Consider if this is better than just printing the raw values (easier
+        to copy + paste)
 
         Prints the results of the field search in a box format.
 
@@ -1156,8 +1153,8 @@ class FIMS_Simulation:
         print('\t' + header)
         print('\t|' + '='*(boxWidth-2) + '|')
 
-        for i, (iteration, field, error) in enumerate(zip(*resultsAtField.values()), 1):
-            print(f'\t| {i:<6} {iteration:<9.1f} {field:<15.3f} {error:<8.3f}|')
+        for iteration, (field, keyData, error) in enumerate(zip(*resultsAtField.values()), 1):
+            print(f'\t| {iteration:<6} {field:<10.1f} {keyData:<13.3f} {error:<9.3f}|')
 
         print('\t' + '-'*boxWidth + '\n')
 
@@ -1300,8 +1297,8 @@ class FIMS_Simulation:
 
         #Choose initial field ratio guess
         optTrans = self._calcOpticalTransparency()
-        #minFieldGuess = math.floor(2/optTrans - 1)
-        minFieldGuess = self._calcMinField()# TODO - Better guess?
+        #minFieldGuess = math.floor(2/optTrans - 1) TODO: may be better for efficiency. Fitted data incoming 
+        minFieldGuess = self._calcMinField()
         
         self.setParameters({'fieldRatio': minFieldGuess})
         print(f'\tInitial field ratio guess: {minFieldGuess}')
