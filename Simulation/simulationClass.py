@@ -114,11 +114,11 @@ class FIMS_Simulation:
             dict: Dictionary of default parameters and values.
         """
         defaultParameters = {
-            'padLength': 20.,
-            'pitch': 55.,
-            'gridStandoff': 50.,
+            'padLength': 18.,
+            'pitch': 42.,
+            'gridStandoff': 30.,
             'gridThickness': 1.,
-            'holeRadius': 20.,
+            'holeRadius': 12.,
             'cathodeHeight': 200.,
             'thicknessSiO2': 5.,
             'pillarRadius': 5.,

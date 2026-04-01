@@ -11,7 +11,7 @@ import uproot
 import random
 import warnings
 
-from scipy.optimize import Bounds, minimize, NonLinearConstraint, LinearConstraint
+from scipy.optimize import Bounds, minimize, NonlinearConstraint, LinearConstraint
 
 simDir = os.getcwd()
 analysisDir = os.path.join(simDir, '..', 'Analysis')
@@ -239,12 +239,14 @@ class FIMS_Optimizer:
         # Get optimizer parameters and bounds
         activeParameters = self.params.copy()
         inputList, minBounds, maxBounds = map(list, zip(*activeParameters))
-
+        
         # Set bounds for variables
         optimizerBounds = Bounds(minBounds, maxBounds)
 
         # Set initial guess as default values
-        optimizerParams = self.simFIMS.getAllParam()
+        optimizerParams = []
+        for param in inputList:
+            optimizerParams.append(self.simFIMS.getParam(param))
         initialGuess = np.array(optimizerParams)
 
         print('Beginning optimization...')
@@ -401,13 +403,15 @@ class FIMS_Optimizer:
         efficiencyTarget = 0.95
         transparencyTarget = 0.99
         fieldConstraints = [
-            NonLinearConstraint(lambda x: self._optimizerMaster(x, inputList)[1], efficiencyTarget, 1.1),
-            NonLinearConstraint(lambda x: self._optimizerMaster(x, inputList)[2], transparencyTarget, 1.1)
+            NonlinearConstraint(lambda x: self._optimizerMaster(x, inputList)[1], efficiencyTarget, 1.1),
+            NonlinearConstraint(lambda x: self._optimizerMaster(x, inputList)[2], transparencyTarget, 1.1)
         ]
         #TODO: Find a way to incorporate the geometry constraints of _getGeometryConstraints here
 
         # Set initial guess as default values
-        optimizerParams = self.simFIMS.getAllParam()
+        optimizerParams = []
+        for param in inputList:
+            optimizerParams.append(self.simFIMS.getParam(param))
         initialGuess = np.array(optimizerParams)
 
         print('Beginning optimization...')
