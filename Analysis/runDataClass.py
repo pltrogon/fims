@@ -501,10 +501,17 @@ class runData:
             self._calculatedData['Efficiency (10e)'] = simEff
             self._calculatedData['Efficiency Error'] = simEffErr
 
-            #Fits
+            efficiencyThreshold = self._getEfficiencyThreshold(targetEfficiency=0.95)
+            self._calculatedData['n_95'] = efficiencyThreshold
+
+            #Polya Fits
             polyaTheta, polyaGain = self._fitPolya()
             self._calculatedData['Polya Theta'] = polyaTheta
             self._calculatedData['Polya Gain'] = polyaGain
+
+
+
+            #Other calculated values can be added here as needed.
 
         return
 
@@ -2236,6 +2243,24 @@ class runData:
         return theta, gain
 
 #********************************************************************************#
+    def _getEfficiencyThreshold(self, targetEfficiency=0.95):
+        """TODO"""
+
+        threshold = 0
+
+        isEfficient = True
+
+        while isEfficient:
+            threshold += 1
+            eff, effErr = self._getEfficiency(threshold=threshold)
+
+            if eff < targetEfficiency:
+                isEfficient = False
+        
+        return threshold-1
+
+
+#********************************************************************************#
     def plotEfficiency(self, binWidth=1, threshold=0):
         """
         Generates a histogram of the avalanche size distribution; The data is split
@@ -2308,8 +2333,9 @@ class runData:
             c='g', ls='--', label=f'Mean Avalanche Size (Gain) = {gain:.1f}'
         )
         
+        dataEff, dataEffErr = self._getEfficiency(threshold=threshold)
         polyaEff = fitPolya.calcEfficiency(threshold)
-        efficiencyText = f'Polya Efficiency = {polyaEff:.4f}'
+        efficiencyText = f'Polya Efficiency = {polyaEff:.4f}\nData Efficiency = {dataEff:.4f} +/- {dataEffErr:.4f}'
         
         ax.text(
             0.8, 0.5, efficiencyText, fontsize=10, 
