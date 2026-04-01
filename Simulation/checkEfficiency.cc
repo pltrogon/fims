@@ -327,8 +327,8 @@ int main(int argc, char * argv[]) {
       isEfficient = false;
     }
     
-    //Efficiency is above target within confidence after at least 50% of avalanches are completed
-    if(lowerLimit >= targetEfficiency && 1.*totalAvalanches/(1.*numAvalanche) > 0.5){
+    //Efficiency is above target within confidence
+    if(lowerLimit >= targetEfficiency){
       runAvalanche = false;
       isEfficient = true;
     }
