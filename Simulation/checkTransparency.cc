@@ -262,8 +262,8 @@ int main(int argc, char * argv[]) {
   //Rejection sampled points near the edge of the unit cell
   double sampleWidth = std::sqrt(0.95); //Reject the inner portion of the unit cell
   double safetyWidth = std::sqrt(0.99); //Reject points very close to the edges of the unit cell
+  double cellLength = pitch/std::sqrt(3.);
   double halfPitch = pitch/2.;
-  double cellLength = halfPitch*2./std::sqrt(3.);
 
   while(xStart.size() < numFieldLine){
 
@@ -272,22 +272,22 @@ int main(int argc, char * argv[]) {
     double sampleY =  ((double)std::rand()/RAND_MAX)*halfPitch;
 
     //Determine if point is in unit cell - Skip if not
-    double unitY = (-2.*halfPitch/cellLength) * (sampleX-cellLength);
+    double unitY = -std::sqrt(3.)*sampleX + pitch;
     if(sampleY > unitY){
       continue;
     }
 
     //Determine if point is near edge of cell - Skip if not
     double checkY = sampleWidth*halfPitch;
-    double edgeY = (-2.*halfPitch/cellLength) * (sampleX-sampleWidth*cellLength);
-    if((sampleY < checkY) && (sampleY < edgeY)){
+    double checkEdge = -std::sqrt(3.)*sampleX + pitch*sampleWidth;
+    if((sampleY < checkY) && (sampleY < checkEdge)){
       continue;
     }
 
     //Ensure point is not too close to edge of cell
     double safetyY = safetyWidth*halfPitch;
-    double safetyEdgeY = (-2.*halfPitch/cellLength) * (sampleX-safetyWidth*cellLength);
-    if((sampleY < safetyY) && (sampleY < safetyEdgeY)){
+    double safetyEdge = -std::sqrt(3.)*sampleX + pitch*safetyWidth;
+    if((sampleY < safetyY) && (sampleY < safetyEdge)){
       xStart.push_back(sampleX);
       yStart.push_back(sampleY);
     }
