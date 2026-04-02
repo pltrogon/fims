@@ -293,7 +293,6 @@ int main(int argc, char * argv[]) {
     }
   }
 
-
   // ***** Calculate field Lines ***** //
   std::vector<std::array<float, 3> > fieldLines;
   int totalFieldLines = xStart.size();
@@ -318,10 +317,7 @@ int main(int argc, char * argv[]) {
     fieldLineZ = fieldLines[lineEnd][2];
 
     //TODO: Find more elegant way to determine where a line terminates
-    // Currently is pad outer radius and no more than 10% of the grid standoff away from the pad
-    //What about other pads?
-    double lineRadius2 = std::pow(fieldLineX, 2.) + std::pow(fieldLineY, 2.);
-    if(sqrt(lineRadius2) <= padLength && fieldLineZ < -0.9*gridStandoff){
+    if(fieldLineZ < -0.9*gridStandoff){
         numAtPad++;
     }
 

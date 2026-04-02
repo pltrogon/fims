@@ -1066,7 +1066,7 @@ class FIMS_Simulation:
         validEfficiency = False
         #Limit can be low. Check is boolean
         saveParam = self.getAllParam()
-        self.setParameters({'numAvalanche': 3000, 'avalancheLimit': 20})
+        self.setParameters({'numAvalanche': 5000, 'avalancheLimit': threshold+5})
         
         while not validEfficiency:
 
@@ -1241,7 +1241,7 @@ class FIMS_Simulation:
             transAtField['transparency'].append(transResults['transparency'])
             transAtField['transparencyErr'].append(transResults['transparencyErr'])
                 
-            twoSigmaTrans = transAtField['transparency'][-1] + 2*transAtField['transparencyErr'][-1]
+            twoSigmaTrans = transAtField['transparency'][-1] - 2*transAtField['transparencyErr'][-1]
             
             #Check transparency to terminate loop
             curField = transAtField['field'][-1]
@@ -1356,12 +1356,12 @@ class FIMS_Simulation:
         iterNo = 0
         iterNoLimit = self._iterationNumberLimit
 
-        transparencyAtField = {
+        transAtField = {
             'field': [],
             'transparency': [],
             'transparencyErr': []
         }
-        efficiencyAtField = {
+        effAtField = {
             'field': [],
             'efficiency': [],
             'efficiencyErr': []
@@ -1372,9 +1372,9 @@ class FIMS_Simulation:
 
         saveParam = self.getAllParam()
         self.setParameters({
-            'numFieldLine': 200,
-            'numAvalanche': 3000, 
-            'avalancheLimit': 20
+            'numFieldLine': 1000,
+            'numAvalanche': 5000, 
+            'avalancheLimit': threshold+5
         })
 
         #Loop until both conditions are satisfied
@@ -1388,11 +1388,15 @@ class FIMS_Simulation:
             
             #Solve for the new transparency electric field if not transparent
             if not isTransparent:
-                newTransparencyField = self._getNextField(iterNo, transparencyAtField, targetTransparency)
+                newTransparencyField = self._getNextField(iterNo, transAtField, targetTransparency)
+            else:
+                newTransparencyField = transAtField['field'][-1]
 
             #Solve for the new efficiency electric field if not efficient
             if not isEfficient:
-                newEfficiencyField = self._getNextField(iterNo, efficiencyAtField, targetEfficiency)
+                newEfficiencyField = self._getNextField(iterNo, effAtField, targetEfficiency)
+            else:
+                newEfficiencyField = effAtField['field'][-1]
 
             # Set field ratio to the maximum of the two new fields to attempt to satisfy both conditions
             ## Note if already transparent or efficient, only one of the fields will be updated, 
@@ -1409,17 +1413,18 @@ class FIMS_Simulation:
             if not isTransparent:
 
                 self._runGarfield('runTransparency')  
-                transparencyResults = self._readTransparencyFile()
+                transResults = self._readTransparencyFile()
 
-                transparencyAtField['field'].append(newField)
-                transparencyAtField['transparency'].append(transparencyResults['transparency'])
-                transparencyAtField['transparencyErr'].append(transparencyResults['transparencyErr'])
+                transAtField['field'].append(newField)
+                transAtField['transparency'].append(transResults['transparency'])
+                transAtField['transparencyErr'].append(transResults['transparencyErr'])
                 
-                    
+                
                 #Check transparency to terminate loop
-                if transparencyAtField['transparency'][-1] >= targetTransparency:
+                twoSigmaTrans = transAtField['transparency'][-1] - 2*transAtField['transparencyErr'][-1]
+                if twoSigmaTrans >= targetTransparency:
                     isTransparent = True
-                    print(f'Transparent at field ratio = {transparencyAtField['field'][-1]}:')
+                    print(f"Transparent at field ratio = {transAtField['field'][-1]}:")
                 else:
                     print(f'\tTransparency condition not satisfied.')
 
@@ -1432,9 +1437,9 @@ class FIMS_Simulation:
                 )
                 effResults = self._readEfficiencyFile()
 
-                efficiencyAtField['field'].append(newField)
-                efficiencyAtField['efficiency'].append(effResults['efficiency'])
-                efficiencyAtField['efficiencyErr'].append(effResults['efficiencyErr'])
+                effAtField['field'].append(newField)
+                effAtField['efficiency'].append(effResults['efficiency'])
+                effAtField['efficiencyErr'].append(effResults['efficiencyErr'])
 
                 match effResults['stopCondition']:
                     
@@ -1443,7 +1448,7 @@ class FIMS_Simulation:
 
                     case 'CONVERGED':
                         isEfficient = True
-                        print(f'Eficiency condition satisfied at field ratio = {efficiencyAtField["field"][-1]}.')
+                        print(f"Eficiency condition satisfied at field ratio = {effAtField['field'][-1]}.")
             
                     case _:
                         raise ValueError('Error - Malformed efficiency file.')
@@ -1482,6 +1487,7 @@ class FIMS_Simulation:
 
         #Choose initial field ratio guess
         minFieldGuess = self._calcMinField()
+        minFieldGuess = 10.0#TODO - Remove hardcoding. This is just to speed up testing of the rest of the code.
 
         self.setParameters({'fieldRatio': minFieldGuess})
         print(f'\tInitial field ratio guess: {minFieldGuess}')
@@ -1597,7 +1603,7 @@ class FIMS_Simulation:
 
         saveParam = self.getAllParam()
         # Limit can be low. Check is boolean - above threshold or not
-        self.setParameters({'numAvalanche': 3000, 'avalancheLimit': 20})  
+        self.setParameters({'numAvalanche': 5000, 'avalancheLimit': efficiencyThreshold+5})  
 
         self._runGarfield(
             'runEfficiency', 
