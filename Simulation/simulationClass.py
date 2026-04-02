@@ -125,7 +125,7 @@ class FIMS_Simulation:
             'driftField': 280.,
             'fieldRatio': 100.,
             'numFieldLine': 25,
-            'numAvalanche': 3000,
+            'numAvalanche': 5000,
             'avalancheLimit': 500,
             'gasCompAr': 0.95,
             'gasCompCO2': 0.00,
@@ -694,7 +694,7 @@ class FIMS_Simulation:
         return runNo
 
 #**********************************************************************#
-    def _calcMinFieldEfficiency(self):
+    def _calcEfficiencyMinField(self):
         """
         Calculates the minimum field ratio to achieve 95% Efficiency.
 
@@ -1063,7 +1063,7 @@ class FIMS_Simulation:
         validEfficiency = False
         #Limit can be low. Check is boolean
         saveParam = self.getAllParam()
-        self.setParameters({'numAvalanche': 5000, 'avalancheLimit': threshold+5})
+        self.setParameters({'numAvalanche': 3000, 'avalancheLimit': threshold+5})
         
         while not validEfficiency:
 
@@ -1390,7 +1390,7 @@ class FIMS_Simulation:
         saveParam = self.getAllParam()
         self.setParameters({    #More is better. Adjust as needed.
             'numFieldLine': 1000, 
-            'numAvalanche': 5000,
+            'numAvalanche': 3000,
             'avalancheLimit': threshold+5
         })
 
@@ -1624,7 +1624,7 @@ class FIMS_Simulation:
 
         saveParam = self.getAllParam()
         # Limit can be low. Check is boolean - above threshold or not
-        self.setParameters({'numAvalanche': 5000, 'avalancheLimit': efficiencyThreshold+5})  
+        self.setParameters({'numAvalanche': 3000, 'avalancheLimit': efficiencyThreshold+5})  
 
         self._runGarfield(
             'runEfficiency', 
