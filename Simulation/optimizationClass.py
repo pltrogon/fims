@@ -211,9 +211,15 @@ class FIMS_Optimizer:
             'params': paramDict,
             'IBN': resultIBN
         })
-
+        with open('log/logOptimizer.txt', 'a') as file:
+                file.write(f'\nIteration {len(self._optimizerLog)}\n')
+                for param in paramDict:
+                    file.write(f'\t{param}: {paramDict[param]}\n')
+                file.write(f'\tIBN: {resultIBN}')
+                
+                
         # Print the current IBN value for this iteration
-        print(f'Iteration {len(self._optimizerLog)}: IBN = {resultIBN:.6f}')
+        print(f'\tIteration {len(self._optimizerLog)}: IBN = {resultIBN:.6f}\n')
         
         return resultIBN
 
