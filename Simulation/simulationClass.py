@@ -173,7 +173,6 @@ class FIMS_Simulation:
             self._param[inParam] = inValue
 
         self._checkParam()
-        self._makeRunControl()
 
         return
     
@@ -534,6 +533,8 @@ class FIMS_Simulation:
                     - targetEfficiency (float): The target efficiency to achieve (default: 0.95).
                     - threshold (int): The number of electrons to consider an avalanche successful (default: 10).
         """
+
+        self._makeRunControl()
 
         if self._unitCell == 'GridPix':
             executable += 'GridPix'
