@@ -213,8 +213,8 @@ class FIMS_Optimizer:
         })
         with open('log/logOptimizer.txt', 'a') as file:
                 file.write(f'\nIteration {len(self._optimizerLog)}\n')
-                for param in paramDict:
-                    file.write(f'\t{param}: {paramDict[param]}\n')
+                for param, value in paramDict.items():
+                    file.write(f'\t{param}: {value}\n')
                 file.write(f'\tIBN: {resultIBN}')
                 
                 

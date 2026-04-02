@@ -956,19 +956,19 @@ class FIMS_Simulation:
 
 
         if abs(valDiff) < 0.001:
-                #print(f'Warning: Slope near zero. Using heuristic step of 1.')
-                return curField+1
+            print(f'Warning: Slope near zero. Using heuristic step of 1.')
+            return curField+1
 
         fieldStep = damping*targetDiff*fieldDiff/valDiff
         #Limit step size for stability
         stepSizeLimit = 10
         if fieldStep > stepSizeLimit:
-            #print(f'Warning: Step size limited to {stepSizeLimit}.')
+            print(f'Warning: Step size limited to {stepSizeLimit}.')
             newField = curField+stepSizeLimit
 
         #Ensure step is at least 1
         elif fieldStep < 1:
-            #print(f'Warning: Field step small. Using heuristic step of 1.')
+            print(f'Warning: Field step small. Using heuristic step of 1.')
             newField = curField+1
 
         #Round step up to nearest integer
@@ -1015,7 +1015,6 @@ class FIMS_Simulation:
         # Take constant step of 2 for 2nd iteration
         elif iterNo == 2:
             newField = valueAtField['field'][0] + 2 #TODO - This can be adjusted
-            print(f'\tNew field ratio: {newField}')
 
         # Use secant method to determine new field
         else:
@@ -1024,8 +1023,7 @@ class FIMS_Simulation:
                 values=np.array([valueAtField[valueKey][-1], valueAtField[valueKey][-2], targetValue]),
                 valuesErr=np.array([valueAtField[errorKey][-1], valueAtField[errorKey][-2]])
             )
-            print(f'\tNew field ratio: {newField}')
-        
+                
         if newField is None:
             raise ValueError('Error: Invalid new field')
         
@@ -1084,8 +1082,9 @@ class FIMS_Simulation:
 
             #Solve for the new electric field
             newField = self._getNextField(iterNo, effAtField, targetEfficiency)
+            print(f'\tNew field ratio: {newField}')
             effAtField['field'].append(newField)
-            self._param['fieldRatio'] = newField
+            self.setParameters({'fieldRatio': newField})
             self._solveEFields(solveWeighting=False)
 
             #Determine the efficiency and read results from file
@@ -1236,6 +1235,7 @@ class FIMS_Simulation:
 
             #Solve the new electric field
             newField = self._getNextField(iterNo, transAtField, targetTransparency)
+            print(f'\tNew field ratio: {newField}')
             transAtField['field'].append(newField)
             self.setParameters({'fieldRatio': newField})
             self._solveEFields(solveWeighting=False)
@@ -1379,10 +1379,12 @@ class FIMS_Simulation:
         isTransparent = False
         isEfficient = False
 
-        self._param['numFieldLine'] = 200
-        self._param['numAvalanche'] = 3000
-        self._param['avalancheLimit'] = 20 #Limit can be low. Check is boolean - above threshold or not
-
+        saveParam = self.getAllParam()
+        self.setParameters({ #More is better. Adjust as needed.
+            'numFieldLine': 1000, 
+            'numAvalanche': 5000,
+            'avalancheLimit': threshold+5
+        })
 
         #Loop until both conditions are satisfied
         while not (isTransparent and isEfficient):
@@ -1406,7 +1408,7 @@ class FIMS_Simulation:
             ## so this will not affect the other condition.
 
             newField = max(newTransparencyField, newEfficiencyField)
-            self._param['fieldRatio'] = newField
+            self.setParameters({'fieldRatio': newField})
             print(f'Iteration {iterNo}: Field ratio = {newField}')
 
             #Solve the electric field for the new field ratio
@@ -1457,7 +1459,8 @@ class FIMS_Simulation:
         #End of find combined min field loop
 
         finalField = self.getParam('fieldRatio')
-        self._param['fieldRatio'] = finalField
+        saveParam['fieldRatio'] = finalField
+        self.setParameters(saveParam)
 
         print(f'Solution found: Field ratio = {finalField}')
 
@@ -1490,7 +1493,7 @@ class FIMS_Simulation:
         opticalTransparency = self._calcOpticalTransparency()
         minFieldGuess = math.floor(0.9*(2/opticalTransparency - 1))
 
-        self._param['fieldRatio'] = minFieldGuess
+        self.setParameters({'fieldRatio': minFieldGuess})
         print(f'\tInitial field ratio guess: {minFieldGuess}')
 
         #Generate the FEM geometry
@@ -1498,7 +1501,7 @@ class FIMS_Simulation:
 
         # Determine minimum field ratio for default conditions
         combinedMinField = self._findCombinedMinField()
-        self._param['fieldRatio'] = combinedMinField
+        self.setParameters({'fieldRatio': combinedMinField})
 
         #Solve for the weighting field
         self._solveEFields(solveWeighting=True)
@@ -1893,7 +1896,7 @@ class FIMS_Simulation:
         #Check that the number of avalanches is a reasonable number
         # too many = too much charge unaffected by new stucks
         # too few = not enough stuck charges to make a difference
-        numAvalanche = self._param('numAvalanche')
+        numAvalanche = self.getParam('numAvalanche')
         if ((numAvalanche < 10) | (numAvalanche > 100)):
             raise ValueError('Error: numAvalanche should be between 10 and 100 for charge buildup simulations.')
         
@@ -1917,9 +1920,9 @@ class FIMS_Simulation:
                 initialRun = False
                 
             #Run simulation - save parameters s reset at end of sim
-            saveParam = self._param.copy()
+            saveParam = self.getAllParam()
             doneRun = self.runSimulation(changeGeometry=initialRun)
-            self._param = saveParam
+            self.setParameters(saveParam)
             
             #Get the simulation data
             simData = runData(doneRun)
