@@ -1113,16 +1113,21 @@ class runData:
 
         if trim:
             data = self._trimAvalanche()
+            if len(data) == 0:
+                print('Trimmed avalanche empty. Using untrimmed data...')
+                data = self.getDataFrame('avalancheData')
+        
         else:
             data = self.getDataFrame('avalancheData')
-
+        
         gain = data['Total Electrons'].mean()
-            
+        
         bins = np.arange(
             data['Total Electrons'].min(), 
             data['Total Electrons'].max()+1, 
             binWidth
         )
+        
         binCenters = bins[:-1] + binWidth/2.
         
         counts, _ = np.histogram(

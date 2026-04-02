@@ -333,7 +333,7 @@ int main(int argc, char * argv[]) {
       isEfficient = true;
     }
 
-		//occasionaly print values
+		//occasionally print values
 		if(totalAvalanches%100 == 0){
 			std::cout << "Total avalanches: " << totalAvalanches << "\n";
       std::cout << "\tEfficiency: " << efficiency << " +/- " << efficiencyErr << "\n";

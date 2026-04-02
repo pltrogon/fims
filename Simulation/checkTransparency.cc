@@ -260,10 +260,10 @@ int main(int argc, char * argv[]) {
 
 
   //Rejection sampled points near the edge of the unit cell
-  double sampleWidth = std::sqrt(0.95); //Reject the inner portion of the unit cell
-  double safetyWidth = std::sqrt(0.99); //Reject points very close to the edges of the unit cell
+  double sampleWidth = std::sqrt(0.85); // Reject the inner portion of the unit cell
+  double safetyWidth = std::sqrt(0.99); // Reject points very close to the edges of the unit cell
   double halfPitch = pitch/2.;
-  double cellLength = halfPitch*2./std::sqrt(3.);
+  double cellLength = pitch/std::sqrt(3.);
 
   while(xStart.size() < numFieldLine){
 
@@ -272,24 +272,25 @@ int main(int argc, char * argv[]) {
     double sampleY =  ((double)std::rand()/RAND_MAX)*halfPitch;
 
     //Determine if point is in unit cell - Skip if not
-    double unitY = (-2.*halfPitch/cellLength) * (sampleX-cellLength);
+    double unitY = (pitch/cellLength) * (cellLength-sampleX);
     if(sampleY > unitY){
       continue;
     }
 
     //Determine if point is near edge of cell - Skip if not
     double checkY = sampleWidth*halfPitch;
-    double edgeY = (-2.*halfPitch/cellLength) * (sampleX-sampleWidth*cellLength);
+    double edgeY = (pitch/cellLength) * (sampleWidth*cellLength-sampleX);
     if((sampleY < checkY) && (sampleY < edgeY)){
       continue;
     }
 
     //Ensure point is not too close to edge of cell
     double safetyY = safetyWidth*halfPitch;
-    double safetyEdgeY = (-2.*halfPitch/cellLength) * (sampleX-safetyWidth*cellLength);
+    double safetyEdgeY = (pitch/cellLength) * (safetyWidth*cellLength-sampleX);
     if((sampleY < safetyY) && (sampleY < safetyEdgeY)){
       xStart.push_back(sampleX);
       yStart.push_back(sampleY);
+      //std::cout << sampleX << ", " << sampleY << ", ";
     }
   }
 
@@ -317,11 +318,9 @@ int main(int argc, char * argv[]) {
     fieldLineY = fieldLines[lineEnd][1];
     fieldLineZ = fieldLines[lineEnd][2];
 
-    //TODO: Find more elegant way to determine where a line terminates
-    // Currently is pad outer radius and no more than 10% of the grid standoff away from the pad
-    //What about other pads?
-    double lineRadius2 = std::pow(fieldLineX, 2.) + std::pow(fieldLineY, 2.);
-    if(sqrt(lineRadius2) <= padLength && fieldLineZ < -0.9*gridStandoff){
+    // Check if final z is within half the SiO2 thickness of the pad
+    // Line may terminate on any pad without issue
+    if(fieldLineZ < thicknessSiO2/2. - gridStandoff){
         numAtPad++;
     }
 
@@ -329,7 +328,7 @@ int main(int argc, char * argv[]) {
     int driftLineProgress = (100*(inFieldLine+1))/totalFieldLines;
     if(   (driftLineProgress % 10 == 0)
       &&  (driftLineProgress != prevDriftLine)){
-      std::cout << "Driftline Progress: " << driftLineProgress << " %" << std::endl;
+      std::cout << "\tDriftline Progress: " << driftLineProgress << " %" << std::endl;
       prevDriftLine = driftLineProgress;
     }
 
