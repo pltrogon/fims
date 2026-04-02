@@ -1502,9 +1502,8 @@ class FIMS_Simulation:
 
         #Choose initial field ratio guess
         minFieldGuess = 10.0 #Default guess. TODO
-
-        self.param['fieldRatio'] = minFieldGuess
         print(f'\tInitial field ratio guess: {minFieldGuess}')
+        self.setParameters({'fieldRatio': minFieldGuess})
 
         #Generate the FEM geometry
         self._generateGeometry()
