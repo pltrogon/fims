@@ -550,12 +550,16 @@ class FIMS_Simulation:
         if executable not in executables:
             raise ValueError(f'Invalid executable: {executable}')
         
-        # Handle inputs for runEfficiency
+        # Handle inputs for runEfficiency or runTransparency
         args = ''
         if executable == 'runEfficiency':
             targetEfficiency = kwargs.get('targetEfficiency', 0.95)
             threshold = kwargs.get('threshold', 10)
             args = f'{targetEfficiency} {threshold}'
+        
+        elif executable == 'runTransparency':
+            targetTransparency = kwargs.get('targetTransparency', 0.95)
+            args = f'{targetTransparency}'
 
         originalCWD = os.getcwd()
 
@@ -851,67 +855,56 @@ class FIMS_Simulation:
 #***********************************************************************************#
 
 #***********************************************************************************#
-    def _readEfficiencyFile(self):
+    def _readResultsFile(self, target=None):
         """
-        Reads the file containing the simulated efficiency for a given field strength. 
+        Reads the results file for a given target value.
+        Options are: 'efficiency' or 'transparency'
 
-        Returns:
-            dict: Dictionary containing the parsed efficiency data. 
-                  Includes:
-                  - 'stopCondition' (str): The avalanche stop condition (Converged or not).
-                  - 'efficiency' (float): The simulated efficiency.
-                  - 'efficiencyErr'(float): The uncertainty of the simulated efficiency.
-
-        """
-
-        with open('../Data/efficiencyFile.dat', 'r') as inFile:
-            allLines = [inLine.strip() for inLine in inFile.readlines()]
-
-        if len(allLines) < 7:
-            raise IndexError('Malformed file.')
+        Args:
+            target (str): The target value to read from the results file.
         
-        findEffValues = {}
-        try:
-            findEffValues['stopCondition'] = allLines[3].strip()
-
-            findEffValues['efficiency'] = float(allLines[5].strip())
-            findEffValues['efficiencyErr'] = float(allLines[6].strip())
-
-        except (IndexError, ValueError) as e:
-            raise RuntimeError(f'Error parsing efficiency file: {e}')
-                
-        return findEffValues
-    
-
-#***********************************************************************************#
-    def _readTransparencyFile(self):
-        """
-        Reads the file containing the simulated transparency for a given field strength. 
-
         Returns:
-            dict: Dictionary containing the parsed efficiency data. 
-                  Includes:
-                  - 'transparency' (float): The simulated transparency.
-                  - 'transparencyErr'(float): The uncertainty of the simulated transparency.
-
+            dict: Dictionary containing the parsed results data. 
+                  - 'stopCondition' (str): The avalanche stop condition.
+                  - '<target>' (float): The simulated target value.
+                  - '<target>Err'(float): The simulated uncertainty.
         """
 
-        with open('../Data/fieldTransparency.dat', 'r') as inFile:
-            allLines = [inLine.strip() for inLine in inFile.readlines()]
-
-        if len(allLines) < 2:
-            raise IndexError('Malformed file.')
+        resultsFiles = {
+            'efficiency': '../Data/efficiencyFile.dat',
+            'transparency': '../Data/fieldTransparency.dat'
+        }
+        if target not in resultsFiles:
+            raise ValueError(f'Invalid target: {target}')
         
-        getTransparencyValues = {}
         try:
-            getTransparencyValues['transparency'] = float(allLines[3].strip())
-            getTransparencyValues['transparencyErr'] = float(allLines[4].strip())
+            with open(resultsFiles[target], 'r') as inFile:
+                allLines = [inLine.strip() for inLine in inFile.readlines()]
+        except Exception as e:
+            raise RuntimeError(f'Error while reading the results file: {e}')
+        
+        results = {}
+        try:
+            # Find the line with "// Stop condition:"
+            stopIndex = None
+            for i, line in enumerate(allLines):
+                if line.startswith('// Stop condition:'):
+                    stopIndex = i
+                    break
+            if stopIndex is None:
+                raise ValueError('Stop condition section not found.')
+            results['stopCondition'] = allLines[stopIndex + 1].strip()
 
-        except (IndexError, ValueError) as e:
-            raise RuntimeError(f'Error parsing transparency file: {e}')
-                
-        return getTransparencyValues
-    
+            # Find the line with the target value
+            targetIndex = None
+            for i, line in enumerate(allLines):
+                if line.startswith(f'// {target.capitalize()}:'):
+                    targetIndex = i
+                    break
+            if targetIndex is None:
+                raise ValueError(f'{target.capitalize()} section not found.')
+            results[target] = float(allLines[targetIndex + 1])
+            results[f'{target}Err'] = float(allLines[targetIndex + 2])
     
 #***********************************************************************************#
     def _getFieldRatioSecant(self, fields, values, valuesErr=None, damping=0.8):
@@ -1091,7 +1084,7 @@ class FIMS_Simulation:
                 'runEfficiency',
                 targetEfficiency=targetEfficiency, threshold=threshold
             )
-            effResults = self._readEfficiencyFile()
+            effResults = self._readResultsFile('efficiency')
 
             effAtField['efficiency'].append(effResults['efficiency'])
             effAtField['efficiencyErr'].append(effResults['efficiencyErr'])
@@ -1243,8 +1236,11 @@ class FIMS_Simulation:
             self._param['fieldRatio'] = newField
             self._solveEFields(solveWeighting=False)
 
-            self._runGarfield('runTransparency')
-            transResults = self._readTransparencyFile()
+            self._runGarfield(
+                'runTransparency',
+                targetTransparency=targetTransparency
+            )
+            transResults = self._readResultsFile('transparency')
 
             transAtField['transparency'].append(transResults['transparency'])
             transAtField['transparencyErr'].append(transResults['transparencyErr'])
@@ -1256,13 +1252,18 @@ class FIMS_Simulation:
             fieldTrans = transAtField['transparency'][-1]
             transErr = transAtField['transparencyErr'][-1]
             
-            if twoSigmaTrans >= targetTransparency:
-                isTransparent = True
-                print(f'Transparent at field ratio = {curField}:')
-                print(f'\tTransparency = {fieldTrans:.3f} +/- {transErr:.3f}')
-            else:
-                isTransparent = False
-                print(f'Not transparent: Transparency = {fieldTrans:.3f} +/- {transErr:.3f}')
+            match transResults['stopCondition']:
+                case 'TRANSPARENT':
+                    isTransparent = True
+                    print(f'Transparent at field ratio = {curField}:')
+                    print(f'\tTransparency = {fieldTrans:.3f} +/- {transErr:.3f}')
+
+                case 'NOT TRANSPARENT':
+                    isTransparent = False
+                    print(f'Not transparent: Transparency = {fieldTrans:.3f} +/- {transErr:.3f}')
+
+                case _:
+                    raise ValueError('Error - Malformed transparency file.')
         #End of find field for transparency loop
 
 
@@ -1428,20 +1429,28 @@ class FIMS_Simulation:
             #Generate field lines and read results from file if not already transparent
             if not isTransparent:
 
-                self._runGarfield('runTransparency')  
-                transparencyResults = self._readTransparencyFile()
+                self._runGarfield(
+                    'runTransparency',
+                    targetTransparency=targetTransparency
+                )
+                transResults = self._readResultsFile('transparency')
 
                 transAtField['field'].append(newField)
-                transAtField['transparency'].append(transparencyResults['transparency'])
-                transAtField['transparencyErr'].append(transparencyResults['transparencyErr'])
+                transAtField['transparency'].append(transResults['transparency'])
+                transAtField['transparencyErr'].append(transResults['transparencyErr'])
                 
                     
                 #Check transparency to terminate loop
-                if transAtField['transparency'][-1] >= targetTransparency:
-                    isTransparent = True
-                    print(f"Transparent at field ratio = {transAtField['field'][-1]}:")
-                else:
-                    print(f'\tTransparency condition not satisfied.')
+                match transResults['stopCondition']:
+                    case 'TRANSPARENT':
+                        isTransparent = True
+                        print(f"Transparent at field ratio = {transAtField['field'][-1]}:")
+
+                    case 'NOT TRANSPARENT':
+                        print(f'\tTransparency condition not satisfied.')
+
+                    case _:
+                        raise ValueError('Error - Malformed transparency file.')
 
             #Determine the efficiency and read results from file if not already efficient
             if not isEfficient:
@@ -1450,7 +1459,7 @@ class FIMS_Simulation:
                     'runEfficiency',
                     targetEfficiency=targetEfficiency, threshold=threshold
                 )
-                effResults = self._readEfficiencyFile()
+                effResults = self._readResultsFile('efficiency')
 
                 effAtField['field'].append(newField)
                 effAtField['efficiency'].append(effResults['efficiency'])
@@ -1591,7 +1600,7 @@ class FIMS_Simulation:
         efficiency = self._getEfficiency(efficiencyGoal=efficiencyGoal, efficiencyThreshold=efficiencyThreshold)
 
         #Get the field transparency
-        transparency = self._getTransparency(transparencyGoal=transparencyGoal)
+        transparency = self._getTransparency(targetTransparency=transparencyGoal)
 
         #Run the electron transport simulation
         self._runGarfield()
@@ -1621,7 +1630,7 @@ class FIMS_Simulation:
             'runEfficiency', 
             targetEfficiency=efficiencyGoal, threshold=efficiencyThreshold
         )
-        effResults = self._readEfficiencyFile()
+        effResults = self._readResultsFile('efficiency')
 
         print(f'\tDetection efficiency: {effResults['efficiency']:.3f} +/- {effResults['efficiencyErr']:.3f}')
 
@@ -1630,13 +1639,13 @@ class FIMS_Simulation:
         return effResults['efficiency']
     
 #***********************************************************************************#
-    def _getTransparency(self, transparencyGoal=0.99):
+    def _getTransparency(self, targetTransparency=0.99):
         """
         Runs a Garfield++ executable to determine field lines and calculate
         the field transparency.
 
         Args:
-            transparencyGoal (float): The target transparency.
+            targetTransparency (float): The target transparency.
 
         Returns:
             float: The field transparency at the current field ratio.
@@ -1646,8 +1655,11 @@ class FIMS_Simulation:
         self.setParameters({'numFieldLine': 500}) #More is better. Adjust as needed.
         
 
-        self._runGarfield('runTransparency')  
-        transparencyResults = self._readTransparencyFile()
+        self._runGarfield(
+            'runTransparency',
+            targetTransparency=targetTransparency
+        )
+        transparencyResults = self._readResultsFile('transparency')
 
         print(f'\tField transparency: {transparencyResults['transparency']:.3f} +/- {transparencyResults['transparencyErr']:.3f}') 
 

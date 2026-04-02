@@ -35,6 +35,13 @@ using namespace Garfield;
 
 int main(int argc, char * argv[]) {
 
+  if(argc != 2){
+    std::cerr << "Format: " << argv[0] << " <Target Transparency>" << std::endl;
+    return 1;
+  }
+
+  double targetTransparency = std::atof(argv[1]);
+
   std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
   const double MICRON = 1e-6;
@@ -345,6 +352,19 @@ int main(int argc, char * argv[]) {
   variance = ((success+1.)*(success+2.))/((total+2.)*(total+3.)) - transparency*transparency;
   transparencyErr = std::sqrt(variance);
 
+  // *** Check Transparency ***
+  const double confidenceValue = 2;//NOTE - 1.645 for 95% confidence instead of 2 for 2-sigma
+  double lowerLimit = transparency - confidenceValue*transparencyErr;
+  double upperLimit = transparency + confidenceValue*transparencyErr;
+
+  std::string transparencyResult;
+
+  if(lowerLimit >= targetTransparency){
+    transparencyResult = "TRANSPARENT";
+  }
+  else{
+    transparencyResult = "NOT TRANSPARENT";
+  }
 
   std::cout << "Transparency is " << transparency <<  "." << std::endl;
 
@@ -361,7 +381,11 @@ int main(int argc, char * argv[]) {
 
   //write some extra information
 	dataFile << "// Finding transparency for run: " << runNo << "\n";
+  dataFile << "// Field Ratio: " << fieldRatio << "\n";
 	dataFile << "// Field lines at pad: " << numAtPad << " (of " << numFieldLine << ")\n";
+
+  dataFile << "// Stop condition:\n";
+  dataFile << transparencyResult << "\n";
 
   //***** Output transparency value *****//
   dataFile << "// Transparency:\n" << transparency << "\n" << transparencyErr << std::endl;

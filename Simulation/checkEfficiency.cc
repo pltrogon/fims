@@ -356,6 +356,7 @@ int main(int argc, char * argv[]) {
 
 	//write some extra information
 	dataFile << "// Finding efficiency for run: " << runNo << "\n";
+  dataFile << "// Field Ratio: " << fieldRatio << "\n";
 	dataFile << "// Total avalanches: " << totalAvalanches << " (of " << numAvalanche << ")\n";
 
   //include convergence criteria
