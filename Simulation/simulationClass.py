@@ -690,7 +690,7 @@ class FIMS_Simulation:
         return runNo
 
 #**********************************************************************#
-    def _calcMinFieldEfficiency(self):
+    def _calcEfficiencyMinField(self):
         """
         Calculates the minimum field ratio to achieve 95% Efficiency.
 
@@ -702,9 +702,9 @@ class FIMS_Simulation:
                               95% efficiency.
         """
         #Get geometry variables
-        standoff = self._getParam('gridStandoff')
-        pad = self._getParam('padLength')
-        pitch = self._getParam('pitch')
+        standoff = self.getParam('gridStandoff')
+        pad = self.getParam('padLength')
+        pitch = self.getParam('pitch')
         
         
         #Insert values into fitted equations
@@ -735,9 +735,9 @@ class FIMS_Simulation:
                               100% transparency.
         """
         #Get geometry variables
-        standoff = self._getParam('gridStandoff')
-        pad = self._getParam('padLength')
-        pitch = self._getParam('pitch')
+        standoff = self.getParam('gridStandoff')
+        pad = self.getParam('padLength')
+        pitch = self.getParam('pitch')
         
         #Convert to dimensionless variables
         optTrans = self._calcOpticalTransparency()
@@ -1054,10 +1054,6 @@ class FIMS_Simulation:
         
         print(f'Beginning field search for {targetEfficiency*100:.0f}% efficiency...')
         
-        # Ensure geometry exists
-        if self._geometry is None:
-            self._generateGeometry()
-        
         iterNo = 0
         iterNoLimit = self._iterationNumberLimit
 
@@ -1207,10 +1203,6 @@ class FIMS_Simulation:
                    This value is also loaded into the class parameters upon completion.
         """
 
-        # Ensure geometry exists
-        if self._geometry is None:
-            self._generateGeometry()
-
         if targetTransparency > 0.99 or targetTransparency <= 0.0:
             raise ValueError('Error: Target transparency must be between 0 and 0.99')
 
@@ -1296,10 +1288,6 @@ class FIMS_Simulation:
                    This value is also loaded into the class parameters upon completion.
         """
 
-        # Ensure geometry exists
-        if self._geometry is None:
-            self._generateGeometry()
-
         #Get absolute drift field value
         driftField = self.getParam('driftField')
         print(f'Finding minimum field ratio for geometry with drift field: {driftField} V/cm')
@@ -1359,10 +1347,6 @@ class FIMS_Simulation:
                    This value is also loaded into the class parameters upon completion.
         """
 
-        # Ensure geometry exists
-        if self._geometry is None:
-            self._generateGeometry()
-
         print('\n'.join([
             'Beginning search for minimum field to achieve:',
             f'\tTransparency >= {targetTransparency*100:.0f}%',
@@ -1386,10 +1370,12 @@ class FIMS_Simulation:
         isTransparent = False
         isEfficient = False
 
-        self.param['numFieldLine'] = 200
-        self.param['numAvalanche'] = 3000
-        self.param['avalancheLimit'] = 20 #Limit can be low. Check is boolean - above threshold or not
-
+        saveParam = self.getAllParam()
+        self.setParameters({
+            'numFieldLine': 200,
+            'numAvalanche': 3000, 
+            'avalancheLimit': 20
+        })
 
         #Loop until both conditions are satisfied
         while not (isTransparent and isEfficient):
@@ -1413,7 +1399,7 @@ class FIMS_Simulation:
             ## so this will not affect the other condition.
 
             newField = max(newTransparencyField, newEfficiencyField)
-            self.param['fieldRatio'] = newField
+            self.setParameters({'fieldRatio': newField})
             print(f'Iteration {iterNo}: Field ratio = {newField}')
 
             #Solve the electric field for the new field ratio
@@ -1464,7 +1450,8 @@ class FIMS_Simulation:
         #End of find combined min field loop
 
         finalField = self.getParam('fieldRatio')
-        self.param['fieldRatio'] = finalField
+        saveParam['fieldRatio'] = finalField
+        self.setParameters(saveParam)
 
         print(f'Solution found: Field ratio = {finalField}')
 
@@ -1494,10 +1481,9 @@ class FIMS_Simulation:
         print(f'Finding minimum field ratio for geometry with drift field: {driftField} V/cm')
 
         #Choose initial field ratio guess
-        opticalTransparency = self._calcOpticalTransparency()
-        minFieldGuess = math.floor(0.9*(2/opticalTransparency - 1))
+        minFieldGuess = self._calcMinField()
 
-        self.param['fieldRatio'] = minFieldGuess
+        self.setParameters({'fieldRatio': minFieldGuess})
         print(f'\tInitial field ratio guess: {minFieldGuess}')
 
         #Generate the FEM geometry
@@ -1505,7 +1491,7 @@ class FIMS_Simulation:
 
         # Determine minimum field ratio for default conditions
         combinedMinField = self._findCombinedMinField()
-        self.param['fieldRatio'] = combinedMinField
+        self.setParameters({'fieldRatio': combinedMinField})
 
         #Solve for the weighting field
         self._solveEFields(solveWeighting=True)
@@ -1900,7 +1886,7 @@ class FIMS_Simulation:
         #Check that the number of avalanches is a reasonable number
         # too many = too much charge unaffected by new stucks
         # too few = not enough stuck charges to make a difference
-        numAvalanche = self._param('numAvalanche')
+        numAvalanche = self.getParam('numAvalanche')
         if ((numAvalanche < 10) | (numAvalanche > 100)):
             raise ValueError('Error: numAvalanche should be between 10 and 100 for charge buildup simulations.')
         
