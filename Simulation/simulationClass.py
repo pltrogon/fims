@@ -905,6 +905,11 @@ class FIMS_Simulation:
                 raise ValueError(f'{target.capitalize()} section not found.')
             results[target] = float(allLines[targetIndex + 1])
             results[f'{target}Err'] = float(allLines[targetIndex + 2])
+
+        except Exception as e:
+            raise RuntimeError(f'Error while parsing the results file: {e}')
+        
+        return results
     
 #***********************************************************************************#
     def _getFieldRatioSecant(self, fields, values, valuesErr=None, damping=0.8):

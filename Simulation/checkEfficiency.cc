@@ -358,6 +358,9 @@ int main(int argc, char * argv[]) {
 	dataFile << "// Finding efficiency for run: " << runNo << "\n";
   dataFile << "// Field Ratio: " << fieldRatio << "\n";
 	dataFile << "// Total avalanches: " << totalAvalanches << " (of " << numAvalanche << ")\n";
+  dataFile << "// Electron threshold: " << electronThreshold << "\n";
+  dataFile << "// Num above threshold: " << numAboveThreshold << "\n";
+  dataFile << "// Num with no avalanche: " << numNoAvalanche << "\n;
 
   //include convergence criteria
   dataFile << "// Stop condition:\n";
