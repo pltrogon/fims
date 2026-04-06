@@ -360,7 +360,7 @@ int main(int argc, char * argv[]) {
 	dataFile << "// Total avalanches: " << totalAvalanches << " (of " << numAvalanche << ")\n";
   dataFile << "// Electron threshold: " << electronThreshold << "\n";
   dataFile << "// Num above threshold: " << numAboveThreshold << "\n";
-  dataFile << "// Num with no avalanche: " << numNoAvalanche << "\n;
+  dataFile << "// Num with no avalanche: " << numNoAvalanche << "\n";
 
   //include convergence criteria
   dataFile << "// Stop condition:\n";

@@ -550,16 +550,19 @@ class FIMS_Simulation:
         if executable not in executables:
             raise ValueError(f'Invalid executable: {executable}')
         
-        # Handle inputs for runEfficiency or runTransparency
-        args = ''
-        if executable == 'runEfficiency':
-            targetEfficiency = kwargs.get('targetEfficiency', 0.95)
-            threshold = kwargs.get('threshold', 10)
-            args = f'{targetEfficiency} {threshold}'
-        
-        elif executable == 'runTransparency':
-            targetTransparency = kwargs.get('targetTransparency', 0.95)
-            args = f'{targetTransparency}'
+        # Handle extra inputs for specific executables
+        match executable:
+            case 'runEfficiency':
+                targetEfficiency = kwargs.get('targetEfficiency', 0.95)
+                threshold = kwargs.get('threshold', 10)
+                args = f'{targetEfficiency} {threshold}'
+
+            case 'runTransparency':
+                targetTransparency = kwargs.get('targetTransparency', 0.95)
+                args = f'{targetTransparency}'
+                
+            case _:
+                args=''
 
         originalCWD = os.getcwd()
 
