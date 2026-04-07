@@ -1014,7 +1014,7 @@ class FIMS_Simulation:
 
         # Take constant step of 2 for 2nd iteration
         elif iterNo == 2:
-            newField = valueAtField['field'][0] + 2 #TODO - This can be adjusted
+            newField = valueAtField['field'][0] + 5 #TODO - This can be adjusted
 
         # Use secant method to determine new field
         else:
