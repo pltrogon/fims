@@ -505,9 +505,11 @@ class runData:
             self._calculatedData['n_95'] = efficiencyThreshold
 
             #Polya Fits
-            polyaTheta, polyaGain = self._fitPolya()
-            self._calculatedData['Polya Theta'] = polyaTheta
-            self._calculatedData['Polya Gain'] = polyaGain
+            polyaFitResults = self._fitPolya()
+            self._calculatedData['Polya Theta'] = polyaFitResults['theta']
+            self._calculatedData['Polya Gain'] = polyaFitResults['gain']
+            self._calculatedData['Polya Theta Error'] = polyaFitResults['thetaErr']
+            self._calculatedData['Polya Gain Error'] = polyaFitResults['gainErr']
 
 
 
@@ -2237,10 +2239,14 @@ class runData:
 
         fitResults = self._fitAvalancheSize(binWidth=1)
 
-        theta = fitResults['fitPolya'].theta
-        gain = fitResults['fitPolya'].gain
+        polyaFitResults = {
+            'theta': fitResults['fitPolya'].theta,
+            'thetaErr': fitResults['fitPolya'].thetaErr,
+            'gain': fitResults['fitPolya'].gain,
+            'gainErr': fitResults['fitPolya'].gainErr
+        }
 
-        return theta, gain
+        return polyaFitResults
 
 #********************************************************************************#
     def _getEfficiencyThreshold(self, targetEfficiency=0.95):
@@ -2256,9 +2262,11 @@ class runData:
 
             if eff < targetEfficiency:
                 isEfficient = False
-        
-        return threshold-1
 
+        #Subtract 1.5 to get the threshold where efficiency is just above target
+        targetThreshold = threshold - 1.5
+        
+        return targetThreshold
 
 #********************************************************************************#
     def plotEfficiency(self, binWidth=1, threshold=0):
