@@ -115,7 +115,7 @@ class FIMS_Simulation:
         """
         defaultParameters = {
             'padLength': 20.,
-            'pitch': 60.,
+            'pitch': 70.,
             'gridStandoff': 50.,
             'gridThickness': 1.,
             'holeRadius': 20.,
@@ -125,8 +125,8 @@ class FIMS_Simulation:
             'driftField': 280.,
             'fieldRatio': 100.,
             'numFieldLine': 25,
-            'numAvalanche': 8000,
-            'avalancheLimit': 1200,
+            'numAvalanche': 20000,
+            'avalancheLimit': 1000,
             'gasCompAr': 0.95,
             'gasCompCO2': 0.00,
             'gasCompCF4': 0.03,

@@ -63,11 +63,9 @@ class FIMS_Optimizer:
         except:
             raise FileNotFoundError('Unable to create log file.')
         
+        # Setup log file and timestamps
         self._optimizerLog = []
-        # TODO - Optimizer log should be saved to a file
-        # in case of crashes or early termination. 
-        # After each iteration?
-        # Should also include timestamp for each entry?
+        self._startTime = time.perf_counter()
 
         # Maintain a record of previous trials and results
         self._lastRunParams = None
@@ -168,6 +166,12 @@ class FIMS_Optimizer:
         Returns:
             IBN (float): The calculated Ion Backflow Number.
         """
+        
+        print(f'********** Iteration {len(self._optimizerLog)+1:<3}************')
+        allParams = self.simFIMS.getAllParam()
+        for elem in self.params:
+            print(f'\t{elem[0]}: {allParams[elem[0]]}')
+        print('************************************')
 
         runNumber = self.simFIMS.runForOptimizer()
         
@@ -198,13 +202,19 @@ class FIMS_Optimizer:
         Returns:
             resultIBN (float): The current IBN value.
         """
-
+        runStart = time.perf_counter()
+        
         # Upload the optimizer parameters into the simulation
         paramDict = dict(zip(inputList, optimizerParam))
         self.simFIMS.setParameters(paramDict)
         
         # Run simulation and get the IBN
         resultIBN = self._getIBN()
+        
+        # Get time stamps
+        runEnd = time.perf_counter()
+        runTime = runEnd - runStart
+        totalTime = runEnd - self._startTime
         
         # Update the optimizer log
         self._optimizerLog.append({
@@ -215,11 +225,13 @@ class FIMS_Optimizer:
                 file.write(f'\nIteration {len(self._optimizerLog)}\n')
                 for param, value in paramDict.items():
                     file.write(f'\t{param}: {value}\n')
-                file.write(f'\tIBN: {resultIBN}')
-                
+                file.write(f'\tIBN: {resultIBN}\n')
+                file.write(f'Run Time: {runTime}\n')
+                file.write(f'Total Time: {totalTime}')
                 
         # Print the current IBN value for this iteration
         print(f'\tIteration {len(self._optimizerLog)}: IBN = {resultIBN:.6f}\n')
+        
         
         return resultIBN
 
@@ -265,6 +277,7 @@ class FIMS_Optimizer:
                 constraints=self._getGeometryConstraints(),
                 callback=self._checkConvergence,
                 bounds=optimizerBounds,
+                options = {'initial_tr_radius': 10}
             )
             finalParams = optimizerResult.x
             finalFunction = optimizerResult.fun
@@ -289,7 +302,7 @@ class FIMS_Optimizer:
         print(f"Optimal IBN value = {resultVals['IBNValue']}")
         print(self.simFIMS)
         
-        self.simFIMS.resetParam()
+        #self.simFIMS._resetParam()
         
         return resultVals
 
@@ -505,8 +518,8 @@ class FIMS_Optimizer:
         ##  gridStandoff >= dielectricThickness + minPillar
 
         constraints = [
-            ({'pitch': 1, 'holeRadius': -2}, pillarRadius),
-            ({'pitch': 1, 'padLength': -1*np.sqrt(3)}, 2*pillarRadius),
+            ({'pitch': 1, 'holeRadius': -2.001}, pillarRadius),
+            ({'pitch': 1, 'padLength': -1.001*np.sqrt(3)}, 2*pillarRadius),
             ({'gridStandoff': 1}, dielectricThickness+minPillar)
         ]
 
@@ -521,7 +534,6 @@ class FIMS_Optimizer:
             
             matrix.append(row)
             lowerBound.append(limit)
-
         geometryConstraints = LinearConstraint(
             matrix, lowerBound, upperBound
         )
