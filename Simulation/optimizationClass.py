@@ -90,6 +90,7 @@ class FIMS_Optimizer:
         return paramList
 
 #**********************************************************************#
+
     def _checkParameters(self):
         """
         Checks the input parameters for correct format.
@@ -119,6 +120,60 @@ class FIMS_Optimizer:
 
         return 
     
+#**********************************************************************#
+
+    def _getGeometryConstraints(self):
+        """
+        Define the geometry constraints based on the physical 
+        requirements of the FIMS design.
+
+        Ensure that the pillars can fit in the space between holes in 
+        the grid and the region between pads.
+        Ensure that the grid standoff is not too small to prevent arcing.
+
+        Returns:
+            LinearConstraint: Object representing the geometry constraints.
+
+        """
+
+        paramName = {p[0]: i for i, p in enumerate(self.params)}
+        
+        pillarRadius = self.simFIMS.getParam('pillarRadius')
+        dielectricThickness = self.simFIMS.getParam('thicknessSiO2')
+        numParam = len(self.params)
+
+        minPillar = 5 # Min pillar height
+
+        # Geometry constraints:
+        # Format: a*x(1) + b*x(2) >= c*x(3)
+        # a,b,c are constants of the matrix. x(n) is the parameter.
+        # 1. Ensure radius is smaller than the pitch (with sufficient space for pillars)
+        # 2. Ensure pads are smaller than the pitch (with sufficient space for pillars)
+        # 3. Ensure that the grid is above the SiO2 layer (with a buffer)
+        
+        constraints = [
+            ({'pitch': 1, 'holeRadius': -2.001}, pillarRadius),
+            ({'pitch': 1, 'padLength': -1.001*np.sqrt(3)}, 2*pillarRadius),
+            ({'gridStandoff': 1}, dielectricThickness+minPillar)
+        ]
+
+        matrix = []
+        lowerBound = []
+        upperBound = np.inf
+
+        for coeffs, limit in constraints:
+            row = np.zeros(numParam)
+            for name, value in coeffs.items():
+                row[paramName[name]] = value
+            
+            matrix.append(row)
+            lowerBound.append(limit)
+        geometryConstraints = LinearConstraint(
+            matrix, lowerBound, upperBound
+        )
+
+        return geometryConstraints
+
 #**********************************************************************#
 
     def _checkConvergence(self, x):
@@ -158,6 +213,7 @@ class FIMS_Optimizer:
         return
 
 #**********************************************************************#
+
     def _getIBN(self):
         """
         Runs a FIMS simulation and calculates
@@ -182,6 +238,7 @@ class FIMS_Optimizer:
         return IBN
 
 #**********************************************************************#
+
     def _IBNObjective(self, optimizerParam, inputList):
         """
         Objective function to optimize for minimum IBN.
@@ -302,12 +359,12 @@ class FIMS_Optimizer:
         print(f"Optimal IBN value = {resultVals['IBNValue']}")
         print(self.simFIMS)
         
-        #self.simFIMS._resetParam()
-        
         return resultVals
 
 #**********************************************************************#
-#     
+#***************** Untested Alternate Optimizer ***********************#
+#**********************************************************************#
+
     def _getIBNALT(self):
         """
         Runs a FIMS simulation with the current parameters.
@@ -487,56 +544,4 @@ class FIMS_Optimizer:
         return self._lastRunResults
 
 #**********************************************************************#
-
-    def _getGeometryConstraints(self):
-        """
-        Define the geometry constraints based on the physical 
-        requirements of the FIMS design.
-
-        Ensure that the pillars can fit in the space between holes in 
-        the grid and the region between pads.
-        Ensure that the grid standoff is not too small to prevent arcing.
-
-        Returns:
-            LinearConstraint: Object representing the geometry constraints.
-
-        """
-
-        paramName = {p[0]: i for i, p in enumerate(self.params)}
-        
-        pillarRadius = self.simFIMS.getParam('pillarRadius')
-        dielectricThickness = self.simFIMS.getParam('thicknessSiO2')
-        numParam = len(self.params)
-
-        minPillar = 5 # Min pillar height
-
-        # Geometry constraints:
-        # Ensure that there is enough room for the pillars:
-        ##  pitch - 2*holeRadius >= pillarRadius
-        ##  pitch - sqrt(3)*padLength >= 2*pillarRadius
-        # Ensure that the grid standoff is not too small
-        ##  gridStandoff >= dielectricThickness + minPillar
-
-        constraints = [
-            ({'pitch': 1, 'holeRadius': -2.001}, pillarRadius),
-            ({'pitch': 1, 'padLength': -1.001*np.sqrt(3)}, 2*pillarRadius),
-            ({'gridStandoff': 1}, dielectricThickness+minPillar)
-        ]
-
-        matrix = []
-        lowerBound = []
-        upperBound = np.inf
-
-        for coeffs, limit in constraints:
-            row = np.zeros(numParam)
-            for name, value in coeffs.items():
-                row[paramName[name]] = value
-            
-            matrix.append(row)
-            lowerBound.append(limit)
-        geometryConstraints = LinearConstraint(
-            matrix, lowerBound, upperBound
-        )
-
-        return geometryConstraints
     

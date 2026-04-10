@@ -1074,8 +1074,23 @@ class FIMS_Simulation:
         saveParam = self.getAllParam()
         self.setParameters({'numAvalanche': 3000, 'avalancheLimit': 15})
         
+        #TODO: explore implementing an initial guess safeguard like this
+        """
+        # Ensure initial field ratio is not too large
+        initialField = saveParam['fieldRatio']
+        self._solveEFields(solveWeighting=False)
+        self._runGarfield(
+            'runEfficiency',
+            targetEfficiency=targetEfficiency, threshold=threshold
+        )
+        effResults = self._readEfficiencyFile()
+        initialEff = effResults['efficiency']
+        
+        if initialEff >= targetEfficiency:
+            print('Warning: initial field ratio too large. Reducing by 50% for stability')
+            self.setParameters({'fieldRatio': initialField*0.5})
+        """
         while not validEfficiency:
-
             iterNo += 1
             if iterNo > iterNoLimit:
                 print(f'Warning - Iteration limit reached ({iterNoLimit})')
@@ -1101,6 +1116,8 @@ class FIMS_Simulation:
             curField = effAtField['field'][-1]
             effField = effAtField['efficiency'][-1]
             errField = effAtField["efficiencyErr"][-1]
+            
+            
             
             match effResults['stopCondition']:
                 
@@ -1288,7 +1305,6 @@ class FIMS_Simulation:
             float: The minimum field ratio that satisfies both conditions.
                    This value is also loaded into the class parameters upon completion.
         """
-
         # Ensure geometry exists
         if self._geometry is None:
             self._generateGeometry()
@@ -1299,7 +1315,7 @@ class FIMS_Simulation:
 
         #Choose initial field ratio guess
         optTrans = self._calcOpticalTransparency()
-        #minFieldGuess = math.floor(2/optTrans - 1) TODO: may be better for efficiency. Fitted data incoming 
+        #minFieldGuess = math.floor(2/optTrans - 1)
         minFieldGuess = self._calcMinField()
         
         self.setParameters({'fieldRatio': minFieldGuess})
