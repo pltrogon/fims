@@ -65,7 +65,7 @@ class FIMS_Simulation:
 
         GARFIELDPATH (str): Filepath to the Garfield++ source script. Read from 'GARFIELDPATH' file.
 
-        geoemetry (geometryClass): A geometry class object representing the geometry and field solvers.
+        geometry (geometryClass): A geometry class object representing the geometry and field solvers.
     """
 
 #***********************************************************************************#
@@ -114,19 +114,19 @@ class FIMS_Simulation:
             dict: Dictionary of default parameters and values.
         """
         defaultParameters = {
-            'padLength': 20.,
+            'padLength': 15.,
             'pitch': 70.,
             'gridStandoff': 50.,
             'gridThickness': 1.,
-            'holeRadius': 20.,
+            'holeRadius': 15.,
             'cathodeHeight': 200.,
             'thicknessSiO2': 5.,
             'pillarRadius': 5.,
             'driftField': 280.,
-            'fieldRatio': 100.,
+            'fieldRatio': 135.,
             'numFieldLine': 25,
-            'numAvalanche': 20000,
-            'avalancheLimit': 1000,
+            'numAvalanche': 10000,
+            'avalancheLimit': 600,
             'gasCompAr': 0.95,
             'gasCompCO2': 0.00,
             'gasCompCF4': 0.03,

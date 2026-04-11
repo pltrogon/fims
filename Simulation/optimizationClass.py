@@ -10,6 +10,7 @@ import numpy as np
 import uproot
 import random
 import warnings
+import math
 
 from scipy.optimize import Bounds, minimize, NonlinearConstraint, LinearConstraint
 
@@ -28,12 +29,47 @@ class RepeatedInputs(Warning):
 class FIMS_Optimizer:
     """
     ===============================================
-    TODO - THIS CLASS NEEDS A DESCRIPTIVE DOCSTRING
+    TODO: Review Docstring
     ===============================================
+    
+    Class representing the FIMS optimization algorithm.
 
-
-    Class representing the FIMS Optimization.
-
+    Initializes a list of lists which describe the input parameters
+    and the bounds on those parameters.
+    
+    The algorithm follows the following procedure:
+    1. Check inputs (TODO: currently only accepts the hole radius,
+    standoff, pad length, and pitch).
+    2. Prepares a log file at log/logoptimizer.txt.
+    3. Unpacks the input parameters and sets up the optimizer minimum 
+    and maximum bounds.
+    4. Uses the simulationClass to set an initial guess.
+    5. Runs a COBYQA minimization method.
+    6. The parameter values are checked to insure the geometry is 
+    physical.
+    7. Within the method, the values for the parameter are used to run 
+    runForOptimizer from the simulationClass.
+    8. The resulting data from the simulation is read and the IBN is 
+    used as the convergence criteria.
+    9. If convergence is not met, new values are chosen and the process
+    resets at step 6.
+    
+    Private Attributes:
+        params (list of lists):
+            [first param name, minimum value, maximum value]
+            .
+            .
+            .
+            [last param name, minimum value, maximum value]
+    
+        simFIMS (simulationClass): a simulation class object that 
+    represents the simulation pipeline.
+        optimizerLog (list): input values and IBN of each iteration of
+    the optimizer.
+        startTime (float): timestamp of the beginning of the optimizer
+        lastRunParams (dictionary): parameters and values from the 
+    previous iteration.
+        lastRunResults (float): the IBN value of the previous iteration.
     """
 
 #**********************************************************************#
@@ -42,7 +78,7 @@ class FIMS_Optimizer:
         """
         Initializes a FIMS_Optimization object.
 
-        The input parameters should be a list of lists.
+        The input parameters should be a list of lists. TODO: change this to dictionary?
         Each inner list must contain:
         - The name of the parameter (string)
         - The minimum value for the parameter (float)
@@ -121,6 +157,26 @@ class FIMS_Optimizer:
         return 
     
 #**********************************************************************#
+    def _unNormalizeInputs(self, optimizerVals):
+        """
+        Converts the optimizer guess to a value readable by simFIMS
+       
+        Uses the initial guess for each parameter as a normalization
+        factor and calculates the raw input value from the current 
+        optimizer value.
+        
+        args:
+            inputParams (list): list of the names of each input 
+        parameter.
+        """
+        paramVals = []
+        initialVals = self._optimizerLog[0]
+        paramID = 0
+        for val in optimizerVals:
+            paramVals.append(val*initialVals[paramID])
+            paramID += 1
+        return paramVals
+#**********************************************************************#
 
     def _getGeometryConstraints(self):
         """
@@ -152,7 +208,7 @@ class FIMS_Optimizer:
         # 3. Ensure that the grid is above the SiO2 layer (with a buffer)
         
         constraints = [
-            ({'pitch': 1, 'holeRadius': -2.001}, pillarRadius),
+            #({'pitch': 1, 'holeRadius': -2.001}, pillarRadius),
             ({'pitch': 1, 'padLength': -1.001*np.sqrt(3)}, 2*pillarRadius),
             ({'gridStandoff': 1}, dielectricThickness+minPillar)
         ]
@@ -264,6 +320,14 @@ class FIMS_Optimizer:
         # Upload the optimizer parameters into the simulation
         paramDict = dict(zip(inputList, optimizerParam))
         self.simFIMS.setParameters(paramDict)
+        
+        # Calculate and set the ideal hole radius
+        pitch = self.simFIMS.getParam('pitch')
+        gridArea = pitch**2*math.sqrt(3)/2
+        optTrans = 0.15 # Ideal optical transparency is 15%
+        
+        holeRadius = math.sqrt(optTrans*gridArea/math.pi)
+        self.simFIMS.setParameters({'holeRadius': holeRadius})
         
         # Run simulation and get the IBN
         resultIBN = self._getIBN()
