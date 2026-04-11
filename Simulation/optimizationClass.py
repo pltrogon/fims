@@ -178,10 +178,10 @@ class FIMS_Optimizer:
         """
         # Get input parameters and their initial values
         paramName = {p[0]: i for i, p in enumerate(self.params)}
-        initialPitch = self._initialValues['pitch']
-        initialRadius = self._initialValues['holeRadius']
-        initialPad = self._initialValues['padLength']
-        initialStand = self._initialValues['gridStandoff']
+        initialPitch = self._initialValues[paramName['pitch']]
+        initialRadius = self._initialValues[paramName['holeRadius']]
+        initialPad = self._initialValues[paramName['padLength']]
+        initialStand = self._initialValues[paramName['gridStandoff']]
         
         radiusRatio = initialPitch/initialRadius
         padRatio = initialPitch/initialPad
@@ -241,8 +241,8 @@ class FIMS_Optimizer:
             value of the corresponding input parameter.
         """
         initialVals = []
-        for param in self._initialValues
-            initialVals.append(self._initialValues[param])
+        for value in self._initialValues:
+            initialVals.append(value)
         normValues = []
         paramID = 0
         
@@ -272,9 +272,10 @@ class FIMS_Optimizer:
             paramVals (dict): dictionary of parameters names and values
         """
         paramVals = {}
+        paramName = {p[0]: i for i, p in enumerate(self.params)}
         for param in optimizerDict:
             val = optimizerDict[param]
-            paramVals[param] = val*self._initialValues[param]
+            paramVals[param] = val*self._initialValues[paramName[param]]
         
         return paramVals
         
@@ -367,7 +368,7 @@ class FIMS_Optimizer:
         
         # Unpack and Upload the optimizer parameters into the simulation
         paramDict = dict(zip(inputList, optimizerParam))
-        unNormalizedDict = self.unNormalizeInputs(paramDict)
+        unNormalizedDict = self._unNormalizeInputs(paramDict)
         self.simFIMS.setParameters(unNormalizedDict)
         
         # Calculate and set the ideal hole radius
@@ -426,18 +427,17 @@ class FIMS_Optimizer:
         activeParameters = self.params.copy()
         inputList, minBounds, maxBounds = map(list, zip(*activeParameters))
         
+        # Set initial guess as simFIMS default values
+        initialGuess = np.empty(0)
+        for param in inputList:
+            self._initialValues.append(self.simFIMS.getParam(param))
+            initialGuess = np.append(initialGuess, 1) # All inputs initially normalized to 1
         
         # Set bounds for variables
         normMinBounds = self._normalizeValues(minBounds)
         normMaxBounds = self._normalizeValues(maxBounds)
         optimizerBounds = Bounds(normMinBounds, normMaxBounds)
 
-        # Set initial guess as simFIMS default values
-        initialGuess = np.array()
-        for param in inputList:
-            self._initialValues.append(self.simFIMS.getParam(param))
-            initialGuess = np.append(initialGuess, 1) # All inputs initially normalized to 1
-        
         print('Beginning optimization...')
         try:
             optimizerResult = minimize(
