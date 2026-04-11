@@ -61,7 +61,8 @@ class FIMS_Optimizer:
             .
             .
             [last param name, minimum value, maximum value]
-    
+        
+        initialValues (list): list of initial values for each parameter.
         simFIMS (simulationClass): a simulation class object that 
     represents the simulation pipeline.
         optimizerLog (list): input values and IBN of each iteration of
@@ -88,6 +89,7 @@ class FIMS_Optimizer:
             params (list of lists): List of parameters with bounds.
         """
         self.params = params
+        self._initialValues = []
         self.simFIMS = FIMS_Simulation()
         
         self._checkParameters()
@@ -157,26 +159,6 @@ class FIMS_Optimizer:
         return 
     
 #**********************************************************************#
-    def _unNormalizeInputs(self, optimizerVals):
-        """
-        Converts the optimizer guess to a value readable by simFIMS
-       
-        Uses the initial guess for each parameter as a normalization
-        factor and calculates the raw input value from the current 
-        optimizer value.
-        
-        args:
-            inputParams (list): list of the names of each input 
-        parameter.
-        """
-        paramVals = []
-        initialVals = self._optimizerLog[0]
-        paramID = 0
-        for val in optimizerVals:
-            paramVals.append(val*initialVals[paramID])
-            paramID += 1
-        return paramVals
-#**********************************************************************#
 
     def _getGeometryConstraints(self):
         """
@@ -186,19 +168,31 @@ class FIMS_Optimizer:
         Ensure that the pillars can fit in the space between holes in 
         the grid and the region between pads.
         Ensure that the grid standoff is not too small to prevent arcing.
-
+        
+        Note: Assumes input parameters are normalized by their initial
+        values.
+        
         Returns:
             LinearConstraint: Object representing the geometry constraints.
 
         """
-
+        # Get input parameters and their initial values
         paramName = {p[0]: i for i, p in enumerate(self.params)}
+        initialPitch = self._initialValues['pitch']
+        initialRadius = self._initialValues['holeRadius']
+        initialPad = self._initialValues['padLength']
+        initialStand = self._initialValues['gridStandoff']
         
+        radiusRatio = initialPitch/initialRadius
+        padRatio = initialPitch/initialPad
+        
+        # Get Fixed parameter values        
         pillarRadius = self.simFIMS.getParam('pillarRadius')
         dielectricThickness = self.simFIMS.getParam('thicknessSiO2')
+        minPillar = 5 # Min pillar height
+        buffer = .01 # safety buffer for precision at boundary
         numParam = len(self.params)
 
-        minPillar = 5 # Min pillar height
 
         # Geometry constraints:
         # Format: a*x(1) + b*x(2) >= c*x(3)
@@ -208,9 +202,9 @@ class FIMS_Optimizer:
         # 3. Ensure that the grid is above the SiO2 layer (with a buffer)
         
         constraints = [
-            #({'pitch': 1, 'holeRadius': -2.001}, pillarRadius),
-            ({'pitch': 1, 'padLength': -1.001*np.sqrt(3)}, 2*pillarRadius),
-            ({'gridStandoff': 1}, dielectricThickness+minPillar)
+            ({'pitch': initialPitch, 'holeRadius': -2*initialRadius}, pillarRadius+buffer),
+            ({'pitch': initialPitch, 'padLength': -initialPad}, 2*pillarRadius+buffer),
+            ({'gridStandoff': initialStand}, dielectricThickness+minPillar+buffer)
         ]
 
         matrix = []
@@ -230,6 +224,60 @@ class FIMS_Optimizer:
 
         return geometryConstraints
 
+#**********************************************************************#
+
+    def _normalizeValues(self, rawValues):
+        """
+        Normalizes a given list of values to the matching parameter.
+        
+        Note: assumes that the list of values is given in the same order
+        as the input parameters.
+        
+        Args: 
+            rawValues (list): list of values associated with the input
+            parameters.
+        returns:
+            normValues (list): list of values normalized by the initial
+            value of the corresponding input parameter.
+        """
+        initialVals = []
+        for param in self._initialValues
+            initialVals.append(self._initialValues[param])
+        normValues = []
+        paramID = 0
+        
+        # Normalize each value in the list using the initial value of
+        # the corresponding parameter as the normalization coefficient.
+        for elem in rawValues:
+            normValues.append(elem/initialVals[paramID])
+            paramID += 1
+            
+        return normValues
+
+#**********************************************************************#
+
+    def _unNormalizeInputs(self, optimizerDict):
+        """
+        Converts the optimizer guess to a value readable by simFIMS
+       
+        Uses the initial guess for each parameter as a normalization
+        factor and calculates the raw input value from the current 
+        optimizer value.
+        
+        args:
+            inputParams (list): list of the names of each input 
+        parameter.
+        
+        returns:
+            paramVals (dict): dictionary of parameters names and values
+        """
+        paramVals = {}
+        for param in optimizerDict:
+            val = optimizerDict[param]
+            paramVals[param] = val*self._initialValues[param]
+        
+        return paramVals
+        
 #**********************************************************************#
 
     def _checkConvergence(self, x):
@@ -304,7 +352,7 @@ class FIMS_Optimizer:
 
         Assumes that field ratio is not one of the input parameters.
         I.e. The efficiency and transparency conditions are being 
-        satified internally by the simulation.
+        satisfied internally by the simulation.
 
         Note that optimizerParam and inputList must be in the same order.
         
@@ -317,17 +365,17 @@ class FIMS_Optimizer:
         """
         runStart = time.perf_counter()
         
-        # Upload the optimizer parameters into the simulation
+        # Unpack and Upload the optimizer parameters into the simulation
         paramDict = dict(zip(inputList, optimizerParam))
-        self.simFIMS.setParameters(paramDict)
+        unNormalizedDict = self.unNormalizeInputs(paramDict)
+        self.simFIMS.setParameters(unNormalizedDict)
         
         # Calculate and set the ideal hole radius
-        pitch = self.simFIMS.getParam('pitch')
-        gridArea = pitch**2*math.sqrt(3)/2
-        optTrans = 0.15 # Ideal optical transparency is 15%
-        
-        holeRadius = math.sqrt(optTrans*gridArea/math.pi)
-        self.simFIMS.setParameters({'holeRadius': holeRadius})
+        #pitch = self.simFIMS.getParam('pitch')
+        #gridArea = pitch**2*math.sqrt(3)/2
+        #optTrans = 0.15 # Ideal optical transparency is 15%
+        #holeRadius = math.sqrt(optTrans*gridArea/math.pi)
+        #self.simFIMS.setParameters({'holeRadius': holeRadius})
         
         # Run simulation and get the IBN
         resultIBN = self._getIBN()
@@ -339,7 +387,7 @@ class FIMS_Optimizer:
         
         # Update the optimizer log
         self._optimizerLog.append({
-            'params': paramDict,
+            'params': unNormalizedDict,
             'IBN': resultIBN
         })
         with open('log/logOptimizer.txt', 'a') as file:
@@ -374,20 +422,22 @@ class FIMS_Optimizer:
                 - IBNValue (float): Final minimum IBN value.
                 - success (bool): Success status of minimization.
         """
-        
         # Get optimizer parameters and bounds
         activeParameters = self.params.copy()
         inputList, minBounds, maxBounds = map(list, zip(*activeParameters))
         
+        
         # Set bounds for variables
-        optimizerBounds = Bounds(minBounds, maxBounds)
+        normMinBounds = self._normalizeValues(minBounds)
+        normMaxBounds = self._normalizeValues(maxBounds)
+        optimizerBounds = Bounds(normMinBounds, normMaxBounds)
 
-        # Set initial guess as default values
-        optimizerParams = []
+        # Set initial guess as simFIMS default values
+        initialGuess = np.array()
         for param in inputList:
-            optimizerParams.append(self.simFIMS.getParam(param))
-        initialGuess = np.array(optimizerParams)
-
+            self._initialValues.append(self.simFIMS.getParam(param))
+            initialGuess = np.append(initialGuess, 1) # All inputs initially normalized to 1
+        
         print('Beginning optimization...')
         try:
             optimizerResult = minimize(
@@ -398,7 +448,7 @@ class FIMS_Optimizer:
                 constraints=self._getGeometryConstraints(),
                 callback=self._checkConvergence,
                 bounds=optimizerBounds,
-                options = {'initial_tr_radius': 10}
+                options = {'initial_tr_radius': .2} # initial step of 20%
             )
             finalParams = optimizerResult.x
             finalFunction = optimizerResult.fun

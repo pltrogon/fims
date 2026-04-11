@@ -1011,10 +1011,10 @@ class gmshClass:
 
         bounds = meshSettings[runOption]
 
-        fineMesh = gridThickness
+        fineMesh = gridThickness/2
         coarseMesh = gridThickness*2
-        backgroundMesh = pitch/10
-        transitionWidth = pitch/4
+        backgroundMesh = pitch/15
+        transitionWidth = pitch/2
 
         smallHole = min(
             self._param['holeRadius'],
