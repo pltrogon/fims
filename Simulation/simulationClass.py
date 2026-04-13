@@ -183,10 +183,10 @@ class FIMS_Simulation:
         Ensures that the gas composition percentages sum to 1.0.
         """
         totalComp = (
-            float(self.getParam('gasCompAr'))
-            + float(self.getParam('gasCompCO2'))
-            + float(self.getParam('gasCompCF4'))
-            + float(self.getParam('gasCompIsobutane'))
+            float(self._param['gasCompAr'])
+            + float(self._param['gasCompCO2'])
+            + float(self._param['gasCompCF4'])
+            + float(self._param['gasCompIsobutane'])
         )
         
         if not math.isclose(totalComp, 1.0, rel_tol=1e-3):
@@ -709,11 +709,11 @@ class FIMS_Simulation:
                               95% efficiency.
         """
         #Get geometry variables
-        standoff = self._getParam('gridStandoff')
-        pad = self._getParam('padLength')
-        pitch = self._getParam('pitch')
-        
-        
+        standoff = self._param['gridStandoff']
+        pad = self._param['padLength']
+        pitch = self._param['pitch']
+
+
         #Insert values into fitted equations
         #Ar+CO2 (depreciated)
         #standoffRatio = standoff/pad
@@ -742,9 +742,9 @@ class FIMS_Simulation:
                               100% transparency.
         """
         #Get geometry variables
-        standoff = self._getParam('gridStandoff')
-        pad = self._getParam('padLength')
-        pitch = self._getParam('pitch')
+        standoff = self._param['gridStandoff']
+        pad = self._param['padLength']
+        pitch = self._param['pitch']
         
         #Convert to dimensionless variables
         optTrans = self._calcOpticalTransparency()
@@ -788,7 +788,7 @@ class FIMS_Simulation:
         #conditions are satisfied simultaneously.
         netMinField = max(minFieldTrans, minFieldEff)
         
-        return math.floor(netMinField)
+        return math.floor(0.75*netMinField)
 
 #***********************************************************************************#
     def runCapacitance(self):
@@ -1010,7 +1010,7 @@ class FIMS_Simulation:
         newField = None
 
         if iterNo == 1:
-            newField = self.getParam('fieldRatio')
+            newField = self._param['fieldRatio']
 
         # Take constant step of 2 for 2nd iteration
         elif iterNo == 2:
@@ -1120,7 +1120,7 @@ class FIMS_Simulation:
         #End of find field for efficiency loop
 
         
-        finalField = self.getParam('fieldRatio')
+        finalField = self._param['fieldRatio']
         print(f'Solution found for {targetEfficiency*100:.0f}% efficiency: Field ratio = {finalField}')
         
         #Reset parameters to original values except for field ratio
@@ -1175,8 +1175,8 @@ class FIMS_Simulation:
         """ 
 
         #Get geometry variables
-        radius = self.getParam('holeRadius')
-        pitch = self.getParam('pitch')
+        radius = self._param['holeRadius']
+        pitch = self._param['pitch']
     
         gridArea = pitch**2*math.sqrt(3)/2
         holeArea = math.pi*radius**2
@@ -1275,7 +1275,7 @@ class FIMS_Simulation:
         #End of find field for transparency loop
 
 
-        finalField = self.getParam('fieldRatio')
+        finalField = self._param['fieldRatio']
         print(f'Solution: Field ratio = {finalField}')
         
         #Reset parameters to original values except for field ratio
@@ -1310,7 +1310,7 @@ class FIMS_Simulation:
             self._generateGeometry()
 
         #Get absolute drift field value
-        driftField = self.getParam('driftField')
+        driftField = self._param['driftField']
         print(f'Finding minimum field ratio for geometry with drift field: {driftField} V/cm')
 
         #Choose initial field ratio guess
@@ -1486,7 +1486,7 @@ class FIMS_Simulation:
                         raise ValueError('Error - Malformed efficiency file.')
         #End of find combined min field loop
 
-        finalField = self.getParam('fieldRatio')
+        finalField = self._param['fieldRatio']
         saveParam['fieldRatio'] = finalField
         self.setParameters(saveParam)
 
@@ -1514,11 +1514,11 @@ class FIMS_Simulation:
         print(f'Running simulation - Run number: {runNo}')
 
         #Get absolute drift field value
-        driftField = self.getParam('driftField')
+        driftField = self._param['driftField']
         print(f'Finding minimum field ratio for geometry with drift field: {driftField} V/cm')
 
         #Choose initial field ratio guess
-        minFieldGuess = 10.0 #Default guess. TODO
+        minFieldGuess = self._calcMinField()
         print(f'\tInitial field ratio guess: {minFieldGuess}')
         self.setParameters({'fieldRatio': minFieldGuess})
 
@@ -1807,7 +1807,7 @@ class FIMS_Simulation:
         electronCharge = -1.602176634e-19
 
         #Geometry parameters
-        pitch = self.getParam('pitch')        
+        pitch = self._param['pitch']        
         xMax = math.sqrt(3)/2.*pitch
         xMin = -xMax
         yMax = pitch
@@ -2000,9 +2000,9 @@ class FIMS_Simulation:
         try:
             allOptimalFieldData = self._loadOptimalDriftFile()
 
-            intAr = round(self.getParam('gasCompAr')*100)
-            intCF4 = round(self.getParam('gasCompCF4')*100)
-            intIsobutane = round(self.getParam('gasCompIsobutane')*100)
+            intAr = round(self._param['gasCompAr']*100)
+            intCF4 = round(self._param['gasCompCF4']*100)
+            intIsobutane = round(self._param['gasCompIsobutane']*100)
 
             gasCompFilter = (
                 (allOptimalFieldData['Ar'] == intAr) &
