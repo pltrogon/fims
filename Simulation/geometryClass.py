@@ -1011,8 +1011,8 @@ class gmshClass:
 
         bounds = meshSettings[runOption]
 
-        fineMesh = gridThickness/2
-        coarseMesh = gridThickness*2
+        fineMesh = gridThickness
+        coarseMesh = gridThickness*4
         backgroundMesh = pitch/15
         transitionWidth = pitch/2
 
