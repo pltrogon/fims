@@ -504,12 +504,23 @@ class runData:
             efficiencyThreshold = self._getEfficiencyThreshold(targetEfficiency=0.95)
             self._calculatedData['n_95'] = efficiencyThreshold
 
-            #Polya Fits
+            # Polya Fits
             polyaFitResults = self._fitPolya()
             self._calculatedData['Polya Theta'] = polyaFitResults['theta']
             self._calculatedData['Polya Gain'] = polyaFitResults['gain']
             self._calculatedData['Polya Theta Error'] = polyaFitResults['thetaErr']
             self._calculatedData['Polya Gain Error'] = polyaFitResults['gainErr']
+
+            # Single-Electron avalanche info
+            singleInfo = self._getSingleElectronAvalancheData()
+            self._calculatedData['Num Avalanche'] = singleInfo['numTotal']
+            self._calculatedData['Num 1e'] = singleInfo['numSingle']
+            self._calculatedData['Num Lost - Attached'] = singleInfo['numAttatched']
+            self._calculatedData['Num Lost - Hit Grid'] = singleInfo['numHitGrid']
+            self._calculatedData['Num Lost - Drift'] = singleInfo['numExitArea']
+            self._calculatedData['Num No Avalanche'] = singleInfo['numExitMedium']
+
+            self._getChargeCollectionEfficiency()
 
 
 
@@ -2253,7 +2264,6 @@ class runData:
         """TODO"""
 
         threshold = 0
-
         isEfficient = True
 
         while isEfficient:
@@ -2267,6 +2277,87 @@ class runData:
         targetThreshold = threshold - 1.5
         
         return targetThreshold
+    
+
+#********************************************************************************#
+    def _getSingleElectronAvalancheData(self):
+        """TODO"""
+
+        #Get avalanche IDs for those with only 1 electron
+        allAvalancheData = self.getDataFrame('avalancheData')
+        singleElectron = allAvalancheData[allAvalancheData['Total Electrons'] == 1]
+        singleElectronID = singleElectron['Avalanche ID'].tolist()
+        numTotal = len(allAvalancheData)
+        numSingle = len(singleElectron)
+
+        allElectronData = self.getDataFrame('electronData')
+        singleElectronData = allElectronData[allElectronData['Avalanche ID'].isin(singleElectronID)]
+
+        attachedElectrons = singleElectronData[singleElectronData['Exit Status'] == -7]
+        numAttatched = len(attachedElectrons)
+        attatchedIDs = attachedElectrons['Avalanche ID'].tolist()
+
+        noAttachment = singleElectronData[singleElectronData['Exit Status'] != -7]
+
+        # Count as hit git if within 1% of the grid plane
+        gridLength = 1.01*self.getRunParameter('Grid Thickness')/2
+        hitGrid = noAttachment[(noAttachment['Final z'] <= gridLength) & (noAttachment['Final z'] >= -gridLength)]
+        numHitGrid = len(hitGrid)
+        hitGridIDs = hitGrid['Avalanche ID'].tolist()
+
+        exitNoAvalanche = noAttachment[~noAttachment['Avalanche ID'].isin(hitGridIDs)]
+
+        # Exit status = -1: Leaves drift area
+        ## Note: These are electrons that exit the sides of the simulation volume.
+        ## They could still hit attach, hit the grid, or cause an avalanche
+        exitArea = exitNoAvalanche[exitNoAvalanche['Exit Status'] == -1]
+        numExitArea = len(exitArea)
+        exitAreaIDs = exitArea['Avalanche ID'].tolist()
+
+
+        # Exit status = -5: Leave drift medium
+        ## Note: These are electrons that leave the drift medium.
+        ## By inspection, these all reach the pad/dielectric without avalanching.
+        exitMedium = exitNoAvalanche[exitNoAvalanche['Exit Status'] == -5]
+        numExitMedium = len(exitMedium)
+        exitMediumIDs = exitMedium['Avalanche ID'].tolist()
+
+        singleAvalancheInfo = {
+            'numTotal': numTotal,
+            'numSingle': numSingle,
+            'numAttatched': numAttatched,
+            'numHitGrid': numHitGrid,
+            'numExitArea': numExitArea,
+            'numExitMedium': numExitMedium,
+            'attatchedIDs': attatchedIDs,
+            'hitGridIDs': hitGridIDs,
+            'exitAreaIDs': exitAreaIDs,
+            'exitMediumIDs': exitMediumIDs
+        }
+
+        return singleAvalancheInfo
+    
+#********************************************************************************#
+    def _getChargeCollectionEfficiency(self):
+        """TODO"""
+
+        singleAvalancheInfo = self._getSingleElectronAvalancheData()
+
+        numSingle = singleAvalancheInfo['numSingle']
+        numAttatched = singleAvalancheInfo['numAttatched']
+        numHitGrid = singleAvalancheInfo['numHitGrid']
+
+        if numSingle == 0:
+            raise ValueError('Error: No single-electron avalanches to calculate efficiency.')
+
+        #Charge collection efficiency is the fraction of single-electron avalanches that are not lost to attachment
+        chargeEff = (numSingle - numAttatched) / numSingle
+
+        #Calculate uncertainty using binomial statistics
+        varience = chargeEff*(1-chargeEff)/numSingle
+        chargeEffErr = math.sqrt(varience)
+
+        return chargeEff, chargeEffErr
 
 #********************************************************************************#
     def plotEfficiency(self, binWidth=1, threshold=0):
