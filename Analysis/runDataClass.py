@@ -502,7 +502,12 @@ class runData:
             self._calculatedData['Efficiency Error'] = simEffErr
 
             efficiencyThreshold = self._getEfficiencyThreshold(targetEfficiency=0.95)
-            self._calculatedData['n_95'] = efficiencyThreshold
+            n95Info = self._bootstrapQuantile(quantile=0.05, numIterations=1000)
+            self._calculatedData['n_95 - Threshold'] = efficiencyThreshold
+            self._calculatedData['n_95'] = n95Info['quantile']
+            self._calculatedData['n_95 Err Low'] = n95Info['lowError']
+            self._calculatedData['n_95 Err High'] = n95Info['highError']
+            self._calculatedData['n_95 StdDev'] = n95Info['quantileErr']
 
             # Polya Fits
             polyaFitResults = self._fitPolya()
@@ -519,9 +524,8 @@ class runData:
             self._calculatedData['Num Lost - Hit Grid'] = singleInfo['numHitGrid']
             self._calculatedData['Num Lost - Drift'] = singleInfo['numExitArea']
             self._calculatedData['Num No Avalanche'] = singleInfo['numExitMedium']
-
-            self._getChargeCollectionEfficiency()
-
+        
+            #self._getChargeCollectionEfficiency()
 
 
             #Other calculated values can be added here as needed.
@@ -2278,6 +2282,50 @@ class runData:
         
         return targetThreshold
     
+#***********************************************************************************#
+    def _bootstrapQuantile(self, quantile=0.05, numIterations=1000):
+        """
+        Performs a bootstrap analysis to estimate the uncertainty of a specified quantile
+        of the avalanche gain distribution. 
+
+        Args:
+            quantile (float): The quantile to estimate (e.g., 0.05 for n_95).
+            numIterations (int): The number of bootstrap iterations to perform.
+
+        Returns:
+            dict: A dictionary containing the following:
+            - 'quantile' (float): The estimated quantile from the original data.
+            - 'quantileErr' (float): The standard deviation of the quantile estimates.
+            - 'lowError' (float): The lower error bound.
+            - 'highError' (float): The upper error bound.
+        """
+        avalancheData = self._trimAvalanche()
+        avalancheGains = avalancheData['Total Electrons'].to_numpy()
+        numAvalanche = len(avalancheGains)
+
+        trueQuantile = np.quantile(avalancheGains, quantile)
+
+        quantileEstimates = np.array([
+            np.quantile(
+                np.random.choice(avalancheGains, size=numAvalanche, replace=True), 
+                quantile
+            )
+            for _ in range(numIterations)
+        ])
+        quantileEstimateStdDev = np.std(quantileEstimates, ddof=1)
+
+        lowBound = np.quantile(quantileEstimates, 0.025)
+        highBound = np.quantile(quantileEstimates, 0.975)
+
+        quantileStats = {
+            'quantile': trueQuantile,
+            'quantileErr': quantileEstimateStdDev,
+            'lowError': trueQuantile - lowBound,
+            'highError': highBound - trueQuantile
+        }
+
+        return quantileStats
+    
 
 #********************************************************************************#
     def _getSingleElectronAvalancheData(self):
@@ -2347,17 +2395,10 @@ class runData:
         numAttatched = singleAvalancheInfo['numAttatched']
         numHitGrid = singleAvalancheInfo['numHitGrid']
 
-        if numSingle == 0:
-            raise ValueError('Error: No single-electron avalanches to calculate efficiency.')
+        return 
+    
 
-        #Charge collection efficiency is the fraction of single-electron avalanches that are not lost to attachment
-        chargeEff = (numSingle - numAttatched) / numSingle
 
-        #Calculate uncertainty using binomial statistics
-        varience = chargeEff*(1-chargeEff)/numSingle
-        chargeEffErr = math.sqrt(varience)
-
-        return chargeEff, chargeEffErr
 
 #********************************************************************************#
     def plotEfficiency(self, binWidth=1, threshold=0):
