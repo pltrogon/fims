@@ -2400,9 +2400,13 @@ class runData:
         numExitArea = singleAvalancheInfo['numExitArea']
         numExitMedium = singleAvalancheInfo['numExitMedium']
 
-
+        # Do not count the following:
+        # Num exit area -> Drifted out of region without avalanching
+        # Num attached -> Electron attached without avalanching
         numValid = numTotal - numExitArea - numAttached
-        numCount = numValid - numHitGrid - numExitMedium
+
+        # Undetected are those that hit the grid (a no-avalanche outcome is still detected)
+        numCount = numValid - numHitGrid
 
         if numValid == 0:
             raise ValueError('Error: No valid avalanches to calculate efficiency.')
