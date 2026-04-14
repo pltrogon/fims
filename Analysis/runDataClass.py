@@ -525,7 +525,9 @@ class runData:
             self._calculatedData['Num Lost - Drift'] = singleInfo['numExitArea']
             self._calculatedData['Num No Avalanche'] = singleInfo['numExitMedium']
         
-            #self._getChargeCollectionEfficiency()
+            chargeCollectionEff = self._getChargeCollectionEfficiency()
+            self._calculatedData['Charge Collection Eff'] = chargeCollectionEff['efficiency']
+            self._calculatedData['Charge Collection Eff Err'] = chargeCollectionEff['efficiencyErr']
 
 
             #Other calculated values can be added here as needed.
@@ -2391,14 +2393,29 @@ class runData:
 
         singleAvalancheInfo = self._getSingleElectronAvalancheData()
 
-        numSingle = singleAvalancheInfo['numSingle']
-        numAttatched = singleAvalancheInfo['numAttatched']
+        numTotal = singleAvalancheInfo['numTotal']
+
+        numAttached = singleAvalancheInfo['numAttatched']
         numHitGrid = singleAvalancheInfo['numHitGrid']
+        numExitArea = singleAvalancheInfo['numExitArea']
+        numExitMedium = singleAvalancheInfo['numExitMedium']
 
-        return 
-    
 
+        numValid = numTotal - numExitArea - numAttached
+        numCount = numValid - numHitGrid - numExitMedium
 
+        if numValid == 0:
+            raise ValueError('Error: No valid avalanches to calculate efficiency.')
+        
+        chargeEff = numCount / numValid
+        chargeEffErr = math.sqrt(chargeEff*(1-chargeEff)/numValid)
+
+        chargeCollectionEff = {
+            'efficiency': chargeEff,
+            'efficiencyErr': chargeEffErr,
+        }
+
+        return chargeCollectionEff
 
 #********************************************************************************#
     def plotEfficiency(self, binWidth=1, threshold=0):
