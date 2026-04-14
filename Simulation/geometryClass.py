@@ -1094,8 +1094,8 @@ class gmshClass:
         gmsh.model.mesh.field.setNumber(5, 'InField', 2)
         gmsh.model.mesh.field.setNumber(5, 'SizeMin', coarseMesh)
         gmsh.model.mesh.field.setNumber(5, 'SizeMax', backgroundMesh)
-        gmsh.model.mesh.field.setNumber(5, 'DistMin', 5*gridThickness)
-        gmsh.model.mesh.field.setNumber(5, 'DistMax', pitch/4)
+        gmsh.model.mesh.field.setNumber(5, 'DistMin', pitch/4/sqrt3)
+        gmsh.model.mesh.field.setNumber(5, 'DistMax', pitch/4/sqrt3 + transitionWidth)
 
         # Keep coarse mesh around the entire grid
         gmsh.model.mesh.field.add('Box', 6)
