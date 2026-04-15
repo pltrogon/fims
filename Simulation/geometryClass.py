@@ -1024,9 +1024,9 @@ class gmshClass:
         bounds = meshSettings[runOption]
         refinements = cellRefinements.get(runOption, [])
 
-        fineMesh = gridThickness
-        coarseMesh = fineMesh*2
-        backgroundMesh = fineMesh*4
+        fineMesh = gridThickness*.6
+        coarseMesh = gridThickness*3
+        backgroundMesh = gridThickness*6
         transitionWidth = pitch/2
 
         smallHole = min(
