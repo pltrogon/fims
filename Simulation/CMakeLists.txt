@@ -15,6 +15,7 @@ find_package(GSL REQUIRED)
 find_package(Garfield REQUIRED)
 find_package(ROOT REQUIRED COMPONENTS Hist Tree MathCore)
 find_package(OpenMP REQUIRED)
+find_package(nlohmann_json REQUIRED)
 
 # --- Define common dependencies ---
 set(COMMON_LIBS
@@ -25,6 +26,7 @@ set(COMMON_LIBS
     ROOT::Tree
     ROOT::MathCore
     OpenMP::OpenMP_CXX
+    nlohmann_json::nlohmann_json
 )
 
 # --- Define executables ---
