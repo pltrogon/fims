@@ -9,7 +9,7 @@
  */
 
 //My includes
-#include "SilenceConsole.h"
+#include "myFunctions.h"
 
 //Garfield includes
 #include "Garfield/ComponentElmer.hh"

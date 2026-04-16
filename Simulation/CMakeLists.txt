@@ -37,6 +37,7 @@ set(EXECUTABLES
     runTransparency           	checkTransparency.cc
     runTransparencyGridPix      checkTransparencyGridPix.cc
     runEfficiency           	checkEfficiency.cc
+    runCharge                	checkCharge.cc
     runMagboltz             	magboltz.cc
     runParallelPlate        	parallelPlate.cc
     runParallelPlateEfficiency 	parallelPlateEfficiency.cc

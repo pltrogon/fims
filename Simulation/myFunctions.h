@@ -8,7 +8,52 @@
 #include <optional>
 #include <nlohmann/json.hpp>
 
+#include "Garfield/ComponentElmer.hh"
+#include "Garfield/AvalancheMicroscopic.hh"
+#include "Garfield/MediumMagboltz.hh"
+#include "Garfield/Medium.hh"
+#include "Garfield/AvalancheMC.hh"
+#include "Garfield/Sensor.hh"
+#include "Garfield/DriftLineRKF.hh"
+#include "Garfield/ViewDrift.hh"
+#include "Garfield/ViewSignal.hh"
+
 using json = nlohmann::json;
+
+// Conversion constant
+const double MICRONTOCM = 1e-4;
+
+// Struct to hold all simulation parameters
+// Compare to simulationClass for consistancy
+struct SimulationParameters {
+    // Geometry parameters
+    double padLength;
+    double pitch;
+    double gridStandoff;
+    double gridThickness;
+    double holeRadius;
+    double cathodeHeight;
+    double thicknessSiO2;
+    double pillarRadius;
+    
+    // Field parameters
+    double driftField;
+    double fieldRatio;
+    int numFieldLine;
+    
+    // Simulation parameters
+    int runNumber;
+    int numAvalanche;
+    int avalancheLimit;
+    int numInputs;
+    
+    // Gas parameters
+    double gasCompAr;
+    double gasCompCO2;
+    double gasCompCF4;
+    double gasCompIsobutane;
+    double gasPenning;
+};
 
 /**
  * Retrieves the current git version/hash.
@@ -40,6 +85,44 @@ std::string getGitVersion() {
     
     return gitVersion;
 }
+
+/**
+ * @brief Utility to temporarily silence std::cerr.
+ */
+class SilenceCerr {
+public:
+    SilenceCerr() {
+        // Platform detection for the "null" device
+        #ifdef _WIN32
+            const char* nullDevice = "nul";
+        #else
+            const char* nullDevice = "/dev/null";
+        #endif
+
+        m_nullStream.open(nullDevice);
+        if (m_nullStream.is_open()) {
+            // Save the old buffer and redirect cerr
+            m_oldBuffer = std::cerr.rdbuf(m_nullStream.rdbuf());
+        } else {
+            m_oldBuffer = nullptr;
+        }
+    }
+
+    ~SilenceCerr() {
+        // Restore the original buffer on destruction
+        if (m_oldBuffer) {
+            std::cerr.rdbuf(m_oldBuffer);
+        }
+    }
+
+    // Disable copying to prevent multiple objects fighting over the same buffer
+    SilenceCerr(const SilenceCerr&) = delete;
+    SilenceCerr& operator=(const SilenceCerr&) = delete;
+
+private:
+    std::streambuf* m_oldBuffer;
+    std::ofstream m_nullStream;
+};
 
 /**
  * Initializes a Garfield++ gas mixture with the provided parameters.
@@ -83,41 +166,6 @@ Garfield::MediumMagboltz* initializeGas(const SimulationParameters& params) {
     
     return gas;
 }
-
-// Conversion constant
-const double MICRONTOCM = 1e-4;
-
-// Struct to hold all simulation parameters
-// Compare to simulationClass for consistancy
-struct SimulationParameters {
-    // Geometry parameters
-    double padLength;
-    double pitch;
-    double gridStandoff;
-    double gridThickness;
-    double holeRadius;
-    double cathodeHeight;
-    double thicknessSiO2;
-    double pillarRadius;
-    
-    // Field parameters
-    double driftField;
-    double fieldRatio;
-    int numFieldLine;
-    
-    // Simulation parameters
-    int runNumber;
-    int numAvalanche;
-    int avalancheLimit;
-    int numInputs;
-    
-    // Gas parameters
-    double gasCompAr;
-    double gasCompCO2;
-    double gasCompCF4;
-    double gasCompIsobutane;
-    double gasPenning;
-};
 
 /**
  * Reads and parses simulation parameters from stdin as JSON.
@@ -178,42 +226,6 @@ std::optional<SimulationParameters> readSimulationParameters() {
     }
 }
 
-/**
- * @brief Utility to temporarily silence std::cerr.
- */
-class SilenceCerr {
-public:
-    SilenceCerr() {
-        // Platform detection for the "null" device
-        #ifdef _WIN32
-            const char* nullDevice = "nul";
-        #else
-            const char* nullDevice = "/dev/null";
-        #endif
 
-        m_nullStream.open(nullDevice);
-        if (m_nullStream.is_open()) {
-            // Save the old buffer and redirect cerr
-            m_oldBuffer = std::cerr.rdbuf(m_nullStream.rdbuf());
-        } else {
-            m_oldBuffer = nullptr;
-        }
-    }
-
-    ~SilenceCerr() {
-        // Restore the original buffer on destruction
-        if (m_oldBuffer) {
-            std::cerr.rdbuf(m_oldBuffer);
-        }
-    }
-
-    // Disable copying to prevent multiple objects fighting over the same buffer
-    SilenceCerr(const SilenceCerr&) = delete;
-    SilenceCerr& operator=(const SilenceCerr&) = delete;
-
-private:
-    std::streambuf* m_oldBuffer;
-    std::ofstream m_nullStream;
-};
 
 #endif // MY_FUNCTIONS_H
