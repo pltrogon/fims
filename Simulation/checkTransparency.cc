@@ -9,7 +9,6 @@
  */
 
 //My includes
-#include "SilenceConsole.h"
 #include "myFunctions.h"
 
 //Garfield includes
@@ -45,16 +44,7 @@ int main(int argc, char * argv[]) {
   double fieldLineX, fieldLineY, fieldLineZ;
   
   //*************** SETUP ***************//
-  //Timing variables
-  clock_t startSim, stopSim, runTime;
-
   //***** Simulation Parameters *****//
-  //Read in simulation parameters from stdin as JSON
-  std::cout << "****************************************\n";
-  std::cout << "Setting up field line simulation.\n";
-  std::cout << "****************************************\n";
-
-  // Read JSON parameters from stdin
   auto simParams = readSimulationParameters();
   if(!simParams){
     return -1;
@@ -65,11 +55,7 @@ int main(int argc, char * argv[]) {
   std::cout << "Building field line simulation: " << runNo << "\n";
   std::cout << "****************************************\n";
 
-  
   //*************** SIMULATION ***************//
-  std::cout << "****************************************\n";
-  std::cout << "Creating field line simulation: " << "\n";
-  std::cout << "****************************************\n";
   
   // Define and initialize the gas mixture
   MediumMagboltz* gasFIMS = initializeGas(*simParams); 
@@ -139,16 +125,6 @@ int main(int argc, char * argv[]) {
   double yWidth = rangeScale*simParams->pitch/2.;
 
   // ***** Generate field line start points ***** //
-  
-  /*
-  //Lines generated radially from the center to corner of unit cell
-  //The x-direction is the long axis of the geometry. 
-  for(int i = 0; i < simParams->numFieldLine; i++){
-    xStart.push_back(xWidth*i/(simParams->numFieldLine-1));
-    yStart.push_back(0.);
-  }
-  */
-
 
   //Rejection sampled points near the edge of the unit cell
   double sampleWidth = std::sqrt(0.85); // Reject the inner portion of the unit cell
@@ -170,7 +146,7 @@ int main(int argc, char * argv[]) {
     //Determine if point is near edge of cell - Skip if not
     double checkY = sampleWidth*halfPitch;
     double edgeY = (simParams->pitch/cellLength) * (sampleWidth*cellLength-sampleX);
-    if((sampleY < checkY) && (sampleY < edgeY)){
+    if((sampleY < checkY) && (sampleY < edgeY)){//NOTE: Change htis to an OR to only include the corner
       continue;
     }
 
@@ -180,7 +156,6 @@ int main(int argc, char * argv[]) {
     if((sampleY < safetyY) && (sampleY < safetyEdgeY)){
       xStart.push_back(sampleX);
       yStart.push_back(sampleY);
-      //std::cout << sampleX << ", " << sampleY << ", ";
     }
   }
 
@@ -223,21 +198,15 @@ int main(int argc, char * argv[]) {
     }
 
   }//End field line loop
-
   std::cout << "Done " << totalFieldLines << " field lines; Determining transparency." << "\n";
 
-  //Determine transparency - Binomial Statistics
-  //transparency = (1.*numAtPad) / (1.*simParams->numFieldLine);
-  //transparencyErr = sqrt(transparency*(1-transparency)/simParams->numFieldLine);
-
-  //Determine transparency - Bayesian statistics
+  //Determine transparency
   double success = 1.*numAtPad;
   double total = 1.*simParams->numFieldLine;
 
   transparency = (success + 1.) / (total + 2.);
   variance = ((success+1.)*(success+2.))/((total+2.)*(total+3.)) - transparency*transparency;
   transparencyErr = std::sqrt(variance);
-
 
   std::cout << "Transparency is " << transparency <<  "." << std::endl;
 
@@ -267,5 +236,4 @@ int main(int argc, char * argv[]) {
   std::cout << std::endl;
 
   return 0;
-
 }

@@ -21,7 +21,6 @@
  */
 
 //My includes
-#include "SilenceConsole.h"
 #include "myFunctions.h"
 
 //Garfield includes
@@ -623,7 +622,7 @@ int main(int argc, char * argv[]) {
       int avalancheElectrons = avalancheE->GetNumberOfElectronEndpoints();
 
       //Check if avalanche limit was reached
-      if(avalancheElectrons >= avalancheLimit){
+      if(avalancheElectrons >= simParams->avalancheLimit){
         hitLimit = true;
       }
       else{

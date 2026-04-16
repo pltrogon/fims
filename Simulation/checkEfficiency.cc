@@ -18,7 +18,6 @@
  */
 
 // My includes
-#include "SilenceConsole.h"
 #include "myFunctions.h"
 
 //Garfield includes
@@ -68,25 +67,16 @@ int main(int argc, char * argv[]) {
   clock_t startSim, stopSim, runTime;
 
   //***** Simulation Parameters *****//
-  //Read in simulation parameters from stdin as JSON
-  std::cout << "****************************************\n";
-  std::cout << "Setting up simulation.\n";
-  std::cout << "****************************************\n";
-
-  // Read JSON parameters from stdin
   auto simParams = readSimulationParameters();
   if(!simParams){
     return -1;
   }
   int runNo = simParams->runNumber;
 
+  //*************** SIMULATION ***************//
+
   std::cout << "****************************************\n";
   std::cout << "Building simulation: " << runNo << " (efficiency)\n";
-  std::cout << "****************************************\n";
-
-  //*************** SIMULATION ***************//
-  std::cout << "****************************************\n";
-  std::cout << "Creating simulation: " << runNo << " (efficiency)\n";
   std::cout << "****************************************\n";
 
   // Define and initialize the gas mixture
@@ -167,6 +157,7 @@ int main(int argc, char * argv[]) {
   bool runAvalanche = true;
   bool isEfficient = false;
   while(runAvalanche && totalAvalanches < simParams->numAvalanche){
+    for(int inAvalanche = 0; inAvalanche < numInBunch; inAvalanche++){
       avalancheE->AvalancheElectron(x0, y0, z0, 0., e0, dx0, dy0, dz0);
 
       //Electron count - use endpoints to include attached electrons
@@ -184,15 +175,10 @@ int main(int argc, char * argv[]) {
 
 		numInBunch = 25;//do bunches of 25 after first iteration
 
-    //Efficiency calculations
+    //Efficiency calculations - Bayesian Statistics
     double success = numAboveThreshold;
     double total = totalAvalanches - numNoAvalanche;
 
-    //Binomial Stats
-    //efficiency = success/total;
-    //varience = (efficiency*(1-efficiency)/total;
-
-    //Bayesian Statistics
     efficiency = (success+1)/(total+2);
     varience = ((success+1)*(success+2))/((total+2)*(total+3)) - efficiency*efficiency;
    
@@ -220,7 +206,7 @@ int main(int argc, char * argv[]) {
       std::cout << "\tEfficiency: " << efficiency << " +/- " << efficiencyErr << "\n";
 		}
 
-  }//end gain convergence loop
+  }//end detection efficiency convergence loop
   
 
 	//***** Output efficiency value *****//	
@@ -237,7 +223,7 @@ int main(int argc, char * argv[]) {
 
 	//write some extra information
 	dataFile << "// Finding efficiency for run: " << runNo << "\n";
-	dataFile << "// Total avalanches: " << totalAvalanches << " (of " << numAvalanche << ")\n";
+	dataFile << "// Total avalanches: " << totalAvalanches << " (of " << simParams->numAvalanche << ")\n";
 
   //include convergence criteria
   dataFile << "// Stop condition:\n";
