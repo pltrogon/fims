@@ -2305,6 +2305,17 @@ class runData:
         avalancheGains = avalancheData['Total Electrons'].to_numpy()
         numAvalanche = len(avalancheGains)
 
+        if self._calculatedData['Raw Gain'].item() < 5 or numAvalanche == 0:
+            print('Warning - Cannot perform bootstrap quantile analysis.')
+            errorQuantile = {
+                'quantile': 0,
+                'quantileErr': 0,
+                'lowError': 0,
+                'highError': 0
+            }
+            return errorQuantile
+
+        
         trueQuantile = np.quantile(avalancheGains, quantile)
 
         quantileEstimates = np.array([
