@@ -19,6 +19,7 @@
 
 // My includes
 #include "SilenceConsole.h"
+#include "myFunctions.h"
 
 //Garfield includes
 #include "Garfield/ComponentElmer.hh"
@@ -66,143 +67,30 @@ int main(int argc, char * argv[]) {
   //Timing variables
   clock_t startSim, stopSim, runTime;
 
-  //***** Run numbering *****//
-  //Read in run number from runNo
-  int runNo;
-  std::string runNoFile = "../runNo";
-  std::ifstream runInFile;
-  runInFile.open(runNoFile);
+  //***** Simulation Parameters *****//
+  //Read in simulation parameters from stdin as JSON
+  std::cout << "****************************************\n";
+  std::cout << "Setting up simulation.\n";
+  std::cout << "****************************************\n";
 
-  if(!runInFile.is_open()){
-    std::cerr << "Error reading file '" << runNoFile << "'." << std::endl;
+  // Read JSON parameters from stdin
+  auto simParams = readSimulationParameters();
+  if(!simParams){
     return -1;
   }
-
-  runInFile >> runNo;
-  runInFile.close();
+  int runNo = simParams->runNumber;
 
   std::cout << "****************************************\n";
   std::cout << "Building simulation: " << runNo << " (efficiency)\n";
   std::cout << "****************************************\n";
 
-  //***** Simulation Parameters *****//
-  //Read in simulation parameters from runControl
-  int numInputs;
-  double  padLength, pitch;
-  double gridStandoff, gridThickness, holeRadius;
-  double cathodeHeight, thicknessSiO2, pillarRadius;
-  double fieldRatio, transparencyLimit;
-  int numFieldLine;
-  int numAvalanche, avalancheLimit;
-  double gasCompAr, gasCompCO2, gasCompCF4, gasCompIsobutane;
-  double gasPenning;
-
-  std::ifstream paramFile;
-  std::string runControlFile = "../runControl";
-  paramFile.open(runControlFile);
-
-  if(!paramFile.is_open()){
-    std::cerr << "Error: Could not open control file '" << runControlFile << "'." << std::endl;
-    return -1;
-  }
-
-  std::cout << "****************************************\n";
-  std::cout << "Setting up simulation.\n";
-  std::cout << "****************************************\n";
-  
-  std::string curLine;
-  std::map<std::string, std::string> readParam;
-
-  //Read the file contents to a map
-  int numKeys = 0;
-  while(std::getline(paramFile, curLine)){
-    if(curLine.find('/') == 0){
-      continue;
-    }
-
-    size_t keyPos = curLine.find("=");
-    if (keyPos != std::string::npos){
-      std::string key = curLine.substr(0, keyPos - 1);
-      std::string value = curLine.substr(keyPos + 2);
-      if(value.back() == ';'){
-        value.pop_back();
-      }
-
-      readParam[key] = value;
-      numKeys++;
-    }
-  }
-  paramFile.close();
-
-  //Parse the values from the map
-  numInputs = std::stoi(readParam["numInputs"]);
-  if(numKeys != numInputs){
-    std::cerr << "Error: Invalid simulation parameters in 'runControl'." << std::endl;
-    return -1;
-  }
-
-  //Geometry parameters
-  //Garfield's operational scale is cm. runControl is defined in microns
-  padLength = std::stod(readParam["padLength"])*MICRONTOCM;
-  pitch = std::stod(readParam["pitch"])*MICRONTOCM;
-
-  gridStandoff = std::stod(readParam["gridStandoff"])*MICRONTOCM;
-  gridThickness = std::stod(readParam["gridThickness"])*MICRONTOCM;
-  holeRadius = std::stod(readParam["holeRadius"])*MICRONTOCM;
-
-  cathodeHeight = std::stod(readParam["cathodeHeight"])*MICRONTOCM;
-  thicknessSiO2 = std::stod(readParam["thicknessSiO2"])*MICRONTOCM;
-  pillarRadius = std::stod(readParam["pillarRadius"])*MICRONTOCM;
-
-  //Field parameters
-  fieldRatio = std::stod(readParam["fieldRatio"]);
-  numFieldLine = std::stoi(readParam["numFieldLine"]);
-
-  //Simulation Parameters
-  numAvalanche = std::stoi(readParam["numAvalanche"]);
-  avalancheLimit = std::stoi(readParam["avalancheLimit"]);
-  
- //Gasses defined as percentages
-  gasCompAr = std::stod(readParam["gasCompAr"])*100.;
-  gasCompCO2 = std::stod(readParam["gasCompCO2"])*100.;
-  gasCompCF4 = std::stod(readParam["gasCompCF4"])*100.;
-  gasCompIsobutane = std::stod(readParam["gasCompIsobutane"])*100.;
-
-  gasPenning = std::stod(readParam["gasPenning"]);
-
-  
   //*************** SIMULATION ***************//
   std::cout << "****************************************\n";
   std::cout << "Creating simulation: " << runNo << " (efficiency)\n";
   std::cout << "****************************************\n";
 
-  // Define the gas mixture
-  MediumMagboltz* gasFIMS = new MediumMagboltz();
-
-  //Set gas parameters
-  gasFIMS->SetComposition(
-    "ar", gasCompAr, 
-    "co2", gasCompCO2,
-    "cf4", gasCompCF4,
-    "iC4H10", gasCompIsobutane
-  );
-
-  {
-	SilenceCerr guard; 
-    gasFIMS->EnablePenningTransfer(gasPenning, 0.0, "ar");
-  }
-
-  //gas parameters:
-  double gasTemperature = 293.15; //K
-  double gasPressure = 760.;//torr
-  int maxElectronE = 200;
-
-  gasFIMS->SetTemperature(gasTemperature);
-  gasFIMS->SetPressure(gasPressure);
-  gasFIMS->SetMaxElectronEnergy(maxElectronE);
-  gasFIMS->Initialise(true);
-
-  const std::string path = std::getenv("GARFIELD_INSTALL");
+  // Define and initialize the gas mixture
+  MediumMagboltz* gasFIMS = initializeGas(*simParams);
 
   // Import elmer-generated field map
   std::string geometryPath = "../Geometry/";
@@ -226,10 +114,10 @@ int main(int argc, char * argv[]) {
   zBoundary[1] = zmax;
   //Extend simulation boundary to +/- pitch in x and y
   //TODO - This may need to be much larger
-  xBoundary[0] = -pitch;
-  xBoundary[1] = pitch;
-  yBoundary[0] = -pitch;
-  yBoundary[1] = pitch;
+  xBoundary[0] = -simParams->pitch;
+  xBoundary[1] = simParams->pitch;
+  yBoundary[0] = -simParams->pitch;
+  yBoundary[1] = simParams->pitch;
 
   //Enable periodicity and set components
   fieldFIMS.EnableMirrorPeriodicityX();
@@ -245,12 +133,12 @@ int main(int argc, char * argv[]) {
   );
 
   AvalancheMicroscopic* avalancheE = new AvalancheMicroscopic;
-	avalancheE->SetSensor(sensorFIMS);
-  avalancheE->EnableAvalancheSizeLimit(avalancheLimit);
+  avalancheE->SetSensor(sensorFIMS);
+  avalancheE->EnableAvalancheSizeLimit(simParams->avalancheLimit);
       
   // ***** Prepare Avalanche Electron ***** //
   //Set the Initial electron parameters
-  double x0 = 0., y0 = 0., z0 = holeRadius;//x0 = pitch/std::sqrt(3)
+  double x0 = 0., y0 = 0., z0 = simParams->holeRadius;//x0 = pitch/std::sqrt(3)
   double t0 = 0.;//ns
   double e0 = 0.1;//eV (Garfield is weird when this is 0.)
   double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
@@ -278,14 +166,7 @@ int main(int argc, char * argv[]) {
   //Begin simulating electron avalanches
   bool runAvalanche = true;
   bool isEfficient = false;
-  while(runAvalanche && totalAvalanches < numAvalanche){
-
-    //Do bunch of avalanches
-    for(int inAvalanche = 0; inAvalanche < numInBunch; inAvalanche++){
-      
-      totalAvalanches++;
-
-      //Begin single-electron avalanche
+  while(runAvalanche && totalAvalanches < simParams->numAvalanche){
       avalancheE->AvalancheElectron(x0, y0, z0, 0., e0, dx0, dy0, dz0);
 
       //Electron count - use endpoints to include attached electrons

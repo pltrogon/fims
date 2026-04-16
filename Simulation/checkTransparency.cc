@@ -10,6 +10,7 @@
 
 //My includes
 #include "SilenceConsole.h"
+#include "myFunctions.h"
 
 //Garfield includes
 #include "Garfield/ComponentElmer.hh"
@@ -47,105 +48,22 @@ int main(int argc, char * argv[]) {
   //Timing variables
   clock_t startSim, stopSim, runTime;
 
-  //***** Run numbering *****//
-  //Read in run number from runNo
-  int runNo;
-  std::string runNoFile = "../runNo";
-  std::ifstream runInFile;
-  runInFile.open(runNoFile);
-
-  if(!runInFile.is_open()){
-    std::cerr << "Error reading file '" << runNoFile << "'." << std::endl;
-    return -1;
-  }
-
-  runInFile >> runNo;
-  runInFile.close();
-
-  std::cout << "****************************************\n";
-  std::cout << "Building field line simulation: " << "\n";
-  std::cout << "****************************************\n";
-  
   //***** Simulation Parameters *****//
-  //Read in simulation parameters from runControl
-  int numInputs;
-  double  padLength, pitch;
-  double gridStandoff, gridThickness, holeRadius;
-  double cathodeHeight, thicknessSiO2, pillarRadius;
-  double fieldRatio, transparencyLimit;
-  int numFieldLine;
-  double gasCompAr, gasCompCO2, gasCompCF4, gasCompIsobutane;
-  double gasPenning;
-
-  std::ifstream paramFile;
-  std::string runControlFile = "../runControl";
-  paramFile.open(runControlFile);
-
-  if(!paramFile.is_open()){
-    std::cerr << "Error: Could not open control file '" << runControlFile << "'." << std::endl;
-    return -1;
-  }
-
+  //Read in simulation parameters from stdin as JSON
   std::cout << "****************************************\n";
   std::cout << "Setting up field line simulation.\n";
   std::cout << "****************************************\n";
-  
-  std::string curLine;
-  std::map<std::string, std::string> readParam;
 
-  //Read the file contents to a map
-  int numKeys = 0;
-  while(std::getline(paramFile, curLine)){
-    if(curLine.find('/') == 0){
-      continue;
-    }
-
-    size_t keyPos = curLine.find("=");
-    if (keyPos != std::string::npos){
-      std::string key = curLine.substr(0, keyPos - 1);
-      std::string value = curLine.substr(keyPos + 2);
-      if(value.back() == ';'){
-        value.pop_back();
-      }
-
-      readParam[key] = value;
-      numKeys++;
-    }
-  }
-  paramFile.close();
-
-  //Parse the values from the map
-  numInputs = std::stoi(readParam["numInputs"]);
-  if(numKeys != numInputs){
-    std::cerr << "Error: Invalid simulation parameters in 'runControl'." << std::endl;
+  // Read JSON parameters from stdin
+  auto simParams = readSimulationParameters();
+  if(!simParams){
     return -1;
   }
+  int runNo = simParams->runNumber;
 
-  //Geometry parameters
-  //Garfield's operational scale is cm. runControl is defined in microns
-  padLength = std::stod(readParam["padLength"])*MICRONTOCM;
-  pitch = std::stod(readParam["pitch"])*MICRONTOCM;
-
-  gridStandoff = std::stod(readParam["gridStandoff"])*MICRONTOCM;
-  gridThickness = std::stod(readParam["gridThickness"])*MICRONTOCM;
-  holeRadius = std::stod(readParam["holeRadius"])*MICRONTOCM;
-
-  cathodeHeight = std::stod(readParam["cathodeHeight"])*MICRONTOCM;
-  thicknessSiO2 = std::stod(readParam["thicknessSiO2"])*MICRONTOCM;
-  pillarRadius = std::stod(readParam["pillarRadius"])*MICRONTOCM;
-
-  //Field parameters
-  fieldRatio = std::stod(readParam["fieldRatio"]);
-  numFieldLine = std::stoi(readParam["numFieldLine"]);
-
-  //Simulation Parameters
- //Gasses defined as percentages
-  gasCompAr = std::stod(readParam["gasCompAr"])*100.;
-  gasCompCO2 = std::stod(readParam["gasCompCO2"])*100.;
-  gasCompCF4 = std::stod(readParam["gasCompCF4"])*100.;
-  gasCompIsobutane = std::stod(readParam["gasCompIsobutane"])*100.;
-
-  gasPenning = std::stod(readParam["gasPenning"]);
+  std::cout << "****************************************\n";
+  std::cout << "Building field line simulation: " << runNo << "\n";
+  std::cout << "****************************************\n";
 
   
   //*************** SIMULATION ***************//
@@ -153,35 +71,8 @@ int main(int argc, char * argv[]) {
   std::cout << "Creating field line simulation: " << "\n";
   std::cout << "****************************************\n";
   
-  // Define the gas mixture
-  MediumMagboltz* gasFIMS = new MediumMagboltz();
-
-  //Set gas parameters
-  gasFIMS->SetComposition(
-    "ar", gasCompAr, 
-    "co2", gasCompCO2,
-    "cf4", gasCompCF4,
-    "iC4H10", gasCompIsobutane
-  );
-
-  {
-	SilenceCerr guard; 
-	gasFIMS->EnablePenningTransfer(gasPenning, 0.0, "ar");
-  }
-  
-  gasFIMS->SetTemperature(293.15); // Room temperature
-  gasFIMS->SetPressure(760.);     // Atmospheric pressure
-  gasFIMS->SetMaxElectronEnergy(200);
-  gasFIMS->Initialise(true);
-  
-  // Load the ion mobilities.
-  // Load ion mobilities. 
-  const std::string path = std::getenv("GARFIELD_INSTALL");
-  const std::string posIonPath = path + "/share/Garfield/Data/IonMobility_Ar+_Ar.txt";
-  //const std::string negIonPath = path + "/share/Garfield/Data/IonMobility_CO2+_CO2.txt";
-  const std::string negIonPath = path + "/share/Garfield/Data/IonMobility_CF4+_CF4.txt";
-  gasFIMS->LoadIonMobility(posIonPath);
-  gasFIMS->LoadNegativeIonMobility(negIonPath);//TODO - Is this correct for negative ion drift? 
+  // Define and initialize the gas mixture
+  MediumMagboltz* gasFIMS = initializeGas(*simParams); 
   
   // Import elmer-generated field map
   std::string geometryPath = "../Geometry/";
@@ -244,16 +135,16 @@ int main(int argc, char * argv[]) {
   double fieldCutoff = 0.2;
   double xRange = (xBoundary[1] - xBoundary[0])*rangeScale;
   double yRange = (yBoundary[1] - yBoundary[0])*rangeScale;
-  double xWidth = rangeScale*pitch*sqrt(3.)/3.;
-  double yWidth = rangeScale*pitch/2.;
+  double xWidth = rangeScale*simParams->pitch*sqrt(3.)/3.;
+  double yWidth = rangeScale*simParams->pitch/2.;
 
   // ***** Generate field line start points ***** //
   
   /*
   //Lines generated radially from the center to corner of unit cell
   //The x-direction is the long axis of the geometry. 
-  for(int i = 0; i < numFieldLine; i++){
-    xStart.push_back(xWidth*i/(numFieldLine-1));
+  for(int i = 0; i < simParams->numFieldLine; i++){
+    xStart.push_back(xWidth*i/(simParams->numFieldLine-1));
     yStart.push_back(0.);
   }
   */
@@ -262,31 +153,30 @@ int main(int argc, char * argv[]) {
   //Rejection sampled points near the edge of the unit cell
   double sampleWidth = std::sqrt(0.85); // Reject the inner portion of the unit cell
   double safetyWidth = std::sqrt(0.99); // Reject points very close to the edges of the unit cell
-  double halfPitch = pitch/2.;
-  double cellLength = pitch/std::sqrt(3.);
-
-  while(xStart.size() < numFieldLine){
+  double halfPitch = simParams->pitch/2.;
+  double cellLength = simParams->pitch/std::sqrt(3.);
+  while(xStart.size() < simParams->numFieldLine){
 
     // Generate random point in rectangle defined by cellLength (x) and halfPitch (y)
     double sampleX =  ((double)std::rand()/RAND_MAX)*cellLength;
     double sampleY =  ((double)std::rand()/RAND_MAX)*halfPitch;
 
     //Determine if point is in unit cell - Skip if not
-    double unitY = (pitch/cellLength) * (cellLength-sampleX);
+    double unitY = (simParams->pitch/cellLength) * (cellLength-sampleX);
     if(sampleY > unitY){
       continue;
     }
 
     //Determine if point is near edge of cell - Skip if not
     double checkY = sampleWidth*halfPitch;
-    double edgeY = (pitch/cellLength) * (sampleWidth*cellLength-sampleX);
+    double edgeY = (simParams->pitch/cellLength) * (sampleWidth*cellLength-sampleX);
     if((sampleY < checkY) && (sampleY < edgeY)){
       continue;
     }
 
     //Ensure point is not too close to edge of cell
     double safetyY = safetyWidth*halfPitch;
-    double safetyEdgeY = (pitch/cellLength) * (safetyWidth*cellLength-sampleX);
+    double safetyEdgeY = (simParams->pitch/cellLength) * (safetyWidth*cellLength-sampleX);
     if((sampleY < safetyY) && (sampleY < safetyEdgeY)){
       xStart.push_back(sampleX);
       yStart.push_back(sampleY);
@@ -320,7 +210,7 @@ int main(int argc, char * argv[]) {
 
     // Check if final z is within half the SiO2 thickness of the pad
     // Line may terminate on any pad without issue
-    if(fieldLineZ < thicknessSiO2/2. - gridStandoff){
+    if(fieldLineZ < simParams->thicknessSiO2/2. - simParams->gridStandoff){
         numAtPad++;
     }
 
@@ -337,12 +227,12 @@ int main(int argc, char * argv[]) {
   std::cout << "Done " << totalFieldLines << " field lines; Determining transparency." << "\n";
 
   //Determine transparency - Binomial Statistics
-  //transparency = (1.*numAtPad) / (1.*numFieldLine);
-  //transparencyErr = sqrt(transparency*(1-transparency)/numFieldLine);
+  //transparency = (1.*numAtPad) / (1.*simParams->numFieldLine);
+  //transparencyErr = sqrt(transparency*(1-transparency)/simParams->numFieldLine);
 
   //Determine transparency - Bayesian statistics
   double success = 1.*numAtPad;
-  double total = 1.*numFieldLine;
+  double total = 1.*simParams->numFieldLine;
 
   transparency = (success + 1.) / (total + 2.);
   variance = ((success+1.)*(success+2.))/((total+2.)*(total+3.)) - transparency*transparency;
@@ -364,7 +254,7 @@ int main(int argc, char * argv[]) {
 
   //write some extra information
 	dataFile << "// Finding transparency for run: " << runNo << "\n";
-	dataFile << "// Field lines at pad: " << numAtPad << " (of " << numFieldLine << ")\n";
+	dataFile << "// Field lines at pad: " << numAtPad << " (of " << simParams->numFieldLine << ")\n";
 
   //***** Output transparency value *****//
   dataFile << "// Transparency:\n" << transparency << "\n" << transparencyErr << std::endl;
