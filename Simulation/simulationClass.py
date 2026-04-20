@@ -507,7 +507,8 @@ class FIMS_Simulation:
             'runAvalancheGridPix',
             'runTransparency',
             'runTransparencyGridPix',
-            'runEfficiency'
+            'runEfficiency',
+            'runCharge'
         ]
 
         if executable not in executables:
@@ -519,6 +520,11 @@ class FIMS_Simulation:
             targetEfficiency = kwargs.get('targetEfficiency', 0.95)
             threshold = kwargs.get('threshold', 10)
             args = f'{targetEfficiency} {threshold}'
+        
+        # Handle inputs for runCharge
+        if executable == 'runCharge':
+            initialZ = kwargs.get('initialZ', 2*self._param['holeRadius'])
+            args = f'{initialZ}'
 
         originalCWD = os.getcwd()
 

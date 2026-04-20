@@ -42,20 +42,20 @@ using namespace Garfield;
 
 int main(int argc, char * argv[]) {
 
+  const double MICRON = 1e-6;
+  const double CM = 1e-2;
+  const double MICRONTOCM = 1e-4;
+
   if(argc != 2){
     std::cerr << "Format: " << argv[0] << " <Initial Z position>" << std::endl;
     return 1;
   }
 
-  double initialZ = std::atof(argv[1]);
+  double initialZ = std::atof(argv[1])*MICRONTOCM;
 
   //Random seed
   std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
-  const double MICRON = 1e-6;
-  const double CM = 1e-2;
-  const double MICRONTOCM = 1e-4;
-  
   //*************** SETUP ***************//
   //Timing variables
   clock_t startSim, stopSim, runTime;
@@ -126,27 +126,30 @@ int main(int argc, char * argv[]) {
     xBoundary[1], yBoundary[1], zBoundary[1]
   );
   avalancheE->EnablePlotting(viewElectronDrift, 250);
-      
+  
   // ***** Prepare Avalanche Electron ***** //
   //Set the Initial electron parameters
   double x0 = 0., y0 = 0., z0 = initialZ;
   double t0 = 0.;//ns
   double e0 = 0.1;//eV (Garfield is weird when this is 0.)
   double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
-  
+ 
   //Start timing the sim
   startSim = clock();
 
   std::cout << "****************************************\n";
-  std::cout << "Starting simulation: " << runNo << " (efficiency)\n";
+  std::cout << "Starting simulation: " << runNo << " (charge)\n";
   std::cout << "****************************************\n";
 
   //Begin simulating electron avalanches
   int numSuccess = 0;
   int numTotal = 0;
 
-  for(int inAvalanche = 0; inAvalanche < simParams->numAvalanche; inAvalanche++){
+  std::cout << "\nPITCH: " << simParams->pitch << "\n" << std::endl;
 
+  for(int inAvalanche = 0; inAvalanche < simParams->numAvalanche; inAvalanche++){
+    std::cout << "Running avalanche " << inAvalanche << " of " << simParams->numAvalanche << std::endl; 
+    
     double curX = x0, curY = y0, curZ = z0;
     double curTime = t0;
     double curEnergy = e0;
@@ -171,14 +174,19 @@ int main(int argc, char * argv[]) {
       }
 
       avalancheE->GetElectronEndpoint(0, xi, yi, zi, ti, Ei, xf, yf, zf, tf, Ef, stat);
+    
+      std::cout << "Avalanche " << inAvalanche << " electron endpoint status: " << stat << std::endl;
+      std::cout << "\tInitial position: (" << xi << ", " << yi << ", " << zi << ")\n";
+      std:: cout << "\tInital energy: " << Ei << ", time: " << ti << "\n";
+      std::cout << "\tAt position: (" << xf << ", " << yf << ", " << zf << ")\n";
+      std::cout << "\tFinal energy: " << Ef << ", time: " << tf << "\n";
+      
 
       switch(stat){
-        // -7: 
-        // -5: Electron leaves drift medium (Hits: Grid, Pad, Dielectric)
-        // -1: Electron leave drift area (Simulation Volume)
 
         case -7: // Electron attached to gas molecule - Restart with initial electron
           //WARNING - This may cause an infinite loop. Consider max attempts if becomes an issue
+          std::cout << "\tREDO" << std::endl;
           curX = x0, curY = y0, curZ = z0;
           curTime = t0;
           curEnergy = e0;
@@ -191,6 +199,9 @@ int main(int argc, char * argv[]) {
           // Check if below grid
           if(zf < -1.*simParams->gridThickness){
             numSuccess++;
+          }
+          else{
+            std::cout << "\tHIT GRID" << std::endl;
           }
           break;
 
@@ -266,6 +277,8 @@ int main(int argc, char * argv[]) {
       }
     }
   }
+
+  delete gasFIMS;
 
   //Charge Efficiency calculations - Bayesian Statistics
   double success = 1.*numSuccess;

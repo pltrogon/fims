@@ -131,6 +131,9 @@ private:
  * @return Pointer to initialized MediumMagboltz object (caller responsible for deletion)
  */
 Garfield::MediumMagboltz* initializeGas(const SimulationParameters& params) {
+
+    std::cout << "Initializing gas mixture..." << std::endl;
+
     Garfield::MediumMagboltz* gas = new Garfield::MediumMagboltz();
     
     // Set gas composition (converting from percentage back to fraction for Garfield)
@@ -140,7 +143,6 @@ Garfield::MediumMagboltz* initializeGas(const SimulationParameters& params) {
         "cf4", params.gasCompCF4 / 100.0,
         "iC4H10", params.gasCompIsobutane / 100.0
     );
-    
     // Enable Penning transfer
     {
         SilenceCerr guard;
@@ -163,6 +165,8 @@ Garfield::MediumMagboltz* initializeGas(const SimulationParameters& params) {
     const std::string negIonPath = path + "/share/Garfield/Data/IonMobility_CF4+_CF4.txt";
     gas->LoadIonMobility(posIonPath);
     gas->LoadNegativeIonMobility(negIonPath);
+
+    std::cout << "Gas mixture initialized." << std::endl;
     
     return gas;
 }
