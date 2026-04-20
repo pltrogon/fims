@@ -51,7 +51,7 @@ int main(int argc, char * argv[]) {
     return 1;
   }
 
-  double initialZ = std::atof(argv[1])*MICRONTOCM;
+  double initialZ = std::stod(argv[1])*MICRONTOCM;
 
   //Random seed
   std::srand(static_cast<unsigned int>(std::time(nullptr)));
@@ -66,6 +66,7 @@ int main(int argc, char * argv[]) {
     return -1;
   }
   int runNo = simParams->runNumber;
+  double pitch = simParams->pitch;
 
   //*************** SIMULATION ***************//
 
@@ -75,7 +76,12 @@ int main(int argc, char * argv[]) {
 
   // Define and initialize the gas mixture
   MediumMagboltz* gasFIMS = initializeGas(*simParams);
+  if (!gasFIMS) {
+    std::cerr << "Error: Failed to initialize gas mixture." << std::endl;
+    return -1;
+  }
 
+  std::cout << "Loading field map..." << std::endl;
   // Import elmer-generated field map
   std::string geometryPath = "../Geometry/";
   std::string elmerResultsPath = geometryPath+"elmerResults/";
@@ -88,6 +94,7 @@ int main(int argc, char * argv[]) {
     "mum"
   );
 
+  std::cout << "Setting geometry boundaries..." << std::endl;
   // Get region of elmer geometry
   double xmin, ymin, zmin, xmax, ymax, zmax;
   fieldFIMS.GetBoundingBox(xmin, ymin, zmin, xmax, ymax, zmax);
@@ -96,18 +103,18 @@ int main(int argc, char * argv[]) {
   double xBoundary[2], yBoundary[2], zBoundary[2];
   zBoundary[0] = zmin;
   zBoundary[1] = zmax;
-  //Extend simulation boundary to +/- pitch in x and y
-  //TODO - This may need to be much larger
-  xBoundary[0] = -simParams->pitch;
-  xBoundary[1] = simParams->pitch;
-  yBoundary[0] = -simParams->pitch;
-  yBoundary[1] = simParams->pitch;
+  //Extend simulation boundary to +/- 2*pitch in x and y
+  xBoundary[0] = -2.*pitch;
+  xBoundary[1] = 2.*pitch;
+  yBoundary[0] = -2.*pitch;
+  yBoundary[1] = 2.*pitch;
 
   //Enable periodicity and set components
   fieldFIMS.EnableMirrorPeriodicityX();
   fieldFIMS.EnableMirrorPeriodicityY();
   fieldFIMS.SetGas(gasFIMS);
 
+  std::cout << "Creating sensor..." << std::endl;
   //Create a sensor
   Sensor* sensorFIMS = new Sensor();
   sensorFIMS->AddComponent(&fieldFIMS);
@@ -116,11 +123,13 @@ int main(int argc, char * argv[]) {
     xBoundary[1], yBoundary[1], zBoundary[1]
   );
 
+  std::cout << "Enabling avalanche..." << std::endl;
   AvalancheMicroscopic* avalancheE = new AvalancheMicroscopic;
-  ViewDrift* viewElectronDrift = new ViewDrift();
   avalancheE->SetSensor(sensorFIMS);
   avalancheE->EnableAvalancheSizeLimit(5);
 
+  std::cout << "Enabling drift view..." << std::endl;
+  ViewDrift* viewElectronDrift = new ViewDrift();
   viewElectronDrift->SetArea(
     xBoundary[0], yBoundary[0], zBoundary[0], 
     xBoundary[1], yBoundary[1], zBoundary[1]
@@ -145,10 +154,13 @@ int main(int argc, char * argv[]) {
   int numSuccess = 0;
   int numTotal = 0;
 
-  std::cout << "\nPITCH: " << simParams->pitch << "\n" << std::endl;
+  int avalancheCheck = (simParams->numAvalanche / 10 > 0) ? (simParams->numAvalanche / 10) : 1;
 
   for(int inAvalanche = 0; inAvalanche < simParams->numAvalanche; inAvalanche++){
-    std::cout << "Running avalanche " << inAvalanche << " of " << simParams->numAvalanche << std::endl; 
+
+    if(inAvalanche % avalancheCheck == 0){
+      std::cout << "Avalanche " << inAvalanche << "/" << simParams->numAvalanche << "\n";
+    }
     
     double curX = x0, curY = y0, curZ = z0;
     double curTime = t0;
@@ -174,19 +186,10 @@ int main(int argc, char * argv[]) {
       }
 
       avalancheE->GetElectronEndpoint(0, xi, yi, zi, ti, Ei, xf, yf, zf, tf, Ef, stat);
-    
-      std::cout << "Avalanche " << inAvalanche << " electron endpoint status: " << stat << std::endl;
-      std::cout << "\tInitial position: (" << xi << ", " << yi << ", " << zi << ")\n";
-      std:: cout << "\tInital energy: " << Ei << ", time: " << ti << "\n";
-      std::cout << "\tAt position: (" << xf << ", " << yf << ", " << zf << ")\n";
-      std::cout << "\tFinal energy: " << Ef << ", time: " << tf << "\n";
-      
-
       switch(stat){
 
         case -7: // Electron attached to gas molecule - Restart with initial electron
           //WARNING - This may cause an infinite loop. Consider max attempts if becomes an issue
-          std::cout << "\tREDO" << std::endl;
           curX = x0, curY = y0, curZ = z0;
           curTime = t0;
           curEnergy = e0;
@@ -196,31 +199,18 @@ int main(int argc, char * argv[]) {
         case -5: // Electron leave drift medium (Hits Grid/Pad/Dielectric)
           repopulate = false;
           numTotal++;
-          // Check if below grid
+          // Check if below grid - TODO: Courrently just checking final z
           if(zf < -1.*simParams->gridThickness){
             numSuccess++;
           }
-          else{
-            std::cout << "\tHIT GRID" << std::endl;
-          }
           break;
 
-        case -1: {// Electron leaves drift area (Simulation Volume) - Reflect it back
-          //Determine which boundary was hit and shift slightly back into volume
-          double boundaryOffset = simParams->pitch - 1.*MICRONTOCM;
-          if(std::abs(xf) >= simParams->pitch){
-            curX = std::copysign(boundaryOffset, xf);
-          }
-          else{
-            curX = xf;
-          }
-
-          if(std::abs(yf) >= simParams->pitch){
-            curY = std::copysign(boundaryOffset, yf);
-          }
-          else{
-            curY = yf;
-          }
+        case -1: {// Electron leaves drift area (Simulation Volume) - Shift it back
+          //Determine which boundary was hit and shift by pitch to opposite side
+          //Example: If leaves volume at x=+2pitch, move to x=-pitch
+          //Allows direction vector to also just be translated
+          curX = std::abs(xf) >= 2.*pitch ? -1.*std::copysign(pitch, xf) : xf;
+          curY = std::abs(yf) >= 2.*pitch ? -1.*std::copysign(pitch, yf) : yf;
           curZ = zf;
 
           curTime = tf;
@@ -234,7 +224,7 @@ int main(int argc, char * argv[]) {
           int numDriftLines = electronDriftLines.size();
 
           
-          // Get 2nd-last and last points
+          // Get 2nd-last and last points from driftlines
           double xPrev, yPrev, zPrev, xFinal, yFinal, zFinal;
           xPrev = electronDriftLines[numDriftLines-2][0];
           yPrev = electronDriftLines[numDriftLines-2][1];
@@ -248,24 +238,10 @@ int main(int argc, char * argv[]) {
           double dy = yFinal - yPrev;
           double dz = zFinal - zPrev;
           double vMag = std::sqrt(dx*dx + dy*dy + dz*dz);
-          dx /= vMag;
-          dy /= vMag;
-          dz /= vMag;
 
-          if(std::abs(xf) >= simParams->pitch){
-            curDx = -dx;
-          }
-          else{
-            curDx = dx;
-          }
-
-          if(std::abs(yf) >= simParams->pitch){
-            curDy = -dy;
-          }
-          else{
-            curDy = dy;
-          }
-          curDz = dz;
+          curDx = dx/vMag;
+          curDy = dy/vMag;
+          curDz = dz/vMag;
 
           viewElectronDrift->Clear();
           break;
@@ -278,6 +254,9 @@ int main(int argc, char * argv[]) {
     }
   }
 
+  delete avalancheE;
+  delete viewElectronDrift;
+  delete sensorFIMS;
   delete gasFIMS;
 
   //Charge Efficiency calculations - Bayesian Statistics
