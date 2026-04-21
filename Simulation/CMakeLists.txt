@@ -30,16 +30,16 @@ set(COMMON_LIBS
 # --- Define executables ---
 # Format: executable_name source_file.cc
 set(EXECUTABLES
-    runAvalanche            	avalanche.cc
-    runAvalancheGridPix         avalancheGridPix.cc
-    runTransparency           	checkTransparency.cc
-    runTransparencyGridPix      checkTransparencyGridPix.cc
-    runEfficiency           	checkEfficiency.cc
-    runMagboltz             	magboltz.cc
-    runParallelPlate        	parallelPlate.cc
-    runParallelPlateEfficiency 	parallelPlateEfficiency.cc
-    runAvalancheSurrounding 	avalancheSurrounding.cc
-    runFullField		plotFullField.cc
+    runAvalanche            	garfieldExecutables/avalanche.cc
+    runAvalancheGridPix         garfieldExecutables/avalancheGridPix.cc
+    runTransparency           	garfieldExecutables/checkTransparency.cc
+    runTransparencyGridPix      garfieldExecutables/checkTransparencyGridPix.cc
+    runEfficiency           	garfieldExecutables/checkEfficiency.cc
+    runMagboltz             	garfieldExecutables/magboltz.cc
+    runParallelPlate        	garfieldExecutables/parallelPlate.cc
+    runParallelPlateEfficiency 	garfieldExecutables/parallelPlateEfficiency.cc
+    runAvalancheSurrounding 	garfieldExecutables/avalancheSurrounding.cc
+    runFullField		garfieldExecutables/plotFullField.cc
 )
 
 # --- Loop to create and link everything ---
