@@ -149,7 +149,7 @@ int main(int argc, char * argv[]) {
   double varience = 0.;
   double efficiencyErr = 0.;
 
-	int numInBunch = 100;//Always do at least 100 avalanches first
+	int numInBunch = 500;//Always do at least 500 avalanches first
   double lowerLimit = 0.;
   double upperLimit = 1.;
 
@@ -173,7 +173,7 @@ int main(int argc, char * argv[]) {
 
     }//end of avalanche bunch loop
 
-		numInBunch = 25;//do bunches of 25 after first iteration
+		numInBunch = 100;//do bunches of 100 after first iteration
 
     //Efficiency calculations - Bayesian Statistics
     double success = numAboveThreshold;
@@ -223,7 +223,11 @@ int main(int argc, char * argv[]) {
 
 	//write some extra information
 	dataFile << "// Finding efficiency for run: " << runNo << "\n";
+  dataFile << "// Field Ratio: " << fieldRatio << "\n";
 	dataFile << "// Total avalanches: " << totalAvalanches << " (of " << simParams->numAvalanche << ")\n";
+  dataFile << "// Electron threshold: " << electronThreshold << "\n";
+  dataFile << "// Num above threshold: " << numAboveThreshold << "\n";
+  dataFile << "// Num with no avalanche: " << numNoAvalanche << "\n";
 
   //include convergence criteria
   dataFile << "// Stop condition:\n";

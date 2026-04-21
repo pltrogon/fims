@@ -155,7 +155,7 @@ class App(tk.Tk):
 
         self.avalancheID = tk.Spinbox(
             self.avalancheFrame, 
-            from_=0, to=999, #TODO - number of avalanches can exceed this
+            from_=0, to=99999,
             wrap=False, width=5, 
             textvariable=self.curAvalancheID,
             command=self.updateAvalancheID)
