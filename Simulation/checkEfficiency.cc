@@ -223,7 +223,7 @@ int main(int argc, char * argv[]) {
 
 	//write some extra information
 	dataFile << "// Finding efficiency for run: " << runNo << "\n";
-  dataFile << "// Field Ratio: " << fieldRatio << "\n";
+  dataFile << "// Field Ratio: " << simParams->fieldRatio << "\n";
 	dataFile << "// Total avalanches: " << totalAvalanches << " (of " << simParams->numAvalanche << ")\n";
   dataFile << "// Electron threshold: " << electronThreshold << "\n";
   dataFile << "// Num above threshold: " << numAboveThreshold << "\n";
