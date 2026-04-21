@@ -39,6 +39,7 @@ set(EXECUTABLES
     runParallelPlate        	parallelPlate.cc
     runParallelPlateEfficiency 	parallelPlateEfficiency.cc
     runAvalancheSurrounding 	avalancheSurrounding.cc
+    runFullField		plotFullField.cc
 )
 
 # --- Loop to create and link everything ---
