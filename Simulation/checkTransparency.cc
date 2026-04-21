@@ -35,6 +35,13 @@ using namespace Garfield;
 
 int main(int argc, char * argv[]) {
 
+  if(argc != 2){
+    std::cerr << "Format: " << argv[0] << " <Target Transparency>" << std::endl;
+    return 1;
+  }
+
+  double targetTransparency = std::atof(argv[1]);
+
   std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
   const double MICRON = 1e-6;
@@ -159,7 +166,6 @@ int main(int argc, char * argv[]) {
     }
   }
 
-
   // ***** Calculate field Lines ***** //
   std::vector<std::array<float, 3> > fieldLines;
   int totalFieldLines = xStart.size();
@@ -223,7 +229,11 @@ int main(int argc, char * argv[]) {
 
   //write some extra information
 	dataFile << "// Finding transparency for run: " << runNo << "\n";
+  dataFile << "// Field Ratio: " << fieldRatio << "\n";
 	dataFile << "// Field lines at pad: " << numAtPad << " (of " << simParams->numFieldLine << ")\n";
+
+  dataFile << "// Stop condition:\n";
+  dataFile << transparencyResult << "\n";
 
   //***** Output transparency value *****//
   dataFile << "// Transparency:\n" << transparency << "\n" << transparencyErr << std::endl;

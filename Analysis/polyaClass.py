@@ -44,7 +44,9 @@ class myPolya:
 
         self.gain = gain
         self.theta = theta
-        self.errors = None
+
+        self.gainErr = None
+        self.thetaErr = None
 
         if gain is not None and theta is not None:
             try:
@@ -318,7 +320,7 @@ class myPolya:
             initial = [gain, 0.5]
             bounds = (
                 [1, 0],
-                [2*gain, 2]
+                [2*gain, 5]
             )
 
         try:
@@ -336,9 +338,8 @@ class myPolya:
             self.theta = popt[1]
 
             perr = np.sqrt(np.diag(pcov))
-            self.errors = [perr[0], perr[1]]
-
-            #print(f'Fit converged. Gain: {self.gain:.3f} (+/- {perr[0]:.3f}), Theta: {self.theta:.3f} (+/- {perr[1]:.3f})')
+            self.gainErr = perr[0]
+            self.thetaErr = perr[1]
 
         except RuntimeError as e:
             raise RuntimeError(f'Error during fitPolya: {e}.')

@@ -128,8 +128,8 @@ class FIMS_Simulation:
             'driftField': 280.,
             'fieldRatio': 100.,
             'numFieldLine': 25,
-            'numAvalanche': 8000,
-            'avalancheLimit': 1200,
+            'numAvalanche': 5000,
+            'avalancheLimit': 500,
             'gasCompAr': 0.95,
             'gasCompCO2': 0.00,
             'gasCompCF4': 0.03,
@@ -188,10 +188,10 @@ class FIMS_Simulation:
         Ensures that the gas composition percentages sum to 1.0.
         """
         totalComp = (
-            float(self.getParam('gasCompAr'))
-            + float(self.getParam('gasCompCO2'))
-            + float(self.getParam('gasCompCF4'))
-            + float(self.getParam('gasCompIsobutane'))
+            float(self._param['gasCompAr'])
+            + float(self._param['gasCompCO2'])
+            + float(self._param['gasCompCF4'])
+            + float(self._param['gasCompIsobutane'])
         )
         
         if not math.isclose(totalComp, 1.0, rel_tol=1e-3):
@@ -514,17 +514,23 @@ class FIMS_Simulation:
         if executable not in executables:
             raise ValueError(f'Invalid executable: {executable}')
         
-        # Handle inputs for runEfficiency
-        args = ''
-        if executable == 'runEfficiency':
-            targetEfficiency = kwargs.get('targetEfficiency', 0.95)
-            threshold = kwargs.get('threshold', 10)
-            args = f'{targetEfficiency} {threshold}'
-        
-        # Handle inputs for runCharge
-        if executable == 'runCharge':
-            initialZ = kwargs.get('initialZ', 2*self._param['holeRadius'])
-            args = f'{initialZ}'
+        # Handle extra inputs for specific executables
+        match executable:
+            case 'runEfficiency':
+                targetEfficiency = kwargs.get('targetEfficiency', 0.95)
+                threshold = kwargs.get('threshold', 10)
+                args = f'{targetEfficiency} {threshold}'
+
+            case 'runTransparency':
+                targetTransparency = kwargs.get('targetTransparency', 0.95)
+                args = f'{targetTransparency}'
+                
+            case 'runCharge':
+                initialZ = kwargs.get('initialZ', 2*self._param['holeRadius'])
+                args = f'{initialZ}'
+                
+            case _:
+                args=''
 
         originalCWD = os.getcwd()
 
@@ -678,11 +684,11 @@ class FIMS_Simulation:
                               95% efficiency.
         """
         #Get geometry variables
-        standoff = self.getParam('gridStandoff')
-        pad = self.getParam('padLength')
-        pitch = self.getParam('pitch')
-        
-        
+        standoff = self._param['gridStandoff']
+        pad = self._param['padLength']
+        pitch = self._param['pitch']
+
+
         #Insert values into fitted equations
         #Ar+CO2 (depreciated)
         #standoffRatio = standoff/pad
@@ -712,9 +718,9 @@ class FIMS_Simulation:
                               100% transparency.
         """
         #Get geometry variables
-        standoff = self.getParam('gridStandoff')
-        pad = self.getParam('padLength')
-        pitch = self.getParam('pitch')
+        standoff = self._param['gridStandoff']
+        pad = self._param['padLength']
+        pitch = self._param['pitch']
         
         #Convert to dimensionless variables
         optTrans = self._calcOpticalTransparency()
@@ -758,7 +764,7 @@ class FIMS_Simulation:
         #conditions are satisfied simultaneously.
         netMinField = max(minFieldTrans, minFieldEff)
         
-        return math.floor(netMinField)
+        return math.floor(0.75*netMinField)
 
 #***********************************************************************************#
     def runCapacitance(self):
@@ -828,91 +834,61 @@ class FIMS_Simulation:
 #***********************************************************************************#
 
 #***********************************************************************************#
-    def _readEfficiencyFile(self):
+    def _readResultsFile(self, target=None):
         """
-        Reads the file containing the simulated efficiency for a given field strength. 
+        Reads the results file for a given target value.
+        Options are: 'efficiency' or 'transparency'
 
-        Returns:
-            dict: Dictionary containing the parsed efficiency data. 
-                  Includes:
-                  - 'stopCondition' (str): The avalanche stop condition (Converged or not).
-                  - 'efficiency' (float): The simulated efficiency.
-                  - 'efficiencyErr'(float): The uncertainty of the simulated efficiency.
-
-        """
-
-        with open('../Data/efficiencyFile.dat', 'r') as inFile:
-            allLines = [inLine.strip() for inLine in inFile.readlines()]
-
-        if len(allLines) < 2:
-            raise IndexError('Malformed file.')
+        Args:
+            target (str): The target value to read from the results file.
         
-        findEffValues = {}
+        Returns:
+            dict: Dictionary containing the parsed results data. 
+                  - 'stopCondition' (str): The avalanche stop condition.
+                  - '<target>' (float): The simulated target value.
+                  - '<target>Err'(float): The simulated uncertainty.
+        """
+
+        resultsFiles = {
+            'efficiency': '../Data/efficiencyFile.dat',
+            'transparency': '../Data/fieldTransparency.dat'
+        }
+        if target not in resultsFiles:
+            raise ValueError(f'Invalid target: {target}')
+        
         try:
-            # Find Stop condition section
-            stopConditionIndex = None
+            with open(resultsFiles[target], 'r') as inFile:
+                allLines = [inLine.strip() for inLine in inFile.readlines()]
+        except Exception as e:
+            raise RuntimeError(f'Error while reading the results file: {e}')
+        
+        results = {}
+        try:
+            # Find the line with "// Stop condition:"
+            stopIndex = None
             for i, line in enumerate(allLines):
                 if line.startswith('// Stop condition:'):
-                    stopConditionIndex = i
+                    stopIndex = i
                     break
-            if stopConditionIndex is None:
-                raise ValueError('Stop condition section not found in file.')
-            findEffValues['stopCondition'] = allLines[stopConditionIndex + 1].strip()
+            if stopIndex is None:
+                raise ValueError('Stop condition section not found.')
+            results['stopCondition'] = allLines[stopIndex + 1].strip()
 
-            # Find Efficiency section
-            efficiencyIndex = None
+            # Find the line with the target value
+            targetIndex = None
             for i, line in enumerate(allLines):
-                if line.startswith('// Efficiency:'):
-                    efficiencyIndex = i
+                if line.startswith(f'// {target.capitalize()}:'):
+                    targetIndex = i
                     break
-            if efficiencyIndex is None:
-                raise ValueError('Efficiency section not found in file.')
-            findEffValues['efficiency'] = float(allLines[efficiencyIndex + 1])
-            findEffValues['efficiencyErr'] = float(allLines[efficiencyIndex + 2])
+            if targetIndex is None:
+                raise ValueError(f'{target.capitalize()} section not found.')
+            results[target] = float(allLines[targetIndex + 1])
+            results[f'{target}Err'] = float(allLines[targetIndex + 2])
 
-        except (IndexError, ValueError) as e:
-            raise RuntimeError(f'Error parsing efficiency file: {e}')
-                
-        return findEffValues
-    
-
-#***********************************************************************************#
-    def _readTransparencyFile(self):
-        """
-        Reads the file containing the simulated transparency for a given field strength. 
-
-        Returns:
-            dict: Dictionary containing the parsed efficiency data. 
-                  Includes:
-                  - 'transparency' (float): The simulated transparency.
-                  - 'transparencyErr'(float): The uncertainty of the simulated transparency.
-
-        """
-
-        with open('../Data/fieldTransparency.dat', 'r') as inFile:
-            allLines = [inLine.strip() for inLine in inFile.readlines()]
-
-        if len(allLines) < 2:
-            raise IndexError('Malformed file.')
+        except Exception as e:
+            raise RuntimeError(f'Error while parsing the results file: {e}')
         
-        getTransparencyValues = {}
-        try:
-            # Find Transparency section
-            transparencyIndex = None
-            for i, line in enumerate(allLines):
-                if line.startswith('// Transparency:'):
-                    transparencyIndex = i
-                    break
-            if transparencyIndex is None:
-                raise ValueError('Transparency section not found in file.')
-            getTransparencyValues['transparency'] = float(allLines[transparencyIndex + 1])
-            getTransparencyValues['transparencyErr'] = float(allLines[transparencyIndex + 2])
-
-        except (IndexError, ValueError) as e:
-            raise RuntimeError(f'Error parsing transparency file: {e}')
-                
-        return getTransparencyValues
-    
+        return results
     
 #***********************************************************************************#
     def _getFieldRatioSecant(self, fields, values, valuesErr=None, damping=0.8):
@@ -1010,11 +986,11 @@ class FIMS_Simulation:
         newField = None
 
         if iterNo == 1:
-            newField = self.getParam('fieldRatio')
+            newField = self._param['fieldRatio']
 
         # Take constant step of 2 for 2nd iteration
         elif iterNo == 2:
-            newField = valueAtField['field'][0] + 2 #TODO - This can be adjusted
+            newField = valueAtField['field'][0] + 5 #TODO - This can be adjusted
 
         # Use secant method to determine new field
         else:
@@ -1071,7 +1047,7 @@ class FIMS_Simulation:
         validEfficiency = False
         #Limit can be low. Check is boolean
         saveParam = self.getAllParam()
-        self.setParameters({'numAvalanche': 3000, 'avalancheLimit': 15})
+        self.setParameters({'numAvalanche': 3000, 'avalancheLimit': threshold+5})
         
         while not validEfficiency:
 
@@ -1092,7 +1068,7 @@ class FIMS_Simulation:
                 'runEfficiency',
                 targetEfficiency=targetEfficiency, threshold=threshold
             )
-            effResults = self._readEfficiencyFile()
+            effResults = self._readResultsFile('efficiency')
 
             effAtField['efficiency'].append(effResults['efficiency'])
             effAtField['efficiencyErr'].append(effResults['efficiencyErr'])
@@ -1119,8 +1095,11 @@ class FIMS_Simulation:
                     raise ValueError('Error - Malformed efficiency file.')      
         # End of find field for efficiency loop
 
-        # Reset parameters to original values except for field ratio
-        finalField = self.getParam('fieldRatio')
+        
+        finalField = self._param['fieldRatio']
+        print(f'Solution found for {targetEfficiency*100:.0f}% efficiency: Field ratio = {finalField}')
+        
+        #Reset parameters to original values except for field ratio
         saveParam['fieldRatio'] = finalField
         self.setParameters(saveParam)
         
@@ -1128,6 +1107,7 @@ class FIMS_Simulation:
         #print(f'Solution for {targetEfficiency*100:.0f}% efficiency: Field ratio = {finalField}')
         #print(effAtField)
         self._printFieldSolution(effAtField)
+        #print(effAtField)
 
         return finalField
 
@@ -1170,8 +1150,8 @@ class FIMS_Simulation:
         """ 
 
         #Get geometry variables
-        radius = self.getParam('holeRadius')
-        pitch = self.getParam('pitch')
+        radius = self._param['holeRadius']
+        pitch = self._param['pitch']
     
         gridArea = pitch**2*math.sqrt(3)/2
         holeArea = math.pi*radius**2
@@ -1240,8 +1220,11 @@ class FIMS_Simulation:
             self.setParameters({'fieldRatio': newField})
             self._solveEFields(solveWeighting=False)
 
-            self._runGarfield('runTransparency')
-            transResults = self._readTransparencyFile()
+            self._runGarfield(
+                'runTransparency',
+                targetTransparency=targetTransparency
+            )
+            transResults = self._readResultsFile('transparency')
 
             transAtField['transparency'].append(transResults['transparency'])
             transAtField['transparencyErr'].append(transResults['transparencyErr'])
@@ -1253,14 +1236,23 @@ class FIMS_Simulation:
             fieldTrans = transAtField['transparency'][-1]
             transErr = transAtField['transparencyErr'][-1]
             
-            if twoSigmaTrans >= targetTransparency:
-                isTransparent = True
-                print(f'Transparent at field ratio = {curField}:')
-                print(f'\tTransparency = {fieldTrans:.3f} +/- {transErr:.3f}')
-            else:
-                isTransparent = False
-                print(f'Not transparent: Transparency = {fieldTrans:.3f} +/- {transErr:.3f}')
+            match transResults['stopCondition']:
+                case 'TRANSPARENT':
+                    isTransparent = True
+                    print(f'Transparent at field ratio = {curField}:')
+                    print(f'\tTransparency = {fieldTrans:.3f} +/- {transErr:.3f}')
+
+                case 'NOT TRANSPARENT':
+                    isTransparent = False
+                    print(f'Not transparent: Transparency = {fieldTrans:.3f} +/- {transErr:.3f}')
+
+                case _:
+                    raise ValueError('Error - Malformed transparency file.')
         #End of find field for transparency loop
+
+
+        finalField = self._param['fieldRatio']
+        print(f'Solution: Field ratio = {finalField}')
         
         #Reset parameters to original values except for field ratio
         finalField = self.getParam('fieldRatio')
@@ -1293,7 +1285,7 @@ class FIMS_Simulation:
             self._generateGeometry()
 
         #Get absolute drift field value
-        driftField = self.getParam('driftField')
+        driftField = self._param['driftField']
         print(f'Finding minimum field ratio for geometry with drift field: {driftField} V/cm')
 
         #Choose initial field ratio guess
@@ -1365,12 +1357,12 @@ class FIMS_Simulation:
         iterNo = 0
         iterNoLimit = self._iterationNumberLimit
 
-        transparencyAtField = {
+        transAtField = {
             'field': [],
             'transparency': [],
             'transparencyErr': []
         }
-        efficiencyAtField = {
+        effAtField = {
             'field': [],
             'efficiency': [],
             'efficiencyErr': []
@@ -1395,19 +1387,22 @@ class FIMS_Simulation:
                 break
 
             
+            # Set field ratio to the maximum of the fields to attempt to satisfy both conditions
+            ## Note if already transparent or efficient, only one of the fields will be updated, 
+            ## so this will not affect the other condition.
+            newFields = []
+
             #Solve for the new transparency electric field if not transparent
             if not isTransparent:
-                newTransparencyField = self._getNextField(iterNo, transparencyAtField, targetTransparency)
+                newTransparencyField = self._getNextField(iterNo, transAtField, targetTransparency)
+                newFields.append(newTransparencyField)
 
             #Solve for the new efficiency electric field if not efficient
             if not isEfficient:
-                newEfficiencyField = self._getNextField(iterNo, efficiencyAtField, targetEfficiency)
+                newEfficiencyField = self._getNextField(iterNo, effAtField, targetEfficiency)
+                newFields.append(newEfficiencyField)
 
-            # Set field ratio to the maximum of the two new fields to attempt to satisfy both conditions
-            ## Note if already transparent or efficient, only one of the fields will be updated, 
-            ## so this will not affect the other condition.
-
-            newField = max(newTransparencyField, newEfficiencyField)
+            newField = max(newFields)
             self.setParameters({'fieldRatio': newField})
             print(f'Iteration {iterNo}: Field ratio = {newField}')
 
@@ -1417,20 +1412,28 @@ class FIMS_Simulation:
             #Generate field lines and read results from file if not already transparent
             if not isTransparent:
 
-                self._runGarfield('runTransparency')  
-                transparencyResults = self._readTransparencyFile()
+                self._runGarfield(
+                    'runTransparency',
+                    targetTransparency=targetTransparency
+                )
+                transResults = self._readResultsFile('transparency')
 
-                transparencyAtField['field'].append(newField)
-                transparencyAtField['transparency'].append(transparencyResults['transparency'])
-                transparencyAtField['transparencyErr'].append(transparencyResults['transparencyErr'])
+                transAtField['field'].append(newField)
+                transAtField['transparency'].append(transResults['transparency'])
+                transAtField['transparencyErr'].append(transResults['transparencyErr'])
                 
                     
                 #Check transparency to terminate loop
-                if transparencyAtField['transparency'][-1] >= targetTransparency:
-                    isTransparent = True
-                    print(f'Transparent at field ratio = {transparencyAtField['field'][-1]}:')
-                else:
-                    print(f'\tTransparency condition not satisfied.')
+                match transResults['stopCondition']:
+                    case 'TRANSPARENT':
+                        isTransparent = True
+                        print(f"Transparent at field ratio = {transAtField['field'][-1]}:")
+
+                    case 'NOT TRANSPARENT':
+                        print(f'\tTransparency condition not satisfied.')
+
+                    case _:
+                        raise ValueError('Error - Malformed transparency file.')
 
             #Determine the efficiency and read results from file if not already efficient
             if not isEfficient:
@@ -1439,11 +1442,11 @@ class FIMS_Simulation:
                     'runEfficiency',
                     targetEfficiency=targetEfficiency, threshold=threshold
                 )
-                effResults = self._readEfficiencyFile()
+                effResults = self._readResultsFile('efficiency')
 
-                efficiencyAtField['field'].append(newField)
-                efficiencyAtField['efficiency'].append(effResults['efficiency'])
-                efficiencyAtField['efficiencyErr'].append(effResults['efficiencyErr'])
+                effAtField['field'].append(newField)
+                effAtField['efficiency'].append(effResults['efficiency'])
+                effAtField['efficiencyErr'].append(effResults['efficiencyErr'])
 
                 match effResults['stopCondition']:
                     
@@ -1452,13 +1455,13 @@ class FIMS_Simulation:
 
                     case 'CONVERGED':
                         isEfficient = True
-                        print(f'Eficiency condition satisfied at field ratio = {efficiencyAtField["field"][-1]}.')
+                        print(f"Efficiency condition satisfied at field ratio = {effAtField['field'][-1]}.")
             
                     case _:
                         raise ValueError('Error - Malformed efficiency file.')
         #End of find combined min field loop
 
-        finalField = self.getParam('fieldRatio')
+        finalField = self._param['fieldRatio']
         saveParam['fieldRatio'] = finalField
         self.setParameters(saveParam)
 
@@ -1486,15 +1489,13 @@ class FIMS_Simulation:
         print(f'Running simulation - Run number: {runNo}')
 
         #Get absolute drift field value
-        driftField = self.getParam('driftField')
+        driftField = self._param['driftField']
         print(f'Finding minimum field ratio for geometry with drift field: {driftField} V/cm')
 
         #Choose initial field ratio guess
-        opticalTransparency = self._calcOpticalTransparency()
-        minFieldGuess = math.floor(0.9*(2/opticalTransparency - 1))
-
-        self.setParameters({'fieldRatio': minFieldGuess})
+        minFieldGuess = self._calcMinField()
         print(f'\tInitial field ratio guess: {minFieldGuess}')
+        self.setParameters({'fieldRatio': minFieldGuess})
 
         #Generate the FEM geometry
         self._generateGeometry()
@@ -1508,7 +1509,6 @@ class FIMS_Simulation:
         
         #Run the electron transport simulation
         self._runGarfield()
-
 
         return runNo
 
@@ -1583,7 +1583,7 @@ class FIMS_Simulation:
         efficiency = self._getEfficiency(efficiencyGoal=efficiencyGoal, efficiencyThreshold=efficiencyThreshold)
 
         #Get the field transparency
-        transparency = self._getTransparency(transparencyGoal=transparencyGoal)
+        transparency = self._getTransparency(targetTransparency=transparencyGoal)
 
         #Run the electron transport simulation
         self._runGarfield()
@@ -1607,13 +1607,13 @@ class FIMS_Simulation:
 
         saveParam = self.getAllParam()
         # Limit can be low. Check is boolean - above threshold or not
-        self.setParameters({'numAvalanche': 3000, 'avalancheLimit': 20})  
+        self.setParameters({'numAvalanche': 3000, 'avalancheLimit': efficiencyThreshold+5})  
 
         self._runGarfield(
             'runEfficiency', 
             targetEfficiency=efficiencyGoal, threshold=efficiencyThreshold
         )
-        effResults = self._readEfficiencyFile()
+        effResults = self._readResultsFile('efficiency')
 
         print(f'\tDetection efficiency: {effResults['efficiency']:.3f} +/- {effResults['efficiencyErr']:.3f}')
 
@@ -1622,13 +1622,13 @@ class FIMS_Simulation:
         return effResults['efficiency']
     
 #***********************************************************************************#
-    def _getTransparency(self, transparencyGoal=0.99):
+    def _getTransparency(self, targetTransparency=0.99):
         """
         Runs a Garfield++ executable to determine field lines and calculate
         the field transparency.
 
         Args:
-            transparencyGoal (float): The target transparency.
+            targetTransparency (float): The target transparency.
 
         Returns:
             float: The field transparency at the current field ratio.
@@ -1638,8 +1638,11 @@ class FIMS_Simulation:
         self.setParameters({'numFieldLine': 500}) #More is better. Adjust as needed.
         
 
-        self._runGarfield('runTransparency')  
-        transparencyResults = self._readTransparencyFile()
+        self._runGarfield(
+            'runTransparency',
+            targetTransparency=targetTransparency
+        )
+        transparencyResults = self._readResultsFile('transparency')
 
         print(f'\tField transparency: {transparencyResults['transparency']:.3f} +/- {transparencyResults['transparencyErr']:.3f}') 
 
@@ -1779,7 +1782,7 @@ class FIMS_Simulation:
         electronCharge = -1.602176634e-19
 
         #Geometry parameters
-        pitch = self.getParam('pitch')        
+        pitch = self._param['pitch']        
         xMax = math.sqrt(3)/2.*pitch
         xMin = -xMax
         yMax = pitch
@@ -1972,9 +1975,9 @@ class FIMS_Simulation:
         try:
             allOptimalFieldData = self._loadOptimalDriftFile()
 
-            intAr = round(self.getParam('gasCompAr')*100)
-            intCF4 = round(self.getParam('gasCompCF4')*100)
-            intIsobutane = round(self.getParam('gasCompIsobutane')*100)
+            intAr = round(self._param['gasCompAr']*100)
+            intCF4 = round(self._param['gasCompCF4']*100)
+            intIsobutane = round(self._param['gasCompIsobutane']*100)
 
             gasCompFilter = (
                 (allOptimalFieldData['Ar'] == intAr) &
