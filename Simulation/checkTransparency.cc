@@ -214,11 +214,9 @@ int main(int argc, char * argv[]) {
   variance = ((success+1.)*(success+2.))/((total+2.)*(total+3.)) - transparency*transparency;
   transparencyErr = std::sqrt(variance);
 
-  std::cout << "Transparency is " << transparency <<  "." << std::endl;
-
   //***** Output transparency value *****//	
 	//create output file
-  std::string dataFilename = "fieldTransparency.dat";
+  std::string dataFilename = "transparencyFile.dat";
   std::string dataPath = "../../Data/"+dataFilename;
   std::ofstream dataFile;
 
@@ -229,11 +227,21 @@ int main(int argc, char * argv[]) {
 
   //write some extra information
 	dataFile << "// Finding transparency for run: " << runNo << "\n";
-  dataFile << "// Field Ratio: " << fieldRatio << "\n";
+  dataFile << "// Field Ratio: " << simParams->fieldRatio << "\n";
 	dataFile << "// Field lines at pad: " << numAtPad << " (of " << simParams->numFieldLine << ")\n";
 
   dataFile << "// Stop condition:\n";
-  dataFile << transparencyResult << "\n";
+
+  //Compare with target
+  const double confidenceValue = 2.;
+  double lowerLimit = transparency - confidenceValue*transparencyErr;
+
+  if(lowerLimit >= targetTransparency){
+    dataFile << "TRANSPARENT\n";
+  }
+  else{
+    dataFile << "NOT TRANSPARENT\n";
+  }
 
   //***** Output transparency value *****//
   dataFile << "// Transparency:\n" << transparency << "\n" << transparencyErr << std::endl;

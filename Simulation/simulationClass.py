@@ -851,7 +851,8 @@ class FIMS_Simulation:
 
         resultsFiles = {
             'efficiency': '../Data/efficiencyFile.dat',
-            'transparency': '../Data/fieldTransparency.dat'
+            'transparency': '../Data/transparencyFile.dat',
+            'charge': '../Data/chargeFile.dat'
         }
         if target not in resultsFiles:
             raise ValueError(f'Invalid target: {target}')

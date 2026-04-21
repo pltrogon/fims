@@ -288,7 +288,7 @@ int main(int argc, char * argv[]) {
 
   //include convergence criteria
   dataFile << "// Stop condition:\n";
-  dataFile << "All trials complete\n";
+  dataFile << "TRIALS COMPLETE\n";
   
 
   //output efficiency
