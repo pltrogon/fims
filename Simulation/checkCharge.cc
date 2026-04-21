@@ -23,7 +23,6 @@
 #include "Garfield/Medium.hh"
 #include "Garfield/AvalancheMC.hh"
 #include "Garfield/Sensor.hh"
-#include "Garfield/ViewDrift.hh"
 
 //C includes
 #include <iostream>
@@ -127,14 +126,10 @@ int main(int argc, char * argv[]) {
   AvalancheMicroscopic* avalancheE = new AvalancheMicroscopic;
   avalancheE->SetSensor(sensorFIMS);
   avalancheE->EnableAvalancheSizeLimit(5);
-
-  std::cout << "Enabling drift view..." << std::endl;
-  ViewDrift* viewElectronDrift = new ViewDrift();
-  viewElectronDrift->SetArea(
-    xBoundary[0], yBoundary[0], zBoundary[0], 
-    xBoundary[1], yBoundary[1], zBoundary[1]
-  );
-  avalancheE->EnablePlotting(viewElectronDrift, 250);
+  {
+    SilenceCerr guard;
+    avalancheE->EnablePlotting(nullptr, 10);
+  }
   
   // ***** Prepare Avalanche Electron ***** //
   //Set the Initial electron parameters
@@ -155,7 +150,9 @@ int main(int argc, char * argv[]) {
   int numTotal = 0;
 
   int avalancheCheck = (simParams->numAvalanche / 10 > 0) ? (simParams->numAvalanche / 10) : 1;
-
+  int num7 = 0, num5 = 0, num1 = 0;
+  int numTrials = 0, numFailure = 0;
+  
   for(int inAvalanche = 0; inAvalanche < simParams->numAvalanche; inAvalanche++){
 
     if(inAvalanche % avalancheCheck == 0){
@@ -171,8 +168,10 @@ int main(int argc, char * argv[]) {
     double xf, yf, zf, tf, Ef;
     int stat;
 
+
     bool repopulate = true;
     while(repopulate){
+      numTrials++;
       avalancheE->AvalancheElectron(curX, curY, curZ, curTime, curEnergy, curDx, curDy, curDz);
 
       //Electron count - use endpoints to include attached electrons
@@ -185,7 +184,15 @@ int main(int argc, char * argv[]) {
         break;
       }
 
-      avalancheE->GetElectronEndpoint(0, xi, yi, zi, ti, Ei, xf, yf, zf, tf, Ef, stat);
+      if(avalancheElectrons != 0){
+        avalancheE->GetElectronEndpoint(0, xi, yi, zi, ti, Ei, xf, yf, zf, tf, Ef, stat);
+      }
+      else{
+        std::cerr << "Error: No electrons in avalanche. This should not happen." << std::endl;
+        numFailure++;
+        stat = -7; //Treat as attached to trigger repopulation
+      }
+      
       switch(stat){
 
         case -7: // Electron attached to gas molecule - Restart with initial electron
@@ -194,6 +201,7 @@ int main(int argc, char * argv[]) {
           curTime = t0;
           curEnergy = e0;
           curDx = 0., curDy = 0., curDz = 0.;
+          num7++;
           break;         
 
         case -5: // Electron leave drift medium (Hits Grid/Pad/Dielectric)
@@ -203,47 +211,36 @@ int main(int argc, char * argv[]) {
           if(zf < -1.*simParams->gridThickness){
             numSuccess++;
           }
+          num5++;
           break;
 
         case -1: {// Electron leaves drift area (Simulation Volume) - Shift it back
           //Determine which boundary was hit and shift by pitch to opposite side
           //Example: If leaves volume at x=+2pitch, move to x=-pitch
           //Allows direction vector to also just be translated
-          curX = std::abs(xf) >= 2.*pitch ? -1.*std::copysign(pitch, xf) : xf;
-          curY = std::abs(yf) >= 2.*pitch ? -1.*std::copysign(pitch, yf) : yf;
-          curZ = zf;
+          curX = std::abs(xf) >= .99*2.*pitch ? -1.*std::copysign(pitch, xf) : xf;
+          curY = std::abs(yf) >= .99*2.*pitch ? -1.*std::copysign(pitch, yf) : yf;
+          curZ = std::abs(zf) <= 1.01*simParams->gridThickness/2. ? std::copysign(simParams->gridThickness, zf) : zf;
 
           curTime = tf;
           curEnergy = Ef;
 
-          //Find direction via drift lines
-          int numElectronDrift = viewElectronDrift->GetNumberOfDriftLines();
-          bool isElectron;
-          std::vector<std::array<float, 3> > electronDriftLines;
-          viewElectronDrift->GetDriftLine(0, electronDriftLines, isElectron);
-          int numDriftLines = electronDriftLines.size();
+          //Get 2nd-last and last points along drift
+          double xPrev, yPrev, zPrev, tPrev, xFinal, yFinal, zFinal, tFinal;
+          int nPoints = avalancheE->GetNumberOfElectronDriftLinePoints(0);
+          avalancheE->GetElectronDriftLinePoint(xFinal, yFinal, zFinal, tFinal, nPoints-1, 0);
+          avalancheE->GetElectronDriftLinePoint(xPrev, yPrev, zPrev, tPrev, nPoints-2, 0);
 
-          
-          // Get 2nd-last and last points from driftlines
-          double xPrev, yPrev, zPrev, xFinal, yFinal, zFinal;
-          xPrev = electronDriftLines[numDriftLines-2][0];
-          yPrev = electronDriftLines[numDriftLines-2][1];
-          zPrev = electronDriftLines[numDriftLines-2][2];
-
-          xFinal = electronDriftLines[numDriftLines-1][0];
-          yFinal = electronDriftLines[numDriftLines-1][1];
-          zFinal = electronDriftLines[numDriftLines-1][2];
-
+          //Get normalized direction vector
           double dx = xFinal - xPrev;
           double dy = yFinal - yPrev;
           double dz = zFinal - zPrev;
           double vMag = std::sqrt(dx*dx + dy*dy + dz*dz);
-
           curDx = dx/vMag;
           curDy = dy/vMag;
           curDz = dz/vMag;
-
-          viewElectronDrift->Clear();
+          
+          num1++;
           break;
         }
 
@@ -255,9 +252,15 @@ int main(int argc, char * argv[]) {
   }
 
   delete avalancheE;
-  delete viewElectronDrift;
   delete sensorFIMS;
   delete gasFIMS;
+
+  std::cout << "Electron endpoint status counts:\n";
+  std::cout << "\tElectrons populated: " << numTrials << "\n";
+  std::cout << "\tElectron attached to gas molecule (-7): " << num7 << "\n";
+  std::cout << "\tElectron leave drift medium (Hits Grid/Pad/Dielectric) (-5): " << num5 << "\n";
+  std::cout << "\tElectron leaves drift area (Simulation Volume) (-1): " << num1 << "\n";
+  std::cout << "\tNumber of failures (no electrons in avalanche) (These are included in -7): " << numFailure << "\n";
 
   //Charge Efficiency calculations - Bayesian Statistics
   double success = 1.*numSuccess;
