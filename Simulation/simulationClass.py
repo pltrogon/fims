@@ -2038,3 +2038,44 @@ class FIMS_Simulation:
         self._geometry.buildGeometry()
 
     
+
+#***********************************************************************************#
+    def scanInitialZ(self, numSteps=10):
+        """TODO"""
+
+        runNo = self._param['runNumber']
+        print(f'Scanning Initial z - Run number: {runNo}')
+    
+        self._checkParam()
+        saveParam = self.getAllParam()
+        self.setParameters({'numAvalanche': 5000})
+
+        # Generate geometry and solve fields
+        self._generateGeometry()
+        self._solveEFields(solveWeighting=False)
+
+        zLocation = []
+        chargeTransparency = []
+        chargeTransparencyErr = []
+
+        for inZ in np.linspace(0.1, 0.95, num=numSteps):
+
+            zLoc = inZ*self._param['cathodeHeight']
+            self._runGarfield('runCharge', initialZ=zLoc)
+            chargeResults = self._readResultsFile('charge')
+
+            zLocation.append(zLoc)
+            chargeTransparency.append(chargeResults['charge'])
+            chargeTransparencyErr.append(chargeResults['chargeErr'])
+
+
+        zScanResults = pd.DataFrame({
+            'zLocation': zLocation,
+            'chargeTransparency': chargeTransparency,
+            'chargeTransparencyErr': chargeTransparencyErr
+        })
+
+        return zScanResults
+
+
+
