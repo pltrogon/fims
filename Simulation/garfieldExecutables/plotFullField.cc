@@ -57,7 +57,7 @@ int main(int argc, char * argv[]) {
   double  padLength, pitch;
   double gridStandoff, gridThickness, holeRadius;
   double cathodeHeight, thicknessSiO2, pillarRadius;
-  double fieldRatio, transparencyLimit;
+  double fieldRatio;
   int numFieldLine;
   double gasCompAr, gasCompCO2, gasCompCF4, gasCompIsobutane;
   double gasPenning;
@@ -215,7 +215,7 @@ int main(int argc, char * argv[]) {
   sensorFIMS->SetArea(xBoundary[0], yBoundary[0], zBoundary[0], xBoundary[1], yBoundary[1], zBoundary[1]);
   sensorFIMS->AddElectrode(&fieldFIMS, "wtlel");
 
-  // ***** Find field transparency ***** //
+  // ***** Calculate Field Lines ***** //
   std::cout << "****************************************\n";
   std::cout << "Calculating field Lines.\n";
   std::cout << "****************************************\n";
@@ -233,12 +233,14 @@ int main(int argc, char * argv[]) {
   double yWidth = rangeScale*pitch/2.;
 
   // ***** Generate field line start points ***** //
-
+  // Note: Generates numFieldLine*4 field lines (numFieldLine in each quadrant)
+  
   // Reject sampled points too close to the edge of the unit cell
   double safetyWidth = std::sqrt(0.99);
   double halfPitch = pitch/2.;
   double cellLength = pitch/std::sqrt(3.);
 
+  // Positive x, positive y
   while(xStart.size() < numFieldLine){
 
     // Generate random point in rectangle defined by cellLength (x) and halfPitch (y)
@@ -260,15 +262,79 @@ int main(int argc, char * argv[]) {
     }
   }
 
+  // Positive y, negative x
+  while(xStart.size() < 2*numFieldLine){
+
+    // Generate random point in rectangle defined by cellLength (x) and halfPitch (y)
+    double sampleX =  ((double)std::rand()*(-1.0)/RAND_MAX)*cellLength;
+    double sampleY =  ((double)std::rand()/RAND_MAX)*halfPitch;
+
+    // Determine if point is in unit cell - Skip if not
+    double unitY = (pitch/cellLength) * (cellLength+sampleX);
+    if(sampleY > unitY){
+      continue;
+    }
+
+    // Ensure point is not too close to edge of cell
+    double safetyY = safetyWidth*halfPitch;
+    double safetyEdgeY = (pitch/cellLength) * (safetyWidth*cellLength+sampleX);
+    if((sampleY < safetyY) && (sampleY < safetyEdgeY)){
+      xStart.push_back(sampleX);
+      yStart.push_back(sampleY);
+    }
+  }
+
+  // Positive x, negative y
+  while(xStart.size() < 3*numFieldLine){
+
+    // Generate random point in rectangle defined by cellLength (x) and halfPitch (y)
+    double sampleX =  ((double)std::rand()/RAND_MAX)*cellLength;
+    double sampleY =  ((double)std::rand()*(-1.0)/RAND_MAX)*halfPitch;
+
+    // Determine if point is in unit cell - Skip if not
+    double unitY = (pitch/cellLength) * (cellLength-sampleX);
+    if(-1.*sampleY > unitY){
+      continue;
+    }
+
+    // Ensure point is not too close to edge of cell
+    double safetyY = safetyWidth*halfPitch;
+    double safetyEdgeY = (pitch/cellLength) * (safetyWidth*cellLength-sampleX);
+    if((-1.*sampleY < safetyY) && (-1.*sampleY < safetyEdgeY)){
+      xStart.push_back(sampleX);
+      yStart.push_back(sampleY);
+    }
+  }
+
+  // Negative x, negative y
+  while(xStart.size() < 4*numFieldLine){
+
+    // Generate random point in rectangle defined by cellLength (x) and halfPitch (y)
+    double sampleX =  ((double)std::rand()*(-1.0)/RAND_MAX)*cellLength;
+    double sampleY =  ((double)std::rand()*(-1.0)/RAND_MAX)*halfPitch;
+
+    // Determine if point is in unit cell - Skip if not
+    double unitY = (pitch/cellLength) * (cellLength+sampleX);
+    if(-1.*sampleY > unitY){
+      continue;
+    }
+
+    // Ensure point is not too close to edge of cell
+    double safetyY = safetyWidth*halfPitch;
+    double safetyEdgeY = (pitch/cellLength) * (safetyWidth*cellLength+sampleX);
+    if((-1.*sampleY < safetyY) && (-1.*sampleY < safetyEdgeY)){
+      xStart.push_back(sampleX);
+      yStart.push_back(sampleY);
+    }
+  }
+  
+  // ***** End creation of field line starting points ***** //
+
+
   // ***** Calculate field Lines ***** //
   std::vector<std::array<float, 3> > fieldLines;
   int totalFieldLines = xStart.size();
-  int numAtPad = 0;
   int prevDriftLine = 0;
-
-  double transparency = 0.;
-  double variance = 0.;
-  double transparencyErr = 0.;
 
   std::cout << "Computing field lines" << std::endl;
   // Create and open field line data file

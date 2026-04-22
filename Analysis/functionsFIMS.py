@@ -578,40 +578,53 @@ def getFullFieldData():
     return fieldData
 
 #********************************************************************************#
+
+def plotFullField(zTarget=0):
+    """
+    Plots a 2D slide of the full electric field.
     
-    def plotFullField(self, zTarget = 0):
-        """
-        Plots a 2D slide of the full electric field.
-        
-        args:
-            zTarget (float): height of 2D field slice
-        
-        returns:
-            figure
-        """
-        # Get field data and find the points within .5 microns of the target height
-        fieldData = functionsFIMS.getFullFieldData()
-        zUp = zTarget + .5
-        zDown = zTarget - .5
-        xSlice = []
-        ySlice = []
-        
-        dataID = 0
-        for dataPoint in fieldData['zComp']:
-            if dataPoint < zUp and dataPoint > zDown:
-                xSlice.append(fieldData['xComp'][dataID])
-                ySlice.append(fieldData['yComp'][dataID])
-            dataID += 1
-        
-        # Plot the x,y components of the field at the given height
-        fieldFig = plt.figure()
-        fieldSlice = fieldFig.add_subplot(111)
-        
-        fieldSlice.scatter(xSlice, ySlice, s = .1, c = 'r')
-        fieldSlice.set_xlabel('x Position (\u00B5m)')
-        fieldSlice.set_ylabel('y Position (\u00B5m)')
-        
-        return fieldFig
+    args:
+        zTarget (float): height of 2D field slice
+    
+    returns:
+        figure
+    """
+    # Get field data and find the points within .5 microns of the target height
+    fieldData = getFullFieldData()
+    zUp = zTarget + .5
+    zDown = zTarget - .5
+    xSlice = []
+    ySlice = []
+    
+    dataID = 0
+    for dataPoint in fieldData['zComp']:
+        if dataPoint < zUp and dataPoint > zDown:
+            xSlice.append(fieldData['xComp'][dataID])
+            ySlice.append(fieldData['yComp'][dataID])
+        dataID += 1
+    
+    # Plot the x,y components of the field at the given height
+    fieldFig = plt.figure(figsize=(14,6))
+    xySlice = fieldFig.add_subplot(121)
+    xzSlice = fieldFig.add_subplot(122)
+    
+    xySlice.grid(linewidth=.4, alpha=.6)
+    xySlice.scatter(xSlice, ySlice, s = .1, c = 'r')
+    xySlice.set_xlabel('x Position (\u00B5m)')
+    xySlice.set_ylabel('y Position (\u00B5m)')
+    
+    
+    # Plot the x,z components of the field along with a line showing the target height
+    xzSlice.grid(linewidth=.4, alpha=.6)
+    xzSlice.scatter(fieldData['xComp'], fieldData['zComp'], s=.1, c = 'r')
+    xzSlice.axhline(y=zTarget, c='y', linewidth=3, label='Target Height')
+    xzSlice.legend(loc='lower left')
+    xzSlice.set_xlabel('x Position (\u00B5m)')
+    xzSlice.set_ylabel('z Position (\u00B5m)')
+    
+    fieldFig.suptitle('2D Field Slice', fontsize = 20)
+    
+    return fieldFig
 
 #********************************************************************************#
 
