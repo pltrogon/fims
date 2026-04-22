@@ -529,6 +529,7 @@ class FIMS_Simulation:
                 - 'runAvalancheGridPix': Simulates electron avalanches for the GridPix geometry.
                 - 'runTransparency': Simulates the field transparency for the FIMS geometry.
                 - 'runTransparencyGridPix': Simulates the field transparency for the GridPix geometry.
+                - 'runFullField': Generates field lines that populate the full unit cell.
                 - 'runEfficiency': Simulates the efficiency for a given field strength. Requires additional arguments:
                     - targetEfficiency (float): The target efficiency to achieve (default: 0.95).
                     - threshold (int): The number of electrons to consider an avalanche successful (default: 10).
@@ -545,7 +546,8 @@ class FIMS_Simulation:
             'runAvalancheGridPix',
             'runTransparency',
             'runTransparencyGridPix',
-            'runEfficiency'
+            'runEfficiency',
+            'runFullField'
         ]
 
         if executable not in executables:
@@ -691,6 +693,27 @@ class FIMS_Simulation:
         return runNo
 
 #**********************************************************************#
+
+    def runFullField(self):
+        """
+        Draws Field Lines for every point in the unit cell.
+
+        Returns:
+            int: The run number for this simulation.
+        """
+        self._checkParam()
+    
+        self.setGeometry()
+        self._generateGeometry()
+            
+        #Solve fields and run Garfield
+        self._solveEFields(solveWeighting=True)
+        self._runGarfield('runFullField')
+        
+        return
+
+#**********************************************************************#
+
     def _calcEfficiencyMinField(self):
         """
         Calculates the minimum field ratio to achieve 95% Efficiency.
