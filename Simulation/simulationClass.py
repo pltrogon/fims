@@ -22,6 +22,17 @@ import copy
 sys.path.insert(1, '../Analysis')
 from runDataClass import runData
 
+# Class to handle numpy data types in JSON serialization
+class NumPyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super(NumPyEncoder, self).default(obj)
+
 from geometryClass import geometryClass
 
 class FIMS_Simulation:
@@ -546,7 +557,7 @@ class FIMS_Simulation:
             garfieldLog = os.path.join(originalCWD, 'log', logFile)
 
             # Pass parameters as JSON via stdin
-            jsonParam = json.dumps(self._param)
+            jsonParam = json.dumps(self._param, cls=NumPyEncoder)
 
             with open(garfieldLog, 'w+') as garfieldOutput:
                 startTime = time.monotonic()
@@ -2038,6 +2049,29 @@ class FIMS_Simulation:
         self._geometry.buildGeometry()
 
     
+#***********************************************************************************#
+    def getChargeEfficiency(self, initialZ=None, changeGeometry=False):
+        """TODO"""
+
+        if initialZ is None:
+            initialZ = 0.5*self._param['cathodeHeight']
+
+        runNo = self._param['runNumber']
+        print(f'Getting charge efficiency - Run number: {runNo}')
+    
+        self._checkParam()
+
+        # Generate geometry and solve fields
+        if changeGeometry or self._geometry is None:
+            self._generateGeometry()
+            self._solveEFields(solveWeighting=False)
+
+        self._runGarfield('runCharge', initialZ=initialZ)
+        chargeResults = self._readResultsFile('charge')
+
+        return chargeResults
+        
+
 
 #***********************************************************************************#
     def scanInitialZ(self, numSteps=10):
@@ -2047,8 +2081,6 @@ class FIMS_Simulation:
         print(f'Scanning Initial z - Run number: {runNo}')
     
         self._checkParam()
-        saveParam = self.getAllParam()
-        self.setParameters({'numAvalanche': 5000})
 
         # Generate geometry and solve fields
         self._generateGeometry()
