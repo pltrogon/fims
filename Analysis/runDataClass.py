@@ -866,7 +866,7 @@ class runData:
             target (str): Identifier for what data to plot.
     
         Returns:
-            None
+            figure
         """
         plotOptions = [
             'Cathode',
@@ -924,8 +924,9 @@ class runData:
         plt.tight_layout()   
         
         return fig2D
-    
-#********************************************************************************#   
+
+#********************************************************************************#
+
     def add2DFieldLines(self, axes, fieldLineData, target):
         """
         Plots the 2D projections of electric field lines, colored according to 
@@ -2590,8 +2591,6 @@ class runData:
         ax.grid()
 
         return fig
-
-
 
 #********************************************************************************#
 

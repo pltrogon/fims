@@ -24,6 +24,8 @@ Functions:
     getSetData
     plotDataSets
     getDiffusionData
+    getFullFieldData
+    plotFullField
 """
 
 #********************************************************************************#   
@@ -538,3 +540,78 @@ def getGasData(runNoList):
     allRunData = allRunData.sort_values(by='runNo').reset_index(drop=True)
 
     return allRunData
+ 
+#********************************************************************************#
+
+def getFullFieldData():
+    """
+    Gets the field data points for each drift line created by runFullField.
+    
+    returns:
+        fieldData (dict): dictionary of the three spatial coordinates for the field.
+    """
+    fieldData = {
+    }
+    xComp = []
+    yComp = []
+    zComp = []
+    
+    # Read the data file line by line
+    with open('../Data/fullFieldLines.dat', 'r') as dataFile: 
+        row = dataFile.readline()
+        while row:
+            # split each line into the three spatial coordinates
+            line = row.strip().split(',')
+            numbersList = list(float(component) for component in line)
+            
+            # Append each coordinate to the list
+            xComp.append(numbersList[0]*1e4)
+            yComp.append(numbersList[1]*1e4)
+            zComp.append(numbersList[2]*1e4)
+            
+            row = dataFile.readline()
+    
+    fieldData['xComp'] = xComp
+    fieldData['yComp'] = yComp
+    fieldData['zComp'] = zComp
+    
+    return fieldData
+
+#********************************************************************************#
+    
+    def plotFullField(self, zTarget = 0):
+        """
+        Plots a 2D slide of the full electric field.
+        
+        args:
+            zTarget (float): height of 2D field slice
+        
+        returns:
+            figure
+        """
+        # Get field data and find the points within .5 microns of the target height
+        fieldData = functionsFIMS.getFullFieldData()
+        zUp = zTarget + .5
+        zDown = zTarget - .5
+        xSlice = []
+        ySlice = []
+        
+        dataID = 0
+        for dataPoint in fieldData['zComp']:
+            if dataPoint < zUp and dataPoint > zDown:
+                xSlice.append(fieldData['xComp'][dataID])
+                ySlice.append(fieldData['yComp'][dataID])
+            dataID += 1
+        
+        # Plot the x,y components of the field at the given height
+        fieldFig = plt.figure()
+        fieldSlice = fieldFig.add_subplot(111)
+        
+        fieldSlice.scatter(xSlice, ySlice, s = .1, c = 'r')
+        fieldSlice.set_xlabel('x Position (\u00B5m)')
+        fieldSlice.set_ylabel('y Position (\u00B5m)')
+        
+        return fieldFig
+
+#********************************************************************************#
+
