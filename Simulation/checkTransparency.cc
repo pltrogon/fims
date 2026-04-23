@@ -140,9 +140,11 @@ int main(int argc, char * argv[]) {
   double cellLength = simParams->pitch/std::sqrt(3.);
   while(xStart.size() < simParams->numFieldLine){
 
-    // Generate random point in rectangle defined by cellLength (x) and halfPitch (y)
-    double sampleX =  ((double)std::rand()/RAND_MAX)*cellLength;
-    double sampleY =  ((double)std::rand()/RAND_MAX)*halfPitch;
+    // Generate random point in hexagon
+    auto [sampleX, sampleY] = randomXYInHexagon(cellLength);
+    //map to Q1 of unit cell
+    sampleX = std::fabs(sampleX);
+    sampleY = std::fabs(sampleY);
 
     //Determine if point is in unit cell - Skip if not
     double unitY = (simParams->pitch/cellLength) * (cellLength-sampleX);
