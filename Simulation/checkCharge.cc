@@ -36,6 +36,8 @@
 #include <sstream>
 #include <cstdio>
 #include <vector>
+#include <random>
+#include <utility>
 
 using namespace Garfield;
 
@@ -152,6 +154,8 @@ int main(int argc, char * argv[]) {
   int avalancheCheck = (simParams->numAvalanche / 10 > 0) ? (simParams->numAvalanche / 10) : 1;
   int num7 = 0, num5 = 0, num1 = 0;
   int numTrials = 0, numFailure = 0;
+
+  double cellLength = simParams->pitch/std::sqrt(3.);
   
   for(int inAvalanche = 0; inAvalanche < simParams->numAvalanche; inAvalanche++){
 
@@ -197,7 +201,7 @@ int main(int argc, char * argv[]) {
       
       switch(stat){
 
-        case -7: // Electron attached to gas molecule - Restart with initial electron
+        case -7: {// Electron attached to gas molecule - Restart with initial electron
           //WARNING - This may cause an infinite loop. Consider max attempts if becomes an issue
           auto [sampleX, sampleY] = randomXYInHexagon(cellLength);
           curX = sampleX, curY = sampleY, curZ = z0;
@@ -205,9 +209,10 @@ int main(int argc, char * argv[]) {
           curEnergy = e0;
           curDx = 0., curDy = 0., curDz = 0.;
           num7++;
-          break;         
+          break;  
+        }       
 
-        case -5: // Electron leave drift medium (Hits Grid/Pad/Dielectric)
+        case -5: {// Electron leave drift medium (Hits Grid/Pad/Dielectric)
           repopulate = false;
           numTotal++;
           // Check if below grid - TODO: Courrently just checking final z
@@ -216,6 +221,7 @@ int main(int argc, char * argv[]) {
           }
           num5++;
           break;
+        }
 
         case -1: {// Electron leaves drift area (Simulation Volume) - Shift it back
           //Determine which boundary was hit and shift by pitch to opposite side

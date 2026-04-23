@@ -30,6 +30,8 @@
 #include <map>
 #include <sstream>
 #include <cstdio>
+#include <random>
+#include <utility>
 
 using namespace Garfield;
 
