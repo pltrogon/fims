@@ -40,6 +40,8 @@
 #include <sstream>
 #include <cstdio>
 #include <vector>
+#include <random>
+#include <utility>
 
 using namespace Garfield;
 

@@ -7,6 +7,9 @@
 #include <iostream>
 #include <optional>
 #include <nlohmann/json.hpp>
+#include <random>
+#include <cmath>
+#include <utility>
 
 #include "Garfield/ComponentElmer.hh"
 #include "Garfield/AvalancheMicroscopic.hh"
@@ -88,6 +91,9 @@ std::string getGitVersion() {
 
 /**
  * @brief Generates a random (x,y) point uniformly distributed within a hexagon centered at the origin with the specified side length.
+ * @param sideLength The length of each side of the hexagon.
+ * 
+ * @return A pair of doubles representing the (x,y) coordinates of the random point.
  */
 std::pair<double, double> randomXYInHexagon(double sideLength) {
 
