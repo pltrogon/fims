@@ -87,6 +87,32 @@ std::string getGitVersion() {
 }
 
 /**
+ * @brief Generates a random (x,y) point uniformly distributed within a hexagon centered at the origin with the specified side length.
+ */
+std::pair<double, double> randomXYInHexagon(double sideLength) {
+
+    const double sqrt3 = std::sqrt(3.0);
+    const double xWidth = 2.*sideLength;
+    const double yWidth = sqrt3*sideLength;
+
+    static std::mt19937 rng(std::random_device{}());
+    std::uniform_real_distribution<double> dist(-1.0, 1.0);
+
+    while(true){
+        // Uniform sample in box
+        double sampleX = dist(rng)*xWidth/2.;
+        double sampleY = dist(rng)*yWidth/2.;
+
+        // Check if in hexagon (use symmetry of Q1)
+        double absX = std::fabs(sampleX);
+        double absY = std::fabs(sampleY);
+        if(absY <= yWidth/2. - absX/sqrt3){
+            return {sampleX, sampleY};
+        }
+    }
+}
+
+/**
  * @brief Utility to temporarily silence std::cerr.
  */
 class SilenceCerr {
