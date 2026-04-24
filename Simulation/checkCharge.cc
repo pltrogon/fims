@@ -164,8 +164,9 @@ int main(int argc, char * argv[]) {
     }
     
     // Generate random point in hexagon
-    auto [sampleX, sampleY] = randomXYInHexagon(cellLength);
-    double curX = sampleX, curY = sampleY, curZ = z0;
+    //auto [sampleX, sampleY] = randomXYInHexagon(cellLength);
+    //double curX = sampleX, curY = sampleY, curZ = z0;
+    double curX = x0, curY = y0, curZ = z0;
     double curTime = t0;
     double curEnergy = e0;
     double curDx = 0., curDy = 0., curDz = 0.;
@@ -203,8 +204,9 @@ int main(int argc, char * argv[]) {
 
         case -7: {// Electron attached to gas molecule - Restart with initial electron
           //WARNING - This may cause an infinite loop. Consider max attempts if becomes an issue
-          auto [sampleX, sampleY] = randomXYInHexagon(cellLength);
-          curX = sampleX, curY = sampleY, curZ = z0;
+          //auto [sampleX, sampleY] = randomXYInHexagon(cellLength);
+          //curX = sampleX, curY = sampleY, curZ = z0;
+          curX = x0, curY = y0, curZ = z0;
           curTime = t0;
           curEnergy = e0;
           curDx = 0., curDy = 0., curDz = 0.;
