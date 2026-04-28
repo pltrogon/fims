@@ -1688,6 +1688,8 @@ class FIMS_Simulation:
         results = self._readResultsFile(target)
         print(f'\t{target}: {results[target]:.3f} +/- {results[f"{target}Err"]:.3f}') 
 
+        self.setParameters(saveParam)
+
         return results[target], results[f'{target}Err']
 
 #***********************************************************************************#
@@ -1715,7 +1717,7 @@ class FIMS_Simulation:
         # Get each efficiency
         detectionEfficiency = self._getEfficiency(target='efficiency')
         fieldTransparency = self._getEfficiency(target='transparency')
-        chargeEfficiency = self._getEfficiency(target='charge')
+        chargeEfficiency = self._getEfficiency(target='charge', initialZ=100)
 
         efficiencyResults = {
             'detectionEfficiency': detectionEfficiency,
