@@ -775,7 +775,7 @@ class FIMS_Simulation:
         #conditions are satisfied simultaneously.
         netMinField = max(minFieldTrans, minFieldEff)
         
-        return math.floor(0.75*netMinField)
+        return math.floor(0.5*netMinField)
 
 #***********************************************************************************#
     def runCapacitance(self):
@@ -2039,6 +2039,8 @@ class FIMS_Simulation:
             unitCell (str): The type of unit cell to use.
             surroundingCells (bool): Whether to include surrounding cells.
         """
+
+        print('Visualizing geometry...')
         self._geometry = geometryClass(self._param)
 
         self._geometry.setGUI(runGUI=True)
@@ -2047,6 +2049,8 @@ class FIMS_Simulation:
         self._geometry.setSurroundingCells(self._surroundingCells)
 
         self._geometry.buildGeometry()
+
+        return
 
     
 #***********************************************************************************#

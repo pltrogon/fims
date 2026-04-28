@@ -160,6 +160,7 @@ int main(int argc, char * argv[]) {
   bool isEfficient = false;
   while(runAvalanche && totalAvalanches < simParams->numAvalanche){
     for(int inAvalanche = 0; inAvalanche < numInBunch; inAvalanche++){
+      totalAvalanches++;
       avalancheE->AvalancheElectron(x0, y0, z0, 0., e0, dx0, dy0, dz0);
 
       //Electron count - use endpoints to include attached electrons
