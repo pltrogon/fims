@@ -475,6 +475,29 @@ class FIMS_Simulation:
         return        
     
 #***********************************************************************************#
+    def visualizeGeometry(self):
+        """
+        Generates the geometry for the FIMS simulation 
+        and visualizes it using the Gmsh GUI.
+
+        Args:
+            unitCell (str): The type of unit cell to use.
+            surroundingCells (bool): Whether to include surrounding cells.
+        """
+
+        print('Visualizing geometry...')
+        self._geometry = geometryClass(self._param)
+
+        self._geometry.setGUI(runGUI=True)
+        
+        self._geometry.setUnitCell(self._unitCell)
+        self._geometry.setSurroundingCells(self._surroundingCells)
+
+        self._geometry.buildGeometry()
+
+        return
+    
+#***********************************************************************************#
     def _solveEFields(self, solveWeighting=True):
         """
         Solves the electric field for the FIMS simulation using the geometryClass.
@@ -1592,76 +1615,115 @@ class FIMS_Simulation:
         self._solveEFields(solveWeighting=True)
 
         #Get the detection efficiency
-        efficiency = self._getEfficiency(efficiencyGoal=efficiencyGoal, efficiencyThreshold=efficiencyThreshold)
+        efficiency = self._getEfficiency(target='efficiency', efficiencyGoal=efficiencyGoal, efficiencyThreshold=efficiencyThreshold)
 
         #Get the field transparency
-        transparency = self._getTransparency(targetTransparency=transparencyGoal)
+        transparency = self._getEfficiency(target='transparency', transparencyGoal=transparencyGoal)
 
         #Run the electron transport simulation
         self._runGarfield()
 
-        return runNo, efficiency, transparency
-
-
-#***********************************************************************************#
-    def _getEfficiency(self, efficiencyGoal=0.95, efficiencyThreshold=10):
-        """
-        Runs a Garfield++ executable the generates electron avalanches to determine
-        the detection efficiency at the current field ratio.
-
-        Args:
-            efficiencyGoal (float): The target efficiency.
-            efficiencyThreshold (int): The minimum number of electrons required to be considered a 'success'.
-
-        Returns:
-            float: The detection efficiency at the current field ratio.
-        """
-
-        saveParam = self.getAllParam()
-        # Limit can be low. Check is boolean - above threshold or not
-        self.setParameters({'numAvalanche': 3000, 'avalancheLimit': efficiencyThreshold+5})  
-
-        self._runGarfield(
-            'runEfficiency', 
-            targetEfficiency=efficiencyGoal, threshold=efficiencyThreshold
-        )
-        effResults = self._readResultsFile('efficiency')
-
-        print(f'\tDetection efficiency: {effResults['efficiency']:.3f} +/- {effResults['efficiencyErr']:.3f}')
-
-        self.setParameters(saveParam)
-
-        return effResults['efficiency']
+        return runNo, efficiency[0], transparency[0]
     
+
 #***********************************************************************************#
-    def _getTransparency(self, targetTransparency=0.99):
+    def _getEfficiency(self, target, **kwargs):
         """
-        Runs a Garfield++ executable to determine field lines and calculate
-        the field transparency.
+        Gets a target efficiency value for the current geometry and field ratio.
 
         Args:
-            targetTransparency (float): The target transparency.
-
+            target (str): The target efficiency to get. Options are:
+                - 'efficiency': The electron detection efficiency.
+                - 'transparency': The electric field line transparency.
+                - 'charge': The charge collection efficiency.
+            kwargs: Additional keyword arguments for specific targets:
+                - efficiencyGoal (float): The target efficiency for the efficiency target.
+                - efficiencyThreshold (int): The detection threshold for the efficiency target.
+                - transparencyGoal (float): The target transparency for the transparency target.
+                - chargeGoal (float): The target charge collection efficiency for the charge target.
+        
         Returns:
-            float: The field transparency at the current field ratio.
+            tuple containing:
+                - float: The simulated target efficiency value.
+                - float: The uncertainty in the simulated target efficiency value.
+
         """
 
+        runSettings = {
+            'efficiency': {'numAvalanche': 5000, 'avalancheLimit': kwargs.get('efficiencyThreshold', 10) + 5},
+            'charge': {'numAvalanche': 5000, 'avalancheLimit': 5},
+            'transparency': {'numFieldLine': 1000}
+        }
         saveParam = self.getAllParam()
-        self.setParameters({'numFieldLine': 500}) #More is better. Adjust as needed.
+
+        if target not in runSettings:
+            raise ValueError(f"Invalid target '{target}'. Valid options are: {', '.join(runSettings.keys())}.")
+        self.setParameters(runSettings[target])
+
+        match target:
+            case 'efficiency':
+                self._runGarfield(
+                    'runEfficiency', 
+                    targetEfficiency=kwargs.get('efficiencyGoal', 0.95), 
+                    threshold=kwargs.get('efficiencyThreshold', 10)
+                )
+            
+            case 'charge':
+                initialZ = kwargs.get('initialZ', 0.5*self._param['cathodeHeight'])
+                self._runGarfield(
+                    'runCharge', 
+                    initialZ=initialZ
+                )
+
+            case 'transparency':
+                self._runGarfield(
+                    'runTransparency',
+                    targetTransparency=kwargs.get('transparencyGoal', 0.99)
+                )
+
+            case _:
+                raise RuntimeError('Unexpected error in target selection.')
+            
         
+        results = self._readResultsFile(target)
+        print(f'\t{target}: {results[target]:.3f} +/- {results[f"{target}Err"]:.3f}') 
 
-        self._runGarfield(
-            'runTransparency',
-            targetTransparency=targetTransparency
-        )
-        transparencyResults = self._readResultsFile('transparency')
+        return results[target], results[f'{target}Err']
 
-        print(f'\tField transparency: {transparencyResults['transparency']:.3f} +/- {transparencyResults['transparencyErr']:.3f}') 
+#***********************************************************************************#
+    def getAllEfficiencies(self):
+        """
+        Gets all efficiencies for the current geometry and field ratio.
 
-        self.setParameters(saveParam)
-        
-        return transparencyResults['transparency']
 
+        Returns:
+            dict: A dictionary containing values as tuples of (value, error):
+                - 'detectionEfficiency': The electron detection efficiency.
+                - 'fieldTransparency': The electric field line transparency.
+                - 'chargeEfficiency': The charge collection efficiency.
+        """
+
+        runNo = self._param['runNumber']
+        print(f'Getting all efficiencies - Run number: {runNo}')
+    
+        self._checkParam()
+
+        # Generate geometry and solve fields
+        self._generateGeometry()
+        self._solveEFields(solveWeighting=False)
+
+        # Get each efficiency
+        detectionEfficiency = self._getEfficiency(target='efficiency')
+        fieldTransparency = self._getEfficiency(target='transparency')
+        chargeEfficiency = self._getEfficiency(target='charge')
+
+        efficiencyResults = {
+            'detectionEfficiency': detectionEfficiency,
+            'fieldTransparency': fieldTransparency,
+            'chargeEfficiency': chargeEfficiency
+        }
+
+        return efficiencyResults
 
 #***********************************************************************************#
 #***********************************************************************************#
@@ -2029,52 +2091,6 @@ class FIMS_Simulation:
 
         return optimalFieldData
 
-#***********************************************************************************#
-    def visualizeGeometry(self):
-        """
-        Generates the geometry for the FIMS simulation 
-        and visualizes it using the Gmsh GUI.
-
-        Args:
-            unitCell (str): The type of unit cell to use.
-            surroundingCells (bool): Whether to include surrounding cells.
-        """
-
-        print('Visualizing geometry...')
-        self._geometry = geometryClass(self._param)
-
-        self._geometry.setGUI(runGUI=True)
-        
-        self._geometry.setUnitCell(self._unitCell)
-        self._geometry.setSurroundingCells(self._surroundingCells)
-
-        self._geometry.buildGeometry()
-
-        return
-
-    
-#***********************************************************************************#
-    def getChargeEfficiency(self, initialZ=None, changeGeometry=False):
-        """TODO"""
-
-        if initialZ is None:
-            initialZ = 0.5*self._param['cathodeHeight']
-
-        runNo = self._param['runNumber']
-        print(f'Getting charge efficiency - Run number: {runNo}')
-    
-        self._checkParam()
-
-        # Generate geometry and solve fields
-        if changeGeometry or self._geometry is None:
-            self._generateGeometry()
-            self._solveEFields(solveWeighting=False)
-
-        self._runGarfield('runCharge', initialZ=initialZ)
-        chargeResults = self._readResultsFile('charge')
-
-        return chargeResults
-        
 
 
 #***********************************************************************************#
@@ -2112,6 +2128,9 @@ class FIMS_Simulation:
         })
 
         return zScanResults
+
+
+
 
 
 
