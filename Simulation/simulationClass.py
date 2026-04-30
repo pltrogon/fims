@@ -947,6 +947,8 @@ class FIMS_Simulation:
             float: Numerical solution to the field ratio in order to achieve target value
         """
 
+        minFieldStep = 3
+
         curField, prevField = fields
         curVal, prevVal, targetVal = values
 
@@ -967,8 +969,8 @@ class FIMS_Simulation:
 
 
         if abs(valDiff) < 0.001:
-            print(f'Warning: Slope near zero. Using heuristic step of 1.')
-            return curField+1
+            print(f'Warning: Slope near zero. Using heuristic step.')
+            return curField+minFieldStep
 
         fieldStep = damping*targetDiff*fieldDiff/valDiff
         #Limit step size for stability
@@ -979,8 +981,8 @@ class FIMS_Simulation:
 
         #Ensure step is at least 1
         elif fieldStep < 1:
-            print(f'Warning: Field step small. Using heuristic step of 1.')
-            newField = curField+1
+            print(f'Warning: Field step small. Using minimum step.')
+            newField = curField+minFieldStep
 
         #Round step up to nearest integer
         else:
@@ -1283,6 +1285,10 @@ class FIMS_Simulation:
 
                 case _:
                     raise ValueError('Error - Malformed transparency file.')
+                
+            if newField >= 200:
+                isTransparent = True
+                print('Warning - Field ratio exceeded 200. Escaping...')
         #End of find field for transparency loop
 
 
@@ -1494,6 +1500,15 @@ class FIMS_Simulation:
             
                     case _:
                         raise ValueError('Error - Malformed efficiency file.')
+                    
+
+            # Escape if field becomes too large
+            maxField = 175
+            if newField >= maxField:
+                isTransparent = True
+                isEfficient = True
+                print(f'Warning - Field ratio above {maxField}. Escaping...')
+
         #End of find combined min field loop
 
         finalField = self._param['fieldRatio']
