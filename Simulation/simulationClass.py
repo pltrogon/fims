@@ -707,7 +707,7 @@ class FIMS_Simulation:
         self._generateGeometry()
             
         #Solve fields and run Garfield
-        self._solveEFields(solveWeighting=True)
+        self._solveEFields(solveWeighting=False)
         self._runGarfield('runFullField')
         
         return
