@@ -47,6 +47,21 @@ int main(int argc, char * argv[]) {
   // Timing variables
   clock_t startSim, stopSim, runTime;
   
+  //***** Run numbering *****//
+  //Read in run number from runNo
+  int runNo;
+  std::string runNoFile = "../runNo";
+  std::ifstream runInFile;
+  runInFile.open(runNoFile);
+
+  if(!runInFile.is_open()){
+    std::cerr << "Error reading file '" << runNoFile << "'." << std::endl;
+    return -1;
+  }
+
+  runInFile >> runNo;
+  runInFile.close();
+  
   std::cout << "****************************************\n";
   std::cout << "Building field line simulation: " << "\n";
   std::cout << "****************************************\n";
@@ -339,7 +354,7 @@ int main(int argc, char * argv[]) {
   std::cout << "Computing field lines" << std::endl;
   // Create and open field line data file
   
-  std::string fieldFileName = "fullFieldLines.dat";
+  std::string fieldFileName = "sim"+std::to_string(runNo)+"fullFieldLines.dat";
   std::string fieldFilePath = "../../Data/"+fieldFileName;
   std::ofstream fieldFile;
   fieldFile.open(fieldFilePath, std::ios::out);

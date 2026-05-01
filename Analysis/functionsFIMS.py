@@ -543,7 +543,7 @@ def getGasData(runNoList):
  
 #********************************************************************************#
 
-def getFullFieldData():
+def getFullFieldData(runNum):
     """
     Gets the field data points for each drift line created by runFullField.
     
@@ -557,7 +557,7 @@ def getFullFieldData():
     zComp = []
     
     # Read the data file line by line
-    with open('../Data/fullFieldLines.dat', 'r') as dataFile: 
+    with open(f'../Data/sim{runNum}fullFieldLines.dat', 'r') as dataFile: 
         row = dataFile.readline()
         while row:
             # split each line into the three spatial coordinates
@@ -579,7 +579,7 @@ def getFullFieldData():
 
 #********************************************************************************#
 
-def plotFullField(zTarget=0):
+def plotFullField(runNum, zTarget=0):
     """
     Plots a 2D slide of the full electric field.
     
@@ -590,7 +590,7 @@ def plotFullField(zTarget=0):
         figure
     """
     # Get field data and find the points within .5 microns of the target height
-    fieldData = getFullFieldData()
+    fieldData = getFullFieldData(runNum)
     zUp = zTarget + .5
     zDown = zTarget - .5
     xSlice = []
