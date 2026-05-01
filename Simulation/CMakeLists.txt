@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.12)
+cmake_minimum_required(VERSION 3.15)
 project(runAvalanche C CXX)
 
 # Standard C++ version for Garfield++
@@ -30,26 +30,21 @@ set(COMMON_LIBS
 # --- Define executables ---
 # Format: executable_name source_file.cc
 set(EXECUTABLES
-    runAvalanche            	garfieldExecutables/avalanche.cc
-    runAvalancheGridPix         garfieldExecutables/avalancheGridPix.cc
-    runTransparency           	garfieldExecutables/checkTransparency.cc
-    runTransparencyGridPix      garfieldExecutables/checkTransparencyGridPix.cc
-    runEfficiency           	garfieldExecutables/checkEfficiency.cc
-    runMagboltz             	garfieldExecutables/magboltz.cc
-    runParallelPlate        	garfieldExecutables/parallelPlate.cc
-    runParallelPlateEfficiency 	garfieldExecutables/parallelPlateEfficiency.cc
-    runAvalancheSurrounding 	garfieldExecutables/avalancheSurrounding.cc
-    runFullField		garfieldExecutables/plotFullField.cc
+    runAvalanche            	avalanche.cc
+    runAvalancheGridPix         avalancheGridPix.cc
+    runTransparency           	checkTransparency.cc
+    runTransparencyGridPix      checkTransparencyGridPix.cc
+    runEfficiency           	checkEfficiency.cc
+    runMagboltz             	magboltz.cc
+    runParallelPlate        	parallelPlate.cc
+    runParallelPlateEfficiency 	parallelPlateEfficiency.cc
+    runAvalancheSurrounding 	avalancheSurrounding.cc
+    runFullField		        plotFullField.cc
 )
 
 # --- Loop to create and link everything ---
 while(EXECUTABLES)
-    # Pop the first two items off the list
-    list(GET EXECUTABLES 0 EXE_NAME)
-    list(GET EXECUTABLES 1 EXE_SRC)
-    list(REMOVE_AT EXECUTABLES 0 1)
-
-    add_executable(${EXE_NAME} ${EXE_SRC})
-    
+    list(POP_FRONT EXECUTABLES EXE_NAME EXE_SRC)
+    add_executable(${EXE_NAME} "garfieldExecutables/${EXE_SRC}")
     target_link_libraries(${EXE_NAME} PRIVATE ${COMMON_LIBS})
 endwhile()
