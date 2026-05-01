@@ -103,6 +103,7 @@ class FIMS_Simulation:
         self._surroundingCells = False
         
         self._iterationNumberLimit = 100
+        self._fieldLimit = 200
 
         return
 
@@ -948,6 +949,7 @@ class FIMS_Simulation:
         """
 
         minFieldStep = 3
+        maxFieldStep = 10
 
         curField, prevField = fields
         curVal, prevVal, targetVal = values
@@ -974,13 +976,12 @@ class FIMS_Simulation:
 
         fieldStep = damping*targetDiff*fieldDiff/valDiff
         #Limit step size for stability
-        stepSizeLimit = 10
-        if fieldStep > stepSizeLimit:
-            print(f'Warning: Step size limited to {stepSizeLimit}.')
-            newField = curField+stepSizeLimit
+        if fieldStep > maxFieldStep:
+            print(f'Warning: Step size limited to {maxFieldStep}.')
+            newField = curField+maxFieldStep
 
-        #Ensure step is at least 1
-        elif fieldStep < 1:
+        #Ensure step is at least minimum
+        elif fieldStep < minFieldStep:
             print(f'Warning: Field step small. Using minimum step.')
             newField = curField+minFieldStep
 
@@ -1129,7 +1130,11 @@ class FIMS_Simulation:
                     print(f'Excluded: Efficiency = {effField:.3f} +/- {errField:.3f}')
 
                 case _:
-                    raise ValueError('Error - Malformed efficiency file.')      
+                    raise ValueError('Error - Malformed efficiency file.')
+
+            if newField >= self._fieldLimit:
+                print('Warning - Field ratio exceeded limit. Escaping.')  
+                break
         # End of find field for efficiency loop
 
         
@@ -1286,9 +1291,9 @@ class FIMS_Simulation:
                 case _:
                     raise ValueError('Error - Malformed transparency file.')
                 
-            if newField >= 200:
-                isTransparent = True
-                print('Warning - Field ratio exceeded 200. Escaping...')
+            if newField >= self._fieldLimit:
+                print(f'Warning - Field ratio exceeded limit. Escaping...')
+                break
         #End of find field for transparency loop
 
 
@@ -1501,13 +1506,9 @@ class FIMS_Simulation:
                     case _:
                         raise ValueError('Error - Malformed efficiency file.')
                     
-
-            # Escape if field becomes too large
-            maxField = 175
-            if newField >= maxField:
-                isTransparent = True
-                isEfficient = True
-                print(f'Warning - Field ratio above {maxField}. Escaping...')
+            if newField >= self._fieldLimit:
+                print(f'Warning - Field ratio exceeds limit. Escaping...')
+                break
 
         #End of find combined min field loop
 
@@ -1520,12 +1521,15 @@ class FIMS_Simulation:
         return finalField
 
 #***********************************************************************************#
-    def runCombinedMinFieldRatio(self):
+    def runCombinedMinFieldRatio(self, initialField=None):
         """
         Executes an avalanche simulation of the FIMS geometry at the minimum field 
         ratio required to achieve both:
             - 95% detection efficiency, and
             - 100% electric field line transparency. 
+        
+        Args:
+            initialField (int): Initial field ratio guess.
 
         Returns:
             int: The run number of the simulation that was executed.   
@@ -1543,7 +1547,11 @@ class FIMS_Simulation:
         print(f'Finding minimum field ratio for geometry with drift field: {driftField} V/cm')
 
         #Choose initial field ratio guess
-        minFieldGuess = self._calcMinField()
+        if initialField is not None:
+            minFieldGuess = initialField
+        else:
+            minFieldGuess = self._calcMinField()
+
         print(f'\tInitial field ratio guess: {minFieldGuess}')
         self.setParameters({'fieldRatio': minFieldGuess})
 
