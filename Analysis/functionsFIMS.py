@@ -543,37 +543,27 @@ def getGasData(runNoList):
  
 #********************************************************************************#
 
-def getFullFieldData(runNum):
+def getFullFieldData(runNumber):
     """
     Gets the field data points for each drift line created by runFullField.
-    
+
+    Args:
+        runNumber (int): Run number of the dataset
+        
     returns:
-        fieldData (dict): dictionary of the three spatial coordinates for the field.
+        fieldData (dict): dictionary of numpy arrays for each spacial coordinate.
     """
+
+    filePath = f'../Data/sim{runNumber}fullFieldLines.dat'
+
+    xData, yData, zData = np.loadtxt(filePath, delimiter=',', unpack=True)
+
+    CMTOMICRON = 1e4
     fieldData = {
+        'xComp': xData*CMTOMICRON,
+        'yComp': yData*CMTOMICRON,
+        'zComp': zData*CMTOMICRON
     }
-    xComp = []
-    yComp = []
-    zComp = []
-    
-    # Read the data file line by line
-    with open(f'../Data/sim{runNum}fullFieldLines.dat', 'r') as dataFile: 
-        row = dataFile.readline()
-        while row:
-            # split each line into the three spatial coordinates
-            line = row.strip().split(',')
-            numbersList = list(float(component) for component in line)
-            
-            # Append each coordinate to the list
-            xComp.append(numbersList[0]*1e4)
-            yComp.append(numbersList[1]*1e4)
-            zComp.append(numbersList[2]*1e4)
-            
-            row = dataFile.readline()
-    
-    fieldData['xComp'] = xComp
-    fieldData['yComp'] = yComp
-    fieldData['zComp'] = zComp
     
     return fieldData
 
@@ -584,43 +574,42 @@ def plotFullField(runNum, zTarget=0):
     Plots a 2D slide of the full electric field.
     
     args:
+        runNumber (int): Run number of the dataset
         zTarget (float): height of 2D field slice
     
     returns:
         figure
     """
-    # Get field data and find the points within .5 microns of the target height
+    #Get all field line data
     fieldData = getFullFieldData(runNum)
-    zUp = zTarget + .5
-    zDown = zTarget - .5
-    xSlice = []
-    ySlice = []
-    
-    dataID = 0
-    for dataPoint in fieldData['zComp']:
-        if dataPoint < zUp and dataPoint > zDown:
-            xSlice.append(fieldData['xComp'][dataID])
-            ySlice.append(fieldData['yComp'][dataID])
-        dataID += 1
+    xData = fieldData['xComp']
+    yData = fieldData['yComp']
+    zData = fieldData['zComp']
+
+    #Find data within slice
+    sliceWidth = 0.5
+    sliceRegion = (zData > (zTarget - sliceWidth)) & (zData < (zTarget + sliceWidth))
+
+    xSlice = xData[sliceRegion]
+    ySlice = yData[sliceRegion]
     
     # Plot the x,y components of the field at the given height
     fieldFig = plt.figure(figsize=(14,6))
     xySlice = fieldFig.add_subplot(121)
     xzSlice = fieldFig.add_subplot(122)
-    
-    xySlice.grid(linewidth=.4, alpha=.6)
-    xySlice.scatter(xSlice, ySlice, s = .1, c = 'r')
-    xySlice.set_xlabel('x Position (\u00B5m)')
-    xySlice.set_ylabel('y Position (\u00B5m)')
-    
+
+    xySlice.scatter(xSlice, ySlice, s=.1, c='r')
+    xySlice.grid()
+    xySlice.set_xlabel('x Position (um)')
+    xySlice.set_ylabel('y Position (um)')
     
     # Plot the x,z components of the field along with a line showing the target height
-    xzSlice.grid(linewidth=.4, alpha=.6)
-    xzSlice.scatter(fieldData['xComp'], fieldData['zComp'], s=.1, c = 'r')
-    xzSlice.axhline(y=zTarget, c='y', linewidth=3, label='Target Height')
+    xzSlice.scatter(xData, zData, s=.1, c = 'r')
+    xzSlice.axhline(zTarget, c='y', linewidth=3, label='Target Height')
+    xzSlice.grid()
     xzSlice.legend(loc='lower left')
-    xzSlice.set_xlabel('x Position (\u00B5m)')
-    xzSlice.set_ylabel('z Position (\u00B5m)')
+    xzSlice.set_xlabel('x Position (um)')
+    xzSlice.set_ylabel('z Position (um)')
     
     fieldFig.suptitle('2D Field Slice', fontsize = 20)
     
