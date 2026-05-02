@@ -1733,6 +1733,7 @@ class runData:
                 outerFieldLine['Field Line Radius'] = testFieldLine
             else:
                 lineID -= 1
+                #TODO: revisit this once we know the field shape
             
         # Get radius for target z using linear interpolation
         targetRadius = np.interp(
