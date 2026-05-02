@@ -79,9 +79,8 @@ class FIMS_Optimizer:
         """
         Initializes a FIMS_Optimization object.
 
-        The input parameters should be a list of lists. TODO: change this to dictionary?
-        Each inner list must contain:
-        - The name of the parameter (string)
+        The input parameters should be a dictionary of lists.
+        Each list must contain:
         - The minimum value for the parameter (float)
         - The maximum value for the parameter (float)
         
@@ -120,8 +119,9 @@ class FIMS_Optimizer:
         """
         singleParam = []
 
-        for line in self.params:
-            singleParam.append(f"[{' '.join(map(str, line))}]")
+        for item in self.params:
+            singleParam.append(f'{item} {self.params[item]}') #TODO: double check
+            #singleParam.append(f"[{' '.join(map(str, line))}]")
         
         paramList = ' '.join(singleParam)
         
@@ -141,20 +141,21 @@ class FIMS_Optimizer:
             'pitch',
             'fieldRatio'
         ]
+        paramCopy = self.params.copy()
         
-        if self.params is None:
+        if paramCopy is None:
             raise ValueError('Error - No parameters.')
 
-        for inParam in self.params:
-            if not isinstance(inParam, list) or len(inParam) != 3:
-                raise ValueError(f'Error: {inParam} is invalid.')
+        for paramName in paramCopy:
+            if not isinstance(paramCopy[paramName], list) or len(paramCopy[paramName]) != 2:
+                raise ValueError(f'Error: {paramName} is invalid.')
                 
-            name, minVal, maxVal = inParam
+            name = paramName
+            minVal = min(paramCopy[paramName])
+            maxVal = max(paramCopy[paramName])
             
             if name not in allowedParams:
                 raise ValueError(f'Error: {name} not a valid parameter.')
-            if minVal >= maxVal:
-                raise ValueError(f'Error: Invalid bounds for {name}.')
 
         return 
     
@@ -177,11 +178,11 @@ class FIMS_Optimizer:
 
         """
         # Get input parameters and their initial values
-        paramName = {p[0]: i for i, p in enumerate(self.params)}
-        initialPitch = self._initialValues[paramName['pitch']]
-        initialRadius = self._initialValues[paramName['holeRadius']]
-        initialPad = self._initialValues[paramName['padLength']]
-        initialStand = self._initialValues[paramName['gridStandoff']]
+        paramIndex = {p: i for i, p in enumerate(self.params)}
+        initialPitch = self._initialValues[paramIndex['pitch']]
+        initialRadius = self._initialValues[paramIndex['holeRadius']]
+        initialPad = self._initialValues[paramIndex['padLength']]
+        initialStand = self._initialValues[paramIndex['gridStandoff']]
         
         radiusRatio = initialPitch/initialRadius
         padRatio = initialPitch/initialPad
@@ -214,7 +215,7 @@ class FIMS_Optimizer:
         for coeffs, limit in constraints:
             row = np.zeros(numParam)
             for name, value in coeffs.items():
-                row[paramName[name]] = value
+                row[paramIndex[name]] = value
             
             matrix.append(row)
             lowerBound.append(limit)
@@ -272,10 +273,10 @@ class FIMS_Optimizer:
             paramVals (dict): dictionary of parameters names and values
         """
         paramVals = {}
-        paramName = {p[0]: i for i, p in enumerate(self.params)}
+        paramIndex = {p: i for i, p in enumerate(self.params)}
         for param in optimizerDict:
             val = optimizerDict[param]
-            paramVals[param] = val*self._initialValues[paramName[param]]
+            paramVals[param] = val*self._initialValues[paramIndex[param]]
         
         return paramVals
         
@@ -331,7 +332,7 @@ class FIMS_Optimizer:
         print(f'********** Iteration {len(self._optimizerLog)+1:<3}************')
         allParams = self.simFIMS.getAllParam()
         for elem in self.params:
-            print(f'\t{elem[0]}: {allParams[elem[0]]}')
+            print(f'\t{elem}: {allParams[elem]}')
         print('************************************')
 
         runNumber = self.simFIMS.runForOptimizer()
@@ -424,8 +425,15 @@ class FIMS_Optimizer:
                 - success (bool): Success status of minimization.
         """
         # Get optimizer parameters and bounds
+        inputList = []
+        minBounds = []
+        maxBounds = []
         activeParameters = self.params.copy()
-        inputList, minBounds, maxBounds = map(list, zip(*activeParameters))
+        
+        for paramName in activeParameters:
+            inputList.append(paramName)
+            minBounds.append(min(activeParameters[paramName]))
+            maxBounds.append(max(activeParameters[paramName]))
         
         # Set initial guess as simFIMS default values
         initialGuess = np.empty(0)
@@ -581,10 +589,17 @@ class FIMS_Optimizer:
         #TODO: saw a suggestion to normalize parameter space to improve convergence. 
 
         # Get optimizer parameters and bounds
+        inputList = []
+        minBounds = []
+        maxBounds = []
         activeParameters = self.params.copy()
-        if 'fieldRatio' not in [p[0] for p in activeParameters]:
+        if 'fieldRatio' not in [p for p in activeParameters]:
             raise ValueError('Error - fieldRatio must be an input.')
-        inputList, minBounds, maxBounds = map(list, zip(*activeParameters))
+
+        for paramName in activeParameters:
+            inputList.append(paramName)
+            minBounds.append(min(activeParameters[paramName]))
+            maxBounds.append(max(activeParameters[paramName]))
         
         # Set bounds for variables
         optimizerBounds = Bounds(minBounds, maxBounds)
