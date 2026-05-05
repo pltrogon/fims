@@ -432,8 +432,8 @@ int main(int argc, char * argv[]) {
   startSim = clock();
 
   if(simParams->numAvalanche == 0){
-    std::cerr << "No avalanches - Defaulting to 100." << std::endl;
-    // Note: Can't modify simParams->numAvalanche directly, so just proceed with 0
+    std::cerr << "Warning - No avalanches" << std::endl;
+
   }
   std::cout << "****************************************\n";
   std::cout << "Starting simulation: " << runNo << "\n";

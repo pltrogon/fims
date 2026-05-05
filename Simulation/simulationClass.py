@@ -557,7 +557,7 @@ class FIMS_Simulation:
                 args = f'{targetEfficiency} {threshold}'
 
             case 'runTransparency':
-                targetTransparency = kwargs.get('targetTransparency', 0.95)
+                targetTransparency = kwargs.get('targetTransparency', 0.99)
                 args = f'{targetTransparency}'
                 
             case 'runCollection':
@@ -1678,7 +1678,7 @@ class FIMS_Simulation:
         runSettings = {
             'detection': {'numAvalanche': 5000, 'avalancheLimit': kwargs.get('efficiencyThreshold', 10) + 5},
             'collection': {'numAvalanche': 5000, 'avalancheLimit': 5},
-            'transparency': {'numFieldLine': 1000}
+            'transparency': {'numFieldLine': 500}
         }
         saveParam = self.getAllParam()
 
