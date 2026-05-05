@@ -1,5 +1,5 @@
 /*
- * checkCharge.cc
+ * checkCollection.cc
  *
  * 
  * Garfield++ simulation of single-electron avalanches in a FIMS geometry.
@@ -8,7 +8,7 @@
  * Input parameters are:
  * <Initial Z position>
  * 
- * Results are written to a file: "chargeFile.dat"
+ * Results are written to a file: "collectionFile.dat"
  * 
  * Tanner Polischuk & James Harrison IV
  */
@@ -72,7 +72,7 @@ int main(int argc, char * argv[]) {
   //*************** SIMULATION ***************//
 
   std::cout << "****************************************\n";
-  std::cout << "Building simulation: " << runNo << " (charge)\n";
+  std::cout << "Building simulation: " << runNo << " (Charge Collection)\n";
   std::cout << "****************************************\n";
 
   // Define and initialize the gas mixture
@@ -144,7 +144,7 @@ int main(int argc, char * argv[]) {
   startSim = clock();
 
   std::cout << "****************************************\n";
-  std::cout << "Starting simulation: " << runNo << " (charge)\n";
+  std::cout << "Starting simulation: " << runNo << " (Charge Collection)\n";
   std::cout << "****************************************\n";
 
   //Begin simulating electron avalanches
@@ -273,7 +273,7 @@ int main(int argc, char * argv[]) {
   std::cout << "\tElectron leaves drift area (Simulation Volume) (-1): " << num1 << "\n";
   std::cout << "\tNumber of failures (no electrons in avalanche) (These are included in -7): " << numFailure << "\n";
 
-  //Charge Efficiency calculations - Bayesian Statistics
+  //Charge Collection Efficiency calculations - Bayesian Statistics
   double success = 1.*numSuccess;
   double total = 1.*numTotal;
   double efficiency = (success+1)/(total+2);
@@ -282,7 +282,7 @@ int main(int argc, char * argv[]) {
   
 	//***** Output efficiency value *****//	
 	//create output file
-  std::string dataFilename = "chargeFile.dat";
+  std::string dataFilename = "collectionFile.dat";
   std::string dataPath = "../../Data/"+dataFilename;
 	std::ofstream dataFile;
 
@@ -293,7 +293,7 @@ int main(int argc, char * argv[]) {
   }
 
 	//write some extra information
-	dataFile << "// Finding charge efficiency for run: " << runNo << "\n";
+	dataFile << "// Finding collection efficiency for run: " << runNo << "\n";
   dataFile << "// Field Ratio: " << simParams->fieldRatio << "\n";
 	dataFile << "// Total avalanches: " << simParams->numAvalanche  << "\n";
 
@@ -303,7 +303,7 @@ int main(int argc, char * argv[]) {
   
 
   //output efficiency
-  dataFile << "// Charge:\n" << efficiency << "\n" << efficiencyErr << std::endl;
+  dataFile << "// Collection:\n" << efficiency << "\n" << efficiencyErr << std::endl;
 
 	dataFile.close();
 
@@ -313,7 +313,7 @@ int main(int argc, char * argv[]) {
   std::cout << "****************************************\n";
   std::cout << "Done processing avalanches...(" << runTime << " s)\n";
   std::cout << "****************************************\n";
-  std::cout << "Done simulation: " << runNo << " (charge)\n";
+  std::cout << "Done simulation: " << runNo << " (Charge Collection)\n";
   std::cout << "****************************************\n";
   std::cout << std::endl;
 
