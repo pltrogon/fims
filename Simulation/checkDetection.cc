@@ -1,17 +1,17 @@
 /*
- * checkEfficiency.cc
+ * checkDetection.cc
  *
  * 
  * Garfield++ simulation of single-electron avalanches in a FIMS geometry.
  * 
- * Repeats avalanches until an efficiency of 95% with a 10-electron threshold 
+ * Repeats avalanches until a detection efficiency of 95% with a 10-electron threshold 
  * is met or excluded with a 2-signma confidence.
  * 
  * Input parameters are:
  * <Target Efficiency>
- * <Efficiency Threshold>
+ * <Detection Threshold>
  * 
- * Results are written to a file: "efficiencyFile.dat"
+ * Results are written to a file: "detectionFile.dat"
  * 
  * Tanner Polischuk & James Harrison IV
  * December 2025
@@ -48,7 +48,7 @@ using namespace Garfield;
 int main(int argc, char * argv[]) {
 
   if(argc != 3){
-    std::cerr << "Format: " << argv[0] << " <Target Efficiency> <Threshold>" << std::endl;
+    std::cerr << "Format: " << argv[0] << " <Target Efficiency> <Detection Threshold>" << std::endl;
     return 1;
   }
 
@@ -78,7 +78,7 @@ int main(int argc, char * argv[]) {
   //*************** SIMULATION ***************//
 
   std::cout << "****************************************\n";
-  std::cout << "Building simulation: " << runNo << " (efficiency)\n";
+  std::cout << "Building simulation: " << runNo << " (Detection)\n";
   std::cout << "****************************************\n";
 
   // Define and initialize the gas mixture
@@ -139,7 +139,7 @@ int main(int argc, char * argv[]) {
   startSim = clock();
 
   std::cout << "****************************************\n";
-  std::cout << "Starting simulation: " << runNo << " (efficiency)\n";
+  std::cout << "Starting simulation: " << runNo << " (Detection)\n";
   std::cout << "****************************************\n";
 
   //Set up variables for simulation
@@ -214,7 +214,7 @@ int main(int argc, char * argv[]) {
 
 	//***** Output efficiency value *****//	
 	//create output file
-  std::string dataFilename = "efficiencyFile.dat";
+  std::string dataFilename = "detectionFile.dat";
   std::string dataPath = "../../Data/"+dataFilename;
 	std::ofstream dataFile;
 
@@ -225,7 +225,7 @@ int main(int argc, char * argv[]) {
   }
 
 	//write some extra information
-	dataFile << "// Finding efficiency for run: " << runNo << "\n";
+	dataFile << "// Finding detection efficiency for run: " << runNo << "\n";
   dataFile << "// Field Ratio: " << simParams->fieldRatio << "\n";
 	dataFile << "// Total avalanches: " << totalAvalanches << " (of " << simParams->numAvalanche << ")\n";
   dataFile << "// Electron threshold: " << electronThreshold << "\n";
@@ -247,7 +247,7 @@ int main(int argc, char * argv[]) {
   }
 
   //output efficiency
-  dataFile << "// Efficiency:\n" << efficiency << "\n" << efficiencyErr << std::endl;
+  dataFile << "// Detection:\n" << efficiency << "\n" << efficiencyErr << std::endl;
 
 	dataFile.close();
 
@@ -257,7 +257,7 @@ int main(int argc, char * argv[]) {
   std::cout << "****************************************\n";
   std::cout << "Done processing avalanches...(" << runTime << " s)\n";
   std::cout << "****************************************\n";
-  std::cout << "Done simulation: " << runNo << " (efficiency)\n";
+  std::cout << "Done simulation: " << runNo << " (Detection)\n";
   std::cout << "****************************************\n";
   std::cout << std::endl;
 
