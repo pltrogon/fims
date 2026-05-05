@@ -103,7 +103,7 @@ class FIMS_Simulation:
         self._surroundingCells = False
         
         self._iterationNumberLimit = 100
-        self._fieldLimit = 200
+        self._fieldLimit = 250
 
         return
 
