@@ -543,7 +543,7 @@ class FIMS_Simulation:
             'runTransparency',
             'runTransparencyGridPix',
             'runEfficiency',
-            'runCharge'
+            'runCollection'
         ]
 
         if executable not in executables:
@@ -560,7 +560,7 @@ class FIMS_Simulation:
                 targetTransparency = kwargs.get('targetTransparency', 0.95)
                 args = f'{targetTransparency}'
                 
-            case 'runCharge':
+            case 'runCollection':
                 initialZ = kwargs.get('initialZ', 2*self._param['holeRadius'])
                 args = f'{initialZ}'
                 
@@ -887,7 +887,7 @@ class FIMS_Simulation:
         resultsFiles = {
             'efficiency': '../Data/efficiencyFile.dat',
             'transparency': '../Data/transparencyFile.dat',
-            'charge': '../Data/chargeFile.dat'
+            'collection': '../Data/collectionFile.dat'
         }
         if target not in resultsFiles:
             raise ValueError(f'Invalid target: {target}')
@@ -1658,12 +1658,12 @@ class FIMS_Simulation:
             target (str): The target efficiency to get. Options are:
                 - 'efficiency': The electron detection efficiency.
                 - 'transparency': The electric field line transparency.
-                - 'charge': The charge collection efficiency.
+                - 'collection': The charge collection efficiency.
             kwargs: Additional keyword arguments for specific targets:
-                - efficiencyGoal (float): The target efficiency for the efficiency target.
-                - efficiencyThreshold (int): The detection threshold for the efficiency target.
-                - transparencyGoal (float): The target transparency for the transparency target.
-                - chargeGoal (float): The target charge collection efficiency for the charge target.
+                - efficiencyGoal (float): The target detection efficiency.
+                - efficiencyThreshold (int): The detection threshold for the detection target.
+                - transparencyGoal (float): The target field transparency.
+                - collectionGoal (float): The target charge collection efficiency.
         
         Returns:
             tuple containing:
@@ -1674,7 +1674,7 @@ class FIMS_Simulation:
 
         runSettings = {
             'efficiency': {'numAvalanche': 5000, 'avalancheLimit': kwargs.get('efficiencyThreshold', 10) + 5},
-            'charge': {'numAvalanche': 5000, 'avalancheLimit': 5},
+            'collection': {'numAvalanche': 5000, 'avalancheLimit': 5},
             'transparency': {'numFieldLine': 1000}
         }
         saveParam = self.getAllParam()
@@ -1691,10 +1691,10 @@ class FIMS_Simulation:
                     threshold=kwargs.get('efficiencyThreshold', 10)
                 )
             
-            case 'charge':
+            case 'collection':
                 initialZ = kwargs.get('initialZ', 0.5*self._param['cathodeHeight'])
                 self._runGarfield(
-                    'runCharge', 
+                    'runCollection', 
                     initialZ=initialZ
                 )
 
@@ -1725,7 +1725,7 @@ class FIMS_Simulation:
             dict: A dictionary containing values as tuples of (value, error):
                 - 'detectionEfficiency': The electron detection efficiency.
                 - 'fieldTransparency': The electric field line transparency.
-                - 'chargeEfficiency': The charge collection efficiency.
+                - 'collectionEfficiency': The charge collection efficiency.
         """
 
         runNo = self._param['runNumber']
@@ -1740,12 +1740,12 @@ class FIMS_Simulation:
         # Get each efficiency
         detectionEfficiency = self._getEfficiency(target='efficiency')
         fieldTransparency = self._getEfficiency(target='transparency')
-        chargeEfficiency = self._getEfficiency(target='charge', initialZ=100)
+        collectionEfficiency = self._getEfficiency(target='collection', initialZ=100)
 
         efficiencyResults = {
             'detectionEfficiency': detectionEfficiency,
             'fieldTransparency': fieldTransparency,
-            'chargeEfficiency': chargeEfficiency
+            'collectionEfficiency': collectionEfficiency
         }
 
         return efficiencyResults
@@ -2132,8 +2132,8 @@ class FIMS_Simulation:
         self._solveEFields(solveWeighting=False)
 
         zLocation = []
-        chargeTransparency = []
-        chargeTransparencyErr = []
+        collectionEfficiency = []
+        collectionEfficiencyErr = []
 
         for inZ in np.linspace(0.1, 0.95, num=numSteps):
 
@@ -2142,14 +2142,14 @@ class FIMS_Simulation:
             chargeResults = self._readResultsFile('charge')
 
             zLocation.append(zLoc)
-            chargeTransparency.append(chargeResults['charge'])
-            chargeTransparencyErr.append(chargeResults['chargeErr'])
+            collectionEfficiency.append(chargeResults['charge'])
+            collectionEfficiencyErr.append(chargeResults['chargeErr'])
 
 
         zScanResults = pd.DataFrame({
             'zLocation': zLocation,
-            'chargeTransparency': chargeTransparency,
-            'chargeTransparencyErr': chargeTransparencyErr
+            'collectionEfficiency': collectionEfficiency,
+            'collectionEfficiencyErr': collectionEfficiencyErr
         })
 
         return zScanResults
