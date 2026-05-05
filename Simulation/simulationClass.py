@@ -528,7 +528,7 @@ class FIMS_Simulation:
                 - 'runAvalancheGridPix': Simulates electron avalanches for the GridPix geometry.
                 - 'runTransparency': Simulates the field transparency for the FIMS geometry.
                 - 'runTransparencyGridPix': Simulates the field transparency for the GridPix geometry.
-                - 'runEfficiency': Simulates the efficiency for a given field strength. Requires additional arguments:
+                - 'runDetection': Simulates the detection efficiency for a given field strength. Requires additional arguments:
                     - targetEfficiency (float): The target efficiency to achieve (default: 0.95).
                     - threshold (int): The number of electrons to consider an avalanche successful (default: 10).
         """
@@ -542,7 +542,7 @@ class FIMS_Simulation:
             'runAvalancheGridPix',
             'runTransparency',
             'runTransparencyGridPix',
-            'runEfficiency',
+            'runDetection',
             'runCollection'
         ]
 
@@ -551,7 +551,7 @@ class FIMS_Simulation:
         
         # Handle extra inputs for specific executables
         match executable:
-            case 'runEfficiency':
+            case 'runDetection':
                 targetEfficiency = kwargs.get('targetEfficiency', 0.95)
                 threshold = kwargs.get('threshold', 10)
                 args = f'{targetEfficiency} {threshold}'
@@ -561,7 +561,7 @@ class FIMS_Simulation:
                 args = f'{targetTransparency}'
                 
             case 'runCollection':
-                initialZ = kwargs.get('initialZ', 2*self._param['holeRadius'])
+                initialZ = kwargs.get('initialZ', 0.5*self._param['cathodeHeight'])
                 args = f'{initialZ}'
                 
             case _:
@@ -707,16 +707,16 @@ class FIMS_Simulation:
         return runNo
 
 #**********************************************************************#
-    def _calcEfficiencyMinField(self):
+    def _calcDetectionMinField(self):
         """
-        Calculates the minimum field ratio to achieve 95% Efficiency.
+        Calculates the minimum field ratio to achieve 95% detection efficiency.
 
         Calculation is based off of exponential fits to simulated data
         of padLength and grid standoff vs field ratio.
 
         Returns:
             minField (float): Numerical solution to the minimum field for 
-                              95% efficiency.
+                              95% detection efficiency.
         """
         #Get geometry variables
         standoff = self._param['gridStandoff']
@@ -734,7 +734,7 @@ class FIMS_Simulation:
         #standEffField = 342.0*np.exp(-0.04*standoff) + 83.7 # Chi2 = 5.75 p = 0.836
         standEffField = 4358.0/standoff + 48.4 # Chi2 = 3.83 p = 0.955
         
-        #Minimum field for 95% efficiency
+        #Minimum field for 95% detection efficiency
         minField = max(padEffField, standEffField)
         
         return minField
@@ -781,25 +781,25 @@ class FIMS_Simulation:
     def _calcMinField(self): 
         """
         Calculates the minimum field required for 
-        95% efficiency and 100% transparency.
+        95% detection efficiency and 100% field transparency.
 
         Note: Field is rounded down to nearest integer.
         
         Returns:
             minField (float): Numerical solution to the minimum field for 
-                              100% transparency and 95% efficiency.
+                              100% transparency and 95% detection efficiency.
         """
-        #Minimum field for 100% transparency
-        minFieldTrans = self._calcTransparencyMinField()
+        #Minimum field for 100% field transparency
+        transparencyMin = self._calcTransparencyMinField()
         
-        #Minimum field for 95% efficiency
-        minFieldEff = self._calcEfficiencyMinField()
+        #Minimum field for 95% detection efficiency
+        detectionMin = self._calcDetectionMinField()
         
         #Choose the larger of the two fields so that both 
         #conditions are satisfied simultaneously.
-        netMinField = max(minFieldTrans, minFieldEff)
+        netMinField = max(transparencyMin, detectionMin)
         
-        return math.floor(0.5*netMinField)
+        return math.floor(0.75*netMinField)
 
 #***********************************************************************************#
     def runCapacitance(self):
@@ -872,7 +872,10 @@ class FIMS_Simulation:
     def _readResultsFile(self, target=None):
         """
         Reads the results file for a given target value.
-        Options are: 'efficiency' or 'transparency'
+        Options are: 
+            - detection
+            - transparency
+            - collection
 
         Args:
             target (str): The target value to read from the results file.
@@ -880,12 +883,12 @@ class FIMS_Simulation:
         Returns:
             dict: Dictionary containing the parsed results data. 
                   - 'stopCondition' (str): The avalanche stop condition.
-                  - '<target>' (float): The simulated target value.
-                  - '<target>Err'(float): The simulated uncertainty.
+                  - 'result' (float): The simulated target value.
+                  - 'resultErr' (float): The simulated uncertainty.
         """
 
         resultsFiles = {
-            'efficiency': '../Data/efficiencyFile.dat',
+            'detection': '../Data/detectionFile.dat',
             'transparency': '../Data/transparencyFile.dat',
             'collection': '../Data/collectionFile.dat'
         }
@@ -918,8 +921,8 @@ class FIMS_Simulation:
                     break
             if targetIndex is None:
                 raise ValueError(f'{target.capitalize()} section not found.')
-            results[target] = float(allLines[targetIndex + 1])
-            results[f'{target}Err'] = float(allLines[targetIndex + 2])
+            results['result'] = float(allLines[targetIndex + 1])
+            results['resultErr'] = float(allLines[targetIndex + 2])
 
         except Exception as e:
             raise RuntimeError(f'Error while parsing the results file: {e}')
@@ -1044,7 +1047,7 @@ class FIMS_Simulation:
         return newField
 
 #***********************************************************************************#
-    def _findFieldForEfficiency(self, targetEfficiency=.95, threshold=10):
+    def _findFieldForDetection(self, targetEfficiency=.95, threshold=10):
         """
         Performs an iterative search to find the minimum Electric Field Ratio 
         required to achieve a specified detection efficiency for electron avalanches.
@@ -1103,17 +1106,17 @@ class FIMS_Simulation:
 
             #Determine the efficiency and read results from file
             self._runGarfield(
-                'runEfficiency',
+                'runDetection',
                 targetEfficiency=targetEfficiency, threshold=threshold
             )
-            effResults = self._readResultsFile('efficiency')
+            effResults = self._readResultsFile('detection')
 
-            effAtField['efficiency'].append(effResults['efficiency'])
-            effAtField['efficiencyErr'].append(effResults['efficiencyErr'])
+            effAtField['detection'].append(effResults['result'])
+            effAtField['detectionErr'].append(effResults['resultErr'])
 
             curField = effAtField['field'][-1]
-            effField = effAtField['efficiency'][-1]
-            errField = effAtField["efficiencyErr"][-1]
+            effField = effAtField['detection'][-1]
+            errField = effAtField['detectionErr'][-1]
             
             match effResults['stopCondition']:
                 
@@ -1135,7 +1138,7 @@ class FIMS_Simulation:
             if newField >= self._fieldLimit:
                 print('Warning - Field ratio exceeded limit. Escaping.')  
                 break
-        # End of find field for efficiency loop
+        # End of find field for detection efficiency loop
 
         
         finalField = self._param['fieldRatio']
@@ -1268,8 +1271,8 @@ class FIMS_Simulation:
             )
             transResults = self._readResultsFile('transparency')
 
-            transAtField['transparency'].append(transResults['transparency'])
-            transAtField['transparencyErr'].append(transResults['transparencyErr'])
+            transAtField['transparency'].append(transResults['result'])
+            transAtField['transparencyErr'].append(transResults['resultErr'])
                 
             twoSigmaTrans = transAtField['transparency'][-1] + 2*transAtField['transparencyErr'][-1]
             
@@ -1465,8 +1468,8 @@ class FIMS_Simulation:
                 transResults = self._readResultsFile('transparency')
 
                 transAtField['field'].append(newField)
-                transAtField['transparency'].append(transResults['transparency'])
-                transAtField['transparencyErr'].append(transResults['transparencyErr'])
+                transAtField['transparency'].append(transResults['result'])
+                transAtField['transparencyErr'].append(transResults['resultErr'])
                 
                     
                 #Check transparency to terminate loop
@@ -1488,11 +1491,11 @@ class FIMS_Simulation:
                     'runEfficiency',
                     targetEfficiency=targetEfficiency, threshold=threshold
                 )
-                effResults = self._readResultsFile('efficiency')
+                effResults = self._readResultsFile('detection')
 
                 effAtField['field'].append(newField)
-                effAtField['efficiency'].append(effResults['efficiency'])
-                effAtField['efficiencyErr'].append(effResults['efficiencyErr'])
+                effAtField['efficiency'].append(effResults['result'])
+                effAtField['efficiencyErr'].append(effResults['resultErr'])
 
                 match effResults['stopCondition']:
                     
@@ -1504,7 +1507,7 @@ class FIMS_Simulation:
                         print(f"Efficiency condition satisfied at field ratio = {effAtField['field'][-1]}.")
             
                     case _:
-                        raise ValueError('Error - Malformed efficiency file.')
+                        raise ValueError('Error - Malformed detection file.')
                     
             if newField >= self._fieldLimit:
                 print(f'Warning - Field ratio exceeds limit. Escaping...')
@@ -1656,7 +1659,7 @@ class FIMS_Simulation:
 
         Args:
             target (str): The target efficiency to get. Options are:
-                - 'efficiency': The electron detection efficiency.
+                - 'detection': The electron detection efficiency.
                 - 'transparency': The electric field line transparency.
                 - 'collection': The charge collection efficiency.
             kwargs: Additional keyword arguments for specific targets:
@@ -1673,7 +1676,7 @@ class FIMS_Simulation:
         """
 
         runSettings = {
-            'efficiency': {'numAvalanche': 5000, 'avalancheLimit': kwargs.get('efficiencyThreshold', 10) + 5},
+            'detection': {'numAvalanche': 5000, 'avalancheLimit': kwargs.get('efficiencyThreshold', 10) + 5},
             'collection': {'numAvalanche': 5000, 'avalancheLimit': 5},
             'transparency': {'numFieldLine': 1000}
         }
@@ -1684,9 +1687,9 @@ class FIMS_Simulation:
         self.setParameters(runSettings[target])
 
         match target:
-            case 'efficiency':
+            case 'detection':
                 self._runGarfield(
-                    'runEfficiency', 
+                    'runDetection', 
                     targetEfficiency=kwargs.get('efficiencyGoal', 0.95), 
                     threshold=kwargs.get('efficiencyThreshold', 10)
                 )
@@ -1709,11 +1712,11 @@ class FIMS_Simulation:
             
         
         results = self._readResultsFile(target)
-        print(f'\t{target}: {results[target]:.3f} +/- {results[f"{target}Err"]:.3f}') 
+        print(f'\t{target}: {results['result']:.3f} +/- {results['resultErr']:.3f}') 
 
         self.setParameters(saveParam)
 
-        return results[target], results[f'{target}Err']
+        return results['result'], results['resultErr']
 
 #***********************************************************************************#
     def getAllEfficiencies(self):
@@ -1738,7 +1741,7 @@ class FIMS_Simulation:
         self._solveEFields(solveWeighting=False)
 
         # Get each efficiency
-        detectionEfficiency = self._getEfficiency(target='efficiency')
+        detectionEfficiency = self._getEfficiency(target='detection')
         fieldTransparency = self._getEfficiency(target='transparency')
         collectionEfficiency = self._getEfficiency(target='collection', initialZ=100)
 
