@@ -983,7 +983,8 @@ class gmshClass:
         pitch = self._param['pitch']
         holeRadius = self._param['holeRadius']
         gridThickness = self._param['gridThickness']
-        driftLength = self._param['cathodeHeight'] - gridThickness/2
+        cathodeHeight = self._param['cathodeHeight']
+        gridStandoff = self._param['gridStandoff']
 
         xLength = pitch*sqrt3/2
         yLength = pitch/2
@@ -1024,10 +1025,13 @@ class gmshClass:
         bounds = meshSettings[runOption]
         refinements = cellRefinements.get(runOption, [])
 
-        fineMesh = gridThickness
+        #=========================#
+        #=== DEFINE MESH SIZES ===#
+        #=========================#
+        fineMesh = gridThickness/2
         coarseMesh = fineMesh*2
-        backgroundMesh = fineMesh*4
-        transitionWidth = pitch/2
+        backgroundMesh = fineMesh*10
+        #=========================#
 
         smallHole = min(
             self._param['holeRadius'],
@@ -1042,26 +1046,12 @@ class gmshClass:
 
         # Create a line from the center of the pad to above the center hole
         pipeBottom = self._occ.addPoint(
-            0, 0, -self._param['gridStandoff']
+            0, 0, -gridStandoff
         )
         pipeTop = self._occ.addPoint( 
-            0, 0, self._param['holeRadius']
+            0, 0, 2*holeRadius
         ) 
         amplificationLine = self._occ.addLine(pipeBottom, pipeTop)
-
-        # Create lines for refinement around the edges and corners of the cell
-        refinementLines = []
-
-        for x, y in refinements:
-            refineBottom = self._occ.addPoint(
-                x, y, gridThickness/2
-            )
-            refineTop = self._occ.addPoint(
-                x, y, driftLength
-            )
-            refineLine = self._occ.addLine(refineBottom, refineTop)
-            refinementLines.append(refineLine)
-
 
         self._occ.synchronize()
 
@@ -1069,53 +1059,53 @@ class gmshClass:
         gmsh.model.mesh.field.add('Distance', 1)
         gmsh.model.mesh.field.setNumbers(1, 'EdgesList', [amplificationLine])
 
-        # Find distance from corner lines
-        gmsh.model.mesh.field.add('Distance', 2)
-        gmsh.model.mesh.field.setNumbers(2, 'EdgesList', refinementLines)
-
         # Define fine mesh within smallRadius
-        gmsh.model.mesh.field.add('Threshold', 3)
-        gmsh.model.mesh.field.setNumber(3, 'InField', 1)
-        gmsh.model.mesh.field.setNumber(3, 'SizeMin', fineMesh)
-        gmsh.model.mesh.field.setNumber(3, 'SizeMax', backgroundMesh)
-        gmsh.model.mesh.field.setNumber(3, 'DistMin', smallRadius)
-        gmsh.model.mesh.field.setNumber(3, 'DistMax', smallRadius + transitionWidth)
+        gmsh.model.mesh.field.add('Threshold', 2)
+        gmsh.model.mesh.field.setNumber(2, 'InField', 1)
+        gmsh.model.mesh.field.setNumber(2, 'SizeMin', fineMesh)
+        gmsh.model.mesh.field.setNumber(2, 'SizeMax', backgroundMesh)
+        gmsh.model.mesh.field.setNumber(2, 'DistMin', smallRadius)
+        gmsh.model.mesh.field.setNumber(2, 'DistMax', 2*smallRadius)
 
         # Define coarse mesh within largeRadius
-        gmsh.model.mesh.field.add('Threshold', 4)
-        gmsh.model.mesh.field.setNumber(4, 'InField', 1)
-        gmsh.model.mesh.field.setNumber(4, 'SizeMin', coarseMesh)
-        gmsh.model.mesh.field.setNumber(4, 'SizeMax', backgroundMesh)
-        gmsh.model.mesh.field.setNumber(4, 'DistMin', largeRadius)
-        gmsh.model.mesh.field.setNumber(4, 'DistMax', largeRadius + transitionWidth)
-
-        # Define coarse mesh near edge/corner refinement lines
-        gmsh.model.mesh.field.add('Threshold', 5)
-        gmsh.model.mesh.field.setNumber(5, 'InField', 2)
-        gmsh.model.mesh.field.setNumber(5, 'SizeMin', coarseMesh)
-        gmsh.model.mesh.field.setNumber(5, 'SizeMax', backgroundMesh)
-        gmsh.model.mesh.field.setNumber(5, 'DistMin', pitch/4/sqrt3)
-        gmsh.model.mesh.field.setNumber(5, 'DistMax', pitch/4/sqrt3 + transitionWidth)
+        gmsh.model.mesh.field.add('Threshold', 3)
+        gmsh.model.mesh.field.setNumber(3, 'InField', 1)
+        gmsh.model.mesh.field.setNumber(3, 'SizeMin', coarseMesh)
+        gmsh.model.mesh.field.setNumber(3, 'SizeMax', backgroundMesh)
+        gmsh.model.mesh.field.setNumber(3, 'DistMin', largeRadius)
+        gmsh.model.mesh.field.setNumber(3, 'DistMax', 2*largeRadius)
 
         # Keep coarse mesh around the entire grid
-        gmsh.model.mesh.field.add('Box', 6)
-        gmsh.model.mesh.field.setNumber(6, 'VIn', coarseMesh)
-        gmsh.model.mesh.field.setNumber(6, 'VOut', backgroundMesh)
-        gmsh.model.mesh.field.setNumber(6, 'XMin', bounds['x'][0])
-        gmsh.model.mesh.field.setNumber(6, 'XMax', bounds['x'][1])
-        gmsh.model.mesh.field.setNumber(6, 'YMin', bounds['y'][0])
-        gmsh.model.mesh.field.setNumber(6, 'YMax', bounds['y'][1])
-        gmsh.model.mesh.field.setNumber(6, 'ZMin', -holeRadius)
-        gmsh.model.mesh.field.setNumber(6, 'ZMax', 2.*holeRadius)
-        gmsh.model.mesh.field.setNumber(6, 'Thickness', transitionWidth)
+        gmsh.model.mesh.field.add('Box', 4)
+        gmsh.model.mesh.field.setNumber(4, 'VIn', coarseMesh)
+        gmsh.model.mesh.field.setNumber(4, 'VOut', backgroundMesh)
+        gmsh.model.mesh.field.setNumber(4, 'XMin', bounds['x'][0])
+        gmsh.model.mesh.field.setNumber(4, 'XMax', bounds['x'][1])
+        gmsh.model.mesh.field.setNumber(4, 'YMin', bounds['y'][0])
+        gmsh.model.mesh.field.setNumber(4, 'YMax', bounds['y'][1])
+        gmsh.model.mesh.field.setNumber(4, 'ZMin', -smallRadius)
+        gmsh.model.mesh.field.setNumber(4, 'ZMax', smallRadius)
+        gmsh.model.mesh.field.setNumber(4, 'Thickness', largeRadius)
+
+        #Keep coarse mesh near the cathode
+        gmsh.model.mesh.field.add('Box', 5)
+        gmsh.model.mesh.field.setNumber(5, 'VIn', coarseMesh)
+        gmsh.model.mesh.field.setNumber(5, 'VOut', backgroundMesh)
+        gmsh.model.mesh.field.setNumber(5, 'XMin', bounds['x'][0])
+        gmsh.model.mesh.field.setNumber(5, 'XMax', bounds['x'][1])
+        gmsh.model.mesh.field.setNumber(5, 'YMin', bounds['y'][0])
+        gmsh.model.mesh.field.setNumber(5, 'YMax', bounds['y'][1])
+        gmsh.model.mesh.field.setNumber(5, 'ZMin', .95*cathodeHeight)
+        gmsh.model.mesh.field.setNumber(5, 'ZMax', cathodeHeight)
+        gmsh.model.mesh.field.setNumber(5, 'Thickness', .1*cathodeHeight)
 
         # Use the smallest mesh size
-        gmsh.model.mesh.field.add('Min', 7)
-        gmsh.model.mesh.field.setNumbers(7, 'FieldsList', [3, 4, 5, 6])
-        gmsh.model.mesh.field.setAsBackgroundMesh(7)
+        gmsh.model.mesh.field.add('Min', 11)
+        gmsh.model.mesh.field.setNumbers(11, 'FieldsList', [2, 3, 4, 5])
+        gmsh.model.mesh.field.setAsBackgroundMesh(11)
 
         # Final settings
-        gmsh.option.setNumber('Mesh.MeshSizeFromCurvature', 9)
+        gmsh.option.setNumber('Mesh.MeshSizeFromCurvature', 36)
         gmsh.option.setNumber('Mesh.MeshSizeExtendFromBoundary', 1)
         gmsh.option.setNumber('Mesh.MeshSizeFromPoints', 1)
         gmsh.option.setNumber('Mesh.MeshSizeMax', backgroundMesh)
