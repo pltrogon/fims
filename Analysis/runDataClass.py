@@ -493,13 +493,16 @@ class runData:
             self._calculatedData['IBF * Trimmed Gain'] = dataIBF['meanIBF']*trimmedGain
 
             # Efficiencies
-            simRawEff, simRawEffErr = self._getRawEfficiency(threshold=10)
-            self._calculatedData['Raw Efficiency (10e)'] = simRawEff
-            self._calculatedData['Raw Efficiency Error'] = simRawEffErr
+            rawEfficiency = self._getRawEfficiency(threshold=10)
+            self._calculatedData['Raw Efficiency (10e)'] = rawEfficiency['efficiency']
+            self._calculatedData['Raw Efficiency Error (Low)'] = rawEfficiency['efficiencyErrLow']
+            self._calculatedData['Raw Efficiency Error (High)'] = rawEfficiency['efficiencyErrHigh']
 
-            simEff, simEffErr = self._getEfficiency(threshold=10)
-            self._calculatedData['Efficiency (10e)'] = simEff
-            self._calculatedData['Efficiency Error'] = simEffErr
+            efficiency = self._getEfficiency(threshold=10)
+            self._calculatedData['Efficiency (10e)'] = efficiency['efficiency']
+            self._calculatedData['Efficiency Error (Low)'] = efficiency['efficiencyErrLow']
+            self._calculatedData['Efficiency Error (High)'] = efficiency['efficiencyErrHigh']
+
 
             efficiencyThreshold = self._getEfficiencyThreshold(targetEfficiency=0.95)
             n95Info = self._bootstrapQuantile(quantile=0.05, numIterations=1000)
@@ -527,7 +530,9 @@ class runData:
         
             chargeCollectionEff = self._getChargeCollectionEfficiency()
             self._calculatedData['Charge Collection Eff'] = chargeCollectionEff['efficiency']
-            self._calculatedData['Charge Collection Eff Err'] = chargeCollectionEff['efficiencyErr']
+            self._calculatedData['Charge Collection Eff Err (Low)'] = chargeCollectionEff['efficiencyErrLow']
+            self._calculatedData['Charge Collection Eff Err (High)'] = chargeCollectionEff['efficiencyErrHigh']
+
 
 
             #Other calculated values can be added here as needed.
@@ -2206,8 +2211,17 @@ class runData:
 
         simEffErr = math.sqrt(varience)
 
-        return simEff, simEffErr
-    
+        simEffErrLow, simEffErrHigh = functionsFIMS.getAsymErrs(simEff, simEffErr)
+
+        efficiency = {
+            'efficiency': simEff,
+            'efficiencyErr': simEffErr,
+            'efficiencyErrLow': simEffErrLow,
+            'efficiencyErrHigh': simEffErrHigh
+        }
+
+        return efficiency
+
 #********************************************************************************#
     def _getEfficiency(self, threshold=0):
         """
@@ -2253,7 +2267,16 @@ class runData:
 
         simEffErr = math.sqrt(varience)
 
-        return simEff, simEffErr
+        errorLow, errorHigh = functionsFIMS.getAsymErrs(simEff, simEffErr)
+
+        efficiency = {
+            'efficiency': simEff,
+            'efficiencyErr': simEffErr,
+            'efficiencyErrLow': errorLow,
+            'efficiencyErrHigh': errorHigh
+        }
+
+        return efficiency
     
 #********************************************************************************#
     def _fitPolya(self):
@@ -2279,9 +2302,9 @@ class runData:
 
         while isEfficient:
             threshold += 1
-            eff, effErr = self._getEfficiency(threshold=threshold)
+            efficiency = self._getEfficiency(threshold=threshold)
 
-            if eff < targetEfficiency:
+            if efficiency['efficiency'] < targetEfficiency: #TODO - add error margins
                 isEfficient = False
 
         #Subtract 1.5 to get the threshold where efficiency is just above target
@@ -2430,9 +2453,13 @@ class runData:
         chargeEff = numCount / numValid
         chargeEffErr = math.sqrt(chargeEff*(1-chargeEff)/numValid)
 
+        chargeErrLow, chargeErrHigh = functionsFIMS.getAsymErrs(chargeEff, chargeEffErr)
+
         chargeCollectionEff = {
             'efficiency': chargeEff,
             'efficiencyErr': chargeEffErr,
+            'efficiencyErrLow': chargeErrLow,
+            'efficiencyErrHigh': chargeErrHigh
         }
 
         return chargeCollectionEff
@@ -2510,9 +2537,9 @@ class runData:
             c='g', ls='--', label=f'Mean Avalanche Size (Gain) = {gain:.1f}'
         )
         
-        dataEff, dataEffErr = self._getEfficiency(threshold=threshold)
+        dataEfficiency = self._getEfficiency(threshold=threshold)
         polyaEff = fitPolya.calcEfficiency(threshold)
-        efficiencyText = f'Polya Efficiency = {polyaEff:.4f}\nData Efficiency = {dataEff:.4f} +/- {dataEffErr:.4f}'
+        efficiencyText = f'Polya Efficiency = {polyaEff:.4f}\nData Efficiency = {dataEfficiency["efficiency"]:.4f} (-{dataEfficiency["efficiencyErrLow"]:.4f}, +{dataEfficiency["efficiencyErrHigh"]:.4f})'
         
         ax.text(
             0.8, 0.5, efficiencyText, fontsize=10, 
