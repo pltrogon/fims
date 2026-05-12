@@ -1028,7 +1028,7 @@ class gmshClass:
         #=========================#
         #=== DEFINE MESH SIZES ===#
         #=========================#
-        fineMesh = gridThickness/2
+        fineMesh = gridThickness*2
         coarseMesh = fineMesh*2
         backgroundMesh = fineMesh*10
         #=========================#

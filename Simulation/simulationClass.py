@@ -543,7 +543,8 @@ class FIMS_Simulation:
             'runTransparency',
             'runTransparencyGridPix',
             'runDetection',
-            'runCollection'
+            'runCollection',
+            'runNetEfficiency'
         ]
 
         if executable not in executables:
@@ -563,6 +564,11 @@ class FIMS_Simulation:
             case 'runCollection':
                 initialZ = kwargs.get('initialZ', 0.5*self._param['cathodeHeight'])
                 args = f'{initialZ}'
+
+            case 'runNetEfficiency':
+                targetEfficiency = kwargs.get('targetEfficiency', 0.95)
+                threshold = kwargs.get('threshold', 10)
+                args = f'{targetEfficiency} {threshold}'
                 
             case _:
                 args=''
