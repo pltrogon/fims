@@ -875,13 +875,14 @@ class FIMS_Simulation:
 #***********************************************************************************#
 
 #***********************************************************************************#
-    def _readResultsFile(self, target=None):
+    def _readResultsFile(self, target=None):#TODO - Have changed this to include upper and lower errors instead of symmetric gaussian. Implement here, and in each executable that writes.
         """
         Reads the results file for a given target value.
         Options are: 
             - detection
             - transparency
             - collection
+            - netEfficiency
 
         Args:
             target (str): The target value to read from the results file.
@@ -890,19 +891,23 @@ class FIMS_Simulation:
             dict: Dictionary containing the parsed results data. 
                   - 'stopCondition' (str): The avalanche stop condition.
                   - 'result' (float): The simulated target value.
-                  - 'resultErr' (float): The simulated uncertainty.
+                  - 'resultErrLow' (float): The simulated lower uncertainty.
+                  - 'resultErrHigh' (float): Simulated upper uncertainty
         """
 
+        dataPath = '../Data/'
         resultsFiles = {
-            'detection': '../Data/detectionFile.dat',
-            'transparency': '../Data/transparencyFile.dat',
-            'collection': '../Data/collectionFile.dat'
+            'detection': 'detectionFile.dat',
+            'transparency': 'transparencyFile.dat',
+            'collection': 'collectionFile.dat',
+            'netEfficiency': 'netEfficiency.dat'
         }
         if target not in resultsFiles:
             raise ValueError(f'Invalid target: {target}')
         
+        resultsFile = os.join(dataPath, resultsFiles[target])
         try:
-            with open(resultsFiles[target], 'r') as inFile:
+            with open(resultsFile, 'r') as inFile:
                 allLines = [inLine.strip() for inLine in inFile.readlines()]
         except Exception as e:
             raise RuntimeError(f'Error while reading the results file: {e}')
@@ -927,8 +932,10 @@ class FIMS_Simulation:
                     break
             if targetIndex is None:
                 raise ValueError(f'{target.capitalize()} section not found.')
+            
             results['result'] = float(allLines[targetIndex + 1])
-            results['resultErr'] = float(allLines[targetIndex + 2])
+            results['resultErrLow'] = float(allLines[targetIndex + 2])
+            results['resultErrHigh'] = float(allLines[targetIndex + 3])
 
         except Exception as e:
             raise RuntimeError(f'Error while parsing the results file: {e}')
@@ -1528,6 +1535,135 @@ class FIMS_Simulation:
         print(f'Solution found: Field ratio = {finalField}')
 
         return finalField
+    
+
+#***********************************************************************************#
+    def _findNetMinField(self, targetEfficiency=0.95, threshold=10):
+        """TODO"""
+
+        print('\n'.join([
+            'Beginning search for minimum field to achieve .95 net efficiency considering:',
+            '\t- Collection efficiency',
+            '\t- Detection efficiency'
+        ]))
+
+        iterNo = 0
+        iterNoLimit = self._iterationNumberLimit
+
+        efficiencyAtField = {
+            'field': [],
+            'netEfficiency': [],
+            'netEffErrLow': [],
+            'netEffErrHigh': []
+        }
+
+        saveParam = self.getAllParam()
+        self.setParameters({ #More is better. Adjust as needed.
+            'numAvalanche': 5000,
+            'avalancheLimit': threshold+5
+        })
+
+        isEfficient = False
+        while (not isEfficient) and (iterNo <= iterNoLimit):
+            iterNo += 1
+
+            newFields = []
+
+            newField = self._getNextField(iterNo, efficiencyAtField, targetEfficiency)
+            newFields.append(newField)
+
+            self.setParameters({'fieldRatio': newField})
+            print(f'Iteration {iterNo}: Field ratio = {newField}')
+
+            self._solveEFields(solveWeighting=False)
+
+            self._runGarfield(
+                'runNetEfficiency',
+                targetEfficiency=targetEfficiency, threshold=threshold
+            )
+            efficiencyResults = self._readResultsFile('netEfficiency')
+
+            efficiencyAtField['field'].append(newField)
+            efficiencyAtField['netEffficiency'].append(efficiencyResults['result'])
+            efficiencyAtField['netEffErrLow'].append(efficiencyResults['resultErrLow'])
+            efficiencyAtField['netEffErrHigh'].append(efficiencyResults['resultErrHigh'])
+
+            match efficiencyResults['stopCondition']:
+                    
+                case 'DID NOT CONVERGE' | 'EXCLUDED':
+                    print(f'\tEfficiency condition not satisfied.')
+
+                case 'CONVERGED':
+                    isEfficient = True
+                    print(f"Efficiency condition satisfied at field ratio = {efficiencyAtField['field'][-1]}.")
+        
+                case _:
+                    raise ValueError('Error - Malformed detection file.')
+                
+            if newField >= self._fieldLimit:
+                print(f'Warning - Field ratio exceeds limit. Escaping...')
+                break
+
+            #End of find field loop
+
+        finalField = self._param['fieldRatio']
+        saveParam['fieldRatio'] = finalField
+        self.setParameters(saveParam)
+
+        print(f'Solution found: Field ratio = {finalField}')
+
+        return finalField
+    
+#***********************************************************************************#
+    def runNetMinField(self, initialField=None):
+        """
+        Executes an avalanche simulation of the FIMS geometry at the minimum field 
+        ratio required to achieve a net 95% efficiency considering:
+            - detection efficiency, and
+            - collection efficiency. 
+        
+        Args:
+            initialField (int): Initial field ratio guess.
+
+        Returns:
+            int: The run number of the simulation that was executed.   
+        """
+
+        #Ensure all parameters exist
+        self._checkParam()
+
+        #get the run number for this simulation
+        runNo = self._param['runNumber']
+        print(f'Running simulation - Run number: {runNo}')
+
+        #Get absolute drift field value
+        driftField = self._param['driftField']
+        print(f'Finding minimum field ratio for geometry with drift field: {driftField} V/cm')
+
+        #Choose initial field ratio guess
+        if initialField is not None:
+            minFieldGuess = initialField
+        else:
+            minFieldGuess = 10 #TODO - betetr guess? not longer need transparency in this?
+
+        print(f'\tInitial field ratio guess: {minFieldGuess}')
+        self.setParameters({'fieldRatio': minFieldGuess})
+
+        #Generate the FEM geometry
+        self._generateGeometry()
+
+        # Determine minimum field ratio for default conditions
+        netMinField = self._findNetMinField()
+        self.setParameters({'fieldRatio': netMinField})
+
+        #Solve for the weighting field
+        self._solveEFields(solveWeighting=True)
+        
+        #Run the electron transport simulation
+        self._runGarfield()
+
+        return runNo
+
 
 #***********************************************************************************#
     def runCombinedMinFieldRatio(self, initialField=None):
