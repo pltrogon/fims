@@ -8,7 +8,6 @@
 
 // My includes
 #include "myFunctions.h"
-#include <boost/math/distributions/beta.hpp>//NOTE THIS IS AN EXTERNAL LIBRARY
 
 //Garfield includes
 #include "Garfield/ComponentElmer.hh"
@@ -125,23 +124,15 @@ int main(int argc, char * argv[]) {
     int numFailure = 0;
 
     //Statistics variables
-    double detectionEff = 0., collectionEff = 0., netEfficiency = 0.; 
-    double upperDetectionLimit = 1., lowerDetectionLimit = 0.;
-    double upperCollectionLimit = 1., lowerCollectionLimit = 0.;
-    double netEfficiencyLow = 0., netEfficiencyHigh = 1.;
-    double netEfficiencyErr = 0.;
-
-    double lowerCollection = 0., upperCollection = 0., meanCollection = 0.;
-    double lowerDetection = 0., upperDetection = 0., meanDetection = 0.;
+    EfficiencyResults collectionEff;
+    EfficiencyResults detectionEff;
+    EfficiencyResults netEfficiency;
 
     //Initial loop control
     int numInBunch = 500;//Always do at least 500 avalanches first
     bool runAvalanche = true, isEfficienct = false;
 
     double cellLength = simParams->pitch/std::sqrt(3.);
-
-    //TEstingStats
-    int num7 = 0, num5 = 0, num1 = 0;
 
     std::cout << "Beginning avalanches..." << std::endl;
     //Run avalanches in bunches
@@ -202,7 +193,6 @@ int main(int argc, char * argv[]) {
                             curTime = t0;
                             curEnergy = e0;
                             curDx = 0., curDy = 0., curDz = 0.;
-                            num7++;
                             break;
                         }
 
@@ -214,7 +204,6 @@ int main(int argc, char * argv[]) {
                             else{
                                 numHitGrid++;
                             }
-                            num5++;
                             repopulate = false;
                             break;
                         }
@@ -238,15 +227,11 @@ int main(int argc, char * argv[]) {
                             double dy = yFinal - yPrev;
                             double dz = zFinal - zPrev;
                             double vMag = std::sqrt(dx*dx + dy*dy + dz*dz);
-
                             curDx = dx/vMag;
                             curDy = dy/vMag;
                             curDz = dz/vMag;
-
                             curTime = tf;
                             curEnergy = Ef;
-
-                            num1++;
                             break;
                         }
 
@@ -264,45 +249,22 @@ int main(int argc, char * argv[]) {
 
         numInBunch = 100;//do bunches of 100 after first iteration
 
-        //Calculate efficiencies - Bayesian stats (Depreciated?)
-        collectionEff = (double)(numCollected+1.) / (numInitialElectrons+2.);
-        detectionEff = (double)(numAboveThreshold+1.) / (numCollected+2.);
-
-        netEfficiency = detectionEff*collectionEff;
-
-        // *** Check efficiency ***
-        const double pLower = 0.02275;
-        const double pUpper = 0.97725;
-
-        //Collection Efficiency
-        boost::math::beta_distribution<> distCollection(
-            numCollected + 1., 
-            (numInitialElectrons - numCollected) + 1.
-        );
-
-        meanCollection  = boost::math::mean(distCollection);
-        lowerCollection = boost::math::quantile(distCollection, pLower);
-        upperCollection = boost::math::quantile(distCollection, pUpper);
-
-        //Detection Efficiency
-        if(numCollected > 0){
-            boost::math::beta_distribution<> distDetection(
-                numAboveThreshold + 1., 
-                (numCollected - numAboveThreshold) + 1.
-            );
-            
-            meanDetection  = boost::math::mean(distDetection);
-            lowerDetection = boost::math::quantile(distDetection, pLower);
-            upperDetection = boost::math::quantile(distDetection, pUpper);
-        }
+        // *** Check efficiencies ***
+        //Collection
+        collectionEff = calculateEfficiencyStats(numCollected, numInitialElectrons);
+        //Detection
+        detectionEff = calculateEfficiencyStats(numAboveThreshold, numCollected);
 
         //Net efficiency
-        netEfficiency = meanCollection*meanDetection;
-        netEfficiencyLow = lowerCollection*lowerDetection;
-        netEfficiencyHigh = upperCollection*upperDetection;
+        netEfficiency.meanValue = collectionEff.meanValue*detectionEff.meanValue;
+        netEfficiency.minValue = collectionEff.minValue*detectionEff.minValue;
+        netEfficiency.maxValue = collectionEff.maxValue*detectionEff.maxValue;
+
+        netEfficiency.lowError = netEfficiency.meanValue - netEfficiency.minValue;
+        netEfficiency.highError = netEfficiency.maxValue - netEfficiency.meanValue;
 
         //Efficiency exceeds or excludes target within confidence
-        if(netEfficiencyHigh < targetEfficiency || netEfficiencyLow >= targetEfficiency){
+        if(netEfficiency.maxValue < targetEfficiency || netEfficiency.minValue >= targetEfficiency){
             runAvalanche = false;
         }
 
@@ -330,10 +292,10 @@ int main(int argc, char * argv[]) {
     dataFile << "// Num Detected: " << numAboveThreshold << "\n";
     dataFile << "// Num Collected: " << numCollected << "\n";
 
-    dataFile << "// Collection Efficiency: " << meanCollection << "\n";
-    dataFile << "// Collection Efficiency Range: (" << lowerCollection << ", " << upperCollection << ")\n";
-    dataFile << "// Detection Efficiency: " << meanDetection << "\n";
-    dataFile << "// Detection Efficiency Range: (" << lowerDetection << ", " << upperDetection << ")\n";
+    dataFile << "// Collection Efficiency: " << collectionEff.meanValue << "\n";
+    dataFile << "// Collection Error Range: (-" << collectionEff.lowError << ", +" << collectionEff.highError << ")\n";
+    dataFile << "// Detection Efficiency: " << detectionEff.meanValue << "\n";
+    dataFile << "// Detection Error Range: (-" << detectionEff.lowError << ", +" << detectionEff.highError << ")\n";
 
     //include convergence criteria
     dataFile << "// Stop condition:\n";
@@ -345,7 +307,7 @@ int main(int argc, char * argv[]) {
     }
 
     //output efficiency
-    dataFile << "// Net:\n" << netEfficiency << "\n" << (netEfficiency-netEfficiencyLow) << "\n" << (netEfficiencyHigh-netEfficiency) << std::endl;
+    dataFile << "// NetEfficiency:\n" << netEfficiency.meanValue << "\n" << netEfficiency.lowError << "\n" << netEfficiency.highError << std::endl;
 
     dataFile.close();
 
