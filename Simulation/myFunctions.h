@@ -21,6 +21,8 @@
 #include "Garfield/ViewDrift.hh"
 #include "Garfield/ViewSignal.hh"
 
+#include <boost/math/distributions/beta.hpp>//NOTE THIS IS AN EXTERNAL LIBRARY
+
 using json = nlohmann::json;
 
 // Conversion constant
@@ -56,6 +58,15 @@ struct SimulationParameters {
     double gasCompCF4;
     double gasCompIsobutane;
     double gasPenning;
+};
+
+//Struct to hold efficiency parameters
+struct EfficiencyResults{
+    double meanValue;
+    double lowError;
+    double highError;
+    double minValue;
+    double maxValue;
 };
 
 /**
@@ -262,6 +273,38 @@ std::optional<SimulationParameters> readSimulationParameters() {
     }
 }
 
+/**
+ * @brief Calculates the mean efficiency and its asymmetric error bars using a Beta distribution.
+ * * This function estimates the probability of success (efficiency) based on a given 
+ * number of successes and trials. It uses a Bayesian approach with a uniform prior.
+ * * @param nSuccess The number of successful outcomes recorded.
+ * @param nTotal The total number of trials conducted.
+ * @return Efficiency results {meanValue, lowError, highError, minValue, maxValue}
+ */
+EfficiencyResults calculateEfficiencyStats(int nSuccess, int nTotal){
+    
+    //2-sigma confidence intervals
+    const double pLower = 0.02275; 
+    const double pUpper = 0.97725;
 
+    //Ensure data exists
+    if (nTotal <= 0){
+        return {0.0, 0.0, 1.0, 0.0, 1.0};
+    }
+
+    //Define a beta distribution based on the successes and total trials.
+    boost::math::beta_distribution<> betaDistribution(nSuccess + 1., nTotal - nSuccess + 1.);
+
+    //Calculate stats
+    double meanValue = boost::math::mean(betaDistribution);
+    double lowerLimit = boost::math::quantile(betaDistribution, pLower);
+    double upperLimit = boost::math::quantile(betaDistribution, pUpper);
+
+    //Find errors
+    double lowError = meanValue - lowerLimit;
+    double highError = upperLimit - meanValue;
+
+    return {meanValue, lowError, highError, lowerLimit, upperLimit};
+}
 
 #endif // MY_FUNCTIONS_H
