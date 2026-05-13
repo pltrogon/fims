@@ -36,8 +36,6 @@ set(EXECUTABLES
     runAvalancheGridPix         avalancheGridPix.cc
     runTransparency           	checkTransparency.cc
     runTransparencyGridPix      checkTransparencyGridPix.cc
-    runDetection               	checkDetection.cc
-    runCollection               checkCollection.cc
     runMagboltz             	magboltz.cc
     runParallelPlate        	parallelPlate.cc
     runParallelPlateEfficiency 	parallelPlateEfficiency.cc
