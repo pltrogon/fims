@@ -42,7 +42,7 @@ set(EXECUTABLES
     runParallelPlate        	parallelPlate.cc
     runParallelPlateEfficiency 	parallelPlateEfficiency.cc
     runAvalancheSurrounding 	avalancheSurrounding.cc
-    runNetEfficiency            checkNetEfficiency.cc
+    runEfficiency               checkEfficiency.cc
 )
 
 # --- Loop to create and link everything ---

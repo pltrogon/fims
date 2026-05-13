@@ -10,6 +10,7 @@
 #include <random>
 #include <cmath>
 #include <utility>
+#include <functional>
 
 #include "Garfield/ComponentElmer.hh"
 #include "Garfield/AvalancheMicroscopic.hh"

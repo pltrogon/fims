@@ -1,5 +1,5 @@
 /*
- * checkNetEfficiency.cc
+ * checkEfficiency.cc
  *
  * 
  * TODO
@@ -34,16 +34,37 @@
 
 using namespace Garfield;
 
+//Define a class and handler for the input control for the mode to run
+enum class RunMode {
+    Net,
+    Detection,
+    Collection,
+    Unknown
+};
+
+RunMode stringToRunMode(std::string str) {
+    std::transform(str.begin(), str.end(), str.begin(), ::tolower);
+
+    if (str == "net")        return RunMode::Net;
+    if (str == "detection")  return RunMode::Detection;
+    if (str == "collection") return RunMode::Collection;
+    
+    return RunMode::Unknown;
+}
+
 int main(int argc, char * argv[]) {
-    if(argc != 3){
-        std::cerr << "Format: " << argv[0] << " <Target Efficiency> <Detection Threshold>" << std::endl;
-        return 1;
+    if(argc != 4){
+        std::cerr << "Format: " << argv[0] << " <Target Efficiency> <Target Value> <Detection Threshold>" << std::endl;
+        return -1;
     }
+    RunMode runMode = stringToRunMode(argv[1]);
+    double targetEfficiency = std::atof(argv[2]);
+    int electronThreshold = std::atoi(argv[3]);
 
-    double targetEfficiency = std::atof(argv[1]);
-    int electronThreshold = std::atoi(argv[2]);
-
-    const double confidenceValue = 2.;//NOTE - 1.645 for 95% confidence instead of 2 for 2-sigma
+    if(runMode == RunMode::Unknown){
+        std::cerr << "Error: Invalid runMode: " << argv[1] << std::endl;
+        return -1;
+    }
 
     //Randon seed
     std::srand(static_cast<unsigned int>(std::time(nullptr)));
@@ -57,7 +78,7 @@ int main(int argc, char * argv[]) {
     }
 
     //********** Setup Simulation **********//
-    std::cout << "Setting up simulation " << simParams->runNumber << "(Net efficiency)" << std::endl;
+    std::cout << "Getting efficiency for " << simParams->runNumber << "(" << runMode << ")" << std::endl;
 
     //Gas Mixture
     MediumMagboltz* gasFIMS = initializeGas(*simParams);
@@ -110,7 +131,7 @@ int main(int argc, char * argv[]) {
     }
 
     //Deafult initial electron parameters
-    double x0 = 0., y0 = 0., z0 = 0.75*simParams->holeRadius;
+    double x0 = 0., y0 = 0., z0 = 0.75*simParams->cathodeHeight;
     double t0 = 0.;//ns
     double e0 = 0.1;//eV (Garfield is weird when this is 0.)
     double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
@@ -263,18 +284,28 @@ int main(int argc, char * argv[]) {
         netEfficiency.lowError = netEfficiency.meanValue - netEfficiency.minValue;
         netEfficiency.highError = netEfficiency.maxValue - netEfficiency.meanValue;
 
-        //Efficiency exceeds or excludes target within confidence
-        if(netEfficiency.maxValue < targetEfficiency || netEfficiency.minValue >= targetEfficiency){
-            runAvalanche = false;
+
+        //Determine if target efficiency exceeds or excludes target value within confidence
+        switch (runMode){
+            case RunMode::Net:
+                activeEff = &netEfficiency; break;
+            case RunMode::Detection:
+                activeEff = &detectionEff; break;
+            case RunMode::Collection:
+                activeEff = &collectionEff; break;
+            default:
+                return -1;
         }
 
-
+        if(activeEff->maxValue < targetEfficiency || activeEff->minValue >= targetEfficiency){
+            runAvalanche = false;
+        }
     }//End of all avalanches
 
 
     //***** Output efficiency value *****//	
     //create output file
-    std::string dataFilename = "netEfficiencyFile.dat";
+    std::string dataFilename = "efficiencyResults.dat";
     std::string dataPath = "../../Data/"+dataFilename;
     std::ofstream dataFile;
 
@@ -284,30 +315,33 @@ int main(int argc, char * argv[]) {
         std::cerr << "Error: Could not open file: " << dataPath << std::endl;
     }
 
-    //write some extra information
-    dataFile << "// Finding net efficiency for run: " << simParams->runNumber << "\n";
-    dataFile << "// Field Ratio: " << simParams->fieldRatio << "\n";
-    dataFile << "// Total avalanches: " << numInitialElectrons << " (of " << simParams->numAvalanche << ")\n";
-    dataFile << "// Electron threshold: " << electronThreshold << "\n";
-    dataFile << "// Num Detected: " << numAboveThreshold << "\n";
-    dataFile << "// Num Collected: " << numCollected << "\n";
+    //Write some general info
+    dataFile << "Finding efficiency for run: " << simParams->runNumber << "\n";
+    dataFile << "Run mode: " << runMode << "\n";
+    dataFile << "Total initial electrons: " << numInitialElectrons << " (of " << simParams->numAvalanche << ")\n";
+    dataFile << "Electron threshold: " << electronThreshold << "\n";
+    dataFile << "Field Ratio: " << simParams->fieldRatio << "\n\n";
 
-    dataFile << "// Collection Efficiency: " << collectionEff.meanValue << "\n";
-    dataFile << "// Collection Error Range: (-" << collectionEff.lowError << ", +" << collectionEff.highError << ")\n";
-    dataFile << "// Detection Efficiency: " << detectionEff.meanValue << "\n";
-    dataFile << "// Detection Error Range: (-" << detectionEff.lowError << ", +" << detectionEff.highError << ")\n";
+    //Include the actual results
+    dataFile << "Num collected:\n" << numCollected << "\n";
+    dataFile << "Num detected:\n" << numAboveThreshold << "\n\n";
 
-    //include convergence criteria
-    dataFile << "// Stop condition:\n";
+    dataFile << "Stop condition:\n";
     if(runAvalanche){
-        dataFile << "DID NOT CONVERGE\n";
+        dataFile << "DID NOT CONVERGE\n\n";
     }
     else{
-        dataFile << "CONVERGED\n";
+        dataFile << "CONVERGED\n\n";
     }
 
-    //output efficiency
-    dataFile << "// NetEfficiency:\n" << netEfficiency.meanValue << "\n" << netEfficiency.lowError << "\n" << netEfficiency.highError << std::endl;
+    //Include all of the calculated values
+    dataFile << "Efficiency Values (Form: meanValue, lowError, higherror):\n";
+    dataFile << "Collection Efficiency:\n" << collectionEff.meanValue << "\n";
+    dataFile << collectionEff.lowError << "\n" << collectionEff.highError << "\n";
+    dataFile << "Detection Efficiency:\n" << detectionEff.meanValue << "\n";
+    dataFile << detectionEff.lowError << "\n" << detectionEff.highError << "\n";
+    dataFile << "Net Efficiency:\n" << netEfficiency.meanValue << "\n";
+    dataFile << netEfficiency.lowError << "\n" << netEfficiency.highError << std::endl;
 
     dataFile.close();
 
