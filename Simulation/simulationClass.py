@@ -80,7 +80,7 @@ class FIMS_Simulation:
         geoemetry (geometryClass): A geometry class object representing the geometry and field solvers.
     """
 
-#***********************************************************************************#
+#**********************************************************************#
     def __init__(self):
         """
         Initializes a FIMS_Simulation object.
@@ -107,7 +107,7 @@ class FIMS_Simulation:
 
         return
 
-#***********************************************************************************#
+#**********************************************************************#
     #String definition
     def __str__(self):
         """
@@ -117,7 +117,7 @@ class FIMS_Simulation:
 
         return "FIMS Simulation Parameters:\n\t" + "\n\t".join(paramList)
 
-#***********************************************************************************#    
+#**********************************************************************#    
     def _defaultParam(self):
         """
         Default FIMS parameters.
@@ -150,7 +150,7 @@ class FIMS_Simulation:
         }
         return defaultParameters
 
-#***********************************************************************************#    
+#**********************************************************************#    
     def _checkParam(self):
         """
         Ensures that values exist for all necessary parameters.
@@ -173,7 +173,7 @@ class FIMS_Simulation:
                 
         return
     
-    #***********************************************************************************#    
+    #******************************************************************#    
     def setParameters(self, paramDict):
         """
         Updates the parameter dictionary with the provided values.
@@ -194,7 +194,7 @@ class FIMS_Simulation:
 
         return
     
-#***********************************************************************************#    
+#**********************************************************************#    
     def _checkGasComp(self):
         """
         Ensures that the gas composition percentages sum to 1.0.
@@ -211,7 +211,7 @@ class FIMS_Simulation:
         
         return
     
-#***********************************************************************************#    
+#**********************************************************************#    
     def _checkRunNumber(self):
         """
         Ensures that the run number is valid.
@@ -222,7 +222,7 @@ class FIMS_Simulation:
         
         return
     
-#***********************************************************************************#
+#**********************************************************************#
     def getParam(self, parameter):
         """
         Gets a copy of the desired parameter.
@@ -238,14 +238,14 @@ class FIMS_Simulation:
             
         return copy.copy(self._param[parameter])
     
-#***********************************************************************************#
+#**********************************************************************#
     def getAllParam(self):
         """
         Gets a copy of the entire parameter dictionary.
         """
         return copy.deepcopy(self._param)
 
-#***********************************************************************************#       
+#**********************************************************************#       
     def _getGarfieldPath(self):
         """
         Reads and returns the filepath to the Garfield++ source script.
@@ -278,7 +278,7 @@ class FIMS_Simulation:
             
         return garfieldPath
 
-#***********************************************************************************#
+#**********************************************************************#
     def _setupSimulation(self):
         """
         Initializes Garfield++ and creates an avalanche executable.
@@ -334,7 +334,6 @@ class FIMS_Simulation:
         return
     
 #**********************************************************************#
-
     def _getGarfieldEnvironment(self):
         """
         Sourced the Garfield++ environment via bash.
@@ -364,12 +363,8 @@ class FIMS_Simulation:
             )
 
         return garfieldEnv
-    
+
 #**********************************************************************#
-
-
-
-#***********************************************************************************#
     def setGeometry(self, unitCell='FIMS', surrounding=False):
         """
         Sets the geometry for the simulation.
@@ -387,7 +382,7 @@ class FIMS_Simulation:
 
         return
 
-#***********************************************************************************#
+#**********************************************************************#
     def _resetParam(self, verbose=True):
         """
         Resets the simulation to the default parameters.
@@ -402,7 +397,7 @@ class FIMS_Simulation:
         
         return
 
-#***********************************************************************************#
+#**********************************************************************#
     def _getRunNumber(self):
         """
         Gets the simulation number for the ** NEXT ** simulation.
@@ -424,7 +419,7 @@ class FIMS_Simulation:
         
         return runNo
 
-#***********************************************************************************#
+#**********************************************************************#
     def _incrementRunNumber(self):
         """
         Increments the run number after a successful avalanche run.
@@ -437,7 +432,7 @@ class FIMS_Simulation:
             print(f'Warning: Could not increment run number: {e}')
         return
 
-#***********************************************************************************#
+#**********************************************************************#
     def setRunNumber(runNumber=None):
         """
         Sets the simulation run number to a given input value.
@@ -462,8 +457,7 @@ class FIMS_Simulation:
 
         return
     
-
-#***********************************************************************************#
+#**********************************************************************#
     def _generateGeometry(self):
         """
         Generates the geometry for the simulation using the geometryClass.
@@ -475,7 +469,7 @@ class FIMS_Simulation:
 
         return        
     
-#***********************************************************************************#
+#**********************************************************************#
     def visualizeGeometry(self):
         """
         Generates the geometry for the FIMS simulation 
@@ -498,7 +492,7 @@ class FIMS_Simulation:
 
         return
     
-#***********************************************************************************#
+#**********************************************************************#
     def _solveEFields(self, solveWeighting=True):
         """
         Solves the electric field for the FIMS simulation using the geometryClass.
@@ -509,15 +503,14 @@ class FIMS_Simulation:
             solveWeighting (bool): Additonally solve for weighting fields.
 
         """
-        if not hasattr(self, '_geometry'):
-            self._generateGeometry()
-
         self._geometry.calculateEFields(solveWeighting=solveWeighting)
 
         return
 
-#***********************************************************************************#
+#**********************************************************************#
     def _runGarfield(self, executable='runAvalanche', **kwargs):
+        #TODO - Can we consolidate any of these executables?
+        ##  I.e. do we really need runAvalanche AND runAvalancheGridPix AND runAvalancheSurrounding??
         """
         Runs a Garfield++ simulation with the specified executable.
 
@@ -713,7 +706,7 @@ class FIMS_Simulation:
         return runNo
 
 #**********************************************************************#
-    def _calcDetectionMinField(self):
+    def _calcDetectionMinField(self): #TODO - (Q1) are these guesses depreciated/unnecessary?
         """
         Calculates the minimum field ratio to achieve 95% detection efficiency.
 
@@ -746,8 +739,7 @@ class FIMS_Simulation:
         return minField
 
 #**********************************************************************#
-
-    def _calcTransparencyMinField(self):
+    def _calcTransparencyMinField(self):#TODO - (Q1) are these guesses depreciated/unnecessary?
         """
         Calculates the minimum field ratio to achieve 100% transparency.
 
@@ -783,8 +775,7 @@ class FIMS_Simulation:
         return minField
 
 #**********************************************************************#
-
-    def _calcMinField(self): 
+    def _calcMinField(self): #TODO - (Q1) are these guesses depreciated/unnecessary?
         """
         Calculates the minimum field required for 
         95% detection efficiency and 100% field transparency.
@@ -844,7 +835,6 @@ class FIMS_Simulation:
 
         return capacitanceMatrix
 
-
 #***********************************************************************************#
     def _readCapacitanceMatrix(self):
         """
@@ -875,37 +865,35 @@ class FIMS_Simulation:
 #***********************************************************************************#
 
 #***********************************************************************************#
-    def _readResultsFile(self, target=None):#TODO - Have changed this to include upper and lower errors instead of symmetric gaussian. Implement here, and in each executable that writes.
+    def _readEfficiencyResults(self):#TODO - Have changed this to include upper and lower errors instead of symmetric gaussian. Implement here, and in each executable that writes.
         """
-        Reads the results file for a given target value.
-        Options are: 
-            - detection
-            - transparency
-            - collection
-            - netEfficiency
+        Parses the efficiency results file and merges it with current simulation parameters.
 
-        Args:
-            target (str): The target value to read from the results file.
-        
         Returns:
-            dict: Dictionary containing the parsed results data. 
-                  - 'stopCondition' (str): The avalanche stop condition.
-                  - 'result' (float): The simulated target value.
-                  - 'resultErrLow' (float): The simulated lower uncertainty.
-                  - 'resultErrHigh' (float): Simulated upper uncertainty
+            dict: A dictionary containing the parsed results with the following keys:
+                
+                Metadata:
+                - 'stopCondition' (str): The reason the avalanche simulation terminated.
+                - 'fieldRatio' (int): The field ratio used for this calculation.
+
+                Efficiencies (floats):
+                    Are the Calculated mean values with lower and upper bounds for the 
+                    net, detection, and collection efficiencies
+                - 'netEff'
+                - 'netErrLow'
+                - 'netErrHigh'
+                - 'detectionEff'
+                - 'detectionErrLow'
+                - 'detectionErrHigh'
+                - 'collectionEff'
+                - 'collectionErrLow'
+                - 'collectionErrHigh'
         """
 
         dataPath = '../Data/'
-        resultsFiles = {
-            'detection': 'detectionFile.dat',
-            'transparency': 'transparencyFile.dat',
-            'collection': 'collectionFile.dat',
-            'netEfficiency': 'netEfficiency.dat'
-        }
-        if target not in resultsFiles:
-            raise ValueError(f'Invalid target: {target}')
+        dataFilename = 'efficiencyResults.dat'
         
-        resultsFile = os.join(dataPath, resultsFiles[target])
+        resultsFile = os.path.join(dataPath, dataFilename)
         try:
             with open(resultsFile, 'r') as inFile:
                 allLines = [inLine.strip() for inLine in inFile.readlines()]
@@ -913,29 +901,23 @@ class FIMS_Simulation:
             raise RuntimeError(f'Error while reading the results file: {e}')
         
         results = {}
+        efficiencies = ['net', 'detection', 'collection']
+        
         try:
-            # Find the line with "// Stop condition:"
-            stopIndex = None
             for i, line in enumerate(allLines):
-                if line.startswith('// Stop condition:'):
-                    stopIndex = i
-                    break
-            if stopIndex is None:
-                raise ValueError('Stop condition section not found.')
-            results['stopCondition'] = allLines[stopIndex + 1].strip()
+                line = line.lower()
+                if line.startswith('stop condition:'):
+                    results['stopCondition'] = allLines[i + 1].strip()
+                    continue
 
-            # Find the line with the target value
-            targetIndex = None
-            for i, line in enumerate(allLines):
-                if line.startswith(f'// {target.capitalize()}:'):
-                    targetIndex = i
-                    break
-            if targetIndex is None:
-                raise ValueError(f'{target.capitalize()} section not found.')
-            
-            results['result'] = float(allLines[targetIndex + 1])
-            results['resultErrLow'] = float(allLines[targetIndex + 2])
-            results['resultErrHigh'] = float(allLines[targetIndex + 3])
+                for inEfficiency in efficiencies:
+                    if line.startswith(inEfficiency):
+                        results[f'{inEfficiency}Eff'] = float(allLines[i + 1])
+                        results[f'{inEfficiency}ErrLow'] = float(allLines[i + 2])
+                        results[f'{inEfficiency}ErrHigh'] = float(allLines[i + 3])
+                        break
+
+            results['fieldRatio'] = self.getParam('fieldRatio')
 
         except Exception as e:
             raise RuntimeError(f'Error while parsing the results file: {e}')
@@ -943,7 +925,7 @@ class FIMS_Simulation:
         return results
     
 #***********************************************************************************#
-    def _getFieldRatioSecant(self, fields, values, valuesErr=None, damping=0.8):
+    def _getFieldRatioSecant(self, fields, values, valuesErr=None, damping=0.8):#TODO -- Update to use lowError and higherror
         """
         Calculates the next field strength ratio using the secant method to approach a target value.
 
@@ -1010,7 +992,7 @@ class FIMS_Simulation:
     
 
 #***********************************************************************************#
-    def _getNextField(self, iterNo, valueAtField, targetValue):
+    def _getNextField(self, iterNo, valueAtField, targetValue):#TODO -- Update to use lowError and higherror
         """
         Determines the next field ratio for achieving a target value. 
         Utilizes the iteration number to choreograph a secant-based root-finding method.
@@ -1060,7 +1042,7 @@ class FIMS_Simulation:
         return newField
 
 #***********************************************************************************#
-    def _findFieldForDetection(self, targetEfficiency=.95, threshold=10):
+    def _findFieldForDetection(self, targetEfficiency=.95, threshold=10): #TODO -- Is this depreciated because we never want *just* detection efficiency?
         """
         Performs an iterative search to find the minimum Electric Field Ratio 
         required to achieve a specified detection efficiency for electron avalanches.
@@ -1175,6 +1157,8 @@ class FIMS_Simulation:
         TODO - Consider if this is better than just printing the raw values (easier
         to copy + paste)
 
+        TODO - formatting of this may be off now that there are low and high errors
+
         Prints the results of the field search in a box format.
 
         Args:
@@ -1199,7 +1183,7 @@ class FIMS_Simulation:
         return
 
 #***********************************************************************************#
-    def _calcOpticalTransparency(self):
+    def _calcOpticalTransparency(self): #TODO - Is this unnecessary?
         """
         Calculates the optical transparency of the grid based on the geometry parameters.
 
@@ -1220,7 +1204,7 @@ class FIMS_Simulation:
 
 
 #***********************************************************************************#
-    def _findFieldForTransparency(self, targetTransparency=0.99):
+    def _findFieldForTransparency(self, targetTransparency=0.99): #TODO - Depreciated? Transparency doesnt matter?
         """    
         Runs simulations to determine what the minimum electric field ratio
         needs to be in order to have >99% E-field transparency.
@@ -1327,7 +1311,7 @@ class FIMS_Simulation:
 
 
 #***********************************************************************************#
-    def findMinFieldRatio(self):
+    def findMinFieldRatio(self):#TODO - Depreciated? Transparency doesnt matter?
         """
         Determines the minimum Electric Field Ratio required to achieve:   
             - 95% detection efficiency, and
@@ -1377,7 +1361,7 @@ class FIMS_Simulation:
         return finalField
 
 #***********************************************************************************#
-    def _findCombinedMinField(self, targetTransparency=0.99, targetEfficiency=0.95, threshold=10):
+    def _findCombinedMinField(self, targetTransparency=0.99, targetEfficiency=0.95, threshold=10):#TODO - Depreciated? Transparency doesnt matter?
         """
         Performs an iterative search to find the minimum Electric Field Ratio that 
         simultaneously satisfies both of the input conditions:
@@ -1547,30 +1531,19 @@ class FIMS_Simulation:
             '\t- Detection efficiency'
         ]))
 
-        iterNo = 0
-        iterNoLimit = self._iterationNumberLimit
-
-        efficiencyAtField = {
-            'field': [],
-            'netEfficiency': [],
-            'netEffErrLow': [],
-            'netEffErrHigh': []
-        }
-
         saveParam = self.getAllParam()
-        self.setParameters({ #More is better. Adjust as needed.
-            'numAvalanche': 5000,
+        self.setParameters({ 
+            'numAvalanche': 5000, #More is better. Adjust as needed.
             'avalancheLimit': threshold+5
         })
 
+        efficiencyAtField = []
+        iterNo = 0
         isEfficient = False
-        while (not isEfficient) and (iterNo <= iterNoLimit):
+        while (not isEfficient) and (iterNo <= self._iterationNumberLimit):
             iterNo += 1
 
-            newFields = []
-
             newField = self._getNextField(iterNo, efficiencyAtField, targetEfficiency)
-            newFields.append(newField)
 
             self.setParameters({'fieldRatio': newField})
             print(f'Iteration {iterNo}: Field ratio = {newField}')
@@ -1583,10 +1556,7 @@ class FIMS_Simulation:
             )
             efficiencyResults = self._readResultsFile('netEfficiency')
 
-            efficiencyAtField['field'].append(newField)
-            efficiencyAtField['netEffficiency'].append(efficiencyResults['result'])
-            efficiencyAtField['netEffErrLow'].append(efficiencyResults['resultErrLow'])
-            efficiencyAtField['netEffErrHigh'].append(efficiencyResults['resultErrHigh'])
+            efficiencyAtField.append(efficiencyResults)
 
             match efficiencyResults['stopCondition']:
                     
@@ -1595,7 +1565,7 @@ class FIMS_Simulation:
 
                 case 'CONVERGED':
                     isEfficient = True
-                    print(f"Efficiency condition satisfied at field ratio = {efficiencyAtField['field'][-1]}.")
+                    print(f"Efficiency condition satisfied at field ratio = {self._param['fieldRatio']}.")
         
                 case _:
                     raise ValueError('Error - Malformed detection file.')
@@ -1666,7 +1636,7 @@ class FIMS_Simulation:
 
 
 #***********************************************************************************#
-    def runCombinedMinFieldRatio(self, initialField=None):
+    def runCombinedMinFieldRatio(self, initialField=None):#TODO - Depreciated? Transparency doesnt matter?
         """
         Executes an avalanche simulation of the FIMS geometry at the minimum field 
         ratio required to achieve both:
