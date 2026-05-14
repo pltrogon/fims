@@ -981,10 +981,10 @@ class FIMS_Simulation:
         newField = int(lastField + fieldStep)
 
         #Check to make sure this field has not been tried
-        numAttempts = 0
-        while newField in xData and numAttempts < 5:
-            print(f'Warning - Field of {newField} already tried. Step to nearest neighbor ({numAttempts})...')
-            numAttempts = numAttempts+1
+        numSteps = 0
+        while newField in xData and numSteps <= 5:
+            numSteps = numSteps+1
+            print(f'Warning - Field of {newField} already tried. Step to nearest neighbor ({numSteps})...')
 
             index = np.where(xData == newField)[-1]
             oldEfficiency = yData[index]
