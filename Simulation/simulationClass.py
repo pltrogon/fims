@@ -940,10 +940,9 @@ class FIMS_Simulation:
 
         xData = allPrevData['fieldRatio'].values
         yData = allPrevData[f'{targetEfficiency}Eff'].values
-        yErrs = np.maximum(#Use the maximum error
-            allPrevData[f'{targetEfficiency}ErrLow'], 
-            allPrevData[f'{targetEfficiency}ErrHigh']
-        )
+        yErrHigh = allPrevData[f'{targetEfficiency}ErrHigh'].values
+        yErrLow = allPrevData[f'{targetEfficiency}ErrLow'].values
+        yErrs = np.maximum(yErrLow, yErrHigh)#Use the maximum error for the fit
 
         lastField = xData[-1]
         lastResult = yData[-1]
@@ -973,14 +972,9 @@ class FIMS_Simulation:
             #round step down to int
             fieldStep = numSolveField - lastField
         
-        except Exception as e:#TODO - the step logic here should be tweaked
+        except Exception as e:
             print(f'Fit failed, falling back to incremental step: {e}')
-            if lastResult <= targetValue:
-                fieldStep = maxFieldStep
-            elif lastResult > targetValue:
-                fieldStep = -minFieldStep
-            else:
-                fieldStep = minFieldStep
+            fieldStep = minFieldStep if lastResult <= targetEfficiency else -minFieldStep
 
         #Limit to maximum and minimum step sizes
         if math.fabs(fieldStep) > maxFieldStep:
@@ -997,16 +991,16 @@ class FIMS_Simulation:
             print(f'Warning - Field of {newField} already tried. Step to nearest neighbor...')
             index = np.where(xData == newField)[0][-1]
             oldEfficiency = yData[index]
-            oldEffMin = oldEfficiency - yErrs[index]
+            oldEffMin = oldEfficiency - yErrLow[index]
 
             stepDirection = 1 if oldEffMin < targetValue else -1
 
             numSteps = 0
-            while numSteps <= 3 and newField in xData:
+            while numSteps < 3 and newField in xData:
                 numSteps = numSteps+1
                 newField = newField + stepDirection*minFieldStep
 
-            print(f'Took {numSteps} to {newField}.')
+            print(f'Took {numSteps} steps to {newField}.')
 
         return newField
 
@@ -1017,7 +1011,9 @@ class FIMS_Simulation:
         utilizing a sigmoid-fit-based finder.
         
         Args:
-            TODO
+            targetEfficiency (str): The efficiency (net, detection, collection) to consider
+            efficiencyValues (list of dict): List of dictionaries containing the previous efficiency information.
+            targetValue (float): The target value to reach.
 
         Returns:
             float: Calculated field ratio to achieve target efficiency value
@@ -1042,7 +1038,16 @@ class FIMS_Simulation:
 
 #**********************************************************************#
     def _findMinimumField(self, targetEfficiency='net', targetValue=.95, threshold=10):
-        """TODO"""
+        """
+        Finds the minimum field necessary to achive a target value in a given efficiency.
+
+        Can be based on the collection, detection, or net efficiency.
+
+        Args:
+            targetEfficiency (str): The efficiency (net, detection, collection) to consider
+            targetValue (float): The target value to reach.
+            threshold (int): Electron alanche size that is considered detected.
+        """
 
         print('\n'.join([
             'Searching for minimum field...',
