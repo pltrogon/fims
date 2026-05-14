@@ -125,7 +125,7 @@ std::pair<double, double> randomXYInHexagon(double sideLength) {
         double absX = std::fabs(sampleX);
         double absY = std::fabs(sampleY);
 
-        double checkY = 2.*inRadius*(1.-absX/outRadius)
+        double checkY = 2.*inRadius*(1.-absX/outRadius);
         if(absY <= checkY){
             return {sampleX, sampleY};
         }
