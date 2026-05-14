@@ -971,19 +971,30 @@ class FIMS_Simulation:
             else:
                 fieldStep = minFieldStep
 
-        #Limit to maximum step size
-        if fieldStep > maxFieldStep:
-            fieldStep = maxFieldStep
-        elif fieldStep < -maxFieldStep:
-            fieldStep = -maxFieldStep
+        #Limit to maximum and minimum step sizes
+        if math.fabs(fieldStep) > maxFieldStep:
+            fieldStep = np.sign(fieldStep) * maxFieldStep
+        if math.fabs(fieldStep) < minFieldStep:
+            fieldStep = np.sign(fieldStep) * minFieldStep
 
-        #enforce minimum step size
-        if 0 <= fieldStep < minFieldStep:
-            fieldStep = minFieldStep
-        elif -minFieldStep < fieldStep < 0:
-            fieldStep = -minFieldStep
+        #Proposed new field
+        newField = int(lastField + fieldStep)
 
-        return int(lastField + fieldStep)
+        #Check to make sure this field has not been tried
+        numAttempts = 0
+        while newField in xData and numAttempts < 5:
+            print(f'Warning - Field of {newField} already tried. Step to nearest neighbor ({numAttempts})...')
+            numAttempts = numAttempts+1
+
+            index = np.where(xData == newField)[-1]
+            oldEfficiency = yData[index]
+
+            if oldEfficiency <= targetValue:
+                newField = newField + minFieldStep
+            else:
+                newField = newField - minFieldStep
+
+        return newField
 
 #**********************************************************************#
     def _getNextField(self, targetEfficiency, efficiencyValues, targetValue):
@@ -1028,25 +1039,14 @@ class FIMS_Simulation:
         self.setParameters({'numAvalanche': 5000})#More is better. Adjust as needed.
 
         efficiencyAtField = []
-        fieldList = []
         iterNo = 0
-        previousField = -1
 
         while iterNo <= self._iterationNumberLimit:
             iterNo += 1
 
             newField = self._getNextField(targetEfficiency, efficiencyAtField, targetValue)
-            
-            if newField in fieldList:
-                print(f'Repeat field ratio: {newField}')
-                break
-            fieldList.append(newField)
 
-            if newField == previousField:
-                print(f'Converged at field ratio: {newField}')
-                break
-
-            if newField >= self._fieldLimit:
+            if newField > self._fieldLimit:
                 print(f'Warning - Field ratio exceeds limit. Escaping...')
                 break
 
