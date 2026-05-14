@@ -110,21 +110,23 @@ std::string getGitVersion() {
 std::pair<double, double> randomXYInHexagon(double sideLength) {
 
     const double sqrt3 = std::sqrt(3.0);
-    const double xWidth = 2.*sideLength;
-    const double yWidth = sqrt3*sideLength;
+    const double inRadius = sqrt3*sideLength/2.;
+    const double outRadius = sideLength;
 
-    static std::mt19937 rng(std::random_device{}());
+    thread_local static std::mt19937 rng(std::random_device{}());
     std::uniform_real_distribution<double> dist(-1.0, 1.0);
 
     while(true){
         // Uniform sample in box
-        double sampleX = dist(rng)*xWidth/2.;
-        double sampleY = dist(rng)*yWidth/2.;
+        double sampleX = dist(rng)*outRadius;
+        double sampleY = dist(rng)*inRadius;
 
         // Check if in hexagon (use symmetry of Q1)
         double absX = std::fabs(sampleX);
         double absY = std::fabs(sampleY);
-        if(absY <= yWidth/2. - absX/sqrt3){
+
+        double checkY = 2.*inRadius*(1.-absX/outRadius)
+        if(absY <= checkY){
             return {sampleX, sampleY};
         }
     }
