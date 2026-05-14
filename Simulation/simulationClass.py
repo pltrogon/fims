@@ -524,8 +524,9 @@ class FIMS_Simulation:
                 - 'runAvalancheGridPix': Simulates electron avalanches for the GridPix geometry.
                 - 'runTransparency': Simulates the field transparency for the FIMS geometry.
                 - 'runTransparencyGridPix': Simulates the field transparency for the GridPix geometry.
-                - 'runDetection': Simulates the detection efficiency for a given field strength. Requires additional arguments:
-                    - targetEfficiency (float): The target efficiency to achieve (default: 0.95).
+                - 'runEfficiency': Simulates the efficiency for a given field strength. Requires additional arguments:
+                    - targetEfficiency (str): Name of efficiency to consider (net, detection, collection).
+                    - targetValue (float): The target efficiency to achieve (default: 0.95).
                     - threshold (int): The number of electrons to consider an avalanche successful (default: 10).
         """
 
@@ -932,7 +933,7 @@ class FIMS_Simulation:
         
         targetValue = min(targetValue, 0.999)
             
-        minFieldStep = 2
+        minFieldStep = 1
         maxFieldStep = 10
 
         allPrevData = pd.DataFrame(efficiencyValues)
@@ -949,20 +950,30 @@ class FIMS_Simulation:
         
         try:
             # Fit the sigmoid parameters
-            popt, _ = curve_fit(
+            popt, pcov = curve_fit(
                 mySigmoid, xData, yData, 
                 p0=[1.0, np.median(xData)], 
-                sigma=yErrs
+                sigma=yErrs, absolute_sigma=True
             )
             k, x0 = popt
             
             # Invert the sigmoid to find x for a given y
             numSolveField = x0 - (1/k) * np.log((1.0 / targetValue) - 1)
 
+            # Find errors of the fit
+            perr = np.sqrt(np.diag(pcov))
+
+            # The uncertainty in x (field) due to uncertainties in x0 and k
+            kErr = (1.0 / (k**2)) * np.log((1.0 / targetValue) - 1)
+            fieldErr = np.sqrt(perr[1]**2 + (kErr * perr[0])**2)
+
+            #shift solution by 2-sigma
+            numSolveField = numSolveField + (2*fieldErr)
+
             #round step down to int
             fieldStep = numSolveField - lastField
         
-        except Exception as e:
+        except Exception as e:#TODO - the step logic here should be tweaked
             print(f'Fit failed, falling back to incremental step: {e}')
             if lastResult <= targetValue:
                 fieldStep = maxFieldStep
@@ -981,18 +992,21 @@ class FIMS_Simulation:
         newField = int(lastField + fieldStep)
 
         #Check to make sure this field has not been tried
-        numSteps = 0
-        while newField in xData and numSteps <= 5:
-            numSteps = numSteps+1
-            print(f'Warning - Field of {newField} already tried. Step to nearest neighbor ({numSteps})...')
-
-            index = np.where(xData == newField)[-1]
+        
+        if newField in xData:
+            print(f'Warning - Field of {newField} already tried. Step to nearest neighbor...')
+            index = np.where(xData == newField)[0][-1]
             oldEfficiency = yData[index]
+            oldEffMin = oldEfficiency - yErrs[index]
 
-            if oldEfficiency <= targetValue:
-                newField = newField + minFieldStep
-            else:
-                newField = newField - minFieldStep
+            stepDirection = 1 if oldEffMin < targetValue else -1
+
+            numSteps = 0
+            while numSteps <= 3 and newField in xData:
+                numSteps = numSteps+1
+                newField = newField + stepDirection*minFieldStep
+
+            print(f'Took {numSteps} to {newField}.')
 
         return newField
 
@@ -1039,6 +1053,7 @@ class FIMS_Simulation:
         self.setParameters({'numAvalanche': 5000})#More is better. Adjust as needed.
 
         efficiencyAtField = []
+        fieldValues = []
         iterNo = 0
 
         while iterNo <= self._iterationNumberLimit:
@@ -1049,6 +1064,11 @@ class FIMS_Simulation:
             if newField > self._fieldLimit:
                 print(f'Warning - Field ratio exceeds limit. Escaping...')
                 break
+
+            if newField in fieldValues:
+                print(f'Warning - Repeat field. Escaping.')
+                break
+            fieldValues.append(newField)
 
             self.setParameters({'fieldRatio': newField})
             print(f'Iteration {iterNo}: Field ratio = {newField}')
@@ -1061,14 +1081,14 @@ class FIMS_Simulation:
 
             runResults = self._readEfficiencyResults()
             efficiencyAtField.append(runResults)
-            previousField = newField
 
             currentEff = runResults[f'{targetEfficiency}Eff']
             print(f"\tResult: {currentEff*100:.2f}% (Stop Condition: {runResults['stopCondition']})")
         #End of find field loop
 
         allResults = pd.DataFrame(efficiencyAtField)
-        isEfficient = allResults[allResults[f'{targetEfficiency}Eff'] >= targetValue]
+        converged = allResults[allResults['stopCondition'] == 'CONVERGED']
+        isEfficient = converged[converged[f'{targetEfficiency}Eff'] >= targetValue]
 
         if not isEfficient.empty:
             finalField = int(isEfficient['fieldRatio'].min())

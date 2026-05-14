@@ -179,11 +179,15 @@ int main(int argc, char * argv[]) {
             while(repopulate){
                 //Populate with an electron
                 numTotalTrials++;
-                avalancheE->AvalancheElectron(
-                    curX, curY, curZ, 
-                    curTime, curEnergy, 
-                    curDx, curDy, curDz
-                );
+                {//Guarding against Garfield error. See notes below.
+                    SilenceCerr guard;
+                
+                    avalancheE->AvalancheElectron(
+                        curX, curY, curZ, 
+                        curTime, curEnergy, 
+                        curDx, curDy, curDz
+                    );
+                }
 
                 int numAvalancheElectrons = avalancheE->GetNumberOfElectronEndpoints();
 
@@ -192,8 +196,8 @@ int main(int argc, char * argv[]) {
                     avalancheE->GetElectronEndpoint(0, xi, yi, zi, ti, Ei, xf, yf, zf, tf, Ef, exitStatus);
                 }
                 else{
-                    std::cerr << "Error: No electrons in avalanche - Restarting." << std::endl;
-                    std::cerr << "\tError at (" << curX << ", " << curY << ", " << curZ << ")" << std::endl;
+                    //std::cerr << "Error: No electrons in avalanche - Restarting." << std::endl;
+                    //std::cerr << "\tError at (" << curX << ", " << curY << ", " << curZ << ")" << std::endl;
                     numFailure++;
 
                     auto [newX, newY] = randomXYInHexagon(cellLength);
@@ -289,6 +293,7 @@ int main(int argc, char * argv[]) {
 
         }//end of avalanche bunch loop
         std::cout << "Done " << numInitialElectrons << " trials." << std::endl;
+        std::cerr << "Number of surpressed Garfield errors: " << numFailure << std::endl;
 
         numInBunch = 100;//do bunches of 100 after first iteration
 
