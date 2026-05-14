@@ -18,6 +18,9 @@ import itertools
 import re
 import copy
 
+from scipy.optimize import curve_fit
+
+
 #Include the analysis object        
 sys.path.insert(1, '../Analysis')
 from runDataClass import runData
@@ -535,9 +538,7 @@ class FIMS_Simulation:
             'runAvalancheGridPix',
             'runTransparency',
             'runTransparencyGridPix',
-            'runDetection',
-            'runCollection',
-            'runNetEfficiency'
+            'runEfficiency'
         ]
 
         if executable not in executables:
@@ -545,23 +546,16 @@ class FIMS_Simulation:
         
         # Handle extra inputs for specific executables
         match executable:
-            case 'runDetection':
-                targetEfficiency = kwargs.get('targetEfficiency', 0.95)
-                threshold = kwargs.get('threshold', 10)
-                args = f'{targetEfficiency} {threshold}'
 
             case 'runTransparency':
                 targetTransparency = kwargs.get('targetTransparency', 0.99)
                 args = f'{targetTransparency}'
-                
-            case 'runCollection':
-                initialZ = kwargs.get('initialZ', 0.5*self._param['cathodeHeight'])
-                args = f'{initialZ}'
 
-            case 'runNetEfficiency':
-                targetEfficiency = kwargs.get('targetEfficiency', 0.95)
+            case 'runEfficiency':
+                targetEfficiency = kwargs.get('targetEfficiency', 'net')
+                targetValue = kwargs.get('targetValue', 0.95)
                 threshold = kwargs.get('threshold', 10)
-                args = f'{targetEfficiency} {threshold}'
+                args = f'{targetEfficiency} {targetValue} {threshold}'
                 
             case _:
                 args=''
@@ -609,7 +603,7 @@ class FIMS_Simulation:
 
         return  
     
-#***********************************************************************************#
+#**********************************************************************#
     def runSimulation(self, changeGeometry=True):
         """
         Executes a full simulation run with the current parameters.
@@ -652,7 +646,7 @@ class FIMS_Simulation:
         
         return runNo
     
-#***********************************************************************************#
+#**********************************************************************#
     def runSurrounding(self):
         """
         Executes a simulation with the surrounding geometry.
@@ -680,7 +674,7 @@ class FIMS_Simulation:
         
         return runNo
     
-#***********************************************************************************#
+#**********************************************************************#
     def runGridPix(self):
         """
         Executes a simulation with the GridPix geometry.
@@ -798,7 +792,7 @@ class FIMS_Simulation:
         
         return math.floor(0.75*netMinField)
 
-#***********************************************************************************#
+#**********************************************************************#
     def runCapacitance(self):
         """
         Solves the capacitance matrix for the geometry using Elmer.
@@ -835,7 +829,7 @@ class FIMS_Simulation:
 
         return capacitanceMatrix
 
-#***********************************************************************************#
+#**********************************************************************#
     def _readCapacitanceMatrix(self):
         """
         Reads the capacitance matrix from the Elmer output file.
@@ -858,14 +852,8 @@ class FIMS_Simulation:
         
         return capacitanceMatrix
 
-#***********************************************************************************#
-#***********************************************************************************#
-# METHODS FOR RUNNING MINIMUM FIELD
-#***********************************************************************************#
-#***********************************************************************************#
-
-#***********************************************************************************#
-    def _readEfficiencyResults(self):#TODO - Have changed this to include upper and lower errors instead of symmetric gaussian. Implement here, and in each executable that writes.
+#**********************************************************************#
+    def _readEfficiencyResults(self):
         """
         Parses the efficiency results file and merges it with current simulation parameters.
 
@@ -924,234 +912,181 @@ class FIMS_Simulation:
         
         return results
     
-#***********************************************************************************#
-    def _getFieldRatioSecant(self, fields, values, valuesErr=None, damping=0.8):#TODO -- Update to use lowError and higherror
+#**********************************************************************#
+    def _fitForNextField(self, targetEfficiency, efficiencyValues, targetValue):
         """
-        Calculates the next field strength ratio using the secant method to approach a target value.
-
-        If errors are provided, utilizes a step base on the maximum possible slope.
-        Assumes that the value is monotonically increasing for field ratios.
-
-        The resulting field ratio is rounded up to the nearest integer.
-        
-        *TODO - Tested for when  current and previous values are both LESS than target. Behavior when bracketing target unknown.*
+        Calculates the next field ratio using a sigmoid fit of historical data.
+        Ensures forward progress by enforcing a minimum positive step.
 
         Args:
-            fields (np.array): Numpy array of the field ratio. Has form: [current, previous]
-            valus (np.array): Numpy array of the values. Has form: [current, previous, target]
-            valuesErr (np.array): Optional. Array of errors in the values. Has form: [currentError, previousError]
-            damping (float): Damping factor for the secant method to avoid too large of steps.
+            targetEfficiency (str): The efficiency metric to target ('net', 'detection', 'collection').
+            efficiencyValues (list): List of results dictionaries from previous runs.
+            targetValue (float): The target efficiency.
 
         Returns:
-            float: Numerical solution to the field ratio in order to achieve target value
+            int: The next field ratio to be simulated.
         """
 
-        minFieldStep = 3
+        def mySigmoid(x, k, x0):
+            return 1.0 / (1.0 + np.exp(-k * (x - x0)))
+        
+        targetValue = min(targetValue, 0.999)
+            
+        minFieldStep = 2
         maxFieldStep = 10
 
-        curField, prevField = fields
-        curVal, prevVal, targetVal = values
+        allPrevData = pd.DataFrame(efficiencyValues)
 
-        fieldDiff = curField - prevField
+        xData = allPrevData['fieldRatio'].values
+        yData = allPrevData[f'{targetEfficiency}Eff'].values
+        yErrs = np.maximum(#Use the maximum error
+            allPrevData[f'{targetEfficiency}ErrLow'], 
+            allPrevData[f'{targetEfficiency}ErrHigh']
+        )
 
-        #If errors exist, use the maximum possible slope
-        if valuesErr is not None:
-            curValErr, prevValErr = valuesErr
-            prevValMin = prevVal - prevValErr
-            curValMax = curVal + curValErr
+        lastField = xData[-1]
+        lastResult = yData[-1]
+        
+        try:
+            # Fit the sigmoid parameters
+            popt, _ = curve_fit(
+                mySigmoid, xData, yData, 
+                p0=[1.0, np.median(xData)], 
+                sigma=yErrs
+            )
+            k, x0 = popt
+            
+            # Invert the sigmoid to find x for a given y
+            numSolveField = x0 - (1/k) * np.log((1.0 / targetValue) - 1)
 
-            valDiff = curValMax - prevValMin
-            targetDiff = targetVal - curValMax
+            #round step down to int
+            fieldStep = numSolveField - lastField
+        
+        except Exception as e:
+            print(f'Fit failed, falling back to incremental step: {e}')
+            if lastResult <= targetValue:
+                fieldStep = maxFieldStep
+            elif lastResult > targetValue:
+                fieldStep = -minFieldStep
+            else:
+                fieldStep = minFieldStep
 
-        else:
-            valDiff = curVal - prevVal
-            targetDiff = targetVal - curVal 
-
-
-        if abs(valDiff) < 0.001:
-            print(f'Warning: Slope near zero. Using heuristic step.')
-            return curField+minFieldStep
-
-        fieldStep = damping*targetDiff*fieldDiff/valDiff
-        #Limit step size for stability
+        #Limit to maximum step size
         if fieldStep > maxFieldStep:
-            print(f'Warning: Step size limited to {maxFieldStep}.')
-            newField = curField+maxFieldStep
+            fieldStep = maxFieldStep
+        elif fieldStep < -maxFieldStep:
+            fieldStep = -maxFieldStep
 
-        #Ensure step is at least minimum
-        elif fieldStep < minFieldStep:
-            print(f'Warning: Field step small. Using minimum step.')
-            newField = curField+minFieldStep
+        #enforce minimum step size
+        if 0 <= fieldStep < minFieldStep:
+            fieldStep = minFieldStep
+        elif -minFieldStep < fieldStep < 0:
+            fieldStep = -minFieldStep
 
-        #Round step up to nearest integer
-        else:
-            roundedStep = math.ceil(fieldStep)
-            newField = curField+roundedStep
+        return int(lastField + fieldStep)
 
-        return newField
-    
-
-#***********************************************************************************#
-    def _getNextField(self, iterNo, valueAtField, targetValue):#TODO -- Update to use lowError and higherror
+#**********************************************************************#
+    def _getNextField(self, targetEfficiency, efficiencyValues, targetValue):
         """
-        Determines the next field ratio for achieving a target value. 
-        Utilizes the iteration number to choreograph a secant-based root-finding method.
+        Determines the next field ratio for achieving a target value by
+        utilizing a sigmoid-fit-based finder.
         
         Args:
-            iterNo (int): Iteration number.
-            valueAtField (dict): Dictionary containing field and value information:
-                - 'field': Array of previous field ratios.
-                - 'value': Array of previous values.
-                - 'valueErr': Array of previous value errors.
-            targetValue (float): The target value to achieve.
+            TODO
 
         Returns:
-            float: Calculated field ratio for target value
+            float: Calculated field ratio to achieve target efficiency value
         """
 
-        #Identify data key
-        dataKeys = [k for k in valueAtField.keys() if k != 'field' and not k.endswith('Err')]
-    
-        if not dataKeys:
-            raise KeyError('Could not find a valid data key in the dictionary.')
-        
-        valueKey = dataKeys[0]
-        errorKey = f'{valueKey}Err'
+        numIterations = len(efficiencyValues)
 
         # Determine new field strength
-        newField = None
+        initialStep = 5 #TODO - This can be adjusted
 
-        if iterNo == 1:
+        if numIterations == 0:
             newField = self._param['fieldRatio']
 
-        # Take constant step of 2 for 2nd iteration
-        elif iterNo == 2:
-            newField = valueAtField['field'][0] + 5 #TODO - This can be adjusted
+        elif numIterations == 1:
+            newField = self._param['fieldRatio'] + initialStep
 
-        # Use secant method to determine new field
+        # Determine new field from fit
         else:
-            newField = self._getFieldRatioSecant( 
-                fields=np.array([valueAtField['field'][-1], valueAtField['field'][-2]]),
-                values=np.array([valueAtField[valueKey][-1], valueAtField[valueKey][-2], targetValue]),
-                valuesErr=np.array([valueAtField[errorKey][-1], valueAtField[errorKey][-2]])
-            )
-                
-        if newField is None:
-            raise ValueError('Error: Invalid new field')
+            newField = self._fitForNextField(targetEfficiency, efficiencyValues, targetValue)
         
         return newField
 
-#***********************************************************************************#
-    def _findFieldForDetection(self, targetEfficiency=.95, threshold=10): #TODO -- Is this depreciated because we never want *just* detection efficiency?
-        """
-        Performs an iterative search to find the minimum Electric Field Ratio 
-        required to achieve a specified detection efficiency for electron avalanches.
+#**********************************************************************#
+    def _findMinimumField(self, targetEfficiency='net', targetValue=.95, threshold=10):
+        """TODO"""
 
-        Process:
-            1 - Solves an electric field using Elmer. 
-            2 - Executes Garfield++ avalanches to determine a detection efficiency.
-            3 - Repeats steps 1 and 2, increasing the field ratio using a modified 
-                secant method until a solution is reached.
+        print('\n'.join([
+            'Searching for minimum field...',
+            f'Target {targetEfficiency} efficiency is: {targetValue}'
+        ]))
 
-        Note that this assumes that the field strength is monotonically increasing.
-
-        Args:
-            targetEfficiency (float): The target electron detection efficiency.
-            threshold (int): The minimum avalanche size required for an event to 
-                             be counted as 'detected'.
-
-        Returns:
-            float: The minimum field ratio required to achieve the target efficiency.
-                   This value is also loaded into the class parameters upon completion.
-        """
-        
-        print(f'Beginning field search for {targetEfficiency*100:.0f}% efficiency...')
-        
-        # Ensure geometry exists
-        if self._geometry is None:
-            self._generateGeometry()
-        
-        iterNo = 0
-        iterNoLimit = self._iterationNumberLimit
-
-        effAtField = {
-            'field': [],
-            'efficiency': [],
-            'efficiencyErr': []
-        }        
-
-        validEfficiency = False
-        #Limit can be low. Check is boolean
         saveParam = self.getAllParam()
-        self.setParameters({'numAvalanche': 3000, 'avalancheLimit': threshold+5})
-        
-        while not validEfficiency:
+        self.setParameters({'numAvalanche': 5000})#More is better. Adjust as needed.
 
+        efficiencyAtField = []
+        fieldList = []
+        iterNo = 0
+        previousField = -1
+
+        while iterNo <= self._iterationNumberLimit:
             iterNo += 1
-            if iterNo > iterNoLimit:
-                print(f'Warning - Iteration limit reached ({iterNoLimit})')
+
+            newField = self._getNextField(targetEfficiency, efficiencyAtField, targetValue)
+            
+            if newField in fieldList:
+                print(f'Repeat field ratio: {newField}')
                 break
+            fieldList.append(newField)
 
-            #Solve for the new electric field
-            newField = self._getNextField(iterNo, effAtField, targetEfficiency)
-            print(f'\tNew field ratio: {newField}')
-            effAtField['field'].append(newField)
-            self.setParameters({'fieldRatio': newField})
-            self._solveEFields(solveWeighting=False)
-
-            #Determine the efficiency and read results from file
-            self._runGarfield(
-                'runDetection',
-                targetEfficiency=targetEfficiency, threshold=threshold
-            )
-            effResults = self._readResultsFile('detection')
-
-            effAtField['detection'].append(effResults['result'])
-            effAtField['detectionErr'].append(effResults['resultErr'])
-
-            curField = effAtField['field'][-1]
-            effField = effAtField['detection'][-1]
-            errField = effAtField['detectionErr'][-1]
-            
-            match effResults['stopCondition']:
-                
-                case 'DID NOT CONVERGE':
-                    validEfficiency = False
-                    print(f'Did not converge: Efficiency = {effField:.3f} +/- {errField:.3f}')
-
-                case 'CONVERGED':
-                    validEfficiency = True
-                    print(f'Converged: Efficiency = {effField:.3f} +/- {errField:.3f}')
-            
-                case 'EXCLUDED':
-                    validEfficiency = False
-                    print(f'Excluded: Efficiency = {effField:.3f} +/- {errField:.3f}')
-
-                case _:
-                    raise ValueError('Error - Malformed efficiency file.')
+            if newField == previousField:
+                print(f'Converged at field ratio: {newField}')
+                break
 
             if newField >= self._fieldLimit:
-                print('Warning - Field ratio exceeded limit. Escaping.')  
+                print(f'Warning - Field ratio exceeds limit. Escaping...')
                 break
-        # End of find field for detection efficiency loop
 
-        
-        finalField = self._param['fieldRatio']
-        print(f'Solution found for {targetEfficiency*100:.0f}% efficiency: Field ratio = {finalField}')
-        
-        #Reset parameters to original values except for field ratio
+            self.setParameters({'fieldRatio': newField})
+            print(f'Iteration {iterNo}: Field ratio = {newField}')
+
+            self._solveEFields(solveWeighting=False)
+            self._runGarfield(
+                'runEfficiency',
+                targetEfficiency=targetEfficiency, targetValue=targetValue, threshold=threshold
+            )
+
+            runResults = self._readEfficiencyResults()
+            efficiencyAtField.append(runResults)
+            previousField = newField
+
+            currentEff = runResults[f'{targetEfficiency}Eff']
+            print(f"\tResult: {currentEff*100:.2f}% (Stop Condition: {runResults['stopCondition']})")
+        #End of find field loop
+
+        allResults = pd.DataFrame(efficiencyAtField)
+        isEfficient = allResults[allResults[f'{targetEfficiency}Eff'] >= targetValue]
+
+        if not isEfficient.empty:
+            finalField = int(isEfficient['fieldRatio'].min())
+            print(f'Solution found: Minimum field ratio = {finalField}')
+        else:
+            finalField = int(allResults['fieldRatio'].iloc[-1])
+            print(f'Warning: Target not reached. Closest field: {finalField}')
+
         saveParam['fieldRatio'] = finalField
         self.setParameters(saveParam)
-        
-        # Print Solution and full scan details
-        #print(f'Solution for {targetEfficiency*100:.0f}% efficiency: Field ratio = {finalField}')
-        #print(effAtField)
-        self._printFieldSolution(effAtField)
-        #print(effAtField)
+
+        print(f'Solution found: Field ratio = {finalField}')
+
+        allResults.to_csv('../Data/allEfficiencyResults.csv', index=False)
 
         return finalField
 
-#***********************************************************************************#
+#**********************************************************************#
     def _printFieldSolution(self, resultsAtField):
         """
         TODO - Consider if this is better than just printing the raw values (easier
@@ -1182,7 +1117,7 @@ class FIMS_Simulation:
 
         return
 
-#***********************************************************************************#
+#**********************************************************************#
     def _calcOpticalTransparency(self): #TODO - Is this unnecessary?
         """
         Calculates the optical transparency of the grid based on the geometry parameters.
@@ -1202,9 +1137,8 @@ class FIMS_Simulation:
 
         return opticalTransparency
 
-
-#***********************************************************************************#
-    def _findFieldForTransparency(self, targetTransparency=0.99): #TODO - Depreciated? Transparency doesnt matter?
+#**********************************************************************#
+    def _findFieldForTransparency(self, targetTransparency=0.99): #TODO - (Q2) Depreciated? Transparency doesnt matter?
         """    
         Runs simulations to determine what the minimum electric field ratio
         needs to be in order to have >99% E-field transparency.
@@ -1311,7 +1245,7 @@ class FIMS_Simulation:
 
 
 #***********************************************************************************#
-    def findMinFieldRatio(self):#TODO - Depreciated? Transparency doesnt matter?
+    def findMinFieldRatio(self):#TODO - (Q2) Depreciated? Transparency doesnt matter?
         """
         Determines the minimum Electric Field Ratio required to achieve:   
             - 95% detection efficiency, and
@@ -1361,7 +1295,7 @@ class FIMS_Simulation:
         return finalField
 
 #***********************************************************************************#
-    def _findCombinedMinField(self, targetTransparency=0.99, targetEfficiency=0.95, threshold=10):#TODO - Depreciated? Transparency doesnt matter?
+    def _findCombinedMinField(self, targetTransparency=0.99, targetEfficiency=0.95, threshold=10):#TODO - (Q2) Depreciated? Transparency doesnt matter?
         """
         Performs an iterative search to find the minimum Electric Field Ratio that 
         simultaneously satisfies both of the input conditions:
@@ -1520,85 +1454,30 @@ class FIMS_Simulation:
 
         return finalField
     
-
 #***********************************************************************************#
-    def _findNetMinField(self, targetEfficiency=0.95, threshold=10):
-        """TODO"""
-
-        print('\n'.join([
-            'Beginning search for minimum field to achieve .95 net efficiency considering:',
-            '\t- Collection efficiency',
-            '\t- Detection efficiency'
-        ]))
-
-        saveParam = self.getAllParam()
-        self.setParameters({ 
-            'numAvalanche': 5000, #More is better. Adjust as needed.
-            'avalancheLimit': threshold+5
-        })
-
-        efficiencyAtField = []
-        iterNo = 0
-        isEfficient = False
-        while (not isEfficient) and (iterNo <= self._iterationNumberLimit):
-            iterNo += 1
-
-            newField = self._getNextField(iterNo, efficiencyAtField, targetEfficiency)
-
-            self.setParameters({'fieldRatio': newField})
-            print(f'Iteration {iterNo}: Field ratio = {newField}')
-
-            self._solveEFields(solveWeighting=False)
-
-            self._runGarfield(
-                'runNetEfficiency',
-                targetEfficiency=targetEfficiency, threshold=threshold
-            )
-            efficiencyResults = self._readResultsFile('netEfficiency')
-
-            efficiencyAtField.append(efficiencyResults)
-
-            match efficiencyResults['stopCondition']:
-                    
-                case 'DID NOT CONVERGE' | 'EXCLUDED':
-                    print(f'\tEfficiency condition not satisfied.')
-
-                case 'CONVERGED':
-                    isEfficient = True
-                    print(f"Efficiency condition satisfied at field ratio = {self._param['fieldRatio']}.")
-        
-                case _:
-                    raise ValueError('Error - Malformed detection file.')
-                
-            if newField >= self._fieldLimit:
-                print(f'Warning - Field ratio exceeds limit. Escaping...')
-                break
-
-            #End of find field loop
-
-        finalField = self._param['fieldRatio']
-        saveParam['fieldRatio'] = finalField
-        self.setParameters(saveParam)
-
-        print(f'Solution found: Field ratio = {finalField}')
-
-        return finalField
-    
-#***********************************************************************************#
-    def runNetMinField(self, initialField=None):
+    def runForEfficiency(self, targetEfficiency='net', targetValue=.95, threshold=10, initialField=None):
         """
         Executes an avalanche simulation of the FIMS geometry at the minimum field 
-        ratio required to achieve a net 95% efficiency considering:
-            - detection efficiency, and
-            - collection efficiency. 
+        ratio required to achieve a given efficiency.
         
         Args:
+            targetEfficiency (str): Efficiency to target. (net, detection, or collection)
+            targetValue (float): The target efficiency to reach.
+            threshold (int): The avalanche size detection threshold.
             initialField (int): Initial field ratio guess.
 
         Returns:
             int: The run number of the simulation that was executed.   
         """
 
+        efficiencyOptions = [
+            'net', 
+            'detection',
+            'collection'
+        ]
+        if targetEfficiency not in efficiencyOptions:
+            raise ValueError('Error - Invalid target efficiency.')
+        
         #Ensure all parameters exist
         self._checkParam()
 
@@ -1614,7 +1493,7 @@ class FIMS_Simulation:
         if initialField is not None:
             minFieldGuess = initialField
         else:
-            minFieldGuess = 10 #TODO - betetr guess? not longer need transparency in this?
+            minFieldGuess = 10 #TODO - better guess?
 
         print(f'\tInitial field ratio guess: {minFieldGuess}')
         self.setParameters({'fieldRatio': minFieldGuess})
@@ -1622,9 +1501,14 @@ class FIMS_Simulation:
         #Generate the FEM geometry
         self._generateGeometry()
 
-        # Determine minimum field ratio for default conditions
-        netMinField = self._findNetMinField()
-        self.setParameters({'fieldRatio': netMinField})
+        # Determine minimum field ratio
+        minFieldSolution = self._findMinimumField(
+            targetEfficiency=targetEfficiency, 
+            targetValue=targetValue, 
+            threshold=threshold
+            )
+
+        self.setParameters({'fieldRatio': minFieldSolution})
 
         #Solve for the weighting field
         self._solveEFields(solveWeighting=True)
@@ -1634,9 +1518,8 @@ class FIMS_Simulation:
 
         return runNo
 
-
 #***********************************************************************************#
-    def runCombinedMinFieldRatio(self, initialField=None):#TODO - Depreciated? Transparency doesnt matter?
+    def runCombinedMinFieldRatio(self, initialField=None):#TODO - (Q2) Depreciated? Transparency doesnt matter?
         """
         Executes an avalanche simulation of the FIMS geometry at the minimum field 
         ratio required to achieve both:
@@ -1692,7 +1575,7 @@ class FIMS_Simulation:
         for efficient running within an optimizer.
 
         Determines the electric field ratio required for
-        95% efficiency and 100% transparency.
+        95% net efficiency
             Note this generates the geometry and solves the electric field.
         Solves the weighting field and runs the electron transport simulation.
             
@@ -1710,9 +1593,8 @@ class FIMS_Simulation:
         # Generate Geometry
         self._generateGeometry()
 
-        #Find the minimum field ratio for this geometry that satisfies:
-        #  95% efficiency and 100% transparency
-        minField = self.findMinFieldRatio()
+        #Find the minimum field ratio for this geometry
+        minField = self._findMinimumField()
         self.setParameters({'fieldRatio': minField})
 
         #Solve fields and run Garfield
@@ -1722,7 +1604,7 @@ class FIMS_Simulation:
         return runNo
     
 #***********************************************************************************#
-    def runForOptimizerALT(self, efficiencyGoal=0.95, efficiencyThreshold=10, transparencyGoal=.99):
+    def runForOptimizerALT(self, efficiencyGoal=0.95, efficiencyThreshold=10, transparencyGoal=.99):#TODO - (Q2) Depreciated? Transparency doesnt matter?
         """
         Executes a full avalanche simulation of the FIMS geometry at a given geometry and field ratio.
 
@@ -1831,46 +1713,10 @@ class FIMS_Simulation:
         return results['result'], results['resultErr']
 
 #***********************************************************************************#
-    def getAllEfficiencies(self):
-        """
-        Gets all efficiencies for the current geometry and field ratio.
-
-
-        Returns:
-            dict: A dictionary containing values as tuples of (value, error):
-                - 'detectionEfficiency': The electron detection efficiency.
-                - 'fieldTransparency': The electric field line transparency.
-                - 'collectionEfficiency': The charge collection efficiency.
-        """
-
-        runNo = self._param['runNumber']
-        print(f'Getting all efficiencies - Run number: {runNo}')
-    
-        self._checkParam()
-
-        # Generate geometry and solve fields
-        self._generateGeometry()
-        self._solveEFields(solveWeighting=False)
-
-        # Get each efficiency
-        detectionEfficiency = self._getEfficiency(target='detection')
-        fieldTransparency = self._getEfficiency(target='transparency')
-        collectionEfficiency = self._getEfficiency(target='collection', initialZ=100)
-
-        efficiencyResults = {
-            'detectionEfficiency': detectionEfficiency,
-            'fieldTransparency': fieldTransparency,
-            'collectionEfficiency': collectionEfficiency
-        }
-
-        return efficiencyResults
-
+#***********************************************************************************#
+# METHODS FOR RUNNING CHARGE BUILDUP  (TODO - these need to be largely redone)
 #***********************************************************************************#
 #***********************************************************************************#
-# METHODS FOR RUNNING CHARGE BUILDUP - UNTESTED (TODO)
-#***********************************************************************************#
-#***********************************************************************************#
-##TODO - not adjusted with new class implementation. Update as necessary.
 #***********************************************************************************#
     def resetCharge(self):
         """
@@ -2169,9 +2015,13 @@ class FIMS_Simulation:
             'totalCharge': totalElectrons,
         }
         return chargeBuildupSummary
-        
 
+# END METHODS FOR RUNNING CHARGE BUILDUP (TODO)
 #***********************************************************************************#
+#***********************************************************************************#
+
+
+#**********************************************************************#
     def _getOptimalDriftField(self):
         """
         Determines the optimal drift field for the current gas mixture in V/cm.
@@ -2214,8 +2064,7 @@ class FIMS_Simulation:
 
         return round(optimalFieldStrength)
 
-
-#********************************************************************************#
+#**********************************************************************#
     def _loadOptimalDriftFile(self):
         """
         Loads pre-computed optimal drift field data from a .pkl file.
@@ -2230,44 +2079,6 @@ class FIMS_Simulation:
         optimalFieldData = pd.read_pickle(filename)  
 
         return optimalFieldData
-
-
-
-#***********************************************************************************#
-    def scanInitialZ(self, numSteps=10):
-        """TODO"""
-
-        runNo = self._param['runNumber']
-        print(f'Scanning Initial z - Run number: {runNo}')
-    
-        self._checkParam()
-
-        # Generate geometry and solve fields
-        self._generateGeometry()
-        self._solveEFields(solveWeighting=False)
-
-        zLocation = []
-        collectionEfficiency = []
-        collectionEfficiencyErr = []
-
-        for inZ in np.linspace(0.1, 0.95, num=numSteps):
-
-            zLoc = inZ*self._param['cathodeHeight']
-            self._runGarfield('runCharge', initialZ=zLoc)
-            chargeResults = self._readResultsFile('charge')
-
-            zLocation.append(zLoc)
-            collectionEfficiency.append(chargeResults['charge'])
-            collectionEfficiencyErr.append(chargeResults['chargeErr'])
-
-
-        zScanResults = pd.DataFrame({
-            'zLocation': zLocation,
-            'collectionEfficiency': collectionEfficiency,
-            'collectionEfficiencyErr': collectionEfficiencyErr
-        })
-
-        return zScanResults
 
 
 
