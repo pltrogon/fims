@@ -45,9 +45,9 @@ enum class RunMode {
 RunMode stringToRunMode(std::string str) {
     std::transform(str.begin(), str.end(), str.begin(), ::tolower);
 
-    if (str == "net")        return RunMode::Net;
-    if (str == "detection")  return RunMode::Detection;
-    if (str == "collection") return RunMode::Collection;
+    if(str == "net"){return RunMode::Net;}
+    if(str == "detection"){return RunMode::Detection;}
+    if(str == "collection"){return RunMode::Collection;}
     
     return RunMode::Unknown;
 }
@@ -57,6 +57,8 @@ int main(int argc, char * argv[]) {
         std::cerr << "Format: " << argv[0] << " <Target Efficiency> <Target Value> <Detection Threshold>" << std::endl;
         return -1;
     }
+    
+    std::string runModeString = argv[1];
     RunMode runMode = stringToRunMode(argv[1]);
     double targetEfficiency = std::atof(argv[2]);
     int electronThreshold = std::atoi(argv[3]);
@@ -78,7 +80,7 @@ int main(int argc, char * argv[]) {
     }
 
     //********** Setup Simulation **********//
-    std::cout << "Getting efficiency for " << simParams->runNumber << "(" << runMode << ")" << std::endl;
+    std::cout << "Getting efficiency for " << simParams->runNumber << "(" << runModeString << ")" << std::endl;
 
     //Gas Mixture
     MediumMagboltz* gasFIMS = initializeGas(*simParams);
@@ -99,11 +101,13 @@ int main(int argc, char * argv[]) {
     fieldFIMS.GetBoundingBox(xmin, ymin, zmin, xmax, ymax, zmax);
 
     //Define boundary region for simulation
+    double cellLength = simParams->pitch/std::sqrt(3.);
+
     double xBoundary[2], yBoundary[2], zBoundary[2];
     zBoundary[0] = zmin;
     zBoundary[1] = zmax;
-    xBoundary[0] = -2.*simParams->pitch;
-    xBoundary[1] = 2.*simParams->pitch;
+    xBoundary[0] = -2.*cellLength;
+    xBoundary[1] = 2.*cellLength;
     yBoundary[0] = -2.*simParams->pitch;
     yBoundary[1] = 2.*simParams->pitch;
 
@@ -118,7 +122,7 @@ int main(int argc, char * argv[]) {
     sensorFIMS->SetArea(
         xBoundary[0], yBoundary[0], zBoundary[0], 
         xBoundary[1], yBoundary[1], zBoundary[1]
-    );
+    );    
 
     //Define avalanche characteristics
     int electronLimit = electronThreshold+5;
@@ -153,8 +157,6 @@ int main(int argc, char * argv[]) {
     int numInBunch = 500;//Always do at least 500 avalanches first
     bool runAvalanche = true, isEfficienct = false;
 
-    double cellLength = simParams->pitch/std::sqrt(3.);
-
     std::cout << "Beginning avalanches..." << std::endl;
     //Run avalanches in bunches
     while(runAvalanche && numInitialElectrons < simParams->numAvalanche){
@@ -186,14 +188,34 @@ int main(int argc, char * argv[]) {
                 int numAvalancheElectrons = avalancheE->GetNumberOfElectronEndpoints();
 
                 //Ensure electron didnt disappear. Reinitialize if so. 
-                if(numAvalancheElectrons == 0){
+                if(numAvalancheElectrons >= 1){
+                    avalancheE->GetElectronEndpoint(0, xi, yi, zi, ti, Ei, xf, yf, zf, tf, Ef, exitStatus);
+                }
+                else{
                     std::cerr << "Error: No electrons in avalanche - Restarting." << std::endl;
                     std::cerr << "\tError at (" << curX << ", " << curY << ", " << curZ << ")" << std::endl;
                     numFailure++;
-                    exitStatus = -7;//Treat it the same as an attachment
-                }
-                else{
-                    avalancheE->GetElectronEndpoint(0, xi, yi, zi, ti, Ei, xf, yf, zf, tf, Ef, exitStatus);
+
+                    auto [newX, newY] = randomXYInHexagon(cellLength);
+                    curX = newX, curY = newY, curZ = z0;
+                    curTime = t0;
+                    curEnergy = e0;
+                    curDx = 0., curDy = 0., curDz = 0.;
+
+                    /**
+                     * TODO - Fix this!!
+                     * Garfield error: AvalancheMicroscopic::TransportElectrons: Starting point is not in a valid medium.
+                     * Tanner notes (13/05/2026)
+                     * Still not exactly sure what/why/how this occurs. 
+                     * It seesm that when this is happening y = pitch ALWAYS.
+                     * But the area is defined to +/- 2*pitch, so it should be fine.
+                     * x values seems like they can be anything, but cap at (-cellLength, cellLength)
+                     * Again, defined as 2x this, so not sure.
+                     * The z values are + and -. Thought maybe they were "in" a hole and translated weird, but must not be the case
+                     * Z range is +5, -2 (not hard limits as far as I can tell)
+                     * 
+                     * The current implementation is that this is just restarting, so although inefficienct it shouldnt affect results
+                     */
                 }
 
                 //Check if above threshold for detection efficiency. Assume it is collected.
@@ -232,9 +254,9 @@ int main(int argc, char * argv[]) {
                         // Electron leaves the simulation volume - Shift it back
                         //Determine which boundary was hit and shift by pitch to opposite side
                         case -1: {
-                            //Shift x or y by pitch and keep z (Use some buffer)
-                            curX = std::abs(xf) >= .99*2.*simParams->pitch ? -1.*std::copysign(simParams->pitch, xf) : xf;
-                            curY = std::abs(yf) >= .99*2.*simParams->pitch ? -1.*std::copysign(simParams->pitch, yf) : yf;
+                            //Shift x or y
+                            curX = std::abs(xf) >= cellLength ? -1.*std::copysign(cellLength, xf) : xf;
+                            curY = std::abs(yf) >= simParams->pitch ? -1.*std::copysign(simParams->pitch, yf) : yf;
                             curZ = zf;
 
                             //Get direction vector from 2nd-last and last points along drift
@@ -286,7 +308,8 @@ int main(int argc, char * argv[]) {
 
 
         //Determine if target efficiency exceeds or excludes target value within confidence
-        switch (runMode){
+        EfficiencyResults* activeEff;
+        switch(runMode){
             case RunMode::Net:
                 activeEff = &netEfficiency; break;
             case RunMode::Detection:
@@ -317,7 +340,7 @@ int main(int argc, char * argv[]) {
 
     //Write some general info
     dataFile << "Finding efficiency for run: " << simParams->runNumber << "\n";
-    dataFile << "Run mode: " << runMode << "\n";
+    dataFile << "Run mode: " << runModeString << "\n";
     dataFile << "Total initial electrons: " << numInitialElectrons << " (of " << simParams->numAvalanche << ")\n";
     dataFile << "Electron threshold: " << electronThreshold << "\n";
     dataFile << "Field Ratio: " << simParams->fieldRatio << "\n\n";
@@ -335,7 +358,7 @@ int main(int argc, char * argv[]) {
     }
 
     //Include all of the calculated values
-    dataFile << "Efficiency Values (Form: meanValue, lowError, higherror):\n";
+    dataFile << "Efficiency Values (Form: meanValue, lowError, highError):\n";
     dataFile << "Collection Efficiency:\n" << collectionEff.meanValue << "\n";
     dataFile << collectionEff.lowError << "\n" << collectionEff.highError << "\n";
     dataFile << "Detection Efficiency:\n" << detectionEff.meanValue << "\n";
