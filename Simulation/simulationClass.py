@@ -22,6 +22,7 @@ sys.path.insert(1, '../Analysis')
 from runDataClass import runData
 
 from geometryClass import geometryClass
+from geometryClass import gmshClass
 
 class FIMS_Simulation:
     """
@@ -702,8 +703,8 @@ class FIMS_Simulation:
             int: The run number for this simulation.
         """
         self._checkParam()
-    
-        self.setGeometry()
+        
+        self.setGeometry(surrounding=True)
         self._generateGeometry()
             
         #Solve fields and run Garfield
@@ -2073,4 +2074,3 @@ class FIMS_Simulation:
 
         self._geometry.buildGeometry()
 
-    

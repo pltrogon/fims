@@ -502,10 +502,15 @@ class runData:
             self._calculatedData['Efficiency Error'] = simEffErr
 
             #Fits
-            polyaTheta, polyaGain = self._fitPolya()
-            self._calculatedData['Polya Theta'] = polyaTheta
-            self._calculatedData['Polya Gain'] = polyaGain
-
+            try:
+                polyaTheta, polyaGain = self._fitPolya()
+                self._calculatedData['Polya Theta'] = polyaTheta
+                self._calculatedData['Polya Gain'] = polyaGain
+            except:
+                print('Error: Unable to fit polya.') #TODO: find better way to handle this error
+                self._calculatedData['Polya Theta'] = None
+                self._calculatedData['Polya Gain'] = None
+                
         return
 
 #********************************************************************************#   

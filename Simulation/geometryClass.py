@@ -133,7 +133,6 @@ class geometryClass:
 
         return
 
-
 #**********************************************************************#
     def setSurroundingCells(self, surrounding=False):
         """
@@ -168,7 +167,7 @@ class geometryClass:
         )
 
         return
-    
+
 #**********************************************************************#
     def _generateElmerFiles(self, capacitance=False):
         """
@@ -989,6 +988,11 @@ class gmshClass:
         yLength = pitch/2
         outRadius = pitch/sqrt3
 
+        # TODO: evaluate default values for simulation stability      
+        fineMesh = 0.4*gridThickness
+        coarseMesh = 1.0*gridThickness
+        backgroundMesh = 6.0*gridThickness
+
         meshSettings = {
             'FIMS': {
                 'x': (0, xLength), 
@@ -1024,10 +1028,6 @@ class gmshClass:
         bounds = meshSettings[runOption]
         refinements = cellRefinements.get(runOption, [])
 
-        #TODO: the format of this can be improved
-        fineMesh = gridThickness*.6
-        coarseMesh = gridThickness*3
-        backgroundMesh = gridThickness*6
         transitionWidth = pitch/2
 
         smallHole = min(
@@ -1073,7 +1073,7 @@ class gmshClass:
         # Find distance from corner lines
         gmsh.model.mesh.field.add('Distance', 2)
         gmsh.model.mesh.field.setNumbers(2, 'EdgesList', refinementLines)
-
+        
         # Define fine mesh within smallRadius
         gmsh.model.mesh.field.add('Threshold', 3)
         gmsh.model.mesh.field.setNumber(3, 'InField', 1)
@@ -1081,7 +1081,7 @@ class gmshClass:
         gmsh.model.mesh.field.setNumber(3, 'SizeMax', backgroundMesh)
         gmsh.model.mesh.field.setNumber(3, 'DistMin', smallRadius)
         gmsh.model.mesh.field.setNumber(3, 'DistMax', smallRadius + transitionWidth)
-
+        
         # Define coarse mesh within largeRadius
         gmsh.model.mesh.field.add('Threshold', 4)
         gmsh.model.mesh.field.setNumber(4, 'InField', 1)
@@ -1097,8 +1097,9 @@ class gmshClass:
         gmsh.model.mesh.field.setNumber(5, 'SizeMax', backgroundMesh)
         gmsh.model.mesh.field.setNumber(5, 'DistMin', pitch/4/sqrt3)
         gmsh.model.mesh.field.setNumber(5, 'DistMax', pitch/4/sqrt3 + transitionWidth)
-
-        # Keep coarse mesh around the entire grid
+        
+        
+        # Keep fine mesh around the entire grid
         gmsh.model.mesh.field.add('Box', 6)
         gmsh.model.mesh.field.setNumber(6, 'VIn', coarseMesh)
         gmsh.model.mesh.field.setNumber(6, 'VOut', backgroundMesh)
@@ -1107,14 +1108,14 @@ class gmshClass:
         gmsh.model.mesh.field.setNumber(6, 'YMin', bounds['y'][0])
         gmsh.model.mesh.field.setNumber(6, 'YMax', bounds['y'][1])
         gmsh.model.mesh.field.setNumber(6, 'ZMin', -holeRadius)
-        gmsh.model.mesh.field.setNumber(6, 'ZMax', 2.*holeRadius)
+        gmsh.model.mesh.field.setNumber(6, 'ZMax', holeRadius)
         gmsh.model.mesh.field.setNumber(6, 'Thickness', transitionWidth)
-
+        
         # Use the smallest mesh size
         gmsh.model.mesh.field.add('Min', 7)
-        gmsh.model.mesh.field.setNumbers(7, 'FieldsList', [3, 4, 5, 6])
+        gmsh.model.mesh.field.setNumbers(7, 'FieldsList', [3,4,5,6])
         gmsh.model.mesh.field.setAsBackgroundMesh(7)
-
+        
         # Final settings
         gmsh.option.setNumber('Mesh.MeshSizeFromCurvature', 9)
         gmsh.option.setNumber('Mesh.MeshSizeExtendFromBoundary', 1)

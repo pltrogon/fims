@@ -33,43 +33,36 @@ class FIMS_Optimizer:
     ===============================================
     
     Class representing the FIMS optimization algorithm.
-
-    Initializes a list of lists which describe the input parameters
-    and the bounds on those parameters.
     
-    The algorithm follows the following procedure:
-    1. Check inputs (TODO: currently only accepts the hole radius,
-    standoff, pad length, and pitch).
-    2. Prepares a log file at log/logoptimizer.txt.
-    3. Unpacks the input parameters and sets up the optimizer minimum 
-    and maximum bounds.
-    4. Uses the simulationClass to set an initial guess.
-    5. Runs a COBYQA minimization method.
-    6. The parameter values are checked to insure the geometry is 
-    physical.
-    7. Within the method, the values for the parameter are used to run 
-    runForOptimizer from the simulationClass.
-    8. The resulting data from the simulation is read and the IBN is 
-    used as the convergence criteria.
-    9. If convergence is not met, new values are chosen and the process
-    resets at step 6.
+    Utilizes scipy.optimize minimize with the COBYQA method to minimize 
+    a target parameter. Currently only accepts the hole radius, pitch,
+    grid standoff height (amplification distance), and pad length as
+    input parameters. Currently only minimizes the IBN.
     
     Private Attributes:
-        params (list of lists):
-            [first param name, minimum value, maximum value]
+        params (dict of lists):
+            first param name: [minimum value, maximum value],
             .
             .
             .
-            [last param name, minimum value, maximum value]
+            last param name: [minimum value, maximum value]
+        Note: minimum value may be placed after the maximum value
+        without issue.
         
         initialValues (list): list of initial values for each parameter.
+        Note: initial values currently taken from FIMS.Simulation class's
+        default parameters (TODO: allow default params as input?)
+        
         simFIMS (simulationClass): a simulation class object that 
     represents the simulation pipeline.
+        
         optimizerLog (list): input values and IBN of each iteration of
     the optimizer.
+        
         startTime (float): timestamp of the beginning of the optimizer
         lastRunParams (dictionary): parameters and values from the 
     previous iteration.
+        
         lastRunResults (float): the IBN value of the previous iteration.
     """
 
