@@ -30,6 +30,7 @@
 #include <map>
 #include <sstream>
 #include <cstdio>
+#include <random>
 
 using namespace Garfield;
 
@@ -241,111 +242,31 @@ int main(int argc, char * argv[]) {
   std::vector<double> xStart;
   std::vector<double> yStart;
   double rangeScale = 0.99;
-  double fieldCutoff = 0.2;
-  double xRange = (xBoundary[1] - xBoundary[0])*rangeScale;
-  double yRange = (yBoundary[1] - yBoundary[0])*rangeScale;
-  double xWidth = rangeScale*pitch*sqrt(3.)/3.;
-  double yWidth = rangeScale*pitch/2.;
 
   // ***** Generate field line start points ***** //
-  // Note: Generates numFieldLine*4 field lines (numFieldLine in each quadrant)
-  
-  // Reject sampled points too close to the edge of the unit cell
   double safetyWidth = std::sqrt(0.99);
+  const double sqrt3 = std::sqrt(3.0);
+  
   double halfPitch = pitch/2.;
-  double cellLength = pitch/std::sqrt(3.);
-
-  // Positive x, positive y
+  double cellLength = pitch/sqrt3;
+    
   while(xStart.size() < numFieldLine){
+      static std::mt19937 rng(std::random_device{}());
+      std::uniform_real_distribution<double> dist(-1.0, 1.0);
 
-    // Generate random point in rectangle defined by cellLength (x) and halfPitch (y)
-    double sampleX =  ((double)std::rand()/RAND_MAX)*cellLength;
-    double sampleY =  ((double)std::rand()/RAND_MAX)*halfPitch;
-
-    // Determine if point is in unit cell - Skip if not
-    double unitY = (pitch/cellLength) * (cellLength-sampleX);
-    if(sampleY > unitY){
-      continue;
-    }
-
-    // Ensure point is not too close to edge of cell
-    double safetyY = safetyWidth*halfPitch;
-    double safetyEdgeY = (pitch/cellLength) * (safetyWidth*cellLength-sampleX);
-    if((sampleY < safetyY) && (sampleY < safetyEdgeY)){
-      xStart.push_back(sampleX);
-      yStart.push_back(sampleY);
-    }
-  }
-
-  // Positive y, negative x
-  while(xStart.size() < 2*numFieldLine){
-
-    // Generate random point in rectangle defined by cellLength (x) and halfPitch (y)
-    double sampleX =  ((double)std::rand()*(-1.0)/RAND_MAX)*cellLength;
-    double sampleY =  ((double)std::rand()/RAND_MAX)*halfPitch;
-
-    // Determine if point is in unit cell - Skip if not
-    double unitY = (pitch/cellLength) * (cellLength+sampleX);
-    if(sampleY > unitY){
-      continue;
-    }
-
-    // Ensure point is not too close to edge of cell
-    double safetyY = safetyWidth*halfPitch;
-    double safetyEdgeY = (pitch/cellLength) * (safetyWidth*cellLength+sampleX);
-    if((sampleY < safetyY) && (sampleY < safetyEdgeY)){
-      xStart.push_back(sampleX);
-      yStart.push_back(sampleY);
-    }
-  }
-
-  // Positive x, negative y
-  while(xStart.size() < 3*numFieldLine){
-
-    // Generate random point in rectangle defined by cellLength (x) and halfPitch (y)
-    double sampleX =  ((double)std::rand()/RAND_MAX)*cellLength;
-    double sampleY =  ((double)std::rand()*(-1.0)/RAND_MAX)*halfPitch;
-
-    // Determine if point is in unit cell - Skip if not
-    double unitY = (pitch/cellLength) * (cellLength-sampleX);
-    if(-1.*sampleY > unitY){
-      continue;
-    }
-
-    // Ensure point is not too close to edge of cell
-    double safetyY = safetyWidth*halfPitch;
-    double safetyEdgeY = (pitch/cellLength) * (safetyWidth*cellLength-sampleX);
-    if((-1.*sampleY < safetyY) && (-1.*sampleY < safetyEdgeY)){
-      xStart.push_back(sampleX);
-      yStart.push_back(sampleY);
-    }
-  }
-
-  // Negative x, negative y
-  while(xStart.size() < 4*numFieldLine){
-
-    // Generate random point in rectangle defined by cellLength (x) and halfPitch (y)
-    double sampleX =  ((double)std::rand()*(-1.0)/RAND_MAX)*cellLength;
-    double sampleY =  ((double)std::rand()*(-1.0)/RAND_MAX)*halfPitch;
-
-    // Determine if point is in unit cell - Skip if not
-    double unitY = (pitch/cellLength) * (cellLength+sampleX);
-    if(-1.*sampleY > unitY){
-      continue;
-    }
-
-    // Ensure point is not too close to edge of cell
-    double safetyY = safetyWidth*halfPitch;
-    double safetyEdgeY = (pitch/cellLength) * (safetyWidth*cellLength+sampleX);
-    if((-1.*sampleY < safetyY) && (-1.*sampleY < safetyEdgeY)){
-      xStart.push_back(sampleX);
-      yStart.push_back(sampleY);
-    }
+      // Uniform sample in box
+      double sampleX = dist(rng)*cellLength;
+      double sampleY = dist(rng)*halfPitch;
+      
+      // Check if in hexagon (use symmetry of Q1)
+      double absX = std::fabs(sampleX);
+      double absY = std::fabs(sampleY);
+      if(absX <= cellLength - absY/sqrt3){
+          xStart.push_back(sampleX);
+          yStart.push_back(sampleY);
+      }
   }
   
-  // ***** End creation of field line starting points ***** //
-
-
   // ***** Calculate field Lines ***** //
   std::vector<std::array<float, 3> > fieldLines;
   int totalFieldLines = xStart.size();

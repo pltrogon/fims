@@ -704,7 +704,7 @@ class FIMS_Simulation:
         """
         self._checkParam()
         
-        self.setGeometry(surrounding=True)
+        self.setGeometry()
         self._generateGeometry()
             
         #Solve fields and run Garfield
