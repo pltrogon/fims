@@ -1028,8 +1028,6 @@ class gmshClass:
         bounds = meshSettings[runOption]
         refinements = cellRefinements.get(runOption, [])
 
-        transitionWidth = pitch/2
-
         smallHole = min(
             self._param['holeRadius'],
             self._param['padLength']
@@ -1040,6 +1038,7 @@ class gmshClass:
         )
         smallRadius = smallHole + self._param['gridThickness']
         largeRadius = largeHole + self._param['gridThickness']
+        transitionWidth = smallHole/4
 
         # Create a line from the center of the pad to above the center hole
         pipeBottom = self._occ.addPoint(
@@ -1107,13 +1106,13 @@ class gmshClass:
         gmsh.model.mesh.field.setNumber(6, 'XMax', bounds['x'][1])
         gmsh.model.mesh.field.setNumber(6, 'YMin', bounds['y'][0])
         gmsh.model.mesh.field.setNumber(6, 'YMax', bounds['y'][1])
-        gmsh.model.mesh.field.setNumber(6, 'ZMin', -holeRadius)
-        gmsh.model.mesh.field.setNumber(6, 'ZMax', holeRadius)
+        gmsh.model.mesh.field.setNumber(6, 'ZMin', -gridThickness)
+        gmsh.model.mesh.field.setNumber(6, 'ZMax', gridThickness)
         gmsh.model.mesh.field.setNumber(6, 'Thickness', transitionWidth)
         
         # Use the smallest mesh size
         gmsh.model.mesh.field.add('Min', 7)
-        gmsh.model.mesh.field.setNumbers(7, 'FieldsList', [3,4,5,6])
+        gmsh.model.mesh.field.setNumbers(7, 'FieldsList', [3,4,6])
         gmsh.model.mesh.field.setAsBackgroundMesh(7)
         
         # Final settings
