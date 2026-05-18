@@ -34,11 +34,7 @@ set(COMMON_LIBS
 set(EXECUTABLES
     runAvalanche            	avalanche.cc
     runAvalancheGridPix         avalancheGridPix.cc
-    runTransparency           	checkTransparency.cc
-    runTransparencyGridPix      checkTransparencyGridPix.cc
     runMagboltz             	magboltz.cc
-    runParallelPlate        	parallelPlate.cc
-    runParallelPlateEfficiency 	parallelPlateEfficiency.cc
     runAvalancheSurrounding 	avalancheSurrounding.cc
     runEfficiency               checkEfficiency.cc
 )
