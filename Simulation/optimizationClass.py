@@ -34,10 +34,10 @@ class FIMS_Optimizer:
     
     Class representing the FIMS optimization algorithm.
     
-    Utilizes scipy.optimize minimize with the COBYQA method to minimize 
-    a target parameter. Currently only accepts the hole radius, pitch,
-    grid standoff height (amplification distance), and pad length as
-    input parameters. Currently only minimizes the IBN.
+    Utilizes scipy.optimize's minimize method with the COBYQA method 
+    to minimize a target parameter. Currently only accepts the hole 
+    radius, pitch, grid standoff height (amplification distance), and 
+    pad length as input parameters. Currently only minimizes the IBN.
     
     Private Attributes:
         params (dict of lists):
@@ -46,24 +46,23 @@ class FIMS_Optimizer:
             .
             .
             last param name: [minimum value, maximum value]
-        Note: minimum value may be placed after the maximum value
-        without issue.
         
         initialValues (list): list of initial values for each parameter.
-        Note: initial values currently taken from FIMS.Simulation class's
+        Note: initial values currently taken from FIMS.Simulation class'
         default parameters (TODO: allow default params as input?)
         
         simFIMS (simulationClass): a simulation class object that 
     represents the simulation pipeline.
         
-        optimizerLog (list): input values and IBN of each iteration of
-    the optimizer.
+        optimizerLog (list): input values and the corresponding target
+        output value for each iteration of the optimizer.
         
         startTime (float): timestamp of the beginning of the optimizer
         lastRunParams (dictionary): parameters and values from the 
     previous iteration.
         
-        lastRunResults (float): the IBN value of the previous iteration.
+        lastRunResults (float): the target output value of the 
+        previous iteration.
     """
 
 #**********************************************************************#
