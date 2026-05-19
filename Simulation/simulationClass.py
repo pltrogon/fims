@@ -1074,7 +1074,6 @@ class FIMS_Simulation:
             float: The minimum field ratio required to achieve the target efficiency.
                    This value is also loaded into the class parameters upon completion.
         """
-        
         print(f'Beginning field search for {targetEfficiency*100:.0f}% efficiency...')
         
         # Ensure geometry exists
@@ -1091,40 +1090,25 @@ class FIMS_Simulation:
         }        
 
         validEfficiency = False
-        #Limit can be low. Check is boolean
+        # Limit can be low. Check is boolean
         saveParam = self.getAllParam()
         self.setParameters({'numAvalanche': 3000, 'avalancheLimit': 15})
         
-        #TODO: explore implementing an initial guess safeguard like this
-        """
-        # Ensure initial field ratio is not too large
-        initialField = saveParam['fieldRatio']
-        self._solveEFields(solveWeighting=False)
-        self._runGarfield(
-            'runEfficiency',
-            targetEfficiency=targetEfficiency, threshold=threshold
-        )
-        effResults = self._readEfficiencyFile()
-        initialEff = effResults['efficiency']
-        
-        if initialEff >= targetEfficiency:
-            print('Warning: initial field ratio too large. Reducing by 50% for stability')
-            self.setParameters({'fieldRatio': initialField*0.5})
-        """
+        # Begin find field for efficiency loop
         while not validEfficiency:
             iterNo += 1
             if iterNo > iterNoLimit:
                 print(f'Warning - Iteration limit reached ({iterNoLimit})')
                 break
 
-            #Solve for the new electric field
+            # Solve for the new electric field
             newField = self._getNextField(iterNo, effAtField, targetEfficiency)
             print(f'\tNew field ratio: {newField}')
             effAtField['field'].append(newField)
             self.setParameters({'fieldRatio': newField})
             self._solveEFields(solveWeighting=False)
 
-            #Determine the efficiency and read results from file
+            # Determine the efficiency and read results from file
             self._runGarfield(
                 'runEfficiency',
                 targetEfficiency=targetEfficiency, threshold=threshold
@@ -1164,7 +1148,6 @@ class FIMS_Simulation:
         self.setParameters(saveParam)
         
         # Print Solution and full scan details
-        #print(f'Solution for {targetEfficiency*100:.0f}% efficiency: Field ratio = {finalField}')
         #print(effAtField)
         self._printFieldSolution(effAtField)
 
@@ -1326,22 +1309,30 @@ class FIMS_Simulation:
             float: The minimum field ratio that satisfies both conditions.
                    This value is also loaded into the class parameters upon completion.
         """
+        initialFieldCap = 160
+        
         # Ensure geometry exists
         if self._geometry is None:
             self._generateGeometry()
-
+        
         #Get absolute drift field value
         driftField = self.getParam('driftField')
         print(f'Finding minimum field ratio for geometry with drift field: {driftField} V/cm')
 
-        #Choose initial field ratio guess
+        # Choose initial field ratio guess
         optTrans = self._calcOpticalTransparency()
-        #minFieldGuess = math.floor(2/optTrans - 1)
         minFieldGuess = self._calcMinField()
         
-        self.setParameters({'fieldRatio': minFieldGuess})
-        print(f'\tInitial field ratio guess: {minFieldGuess}')
-
+        # Ensure initial field ratio is not too large
+        if minFieldGuess > initialFieldCap:
+            print('Warning: initial field ratio guess too large. '
+                f'Setting to {initialFieldCap} for stability.'
+            )
+            self.setParameters({'fieldRatio': initialFieldCap})
+        else:
+            print(f'\tInitial field ratio guess: {minFieldGuess}')
+            self.setParameters({'fieldRatio': minFieldGuess})
+    
         ## Determine minimum field ratio for conditions
         # 95% efficiency
         efficiencyField = self._findFieldForEfficiency()
