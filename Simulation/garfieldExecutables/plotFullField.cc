@@ -192,7 +192,7 @@ int main(int argc, char * argv[]) {
     elmerResultsPath+"mesh.elements",
     elmerResultsPath+"mesh.nodes", 
     geometryPath+"dielectrics.dat",
-    elmerResultsPath+"FIMS.result", 
+    elmerResultsPath+"FIMSSurrounding.result", 
     "mum"
   );
 

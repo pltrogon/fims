@@ -697,14 +697,11 @@ class FIMS_Simulation:
 
     def runFullField(self):
         """
-        Draws Field Lines for every point in the unit cell.
-
-        Returns:
-            int: The run number for this simulation.
+        Draws Field Lines inside the full unit cell.
         """
         self._checkParam()
         
-        self.setGeometry()
+        self.setGeometry(surrounding=True)
         self._generateGeometry()
             
         #Solve fields and run Garfield
