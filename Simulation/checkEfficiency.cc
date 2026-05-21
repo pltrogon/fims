@@ -34,39 +34,28 @@
 
 using namespace Garfield;
 
-//Define a class and handler for the input control for the mode to run
-enum class RunMode {
-    Net,
-    Detection,
-    Collection,
-    Unknown
-};
-
-RunMode stringToRunMode(std::string str) {
-    std::transform(str.begin(), str.end(), str.begin(), ::tolower);
-
-    if(str == "net"){return RunMode::Net;}
-    if(str == "detection"){return RunMode::Detection;}
-    if(str == "collection"){return RunMode::Collection;}
-    
-    return RunMode::Unknown;
-}
-
 int main(int argc, char * argv[]) {
     if(argc != 4){
-        std::cerr << "Format: " << argv[0] << " <Target Efficiency> <Target Value> <Detection Threshold>" << std::endl;
+        std::cerr << "Format: " << argv[0] << " <GeometryMode> <EfficiencyMode> <Target Value> <Detection Threshold>" << std::endl;
         return -1;
     }
     
-    std::string runModeString = argv[1];
-    RunMode runMode = stringToRunMode(argv[1]);
-    double targetEfficiency = std::atof(argv[2]);
-    int electronThreshold = std::atoi(argv[3]);
-
-    if(runMode == RunMode::Unknown){
-        std::cerr << "Error: Invalid runMode: " << argv[1] << std::endl;
+    std::string geoModeString = argv[1];
+    GeometryMode geometryMode = stringToGeometryMode(argv[1]);
+    if(geometryMode == GeometryMode::Unknown){
+        std::cerr << "Error: Invalid GeometryMode: " << argv[1] << std::endl;
         return -1;
     }
+
+    std::string effModeString = argv[2];
+    EfficiencyMode effMode = stringToEfficiencyMode(argv[2]);
+    if(effMode == EfficiencyMode::Unknown){
+        std::cerr << "Error: Invalid EfficiencyMode: " << argv[2] << std::endl;
+        return -1;
+    }
+
+    double targetEfficiency = std::atof(argv[3]);
+    int electronThreshold = std::atoi(argv[4]);
 
     //Randon seed
     std::srand(static_cast<unsigned int>(std::time(nullptr)));
@@ -80,19 +69,20 @@ int main(int argc, char * argv[]) {
     }
 
     //********** Setup Simulation **********//
-    std::cout << "Getting efficiency for " << simParams->runNumber << "(" << runModeString << ")" << std::endl;
+    std::cout << "Getting efficiency for " << simParams->runNumber << "(" << effModeString << ")" << std::endl;
 
     //Gas Mixture
     MediumMagboltz* gasFIMS = initializeGas(*simParams);
     //Field map
     std::string geometryPath = "../Geometry/";
     std::string elmerResultsPath = geometryPath+"elmerResults/";
+    std::string fieldPath = elmerResultsPath + geoModeString + ".result";
     ComponentElmer fieldFIMS(
         elmerResultsPath+"mesh.header",
         elmerResultsPath+"mesh.elements",
         elmerResultsPath+"mesh.nodes", 
         geometryPath+"dielectrics.dat",
-        elmerResultsPath+"FIMS.result", 
+        fieldPath, 
         "mum"
     );
 
@@ -314,12 +304,12 @@ int main(int argc, char * argv[]) {
 
         //Determine if target efficiency exceeds or excludes target value within confidence
         EfficiencyResults* activeEff;
-        switch(runMode){
-            case RunMode::Net:
+        switch(effMode){
+            case EfficiencyMode::Net:
                 activeEff = &netEfficiency; break;
-            case RunMode::Detection:
+            case EfficiencyMode::Detection:
                 activeEff = &detectionEff; break;
-            case RunMode::Collection:
+            case EfficiencyMode::Collection:
                 activeEff = &collectionEff; break;
             default:
                 return -1;
@@ -345,7 +335,7 @@ int main(int argc, char * argv[]) {
 
     //Write some general info
     dataFile << "Finding efficiency for run: " << simParams->runNumber << "\n";
-    dataFile << "Run mode: " << runModeString << "\n";
+    dataFile << "Run mode: " << effModeString << "\n";
     dataFile << "Total initial electrons: " << numInitialElectrons << " (of " << simParams->numAvalanche << ")\n";
     dataFile << "Electron threshold: " << electronThreshold << "\n";
     dataFile << "Field Ratio: " << simParams->fieldRatio << "\n\n";
