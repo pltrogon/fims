@@ -33,9 +33,7 @@ set(COMMON_LIBS
 # Format: executable_name source_file.cc
 set(EXECUTABLES
     runAvalanche            	avalanche.cc
-    runAvalancheGridPix         avalancheGridPix.cc
     runMagboltz             	magboltz.cc
-    runAvalancheSurrounding 	avalancheSurrounding.cc
     runEfficiency               checkEfficiency.cc
 )
 

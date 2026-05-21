@@ -34,7 +34,6 @@
 #include "Garfield/ViewDrift.hh"
 #include "Garfield/ViewSignal.hh"
 
-//WIP - INDUCED SIGNALS
 #include "Garfield/ViewSignal.hh"
 #include "Garfield/ViewField.hh"
 
@@ -67,7 +66,63 @@
 
 using namespace Garfield;
 
+//Define a class and handler for the input control for the mode to run
+enum class GeometryMode {
+    FIMS,
+    FIMSSurrounding,
+    Unknown
+};
+
+GeometryMode stringToGeometryMode(std::string str) {
+    std::transform(str.begin(), str.end(), str.begin(), ::tolower);
+
+    if(str == "fims"){return GeometryMode::FIMS;}
+    if(str == "fimssurrounding"){return GeometryMode::FIMSSurrounding;}
+    
+    return GeometryMode::Unknown;
+}
+
+
 int main(int argc, char * argv[]) {
+
+  // Handle geometry mode from input
+  if(argc != 2){
+    std::cerr << "Format: " << argv[0] << " <GeometryMode>" << std::endl;
+    return -1;
+  }
+
+  std::string geometryModeString = argv[1];
+  GeometryMode geometryMode = stringToGeometryMode(argv[1]);
+  if(geometryMode == GeometryMode::Unknown){
+    std::cerr << "Error: Invalid geometryMode: " << argv[1] << std::endl;
+    return -1;
+  }
+
+  std::vector<std::string> sensorList;
+  sensorList.push_back("CentralPad");
+
+
+  switch(geometryMode){
+
+    case GeometryMode::FIMS: {
+      sensorList.push_back("CornerPad");
+      break;
+    }
+
+    case GeometryMode::FIMSSurrounding: {
+      sensorList.push_back("TopPad");
+      sensorList.push_back("BottomPad");
+      sensorList.push_back("RightTopPad");
+      sensorList.push_back("RightBottomPad");
+      sensorList.push_back("LeftTopPad");
+      sensorList.push_back("LeftBottomPad");
+      break;
+    }
+
+    default:
+      return -1;
+  }
+    
   //Random seed
   std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
@@ -156,12 +211,13 @@ int main(int argc, char * argv[]) {
   // Import elmer-generated field map
   std::string geometryPath = "../Geometry/";
   std::string elmerResultsPath = geometryPath+"elmerResults/";
+  std::string fieldPath = elmerResultsPath + geometryModeString + ".result";
   ComponentElmer fieldFIMS(
     elmerResultsPath+"mesh.header",
     elmerResultsPath+"mesh.elements",
     elmerResultsPath+"mesh.nodes", 
     geometryPath+"dielectrics.dat",
-    elmerResultsPath+"FIMS.result", 
+    fieldPath, 
     "mum"
   );
 
@@ -174,25 +230,22 @@ int main(int argc, char * argv[]) {
   zBoundary[0] = zmin;
   zBoundary[1] = zmax;
   //Extend simulation boundary to +/- pitch in x and y
-  xBoundary[0] = -simParams->pitch;
-  xBoundary[1] = simParams->pitch;
-  yBoundary[0] = -simParams->pitch;
-  yBoundary[1] = simParams->pitch;
+  xBoundary[0] = -2.*simParams->pitch;
+  xBoundary[1] = 2.*simParams->pitch;
+  yBoundary[0] = -2.*simParams->pitch;
+  yBoundary[1] = 2.*simParams->pitch;
 
   //Enable periodicity and set components
   fieldFIMS.EnableMirrorPeriodicityX();
   fieldFIMS.EnableMirrorPeriodicityY();
   fieldFIMS.SetGas(gasFIMS);
 
-  // Import the weighting field for the readout electrode.
-  fieldFIMS.SetWeightingField(
-    elmerResultsPath+"FIMSCentralPadWeighting.result", 
-    "centerPad"
-  );
-  fieldFIMS.SetWeightingField(
-    elmerResultsPath+"FIMSCornerPadWeighting.result", 
-    "cornerPad"
-  );
+  // Import the weighting field for the readout electrodes.
+  for(int i = 0; i < sensorList.size(); i++){
+    std::string inSensor = sensorList.at(i);
+    std::string fieldFilePath = elmerResultsPath + geometryModeString + inSensor + "Weighting.result";
+    fieldFIMS.SetWeightingField(fieldFilePath, inSensor);
+  }
 
   //Create a sensor
   Sensor* sensorFIMS = new Sensor();
@@ -465,7 +518,7 @@ int main(int argc, char * argv[]) {
         elmerResultsPath+"mesh.elements",
         elmerResultsPath+"mesh.nodes", 
         geometryPath+"dielectrics.dat",
-        elmerResultsPath+"FIMS.result", 
+        fieldPath, 
         "mum"
       );
       parallelSensorFIMS = new Sensor();
@@ -476,14 +529,12 @@ int main(int argc, char * argv[]) {
 
       //Link objects
       parallelFieldFIMS->SetGas(gasFIMS);
-      parallelFieldFIMS->SetWeightingField(
-        elmerResultsPath+"FIMSCentralPadWeighting.result", 
-        "centerPad"
-      );
-      parallelFieldFIMS->SetWeightingField(
-        elmerResultsPath+"FIMSCornerPadWeighting.result", 
-        "cornerPad"
-      );
+
+      for(int i = 0; i < sensorList.size(); i++){
+        std::string inSensor = sensorList.at(i);
+        std::string fieldFilePath = elmerResultsPath + geometryModeString + inSensor + "Weighting.result";
+        fieldFIMS.SetWeightingField(fieldFilePath, inSensor);
+      }
       parallelFieldFIMS->EnableMirrorPeriodicityX();
       parallelFieldFIMS->EnableMirrorPeriodicityY();
       
