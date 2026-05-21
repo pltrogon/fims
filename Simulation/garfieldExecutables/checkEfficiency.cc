@@ -2,23 +2,12 @@
  * checkEfficiency.cc
  *
  * 
- * Garfield++ simulation of single-electron avalanches in a FIMS geometry.
+ * TODO
  * 
- * Repeats avalanches until an efficiency of 95% with a 10-electron threshold 
- * is met or excluded with a 2-signma confidence.
- * 
- * Input parameters are:
- * <Target Efficiency>
- * <Efficiency Threshold>
- * 
- * Results are written to a file: "efficiencyFile.dat"
- * 
- * Tanner Polischuk & James Harrison IV
- * December 2025
  */
 
 // My includes
-#include "SilenceConsole.h"
+#include "myFunctions.h"
 
 //Garfield includes
 #include "Garfield/ComponentElmer.hh"
@@ -40,353 +29,340 @@
 #include <sstream>
 #include <cstdio>
 #include <vector>
+#include <random>
+#include <utility>
 
 using namespace Garfield;
 
 int main(int argc, char * argv[]) {
-
-  if(argc != 3){
-    std::cerr << "Format: " << argv[0] << " <Target Efficiency> <Threshold>" << std::endl;
-    return 1;
-  }
-
-  int electronThreshold = std::atoi(argv[2]);
-  double targetEfficiency = std::atof(argv[1]);
-
-  const double confidenceValue = 2;//NOTE - 1.645 for 95% confidence instead of 2 for 2-sigma
-
-  //Random seed
-  std::srand(static_cast<unsigned int>(std::time(nullptr)));
-
-  const double MICRON = 1e-6;
-  const double CM = 1e-2;
-  const double MICRONTOCM = 1e-4;
-  
-  //*************** SETUP ***************//
-  //Timing variables
-  clock_t startSim, stopSim, runTime;
-
-  //***** Run numbering *****//
-  //Read in run number from runNo
-  int runNo;
-  std::string runNoFile = "../runNo";
-  std::ifstream runInFile;
-  runInFile.open(runNoFile);
-
-  if(!runInFile.is_open()){
-    std::cerr << "Error reading file '" << runNoFile << "'." << std::endl;
-    return -1;
-  }
-
-  runInFile >> runNo;
-  runInFile.close();
-
-  std::cout << "****************************************\n";
-  std::cout << "Building simulation: " << runNo << " (efficiency)\n";
-  std::cout << "****************************************\n";
-
-  //***** Simulation Parameters *****//
-  //Read in simulation parameters from runControl
-  int numInputs;
-  double  padLength, pitch;
-  double gridStandoff, gridThickness, holeRadius;
-  double cathodeHeight, thicknessSiO2, pillarRadius;
-  double fieldRatio, transparencyLimit;
-  int numFieldLine;
-  int numAvalanche, avalancheLimit;
-  double gasCompAr, gasCompCO2, gasCompCF4, gasCompIsobutane;
-  double gasPenning;
-
-  std::ifstream paramFile;
-  std::string runControlFile = "../runControl";
-  paramFile.open(runControlFile);
-
-  if(!paramFile.is_open()){
-    std::cerr << "Error: Could not open control file '" << runControlFile << "'." << std::endl;
-    return -1;
-  }
-
-  std::cout << "****************************************\n";
-  std::cout << "Setting up simulation.\n";
-  std::cout << "****************************************\n";
-  
-  std::string curLine;
-  std::map<std::string, std::string> readParam;
-
-  //Read the file contents to a map
-  int numKeys = 0;
-  while(std::getline(paramFile, curLine)){
-    if(curLine.find('/') == 0){
-      continue;
-    }
-
-    size_t keyPos = curLine.find("=");
-    if (keyPos != std::string::npos){
-      std::string key = curLine.substr(0, keyPos - 1);
-      std::string value = curLine.substr(keyPos + 2);
-      if(value.back() == ';'){
-        value.pop_back();
-      }
-
-      readParam[key] = value;
-      numKeys++;
-    }
-  }
-  paramFile.close();
-
-  //Parse the values from the map
-  numInputs = std::stoi(readParam["numInputs"]);
-  if(numKeys != numInputs){
-    std::cerr << "Error: Invalid simulation parameters in 'runControl'." << std::endl;
-    return -1;
-  }
-
-  //Geometry parameters
-  //Garfield's operational scale is cm. runControl is defined in microns
-  padLength = std::stod(readParam["padLength"])*MICRONTOCM;
-  pitch = std::stod(readParam["pitch"])*MICRONTOCM;
-
-  gridStandoff = std::stod(readParam["gridStandoff"])*MICRONTOCM;
-  gridThickness = std::stod(readParam["gridThickness"])*MICRONTOCM;
-  holeRadius = std::stod(readParam["holeRadius"])*MICRONTOCM;
-
-  cathodeHeight = std::stod(readParam["cathodeHeight"])*MICRONTOCM;
-  thicknessSiO2 = std::stod(readParam["thicknessSiO2"])*MICRONTOCM;
-  pillarRadius = std::stod(readParam["pillarRadius"])*MICRONTOCM;
-
-  //Field parameters
-  fieldRatio = std::stod(readParam["fieldRatio"]);
-  numFieldLine = std::stoi(readParam["numFieldLine"]);
-
-  //Simulation Parameters
-  numAvalanche = std::stoi(readParam["numAvalanche"]);
-  avalancheLimit = std::stoi(readParam["avalancheLimit"]);
-  
- //Gasses defined as percentages
-  gasCompAr = std::stod(readParam["gasCompAr"])*100.;
-  gasCompCO2 = std::stod(readParam["gasCompCO2"])*100.;
-  gasCompCF4 = std::stod(readParam["gasCompCF4"])*100.;
-  gasCompIsobutane = std::stod(readParam["gasCompIsobutane"])*100.;
-
-  gasPenning = std::stod(readParam["gasPenning"]);
-
-  
-  //*************** SIMULATION ***************//
-  std::cout << "****************************************\n";
-  std::cout << "Creating simulation: " << runNo << " (efficiency)\n";
-  std::cout << "****************************************\n";
-
-  // Define the gas mixture
-  MediumMagboltz* gasFIMS = new MediumMagboltz();
-
-  //Set gas parameters
-  gasFIMS->SetComposition(
-    "ar", gasCompAr, 
-    "co2", gasCompCO2,
-    "cf4", gasCompCF4,
-    "iC4H10", gasCompIsobutane
-  );
-
-  {
-	SilenceCerr guard; 
-    gasFIMS->EnablePenningTransfer(gasPenning, 0.0, "ar");
-  }
-
-  //gas parameters:
-  double gasTemperature = 293.15; //K
-  double gasPressure = 760.;//torr
-  int maxElectronE = 200;
-
-  gasFIMS->SetTemperature(gasTemperature);
-  gasFIMS->SetPressure(gasPressure);
-  gasFIMS->SetMaxElectronEnergy(maxElectronE);
-  gasFIMS->Initialise(true);
-
-  const std::string path = std::getenv("GARFIELD_INSTALL");
-
-  // Import elmer-generated field map
-  std::string geometryPath = "../Geometry/";
-  std::string elmerResultsPath = geometryPath+"elmerResults/";
-  ComponentElmer fieldFIMS(
-    elmerResultsPath+"mesh.header",
-    elmerResultsPath+"mesh.elements",
-    elmerResultsPath+"mesh.nodes", 
-    geometryPath+"dielectrics.dat",
-    elmerResultsPath+"FIMS.result", 
-    "mum"
-  );
-
-  // Get region of elmer geometry
-  double xmin, ymin, zmin, xmax, ymax, zmax;
-  fieldFIMS.GetBoundingBox(xmin, ymin, zmin, xmax, ymax, zmax);
-
-  //Define boundary region for simulation
-  double xBoundary[2], yBoundary[2], zBoundary[2];
-  zBoundary[0] = zmin;
-  zBoundary[1] = zmax;
-  //Extend simulation boundary to +/- pitch in x and y
-  //TODO - This may need to be much larger
-  xBoundary[0] = -pitch;
-  xBoundary[1] = pitch;
-  yBoundary[0] = -pitch;
-  yBoundary[1] = pitch;
-
-  //Enable periodicity and set components
-  fieldFIMS.EnableMirrorPeriodicityX();
-  fieldFIMS.EnableMirrorPeriodicityY();
-  fieldFIMS.SetGas(gasFIMS);
-
-  //Create a sensor
-  Sensor* sensorFIMS = new Sensor();
-  sensorFIMS->AddComponent(&fieldFIMS);
-  sensorFIMS->SetArea(
-    xBoundary[0], yBoundary[0], zBoundary[0], 
-    xBoundary[1], yBoundary[1], zBoundary[1]
-  );
-
-  AvalancheMicroscopic* avalancheE = new AvalancheMicroscopic;
-	avalancheE->SetSensor(sensorFIMS);
-  avalancheE->EnableAvalancheSizeLimit(avalancheLimit);
-      
-  // ***** Prepare Avalanche Electron ***** //
-  //Set the Initial electron parameters
-  double x0 = 0., y0 = 0., z0 = holeRadius;//x0 = pitch/std::sqrt(3)
-  double t0 = 0.;//ns
-  double e0 = 0.1;//eV (Garfield is weird when this is 0.)
-  double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
-  
-  //Start timing the sim
-  startSim = clock();
-
-  std::cout << "****************************************\n";
-  std::cout << "Starting simulation: " << runNo << " (efficiency)\n";
-  std::cout << "****************************************\n";
-
-  //Set up variables for simulation
-  int totalAvalanches = 0;
-  int numAboveThreshold = 0;
-  int numNoAvalanche = 0;
-
-  double efficiency = 0.;
-  double varience = 0.;
-  double efficiencyErr = 0.;
-
-	int numInBunch = 100;//Always do at least 100 avalanches first
-  double lowerLimit = 0.;
-  double upperLimit = 1.;
-
-  //Begin simulating electron avalanches
-  bool runAvalanche = true;
-  bool isEfficient = false;
-  while(runAvalanche && totalAvalanches < numAvalanche){
-
-    //Do bunch of avalanches
-    for(int inAvalanche = 0; inAvalanche < numInBunch; inAvalanche++){
-      
-      totalAvalanches++;
-
-      //Begin single-electron avalanche
-      avalancheE->AvalancheElectron(x0, y0, z0, 0., e0, dx0, dy0, dz0);
-
-      //Electron count - use endpoints to include attached electrons
-      int avalancheElectrons = avalancheE->GetNumberOfElectronEndpoints();
-
-      //Increment stats counters
-      if(avalancheElectrons == 1){
-        numNoAvalanche++;
-      }
-      if(avalancheElectrons >= electronThreshold){
-        numAboveThreshold++;
-      }
-
-    }//end of avalanche bunch loop
-
-		numInBunch = 25;//do bunches of 25 after first iteration
-
-    //Efficiency calculations
-    double success = numAboveThreshold;
-    double total = totalAvalanches - numNoAvalanche;
-
-    //Binomial Stats
-    //efficiency = success/total;
-    //varience = (efficiency*(1-efficiency)/total;
-
-    //Bayesian Statistics
-    efficiency = (success+1)/(total+2);
-    varience = ((success+1)*(success+2))/((total+2)*(total+3)) - efficiency*efficiency;
-   
-    efficiencyErr = std::sqrt(varience);
-
-    // *** Check efficiency ***
-    lowerLimit = efficiency - confidenceValue*efficiencyErr;
-    upperLimit = efficiency + confidenceValue*efficiencyErr;
-
-    //Efficiency excludes target within confidence
-    if(upperLimit < targetEfficiency){
-      runAvalanche = false;
-      isEfficient = false;
+    if(argc != 4){
+        std::cerr << "Format: " << argv[0] << " <GeometryMode> <EfficiencyMode> <Target Value> <Detection Threshold>" << std::endl;
+        return -1;
     }
     
-    //Efficiency is above target within confidence
-    if(lowerLimit >= targetEfficiency){
-      runAvalanche = false;
-      isEfficient = true;
+    std::string geoModeString = argv[1];
+    GeometryMode geometryMode = stringToGeometryMode(argv[1]);
+    if(geometryMode == GeometryMode::Unknown){
+        std::cerr << "Error: Invalid GeometryMode: " << argv[1] << std::endl;
+        return -1;
     }
 
-		//occasionally print values
-		if(totalAvalanches%100 == 0){
-			std::cout << "Total avalanches: " << totalAvalanches << "\n";
-      std::cout << "\tEfficiency: " << efficiency << " +/- " << efficiencyErr << "\n";
-		}
+    std::string effModeString = argv[2];
+    EfficiencyMode effMode = stringToEfficiencyMode(argv[2]);
+    if(effMode == EfficiencyMode::Unknown){
+        std::cerr << "Error: Invalid EfficiencyMode: " << argv[2] << std::endl;
+        return -1;
+    }
 
-  }//end gain convergence loop
-  
+    double targetEfficiency = std::atof(argv[3]);
+    int electronThreshold = std::atoi(argv[4]);
 
-	//***** Output efficiency value *****//	
-	//create output file
-  std::string dataFilename = "efficiencyFile.dat";
-  std::string dataPath = "../../Data/"+dataFilename;
-	std::ofstream dataFile;
+    //Randon seed
+    std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
-	//Write results to file
-	dataFile.open(dataPath);
-  if(!dataFile.is_open()){
-    std::cerr << "Error: Could not open file: " << dataPath << std::endl;
-  }
+    const double MICRONTOCM = 1e-4;
 
-	//write some extra information
-	dataFile << "// Finding efficiency for run: " << runNo << "\n";
-	dataFile << "// Total avalanches: " << totalAvalanches << " (of " << numAvalanche << ")\n";
+    //Read in simulation parameters
+    auto simParams = readSimulationParameters();
+    if(!simParams){
+        return -1;
+    }
 
-  //include convergence criteria
-  dataFile << "// Stop condition:\n";
-  if(runAvalanche){
-    dataFile << "DID NOT CONVERGE\n";
-  }
-  else{
-    if(isEfficient){
-      dataFile << "CONVERGED\n";
+    //********** Setup Simulation **********//
+    std::cout << "Getting efficiency for " << simParams->runNumber << "(" << effModeString << ")" << std::endl;
+
+    //Gas Mixture
+    MediumMagboltz* gasFIMS = initializeGas(*simParams);
+    //Field map
+    std::string geometryPath = "../Geometry/";
+    std::string elmerResultsPath = geometryPath+"elmerResults/";
+    std::string fieldPath = elmerResultsPath + geoModeString + ".result";
+    ComponentElmer fieldFIMS(
+        elmerResultsPath+"mesh.header",
+        elmerResultsPath+"mesh.elements",
+        elmerResultsPath+"mesh.nodes", 
+        geometryPath+"dielectrics.dat",
+        fieldPath, 
+        "mum"
+    );
+
+    // Get region of elmer geometry
+    double xmin, ymin, zmin, xmax, ymax, zmax;
+    fieldFIMS.GetBoundingBox(xmin, ymin, zmin, xmax, ymax, zmax);
+
+    //Define boundary region for simulation
+    double cellLength = simParams->pitch/std::sqrt(3.);
+
+    double xBoundary[2], yBoundary[2], zBoundary[2];
+    zBoundary[0] = zmin;
+    zBoundary[1] = zmax;
+    xBoundary[0] = -2.*cellLength;
+    xBoundary[1] = 2.*cellLength;
+    yBoundary[0] = -2.*simParams->pitch;
+    yBoundary[1] = 2.*simParams->pitch;
+
+    //Enable periodicity and set components
+    fieldFIMS.EnableMirrorPeriodicityX();
+    fieldFIMS.EnableMirrorPeriodicityY();
+    fieldFIMS.SetGas(gasFIMS);
+
+    //Create a sensor
+    Sensor* sensorFIMS = new Sensor();
+    sensorFIMS->AddComponent(&fieldFIMS);
+    sensorFIMS->SetArea(
+        xBoundary[0], yBoundary[0], zBoundary[0], 
+        xBoundary[1], yBoundary[1], zBoundary[1]
+    );    
+
+    //Define avalanche characteristics
+    int electronLimit = electronThreshold+5;
+    AvalancheMicroscopic* avalancheE = new AvalancheMicroscopic;
+    avalancheE->SetSensor(sensorFIMS);
+    avalancheE->EnableAvalancheSizeLimit(electronLimit);
+    {
+        SilenceCerr guard;
+        avalancheE->EnablePlotting(nullptr, 10);//For velocity vector
+    }
+
+    //Deafult initial electron parameters
+    double x0 = 0., y0 = 0., z0 = 0.75*simParams->cathodeHeight;
+    double t0 = 0.;//ns
+    double e0 = 0.1;//eV (Garfield is weird when this is 0.)
+    double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
+
+    //Set up some data variables
+    int numInitialElectrons = 0;//Number of initial electrons generated 
+    int numTotalTrials = 0;//Number of electrons populated
+    int numAboveThreshold = 0;
+    int numCollected = 0;
+    int numHitGrid = 0;
+    int numFailure = 0;
+
+    //Statistics variables
+    EfficiencyResults collectionEff;
+    EfficiencyResults detectionEff;
+    EfficiencyResults netEfficiency;
+
+    //Initial loop control
+    int numInBunch = 500;//Always do at least 500 avalanches first
+    bool runAvalanche = true, isEfficienct = false;
+
+    std::cout << "Beginning avalanches..." << std::endl;
+    //Run avalanches in bunches
+    while(runAvalanche && numInitialElectrons < simParams->numAvalanche){
+        for(int inAvalanche=0; inAvalanche < numInBunch; inAvalanche++){
+            numInitialElectrons++;
+
+            //Random xy on plane
+            auto [sampleX, sampleY] = randomXYInHexagon(cellLength);
+            double curX = sampleX, curY = sampleY, curZ = z0;
+            double curTime = t0;
+            double curEnergy = e0;
+            double curDx = 0., curDy = 0., curDz = 0.;
+
+            //Parameters to grab electron data
+            double xi, yi, zi, ti, Ei;
+            double xf, yf, zf, tf, Ef;
+            int exitStatus;
+
+            bool repopulate = true;
+            while(repopulate){
+                //Populate with an electron
+                numTotalTrials++;
+                {//Guarding against Garfield error. See notes below.
+                    SilenceCerr guard;
+                
+                    avalancheE->AvalancheElectron(
+                        curX, curY, curZ, 
+                        curTime, curEnergy, 
+                        curDx, curDy, curDz
+                    );
+                }
+
+                int numAvalancheElectrons = avalancheE->GetNumberOfElectronEndpoints();
+
+                //Ensure electron didnt disappear. Reinitialize if so. 
+                if(numAvalancheElectrons >= 1){
+                    avalancheE->GetElectronEndpoint(0, xi, yi, zi, ti, Ei, xf, yf, zf, tf, Ef, exitStatus);
+                }
+                else{
+                    //std::cerr << "Error: No electrons in avalanche - Restarting." << std::endl;
+                    //std::cerr << "\tError at (" << curX << ", " << curY << ", " << curZ << ")" << std::endl;
+                    numFailure++;
+
+                    auto [newX, newY] = randomXYInHexagon(cellLength);
+                    curX = newX, curY = newY, curZ = z0;
+                    curTime = t0;
+                    curEnergy = e0;
+                    curDx = 0., curDy = 0., curDz = 0.;
+
+                    /**
+                     * TODO - Fix this!!
+                     * Garfield error: AvalancheMicroscopic::TransportElectrons: Starting point is not in a valid medium.
+                     * Tanner notes (13/05/2026)
+                     * Still not exactly sure what/why/how this occurs. 
+                     * It seesm that when this is happening y = pitch ALWAYS.
+                     * But the area is defined to +/- 2*pitch, so it should be fine.
+                     * x values seems like they can be anything, but cap at (-cellLength, cellLength)
+                     * Again, defined as 2x this, so not sure.
+                     * The z values are + and -. Thought maybe they were "in" a hole and translated weird, but must not be the case
+                     * Z range is +5, -2 (not hard limits as far as I can tell)
+                     * 
+                     * The current implementation is that this is just restarting, so although inefficienct it shouldnt affect results
+                     */
+                }
+
+                //Check if above threshold for detection efficiency. Assume it is collected.
+                if(numAvalancheElectrons >= electronThreshold){
+                    numAboveThreshold++;
+                    numCollected++;
+                    break;
+                }
+
+                //Only check where electron ends if there is only 1 (Any larger is assumed to be collected)
+                if(numAvalancheElectrons == 1){
+                    switch(exitStatus){
+
+                        // Electron attached to gas molecule - Restart with initial electron
+                        //WARNING - This may cause an infinite loop. Consider max attempts if becomes an issue
+                        case -7: {
+                            curX = sampleX, curY = sampleY, curZ = z0;
+                            curTime = t0;
+                            curEnergy = e0;
+                            curDx = 0., curDy = 0., curDz = 0.;
+                            break;
+                        }
+
+                        // Electron leaves drift medium (Hits Grid/Pad/Dielectric)
+                        case -5: {
+                            if(zf < -1.*simParams->gridThickness){
+                                numCollected++;
+                            }
+                            else{
+                                numHitGrid++;
+                            }
+                            repopulate = false;
+                            break;
+                        }
+
+                        // Electron leaves the simulation volume - Shift it back
+                        //Determine which boundary was hit and shift by pitch to opposite side
+                        case -1: {
+                            //Shift x or y
+                            curX = std::abs(xf) >= cellLength ? -1.*std::copysign(cellLength, xf) : xf;
+                            curY = std::abs(yf) >= simParams->pitch ? -1.*std::copysign(simParams->pitch, yf) : yf;
+                            curZ = zf;
+
+                            //Get direction vector from 2nd-last and last points along drift
+                            double xPrev, yPrev, zPrev, tPrev, xFinal, yFinal, zFinal, tFinal;
+                            int nPoints = avalancheE->GetNumberOfElectronDriftLinePoints(0);
+                            avalancheE->GetElectronDriftLinePoint(xFinal, yFinal, zFinal, tFinal, nPoints-1, 0);
+                            avalancheE->GetElectronDriftLinePoint(xPrev, yPrev, zPrev, tPrev, nPoints-2, 0);
+
+                            //Get normalized direction vector
+                            double dx = xFinal - xPrev;
+                            double dy = yFinal - yPrev;
+                            double dz = zFinal - zPrev;
+                            double vMag = std::sqrt(dx*dx + dy*dy + dz*dz);
+                            curDx = dx/vMag;
+                            curDy = dy/vMag;
+                            curDz = dz/vMag;
+                            curTime = tf;
+                            curEnergy = Ef;
+                            break;
+                        }
+
+                        default:
+                            std::cerr << "Error: Unexpected electron endpoint status (" << exitStatus << ")" << std::endl;
+                            return -1;
+
+                    }//End of electron endpoint switch
+                }
+
+            }//End of single avalanche trial
+
+        }//end of avalanche bunch loop
+        std::cout << "Done " << numInitialElectrons << " trials." << std::endl;
+        std::cerr << "Number of surpressed Garfield errors: " << numFailure << std::endl;
+
+        numInBunch = 100;//do bunches of 100 after first iteration
+
+        // *** Check efficiencies ***
+        //Collection
+        collectionEff = calculateEfficiencyStats(numCollected, numInitialElectrons);
+        //Detection
+        detectionEff = calculateEfficiencyStats(numAboveThreshold, numCollected);
+
+        //Net efficiency
+        netEfficiency.meanValue = collectionEff.meanValue*detectionEff.meanValue;
+        netEfficiency.minValue = collectionEff.minValue*detectionEff.minValue;
+        netEfficiency.maxValue = collectionEff.maxValue*detectionEff.maxValue;
+
+        netEfficiency.lowError = netEfficiency.meanValue - netEfficiency.minValue;
+        netEfficiency.highError = netEfficiency.maxValue - netEfficiency.meanValue;
+
+
+        //Determine if target efficiency exceeds or excludes target value within confidence
+        EfficiencyResults* activeEff;
+        switch(effMode){
+            case EfficiencyMode::Net:
+                activeEff = &netEfficiency; break;
+            case EfficiencyMode::Detection:
+                activeEff = &detectionEff; break;
+            case EfficiencyMode::Collection:
+                activeEff = &collectionEff; break;
+            default:
+                return -1;
+        }
+
+        if(activeEff->maxValue < targetEfficiency || activeEff->minValue >= targetEfficiency){
+            runAvalanche = false;
+        }
+    }//End of all avalanches
+
+
+    //***** Output efficiency value *****//	
+    //create output file
+    std::string dataFilename = "efficiencyResults.dat";
+    std::string dataPath = "../../Data/"+dataFilename;
+    std::ofstream dataFile;
+
+    //Write results to file
+    dataFile.open(dataPath);
+    if(!dataFile.is_open()){
+        std::cerr << "Error: Could not open file: " << dataPath << std::endl;
+    }
+
+    //Write some general info
+    dataFile << "Finding efficiency for run: " << simParams->runNumber << "\n";
+    dataFile << "Run mode: " << effModeString << "\n";
+    dataFile << "Total initial electrons: " << numInitialElectrons << " (of " << simParams->numAvalanche << ")\n";
+    dataFile << "Electron threshold: " << electronThreshold << "\n";
+    dataFile << "Field Ratio: " << simParams->fieldRatio << "\n\n";
+
+    //Include the actual results
+    dataFile << "Num collected:\n" << numCollected << "\n";
+    dataFile << "Num detected:\n" << numAboveThreshold << "\n\n";
+
+    dataFile << "Stop condition:\n";
+    if(runAvalanche){
+        dataFile << "DID NOT CONVERGE\n\n";
     }
     else{
-      dataFile << "EXCLUDED\n";
+        dataFile << "CONVERGED\n\n";
     }
-  }
 
-  //output efficiency
-  dataFile << "// Efficiency:\n" << efficiency << "\n" << efficiencyErr << std::endl;
+    //Include all of the calculated values
+    dataFile << "Efficiency Values (Form: meanValue, lowError, highError):\n";
+    dataFile << "Collection Efficiency:\n" << collectionEff.meanValue << "\n";
+    dataFile << collectionEff.lowError << "\n" << collectionEff.highError << "\n";
+    dataFile << "Detection Efficiency:\n" << detectionEff.meanValue << "\n";
+    dataFile << detectionEff.lowError << "\n" << detectionEff.highError << "\n";
+    dataFile << "Net Efficiency:\n" << netEfficiency.meanValue << "\n";
+    dataFile << netEfficiency.lowError << "\n" << netEfficiency.highError << std::endl;
 
-	dataFile.close();
+    dataFile.close();
 
-  //Final timing
-  stopSim = clock();
-  runTime = (stopSim - startSim)/CLOCKS_PER_SEC;
-  std::cout << "****************************************\n";
-  std::cout << "Done processing avalanches...(" << runTime << " s)\n";
-  std::cout << "****************************************\n";
-  std::cout << "Done simulation: " << runNo << " (efficiency)\n";
-  std::cout << "****************************************\n";
-  std::cout << std::endl;
-
-  return 0;
+    return 0;
 
 }

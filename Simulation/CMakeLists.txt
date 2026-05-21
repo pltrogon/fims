@@ -15,6 +15,7 @@ find_package(GSL REQUIRED)
 find_package(Garfield REQUIRED)
 find_package(ROOT REQUIRED COMPONENTS Hist Tree MathCore)
 find_package(OpenMP REQUIRED)
+find_package(nlohmann_json REQUIRED)
 
 # --- Define common dependencies ---
 set(COMMON_LIBS
@@ -25,20 +26,14 @@ set(COMMON_LIBS
     ROOT::Tree
     ROOT::MathCore
     OpenMP::OpenMP_CXX
+    nlohmann_json::nlohmann_json
 )
 
 # --- Define executables ---
 # Format: executable_name source_file.cc
 set(EXECUTABLES
     runAvalanche            	avalanche.cc
-    runAvalancheGridPix         avalancheGridPix.cc
-    runTransparency           	checkTransparency.cc
-    runTransparencyGridPix      checkTransparencyGridPix.cc
-    runEfficiency           	checkEfficiency.cc
     runMagboltz             	magboltz.cc
-    runParallelPlate        	parallelPlate.cc
-    runParallelPlateEfficiency 	parallelPlateEfficiency.cc
-    runAvalancheSurrounding 	avalancheSurrounding.cc
     runFullField		        plotFullField.cc
 )
 

@@ -7,6 +7,7 @@ import glob
 import pandas as pd
 
 from scipy.special import gammaincc
+from scipy.stats import beta
 
 
 
@@ -617,3 +618,23 @@ def plotFullField(runNum, zTarget=0):
 
 #********************************************************************************#
 
+
+#********************************************************************************#
+def getAsymErrs(eff, effErr):
+    """TODO"""
+    
+    #Reconstruct the bayesian success, fail, and total values
+    variance = effErr*effErr
+    
+    if variance <= 0 or eff <= 0 or eff >= 1:
+        return 0.0, 0.0
+    
+    total = eff*(1-eff)/variance - 1
+    success = eff*total
+    fail = (1-eff)*total
+
+    # 1 stdDev range of the beta distribution
+    errorLow = eff - beta.ppf(0.16, success, fail)
+    errorHigh = beta.ppf(0.84, success, fail) - eff
+
+    return errorLow, errorHigh
