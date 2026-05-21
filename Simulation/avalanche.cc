@@ -66,23 +66,6 @@
 
 using namespace Garfield;
 
-//Define a class and handler for the input control for the mode to run
-enum class GeometryMode {
-    FIMS,
-    FIMSSurrounding,
-    Unknown
-};
-
-GeometryMode stringToGeometryMode(std::string str) {
-    std::transform(str.begin(), str.end(), str.begin(), ::tolower);
-
-    if(str == "fims"){return GeometryMode::FIMS;}
-    if(str == "fimssurrounding"){return GeometryMode::FIMSSurrounding;}
-    
-    return GeometryMode::Unknown;
-}
-
-
 int main(int argc, char * argv[]) {
 
   // Handle geometry mode from input

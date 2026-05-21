@@ -518,17 +518,13 @@ class FIMS_Simulation:
 #**********************************************************************#
     def _runGarfield(self, executable='runAvalanche', **kwargs):
         #TODO - Can we consolidate any of these executables?
-        ##  I.e. do we really need runAvalanche AND runAvalancheGridPix AND runAvalancheSurrounding??
         """
         Runs a Garfield++ simulation with the specified executable.
 
         Args:
             executable (str): The name of the Garfield++ executable to run. Options are:
                 - 'runAvalanche': Simulates electron avalanches for the central pad.
-                - 'runAvalancheSurrounding': Simulates electron avalanches for the surrounding pads.
-                - 'runAvalancheGridPix': Simulates electron avalanches for the GridPix geometry.
-                - 'runTransparency': Simulates the field transparency for the FIMS geometry.
-                - 'runTransparencyGridPix': Simulates the field transparency for the GridPix geometry.
+
                 - 'runEfficiency': Simulates the efficiency for a given field strength. Requires additional arguments:
                     - targetEfficiency (str): Name of efficiency to consider (net, detection, collection).
                     - targetValue (float): The target efficiency to achieve (default: 0.95).
@@ -538,7 +534,6 @@ class FIMS_Simulation:
 
         executables = [
             'runAvalanche',
-            'runTransparency',
             'runEfficiency'
         ]
 
@@ -547,10 +542,6 @@ class FIMS_Simulation:
         
         # Handle extra inputs for specific executables
         match executable:
-
-            case 'runTransparency':
-                targetTransparency = kwargs.get('targetTransparency', 0.99)
-                args = f'{targetTransparency}'
 
             case 'runEfficiency':
                 targetEfficiency = kwargs.get('targetEfficiency', 'net')
@@ -580,7 +571,7 @@ class FIMS_Simulation:
             with open(garfieldLog, 'w+') as garfieldOutput:
                 startTime = time.monotonic()
                 setupAvalanche = (
-                    f'./{executable} {args} {self._runMode}'.strip()
+                    f'./{executable} {self._runMode} {args}'.strip()
                 )
                 subprocess.run(
                     setupAvalanche, 
