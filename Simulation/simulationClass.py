@@ -104,6 +104,9 @@ class FIMS_Simulation:
         self._geometry = None
         self._unitCell = 'FIMS'
         self._surroundingCells = False
+        self._runMode = 'FIMS'
+
+        self._filenames = None
         
         self._iterationNumberLimit = 100
         self._fieldLimit = 250
@@ -382,6 +385,8 @@ class FIMS_Simulation:
         
         self._unitCell = unitCell
         self._surroundingCells = surrounding
+        if self._surroundingCells:
+            self._runMode = unitCell + 'Surrounding'
 
         return
 
@@ -529,16 +534,11 @@ class FIMS_Simulation:
                     - targetValue (float): The target efficiency to achieve (default: 0.95).
                     - threshold (int): The number of electrons to consider an avalanche successful (default: 10).
         """
-
-        if self._unitCell == 'GridPix':
-            executable += 'GridPix'
+        #TODOHERE
 
         executables = [
             'runAvalanche',
-            'runAvalancheSurrounding',
-            'runAvalancheGridPix',
             'runTransparency',
-            'runTransparencyGridPix',
             'runEfficiency'
         ]
 
@@ -580,7 +580,7 @@ class FIMS_Simulation:
             with open(garfieldLog, 'w+') as garfieldOutput:
                 startTime = time.monotonic()
                 setupAvalanche = (
-                    f'./{executable} {args}'.strip()
+                    f'./{executable} {args} {self._runMode}'.strip()
                 )
                 subprocess.run(
                     setupAvalanche, 
@@ -1048,26 +1048,6 @@ class FIMS_Simulation:
         print('\t' + '-'*boxWidth + '\n')
 
         return
-
-#**********************************************************************#
-    def _calcOpticalTransparency(self): #TODO - Is this unnecessary?
-        """
-        Calculates the optical transparency of the grid based on the geometry parameters.
-
-        Returns:
-            float: The optical transparency of the grid.
-        """ 
-
-        #Get geometry variables
-        radius = self._param['holeRadius']
-        pitch = self._param['pitch']
-    
-        gridArea = pitch**2*math.sqrt(3)/2
-        holeArea = math.pi*radius**2
-
-        opticalTransparency = holeArea/gridArea
-
-        return opticalTransparency
     
 #***********************************************************************************#
     def runForEfficiency(self, targetEfficiency='net', targetValue=.95, threshold=10, initialField=None):
