@@ -996,14 +996,15 @@ class gmshClass:
         # FEM Sizes
         fineMesh = gridThickness/2.
         gridMesh = gridThickness/4.
-        refineMesh = gridThickness*2
-        backgroundMesh = pitch/6.
+        refineMesh = gridThickness*2.
+        backgroundMesh = pitch/4.
         
         # FEM region scales
-        smallRadius = min(holeRadius, padLength) + gridThickness
-        largeRadius = max(holeRadius, padLength) + gridThickness
-        transitionWidth = largeRadius/4.
-        refineRadius = smallRadius/2.
+        smallRadius = min(holeRadius, padLength)
+        largeRadius = max(holeRadius, padLength)
+        htransitionWidth = pitch/10.
+        vtransitionWidth = driftLength/10.
+        refineRadius = (pitch-holeRadius)/2.
         
         # Assign the correct boundary limits to the FEM
         meshSettings = {
@@ -1035,24 +1036,20 @@ class gmshClass:
             0, 0, -self._param['gridStandoff'], 
         )
         pipeTop = self._occ.addPoint( 
-            0, 0, self._param['holeRadius']
+            0, 0, driftLength/10.
         ) 
         amplificationLine = self._occ.addLine(pipeBottom, pipeTop)
         
-        # Create lines for refinement around the edge of the unit cell
+        # Create lines for refinement around the top edge of the unit cell
         # TODO - other geometries 
         refinementOptions = {
             'FIMS': {
                 'start': [
                     (pitch/sqrt3, 0, driftLength)
-                    #(padLength, 0, SiO2Height),
-                    #(padLength/2., padLength*sqrt3/2, SiO2Height)
                 ],
                 
                 'end':[
                     (pitch/sqrt3/2, pitch/2, driftLength)
-                    #(padLength/2., padLength*sqrt3/2, SiO2Height),
-                    #(0, padLength*sqrt3/2, SiO2Height)
                 ]
             },
             
@@ -1103,9 +1100,9 @@ class gmshClass:
         gmsh.model.mesh.field.setNumber(3, 'SizeMin', fineMesh)
         gmsh.model.mesh.field.setNumber(3, 'SizeMax', backgroundMesh)
         gmsh.model.mesh.field.setNumber(3, 'DistMin', smallRadius)
-        gmsh.model.mesh.field.setNumber(3, 'DistMax', smallRadius + transitionWidth)
+        gmsh.model.mesh.field.setNumber(3, 'DistMax', smallRadius + htransitionWidth)
 
-        # Keep fine mesh around the entire grid
+        # Define ultra fine mesh inside the entire grid
         gmsh.model.mesh.field.add('Box', 4)
         gmsh.model.mesh.field.setNumber(4, 'VIn', gridMesh)
         gmsh.model.mesh.field.setNumber(4, 'VOut', backgroundMesh)
@@ -1117,25 +1114,50 @@ class gmshClass:
         gmsh.model.mesh.field.setNumber(4, 'ZMax', gridThickness/2.)
         gmsh.model.mesh.field.setNumber(4, 'Thickness', gridThickness*2.)
         
+        # Define fine mesh in the vicinity around the entire grid
+        gmsh.model.mesh.field.add('Box', 5)
+        gmsh.model.mesh.field.setNumber(5, 'VIn', refineMesh)
+        gmsh.model.mesh.field.setNumber(5, 'VOut', backgroundMesh)
+        gmsh.model.mesh.field.setNumber(5, 'XMin', bounds['x'][0])
+        gmsh.model.mesh.field.setNumber(5, 'XMax', bounds['x'][1])
+        gmsh.model.mesh.field.setNumber(5, 'YMin', bounds['y'][0])
+        gmsh.model.mesh.field.setNumber(5, 'YMax', bounds['y'][1])
+        gmsh.model.mesh.field.setNumber(5, 'ZMin', -gridThickness*2.)
+        gmsh.model.mesh.field.setNumber(5, 'ZMax', gridThickness*2.)
+        gmsh.model.mesh.field.setNumber(5, 'Thickness', vtransitionWidth)
+        
+        # Define fine mesh around the pad
+        gmsh.model.mesh.field.add('Box', 6)
+        gmsh.model.mesh.field.setNumber(6, 'VIn', fineMesh)
+        gmsh.model.mesh.field.setNumber(6, 'VOut', backgroundMesh)
+        gmsh.model.mesh.field.setNumber(6, 'XMin', bounds['x'][0])
+        gmsh.model.mesh.field.setNumber(6, 'XMax', bounds['x'][1])
+        gmsh.model.mesh.field.setNumber(6, 'YMin', bounds['y'][0])
+        gmsh.model.mesh.field.setNumber(6, 'YMax', bounds['y'][1])
+        gmsh.model.mesh.field.setNumber(6, 'ZMin', SiO2Height - self._param['thicknessSiO2']/2.)
+        gmsh.model.mesh.field.setNumber(6, 'ZMax', SiO2Height + gridThickness)
+        gmsh.model.mesh.field.setNumber(6, 'Thickness', vtransitionWidth/2.)
+        
         # Define coarse mesh near edge/corner refinement lines
-        gmsh.model.mesh.field.add('Threshold', 5)
-        gmsh.model.mesh.field.setNumber(5, 'InField', 2)
-        gmsh.model.mesh.field.setNumber(5, 'SizeMin', refineMesh)
-        gmsh.model.mesh.field.setNumber(5, 'SizeMax', backgroundMesh)
-        gmsh.model.mesh.field.setNumber(5, 'DistMin', refineRadius)
-        gmsh.model.mesh.field.setNumber(5, 'DistMax', refineRadius + transitionWidth)
+        gmsh.model.mesh.field.add('Threshold', 7)
+        gmsh.model.mesh.field.setNumber(7, 'InField', 2)
+        gmsh.model.mesh.field.setNumber(7, 'SizeMin', refineMesh)
+        gmsh.model.mesh.field.setNumber(7, 'SizeMax', backgroundMesh)
+        gmsh.model.mesh.field.setNumber(7, 'DistMin', refineRadius)
+        gmsh.model.mesh.field.setNumber(7, 'DistMax', refineRadius + vtransitionWidth)
         
         # Use the smallest mesh size
-        gmsh.model.mesh.field.add('Min', 6)
-        gmsh.model.mesh.field.setNumbers(6, 'FieldsList', [3,4,5])
-        gmsh.model.mesh.field.setAsBackgroundMesh(6)
+        gmsh.model.mesh.field.add('Min', 8)
+        gmsh.model.mesh.field.setNumbers(8, 'FieldsList', [3,4,5,6,7])
+        gmsh.model.mesh.field.setAsBackgroundMesh(8)
         
         # Final settings
         gmsh.option.setNumber('Mesh.MeshSizeFromCurvature', 0) # FEM already defined in volume
         gmsh.option.setNumber('Mesh.MeshSizeFromPoints', 0) # FEM not set at points
         gmsh.option.setNumber('Mesh.MeshSizeExtendFromBoundary', 1)
         gmsh.option.setNumber('Mesh.MeshSizeMax', backgroundMesh)
-        gmsh.option.setNumber('Mesh.Algorithm', 6) # better handles large FEM gradients
+        #gmsh.option.setNumber('Mesh.Algorithm', 5) # better handles large FEM gradients
+        # TODO: play test other run options for Algorithm3D
         return
     
 #**********************************************************************#
