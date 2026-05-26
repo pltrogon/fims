@@ -994,7 +994,7 @@ class gmshClass:
         outRadius = pitch/sqrt3
         
         # FEM Sizes
-        fineMesh = gridThickness/2.
+        fineMesh = gridThickness*(3./4.)
         gridMesh = gridThickness/4.
         refineMesh = gridThickness*2.
         backgroundMesh = pitch/4.
@@ -1127,16 +1127,17 @@ class gmshClass:
         gmsh.model.mesh.field.setNumber(5, 'Thickness', vtransitionWidth)
         
         # Define fine mesh around the pad
-        gmsh.model.mesh.field.add('Box', 6)
-        gmsh.model.mesh.field.setNumber(6, 'VIn', fineMesh)
-        gmsh.model.mesh.field.setNumber(6, 'VOut', backgroundMesh)
-        gmsh.model.mesh.field.setNumber(6, 'XMin', bounds['x'][0])
-        gmsh.model.mesh.field.setNumber(6, 'XMax', bounds['x'][1])
-        gmsh.model.mesh.field.setNumber(6, 'YMin', bounds['y'][0])
-        gmsh.model.mesh.field.setNumber(6, 'YMax', bounds['y'][1])
-        gmsh.model.mesh.field.setNumber(6, 'ZMin', SiO2Height - self._param['thicknessSiO2']/2.)
-        gmsh.model.mesh.field.setNumber(6, 'ZMax', SiO2Height + gridThickness)
-        gmsh.model.mesh.field.setNumber(6, 'Thickness', vtransitionWidth/2.)
+        #gmsh.model.mesh.field.add('Box', 6)
+        #gmsh.model.mesh.field.setNumber(6, 'VIn', fineMesh)
+        #gmsh.model.mesh.field.setNumber(6, 'VOut', backgroundMesh)
+        #gmsh.model.mesh.field.setNumber(6, 'XMin', bounds['x'][0])
+        #gmsh.model.mesh.field.setNumber(6, 'XMax', bounds['x'][1])
+        #gmsh.model.mesh.field.setNumber(6, 'YMin', bounds['y'][0])
+        #gmsh.model.mesh.field.setNumber(6, 'YMax', bounds['y'][1])
+        #gmsh.model.mesh.field.setNumber(6, 'ZMin', SiO2Height - self._param['thicknessSiO2']/2.)
+        #gmsh.model.mesh.field.setNumber(6, 'ZMax', SiO2Height + self._param['thicknessSiO2']/2.)
+        #gmsh.model.mesh.field.setNumber(6, 'Thickness', vtransitionWidth/2.)
+        # Fine FEM around pad appears to have no affect on the final field lines.
         
         # Define coarse mesh near edge/corner refinement lines
         gmsh.model.mesh.field.add('Threshold', 7)
@@ -1148,7 +1149,7 @@ class gmshClass:
         
         # Use the smallest mesh size
         gmsh.model.mesh.field.add('Min', 8)
-        gmsh.model.mesh.field.setNumbers(8, 'FieldsList', [3,4,5,6,7])
+        gmsh.model.mesh.field.setNumbers(8, 'FieldsList', [3,4,5,7])
         gmsh.model.mesh.field.setAsBackgroundMesh(8)
         
         # Final settings
@@ -1156,8 +1157,8 @@ class gmshClass:
         gmsh.option.setNumber('Mesh.MeshSizeFromPoints', 0) # FEM not set at points
         gmsh.option.setNumber('Mesh.MeshSizeExtendFromBoundary', 1)
         gmsh.option.setNumber('Mesh.MeshSizeMax', backgroundMesh)
-        #gmsh.option.setNumber('Mesh.Algorithm', 5) # better handles large FEM gradients
-        # TODO: play test other run options for Algorithm3D
+        #gmsh.option.setNumber('Mesh.Algorithm3D', 10) # 10 runs ~40 seconds faster than 1
+
         return
     
 #**********************************************************************#
