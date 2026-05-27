@@ -244,7 +244,7 @@ int main(int argc, char * argv[]) {
   double rangeScale = 0.99;
 
   // ***** Generate field line start points ***** //
-  double safetyWidth = std::sqrt(0.99);
+  double safetyWidth = std::sqrt(0.98);
   const double sqrt3 = std::sqrt(3.0);
   
   double halfPitch = pitch/2.;
@@ -255,8 +255,8 @@ int main(int argc, char * argv[]) {
       std::uniform_real_distribution<double> dist(-1.0, 1.0);
 
       // Uniform sample in box
-      double sampleX = dist(rng)*cellLength;
-      double sampleY = dist(rng)*halfPitch;
+      double sampleX = dist(rng)*cellLength*safetyWidth;
+      double sampleY = dist(rng)*halfPitch*safetyWidth;
       
       // Check if in hexagon (use symmetry of Q1)
       double absX = std::fabs(sampleX);

@@ -1045,7 +1045,7 @@ class gmshClass:
         # FEM Sizes
         fineMesh = gridThickness*(3./4.)
         gridMesh = gridThickness/4.
-        refineMesh = gridThickness*2.
+        refineMesh = gridThickness*(3./2.)
         backgroundMesh = pitch/4.
         
         # FEM region scales
