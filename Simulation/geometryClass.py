@@ -970,9 +970,63 @@ class gmshClass:
         return
 
 #**********************************************************************#
-    def _makeRefinementLines(self):
-        """Makes lines with finer FEM values within the geometry"""
+    def _makeRefinementLines(self, runOption):
+        """
+        Makes lines with finer FEM values within the geometry.
+        
+        returns:
+            refinementLines (list): list of refinement lines in Gmsh API
+        """
+        
+        # TODO - other geometries
+        # Cell dimensions
+        pitch = self._param['pitch']
+        gridThickness = self._param['gridThickness']
+        driftLength = self._param['cathodeHeight'] - gridThickness/2.
+        sqrt3 = math.sqrt(3)
+        
+        refinementOptions = {
+            'FIMS': {
+                'start': [
+                    (pitch/sqrt3, 0, driftLength)
+                ],
+                
+                'end':[
+                    (pitch/sqrt3/2, pitch/2, driftLength)
+                ]
+            },
+            
+            'FIMSSurrounding': {
+                'start': [(pitch/sqrt3, 0, driftLength), 
+                    (pitch/sqrt3/2, pitch/2, driftLength),
+                    (pitch/sqrt3/2, -pitch/2, driftLength),
+                    (-pitch/sqrt3, 0, driftLength),
+                    (-pitch/sqrt3/2, -pitch/2, driftLength),
+                    (-pitch/sqrt3/2, pitch/2, driftLength)
+                ], 
+                
+                'end':[(pitch/sqrt3/2, pitch/2, driftLength),
+                    (pitch/sqrt3/2, -pitch/2, driftLength),
+                    (-pitch/sqrt3, 0, driftLength),
+                    (-pitch/sqrt3/2, -pitch/2, driftLength),
+                    (-pitch/sqrt3/2, pitch/2, driftLength),
+                    (pitch/sqrt3, 0, driftLength)
+                ] #TODO: creates redundant points
+            }
+        }
+        refinement = refinementOptions[runOption]
         refinementLines = []
+        
+        refineID = 0
+        while refineID < len(refinement['start']):
+            xStart, yStart, zStart = refinement['start'][refineID]
+            xEnd, yEnd, zEnd = refinement['end'][refineID]
+            refineStart = self._occ.addPoint(xStart, yStart, zStart)
+            refineEnd = self._occ.addPoint(xEnd, yEnd, zEnd)
+            refineLine = self._occ.addLine(refineStart, refineEnd)
+            refinementLines.append(refineLine)
+            refineID += 1
+
         return refinementLines
 
 #**********************************************************************#
@@ -1045,50 +1099,8 @@ class gmshClass:
         amplificationLine = self._occ.addLine(pipeBottom, pipeTop)
         
         # Create lines for refinement around the top edge of the unit cell
-        # TODO - other geometries
-        refinementOptions = {
-            'FIMS': {
-                'start': [
-                    (pitch/sqrt3, 0, driftLength)
-                ],
-                
-                'end':[
-                    (pitch/sqrt3/2, pitch/2, driftLength)
-                ]
-            },
-            
-            'FIMSSurrounding': {
-                'start': [(pitch/sqrt3, 0, driftLength), 
-                    (pitch/sqrt3/2, pitch/2, driftLength),
-                    (pitch/sqrt3/2, -pitch/2, driftLength),
-                    (-pitch/sqrt3, 0, driftLength),
-                    (-pitch/sqrt3/2, -pitch/2, driftLength),
-                    (-pitch/sqrt3/2, pitch/2, driftLength)
-                ], 
-                
-                'end':[(pitch/sqrt3/2, pitch/2, driftLength),
-                    (pitch/sqrt3/2, -pitch/2, driftLength),
-                    (-pitch/sqrt3, 0, driftLength),
-                    (-pitch/sqrt3/2, -pitch/2, driftLength),
-                    (-pitch/sqrt3/2, pitch/2, driftLength),
-                    (pitch/sqrt3, 0, driftLength)
-                ] #TODO: creates redundant points
-            }
-        }
-        refinement = refinementOptions[runOption]
-        refinementLines = []
-        # refinementLines = self._makeRefinementLines()
+        refinementLines = self._makeRefinementLines(runOption)
         
-        refineID = 0
-        while refineID < len(refinement['start']):
-            xStart, yStart, zStart = refinement['start'][refineID]
-            xEnd, yEnd, zEnd = refinement['end'][refineID]
-            refineStart = self._occ.addPoint(xStart, yStart, zStart)
-            refineEnd = self._occ.addPoint(xEnd, yEnd, zEnd)
-            refineLine = self._occ.addLine(refineStart, refineEnd)
-            refinementLines.append(refineLine)
-            refineID += 1
-
         self._occ.synchronize()
 
         # Find distance from center line
