@@ -970,6 +970,7 @@ class gmshClass:
         return
 
 #**********************************************************************#
+
     def _makeRefinementLines(self, runOption):
         """
         Makes lines with finer FEM values within the geometry.
@@ -985,46 +986,36 @@ class gmshClass:
         driftLength = self._param['cathodeHeight'] - gridThickness/2.
         sqrt3 = math.sqrt(3)
         
+        # List of coordinates for each refinement line point in a specified geometry
         refinementOptions = {
-            'FIMS': {
-                'start': [
-                    (pitch/sqrt3, 0, driftLength)
-                ],
-                
-                'end':[
-                    (pitch/sqrt3/2, pitch/2, driftLength)
-                ]
-            },
+            'FIMS': [
+                (pitch/sqrt3, 0, driftLength), 
+                (pitch/sqrt3/2, pitch/2, driftLength),
+                (0, pitch/2, driftLength)
+            ],
             
-            'FIMSSurrounding': {
-                'start': [(pitch/sqrt3, 0, driftLength), 
-                    (pitch/sqrt3/2, pitch/2, driftLength),
-                    (pitch/sqrt3/2, -pitch/2, driftLength),
-                    (-pitch/sqrt3, 0, driftLength),
-                    (-pitch/sqrt3/2, -pitch/2, driftLength),
-                    (-pitch/sqrt3/2, pitch/2, driftLength)
-                ], 
-                
-                'end':[(pitch/sqrt3/2, pitch/2, driftLength),
-                    (pitch/sqrt3/2, -pitch/2, driftLength),
-                    (-pitch/sqrt3, 0, driftLength),
-                    (-pitch/sqrt3/2, -pitch/2, driftLength),
-                    (-pitch/sqrt3/2, pitch/2, driftLength),
-                    (pitch/sqrt3, 0, driftLength)
-                ] #TODO: creates redundant points
-            }
+            'FIMSSurrounding': [
+                (pitch/sqrt3, 0, driftLength), 
+                (pitch/sqrt3/2, pitch/2, driftLength),
+                (-pitch/sqrt3/2, pitch/2, driftLength),
+                (-pitch/sqrt3, 0, driftLength),
+                (-pitch/sqrt3/2, -pitch/2, driftLength),
+                (pitch/sqrt3/2, -pitch/2, driftLength),
+                (pitch/sqrt3, 0, driftLength)
+            ]
         }
         refinement = refinementOptions[runOption]
         refinementLines = []
         
+        # Use points to generate lines and append those lines to a list
         refineID = 0
-        while refineID < len(refinement['start']):
-            xStart, yStart, zStart = refinement['start'][refineID]
-            xEnd, yEnd, zEnd = refinement['end'][refineID]
-            refineStart = self._occ.addPoint(xStart, yStart, zStart)
-            refineEnd = self._occ.addPoint(xEnd, yEnd, zEnd)
-            refineLine = self._occ.addLine(refineStart, refineEnd)
-            refinementLines.append(refineLine)
+        while refineID < len(refinement):
+            xCoor, yCoor, zCoor = refinement[refineID]
+            newPoint = self._occ.addPoint(xCoor, yCoor, zCoor)
+            if refineID > 0:
+                refineLine = self._occ.addLine(oldPoint, newPoint)
+                refinementLines.append(refineLine)
+            oldPoint = newPoint
             refineID += 1
 
         return refinementLines
@@ -1145,7 +1136,7 @@ class gmshClass:
         
         # Define fine mesh around the pad
         gmsh.model.mesh.field.add('Box', 6)
-        gmsh.model.mesh.field.setNumber(6, 'VIn', gridMesh)
+        gmsh.model.mesh.field.setNumber(6, 'VIn', refineMesh)
         gmsh.model.mesh.field.setNumber(6, 'VOut', backgroundMesh)
         gmsh.model.mesh.field.setNumber(6, 'XMin', bounds['x'][0])
         gmsh.model.mesh.field.setNumber(6, 'XMax', bounds['x'][1])
