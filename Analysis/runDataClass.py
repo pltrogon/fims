@@ -502,14 +502,9 @@ class runData:
             self._calculatedData['Efficiency Error'] = simEffErr
 
             #Fits
-            try:
-                polyaTheta, polyaGain = self._fitPolya()
-                self._calculatedData['Polya Theta'] = polyaTheta
-                self._calculatedData['Polya Gain'] = polyaGain
-            except:
-                print('Error: Unable to fit polya.') #TODO: find better way to handle this error
-                self._calculatedData['Polya Theta'] = None
-                self._calculatedData['Polya Gain'] = None
+            polyaTheta, polyaGain = self._fitPolya()
+            self._calculatedData['Polya Theta'] = polyaTheta
+            self._calculatedData['Polya Gain'] = polyaGain
                 
         return
 
@@ -2247,12 +2242,22 @@ class runData:
     
 #********************************************************************************#
     def _fitPolya(self):
-        """TODO"""
+        """
+        Fits a polya to the avalanche size distribution.
+        
+        Returns:
+            theta (float): The Polya shape parameter
+            gain (float): The mean avalanche size.
+        """
 
-        fitResults = self._fitAvalancheSize(binWidth=1)
-
-        theta = fitResults['fitPolya'].theta
-        gain = fitResults['fitPolya'].gain
+        try:
+            fitResults = self._fitAvalancheSize(binWidth=1)
+            theta = fitResults['fitPolya'].theta
+            gain = fitResults['fitPolya'].gain
+            
+        except:#TODO - there may be a better way to handle this within _fitAvalancheSize
+            print('Warning - Error in Polya Fit.')
+            return None, None
 
         return theta, gain
 
