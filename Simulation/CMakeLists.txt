@@ -34,6 +34,7 @@ set(COMMON_LIBS
 set(EXECUTABLES
     runAvalanche            	avalanche.cc
     runMagboltz             	magboltz.cc
+    runEfficiency               checkEfficiency.cc
     runFullField		        plotFullField.cc
 )
 
