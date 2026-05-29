@@ -493,19 +493,49 @@ class runData:
             self._calculatedData['IBF * Trimmed Gain'] = dataIBF['meanIBF']*trimmedGain
 
             # Efficiencies
-            simRawEff, simRawEffErr = self._getRawEfficiency(threshold=10)
-            self._calculatedData['Raw Efficiency (10e)'] = simRawEff
-            self._calculatedData['Raw Efficiency Error'] = simRawEffErr
+            rawEfficiency = self._getRawEfficiency(threshold=10)
+            self._calculatedData['Raw Efficiency (10e)'] = rawEfficiency['efficiency']
+            self._calculatedData['Raw Efficiency Error (Low)'] = rawEfficiency['efficiencyErrLow']
+            self._calculatedData['Raw Efficiency Error (High)'] = rawEfficiency['efficiencyErrHigh']
 
-            simEff, simEffErr = self._getEfficiency(threshold=10)
-            self._calculatedData['Efficiency (10e)'] = simEff
-            self._calculatedData['Efficiency Error'] = simEffErr
+            efficiency = self._getEfficiency(threshold=10)
+            self._calculatedData['Efficiency (10e)'] = efficiency['efficiency']
+            self._calculatedData['Efficiency Error (Low)'] = efficiency['efficiencyErrLow']
+            self._calculatedData['Efficiency Error (High)'] = efficiency['efficiencyErrHigh']
 
-            #Fits
-            polyaTheta, polyaGain = self._fitPolya()
-            self._calculatedData['Polya Theta'] = polyaTheta
-            self._calculatedData['Polya Gain'] = polyaGain
-                
+            efficiencyThreshold = self._getEfficiencyThreshold(targetEfficiency=0.95)
+            n95Info = self._bootstrapQuantile(quantile=0.05, numIterations=1000)
+            self._calculatedData['n_95 - Threshold'] = efficiencyThreshold
+            self._calculatedData['n_95'] = n95Info['quantile']
+            self._calculatedData['n_95 Err Low'] = n95Info['lowError']
+            self._calculatedData['n_95 Err High'] = n95Info['highError']
+            self._calculatedData['n_95 StdDev'] = n95Info['quantileErr']
+
+            # Polya Fits
+            polyaFitResults = self._fitPolya()
+            self._calculatedData['Polya Theta'] = polyaFitResults['theta']
+            self._calculatedData['Polya Gain'] = polyaFitResults['gain']
+            self._calculatedData['Polya Theta Error'] = polyaFitResults['thetaErr']
+            self._calculatedData['Polya Gain Error'] = polyaFitResults['gainErr']
+
+            # Single-Electron avalanche info
+            singleInfo = self._getSingleElectronAvalancheData()
+            self._calculatedData['Num Avalanche'] = singleInfo['numTotal']
+            self._calculatedData['Num 1e'] = singleInfo['numSingle']
+            self._calculatedData['Num Lost - Attached'] = singleInfo['numAttatched']
+            self._calculatedData['Num Lost - Hit Grid'] = singleInfo['numHitGrid']
+            self._calculatedData['Num Lost - Drift'] = singleInfo['numExitArea']
+            self._calculatedData['Num No Avalanche'] = singleInfo['numExitMedium']
+        
+            chargeCollectionEff = self._getChargeCollectionEfficiency()
+            self._calculatedData['Charge Collection Eff'] = chargeCollectionEff['efficiency']
+            self._calculatedData['Charge Collection Eff Err (Low)'] = chargeCollectionEff['efficiencyErrLow']
+            self._calculatedData['Charge Collection Eff Err (High)'] = chargeCollectionEff['efficiencyErrHigh']
+
+
+
+            #Other calculated values can be added here as needed.
+
         return
 
 #********************************************************************************#   
@@ -1581,7 +1611,7 @@ class runData:
         gain = histData['gain']
 
         if gain < 5 or gain >= self.getRunParameter('Avalanche Limit'):
-            raise ValueError(f'Unable to fit to data. Gain is {gain:.2f}.')
+            raise ValueError(f'Unable to fit to data. Gain is {gain:.2f} ({self.runNumber}).')
 
         
         fitDataToPolya = myPolya()
@@ -2191,8 +2221,17 @@ class runData:
 
         simEffErr = math.sqrt(varience)
 
-        return simEff, simEffErr
-    
+        simEffErrLow, simEffErrHigh = functionsFIMS.getAsymErrs(simEff, simEffErr)
+
+        efficiency = {
+            'efficiency': simEff,
+            'efficiencyErr': simEffErr,
+            'efficiencyErrLow': simEffErrLow,
+            'efficiencyErrHigh': simEffErrHigh
+        }
+
+        return efficiency
+
 #********************************************************************************#
     def _getEfficiency(self, threshold=0):
         """
@@ -2238,7 +2277,16 @@ class runData:
 
         simEffErr = math.sqrt(varience)
 
-        return simEff, simEffErr
+        errorLow, errorHigh = functionsFIMS.getAsymErrs(simEff, simEffErr)
+
+        efficiency = {
+            'efficiency': simEff,
+            'efficiencyErr': simEffErr,
+            'efficiencyErrLow': errorLow,
+            'efficiencyErrHigh': errorHigh
+        }
+
+        return efficiency
     
 #********************************************************************************#
     def _fitPolya(self):
@@ -2258,8 +2306,186 @@ class runData:
         except:#TODO - there may be a better way to handle this within _fitAvalancheSize
             print('Warning - Error in Polya Fit.')
             return None, None
+          
+        polyaFitResults = {
+            'theta': fitResults['fitPolya'].theta,
+            'thetaErr': fitResults['fitPolya'].thetaErr,
+            'gain': fitResults['fitPolya'].gain,
+            'gainErr': fitResults['fitPolya'].gainErr
+        }
 
-        return theta, gain
+        return polyaFitResults
+
+#********************************************************************************#
+    def _getEfficiencyThreshold(self, targetEfficiency=0.95):
+        """TODO"""
+
+        threshold = 0
+        isEfficient = True
+
+        while isEfficient:
+            threshold += 1
+            efficiency = self._getEfficiency(threshold=threshold)
+
+            if efficiency['efficiency'] < targetEfficiency: #TODO - add error margins
+                isEfficient = False
+
+        #Subtract 1.5 to get the threshold where efficiency is just above target
+        targetThreshold = threshold - 1.5
+        
+        return targetThreshold
+    
+#***********************************************************************************#
+    def _bootstrapQuantile(self, quantile=0.05, numIterations=1000):
+        """
+        Performs a bootstrap analysis to estimate the uncertainty of a specified quantile
+        of the avalanche gain distribution. 
+
+        Args:
+            quantile (float): The quantile to estimate (e.g., 0.05 for n_95).
+            numIterations (int): The number of bootstrap iterations to perform.
+
+        Returns:
+            dict: A dictionary containing the following:
+            - 'quantile' (float): The estimated quantile from the original data.
+            - 'quantileErr' (float): The standard deviation of the quantile estimates.
+            - 'lowError' (float): The lower error bound.
+            - 'highError' (float): The upper error bound.
+        """
+        avalancheData = self._trimAvalanche()
+        avalancheGains = avalancheData['Total Electrons'].to_numpy()
+        numAvalanche = len(avalancheGains)
+
+        if self._calculatedData['Raw Gain'].item() < 5 or numAvalanche == 0:
+            print('Warning - Cannot perform bootstrap quantile analysis.')
+            errorQuantile = {
+                'quantile': 0,
+                'quantileErr': 0,
+                'lowError': 0,
+                'highError': 0
+            }
+            return errorQuantile
+
+        
+        trueQuantile = np.quantile(avalancheGains, quantile)
+
+        quantileEstimates = np.array([
+            np.quantile(
+                np.random.choice(avalancheGains, size=numAvalanche, replace=True), 
+                quantile
+            )
+            for _ in range(numIterations)
+        ])
+        quantileEstimateStdDev = np.std(quantileEstimates, ddof=1)
+
+        lowBound = np.quantile(quantileEstimates, 0.025)
+        highBound = np.quantile(quantileEstimates, 0.975)
+
+        quantileStats = {
+            'quantile': trueQuantile,
+            'quantileErr': quantileEstimateStdDev,
+            'lowError': trueQuantile - lowBound,
+            'highError': highBound - trueQuantile
+        }
+
+        return quantileStats
+    
+
+#********************************************************************************#
+    def _getSingleElectronAvalancheData(self):
+        """TODO"""
+
+        #Get avalanche IDs for those with only 1 electron
+        allAvalancheData = self.getDataFrame('avalancheData')
+        singleElectron = allAvalancheData[allAvalancheData['Total Electrons'] == 1]
+        singleElectronID = singleElectron['Avalanche ID'].tolist()
+        numTotal = len(allAvalancheData)
+        numSingle = len(singleElectron)
+
+        allElectronData = self.getDataFrame('electronData')
+        singleElectronData = allElectronData[allElectronData['Avalanche ID'].isin(singleElectronID)]
+
+        attachedElectrons = singleElectronData[singleElectronData['Exit Status'] == -7]
+        numAttatched = len(attachedElectrons)
+        attatchedIDs = attachedElectrons['Avalanche ID'].tolist()
+
+        noAttachment = singleElectronData[singleElectronData['Exit Status'] != -7]
+
+        # Count as hit git if within 1% of the grid plane
+        gridLength = 1.01*self.getRunParameter('Grid Thickness')/2
+        hitGrid = noAttachment[(noAttachment['Final z'] <= gridLength) & (noAttachment['Final z'] >= -gridLength)]
+        numHitGrid = len(hitGrid)
+        hitGridIDs = hitGrid['Avalanche ID'].tolist()
+
+        exitNoAvalanche = noAttachment[~noAttachment['Avalanche ID'].isin(hitGridIDs)]
+
+        # Exit status = -1: Leaves drift area
+        ## Note: These are electrons that exit the sides of the simulation volume.
+        ## They could still hit attach, hit the grid, or cause an avalanche
+        exitArea = exitNoAvalanche[exitNoAvalanche['Exit Status'] == -1]
+        numExitArea = len(exitArea)
+        exitAreaIDs = exitArea['Avalanche ID'].tolist()
+
+
+        # Exit status = -5: Leave drift medium
+        ## Note: These are electrons that leave the drift medium.
+        ## By inspection, these all reach the pad/dielectric without avalanching.
+        exitMedium = exitNoAvalanche[exitNoAvalanche['Exit Status'] == -5]
+        numExitMedium = len(exitMedium)
+        exitMediumIDs = exitMedium['Avalanche ID'].tolist()
+
+        singleAvalancheInfo = {
+            'numTotal': numTotal,
+            'numSingle': numSingle,
+            'numAttatched': numAttatched,
+            'numHitGrid': numHitGrid,
+            'numExitArea': numExitArea,
+            'numExitMedium': numExitMedium,
+            'attatchedIDs': attatchedIDs,
+            'hitGridIDs': hitGridIDs,
+            'exitAreaIDs': exitAreaIDs,
+            'exitMediumIDs': exitMediumIDs
+        }
+
+        return singleAvalancheInfo
+    
+#********************************************************************************#
+    def _getChargeCollectionEfficiency(self):
+        """TODO"""
+
+        singleAvalancheInfo = self._getSingleElectronAvalancheData()
+
+        numTotal = singleAvalancheInfo['numTotal']
+
+        numAttached = singleAvalancheInfo['numAttatched']
+        numHitGrid = singleAvalancheInfo['numHitGrid']
+        numExitArea = singleAvalancheInfo['numExitArea']
+        numExitMedium = singleAvalancheInfo['numExitMedium']
+
+        # Do not count the following:
+        # Num exit area -> Drifted out of region without avalanching
+        # Num attached -> Electron attached without avalanching
+        numValid = numTotal - numExitArea - numAttached
+
+        # Undetected are those that hit the grid (a no-avalanche outcome is still detected)
+        numCount = numValid - numHitGrid
+
+        if numValid == 0:
+            raise ValueError('Error: No valid avalanches to calculate efficiency.')
+        
+        chargeEff = numCount / numValid
+        chargeEffErr = math.sqrt(chargeEff*(1-chargeEff)/numValid)
+
+        chargeErrLow, chargeErrHigh = functionsFIMS.getAsymErrs(chargeEff, chargeEffErr)
+
+        chargeCollectionEff = {
+            'efficiency': chargeEff,
+            'efficiencyErr': chargeEffErr,
+            'efficiencyErrLow': chargeErrLow,
+            'efficiencyErrHigh': chargeErrHigh
+        }
+
+        return chargeCollectionEff
 
 #********************************************************************************#
     def plotEfficiency(self, binWidth=1, threshold=0):
@@ -2334,8 +2560,9 @@ class runData:
             c='g', ls='--', label=f'Mean Avalanche Size (Gain) = {gain:.1f}'
         )
         
+        dataEfficiency = self._getEfficiency(threshold=threshold)
         polyaEff = fitPolya.calcEfficiency(threshold)
-        efficiencyText = f'Polya Efficiency = {polyaEff:.4f}'
+        efficiencyText = f'Polya Efficiency = {polyaEff:.4f}\nData Efficiency = {dataEfficiency["efficiency"]:.4f} (-{dataEfficiency["efficiencyErrLow"]:.4f}, +{dataEfficiency["efficiencyErrHigh"]:.4f})'
         
         ax.text(
             0.8, 0.5, efficiencyText, fontsize=10, 
