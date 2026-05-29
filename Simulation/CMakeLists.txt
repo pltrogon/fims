@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.12)
+cmake_minimum_required(VERSION 3.15)
 project(runAvalanche C CXX)
 
 # Standard C++ version for Garfield++
@@ -35,16 +35,19 @@ set(EXECUTABLES
     runAvalanche            	avalanche.cc
     runMagboltz             	magboltz.cc
     runEfficiency               checkEfficiency.cc
+    runFullField		        plotFullField.cc
 )
 
 # --- Loop to create and link everything ---
 while(EXECUTABLES)
-    # Pop the first two items off the list
-    list(GET EXECUTABLES 0 EXE_NAME)
-    list(GET EXECUTABLES 1 EXE_SRC)
-    list(REMOVE_AT EXECUTABLES 0 1)
-
-    add_executable(${EXE_NAME} ${EXE_SRC})
+    list(POP_FRONT EXECUTABLES EXE_NAME EXE_SRC)
+    
+    add_executable(${EXE_NAME} 
+        "${CMAKE_CURRENT_SOURCE_DIR}/garfieldExecutables/${EXE_SRC}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/myFunctions.cc"
+    )
+    
+    target_include_directories(${EXE_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     
     target_link_libraries(${EXE_NAME} PRIVATE ${COMMON_LIBS})
 endwhile()

@@ -503,7 +503,6 @@ class runData:
             self._calculatedData['Efficiency Error (Low)'] = efficiency['efficiencyErrLow']
             self._calculatedData['Efficiency Error (High)'] = efficiency['efficiencyErrHigh']
 
-
             efficiencyThreshold = self._getEfficiencyThreshold(targetEfficiency=0.95)
             n95Info = self._bootstrapQuantile(quantile=0.05, numIterations=1000)
             self._calculatedData['n_95 - Threshold'] = efficiencyThreshold
@@ -897,7 +896,7 @@ class runData:
             target (str): Identifier for what data to plot.
     
         Returns:
-            None
+            figure
         """
         plotOptions = [
             'Cathode',
@@ -955,8 +954,9 @@ class runData:
         plt.tight_layout()   
         
         return fig2D
-    
-#********************************************************************************#   
+
+#********************************************************************************#
+
     def add2DFieldLines(self, axes, fieldLineData, target):
         """
         Plots the 2D projections of electric field lines, colored according to 
@@ -1739,23 +1739,33 @@ class runData:
                 the bundle at the specified z coordinate.
         """
         zMax = self.getRunParameter('Cathode Height')
-        zMin = -1.*self.getRunParameter('Grid Standoff')
+        zMin = -1.*self.getRunParameter('Grid Standoff')       
         if not (zMin <= zTarget <= zMax):
             raise ValueError('Invalid target z.')
-        
-        lineID = self._getOutermostLineID()
 
+        holeRadius = self.getRunParameter('Hole Radius')
+        lineID = self._getOutermostLineID()
         allFieldLines = self.getDataFrame('fieldLineData')
 
-        outerFieldLine = allFieldLines[allFieldLines['Field Line ID'] == lineID].copy()
-
-        #Determine the radius for all of the outer field line
-        outerFieldLine['Field Line Radius'] = np.sqrt(
-            outerFieldLine['Field Line x']**2 + 
-            outerFieldLine['Field Line y']**2
-        )
-
-        #Get radius for target z using linear interpolation
+        # Find the outermost field line that terminated on the central pad
+        inCenter = False
+        while not inCenter:
+            # Get outer field line
+            outerFieldLine = allFieldLines[allFieldLines['Field Line ID'] == lineID].copy()
+            # Determine the radius for the outer field line
+            testFieldLine = np.sqrt(
+                outerFieldLine['Field Line x']**2 + 
+                outerFieldLine['Field Line y']**2
+            )
+            # Check field line position
+            if testFieldLine.iloc[-1] <= holeRadius:
+                inCenter = True
+                outerFieldLine['Field Line Radius'] = testFieldLine
+            else:
+                lineID -= 1
+                #TODO: revisit this once we know the field shape
+            
+        # Get radius for target z using linear interpolation
         targetRadius = np.interp(
             zTarget, 
             outerFieldLine['Field Line z'],
@@ -2280,10 +2290,23 @@ class runData:
     
 #********************************************************************************#
     def _fitPolya(self):
-        """TODO"""
+        """
+        Fits a polya to the avalanche size distribution.
+        
+        Returns:
+            theta (float): The Polya shape parameter
+            gain (float): The mean avalanche size.
+        """
 
-        fitResults = self._fitAvalancheSize(binWidth=1)
-
+        try:
+            fitResults = self._fitAvalancheSize(binWidth=1)
+            theta = fitResults['fitPolya'].theta
+            gain = fitResults['fitPolya'].gain
+            
+        except:#TODO - there may be a better way to handle this within _fitAvalancheSize
+            print('Warning - Error in Polya Fit.')
+            return None, None
+          
         polyaFitResults = {
             'theta': fitResults['fitPolya'].theta,
             'thetaErr': fitResults['fitPolya'].thetaErr,
@@ -2806,8 +2829,6 @@ class runData:
         ax.grid()
 
         return fig
-
-
 
 #********************************************************************************#
 

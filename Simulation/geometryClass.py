@@ -133,7 +133,6 @@ class geometryClass:
 
         return
 
-
 #**********************************************************************#
     def setSurroundingCells(self, surrounding=False):
         """
@@ -168,7 +167,7 @@ class geometryClass:
         )
 
         return
-    
+
 #**********************************************************************#
     def _generateElmerFiles(self, capacitance=False):
         """
@@ -972,24 +971,98 @@ class gmshClass:
 
 #**********************************************************************#
 
+    def _makeRefinementLines(self, runOption):
+        """
+        Makes lines with finer FEM values within the geometry.
+        
+        returns:
+            refinementLines (list): list of refinement lines in Gmsh API
+        """
+        
+        # TODO - other geometries
+        # Cell dimensions
+        pitch = self._param['pitch']
+        gridThickness = self._param['gridThickness']
+        driftLength = self._param['cathodeHeight'] - gridThickness/2.
+        sqrt3 = math.sqrt(3)
+        
+        # List of coordinates for each refinement line point in a specified geometry
+        ##FUTURE TODO - fucntion that returns the coners of a hexagon at a given z???
+        refinementOptions = {
+            'FIMS': [
+                (0, 0, driftLength)
+                (pitch/sqrt3, 0, driftLength), 
+                (pitch/sqrt3/2, pitch/2, driftLength),
+                (0, pitch/2, driftLength)
+            ],
+            
+            'FIMSSurrounding': [
+                (pitch/sqrt3, 0, driftLength), 
+                (pitch/sqrt3/2, pitch/2, driftLength),
+                (-pitch/sqrt3/2, pitch/2, driftLength),
+                (-pitch/sqrt3, 0, driftLength),
+                (-pitch/sqrt3/2, -pitch/2, driftLength),
+                (pitch/sqrt3/2, -pitch/2, driftLength)
+            ]
+        }
+        refinement = refinementOptions[runOption]
+        refinementLines = []
+        
+        firstPoint = self._occ.addPoint(*refinement[0])
+        curPoint = firstPoint
+        for x, y, z in refinement[1:]:
+            newPoint = self._occ.addPoint(x, y, z)
+            newLine = self._occ.addLine(curPoint, newPoint)
+            refinementLines.append(newLine)
+            
+            curPoint = newPoint
+            
+        finalLine = self._occ.addLine(curPoint, firstPoint)
+        refinementLines.append(finalLine)
+
+        return refinementLines
+
+#**********************************************************************#
+
     def _setMeshSizes(self, runOption):
         """
         Sets the mesh sizes for the geometry based on the run option.
         """
-
         sqrt3 = math.sqrt(3)
 
         # Cell dimensions
         pitch = self._param['pitch']
         holeRadius = self._param['holeRadius']
         gridThickness = self._param['gridThickness']
+        padLength = self._param['padLength']
+        thicknessSiO2 = self._param['thicknessSiO2']
         cathodeHeight = self._param['cathodeHeight']
         gridStandoff = self._param['gridStandoff']
 
+        # Derived cell lengths
+        driftLength = cathodeHeight - gridThickness/2.
+        SiO2Height = thicknessSiO2 - gridStandoff + gridThickness/2.
         xLength = pitch*sqrt3/2
         yLength = pitch/2
         outRadius = pitch/sqrt3
-
+        
+        #=========================#
+        #=== DEFINE MESH SIZES ===#
+        #=========================#
+        fineMesh = gridThickness*(3./4.)
+        gridMesh = gridThickness/4.
+        refineMesh = gridThickness*(3./2.)
+        backgroundMesh = pitch/4.
+        #=========================#
+        
+        # FEM region scales
+        smallRadius = min(holeRadius, padLength)
+        largeRadius = max(holeRadius, padLength)
+        htransitionWidth = pitch/10.
+        vtransitionWidth = driftLength/10.
+        refineRadius = (pitch-holeRadius)/2.
+        
+        # Assign the correct boundary limits to the FEM
         meshSettings = {
             'FIMS': {
                 'x': (0, xLength), 
@@ -1012,103 +1085,93 @@ class gmshClass:
                 'y': (0, yLength)
             }
         }
-
-        # TODO - geometries other than base-FIMS
-        cellRefinements = {
-            'FIMS': [
-                (0, 0), 
-                (pitch/sqrt3, 0), (pitch/sqrt3/2, pitch/2),
-                (0, pitch/2), (pitch*sqrt3/4, pitch/4)
-            ]
-        }
-
         bounds = meshSettings[runOption]
-        refinements = cellRefinements.get(runOption, [])
-
-        #=========================#
-        #=== DEFINE MESH SIZES ===#
-        #=========================#
-        fineMesh = gridThickness*2
-        coarseMesh = fineMesh*2
-        backgroundMesh = fineMesh*10
-        #=========================#
-
-        smallHole = min(
-            self._param['holeRadius'],
-            self._param['padLength']
-        )
-        largeHole = max(
-            self._param['holeRadius'],
-            self._param['padLength']
-        )
-        smallRadius = smallHole + self._param['gridThickness']
-        largeRadius = largeHole + self._param['gridThickness']
-
+        
         # Create a line from the center of the pad to above the center hole
         pipeBottom = self._occ.addPoint(
-            0, 0, -gridStandoff
+            0, 0, -self._param['gridStandoff'], 
         )
         pipeTop = self._occ.addPoint( 
-            0, 0, 2*holeRadius
+            0, 0, driftLength/10.
         ) 
         amplificationLine = self._occ.addLine(pipeBottom, pipeTop)
-
+        
+        # Create lines for refinement around the top edge of the unit cell
+        refinementLines = self._makeRefinementLines(runOption)
+        
         self._occ.synchronize()
 
         # Find distance from center line
         gmsh.model.mesh.field.add('Distance', 1)
         gmsh.model.mesh.field.setNumbers(1, 'EdgesList', [amplificationLine])
-
+        
+        # Find distance from refinement lines
+        gmsh.model.mesh.field.add('Distance', 2)
+        gmsh.model.mesh.field.setNumbers(2, 'EdgesList', refinementLines)
+        
         # Define fine mesh within smallRadius
-        gmsh.model.mesh.field.add('Threshold', 2)
-        gmsh.model.mesh.field.setNumber(2, 'InField', 1)
-        gmsh.model.mesh.field.setNumber(2, 'SizeMin', fineMesh)
-        gmsh.model.mesh.field.setNumber(2, 'SizeMax', backgroundMesh)
-        gmsh.model.mesh.field.setNumber(2, 'DistMin', smallRadius)
-        gmsh.model.mesh.field.setNumber(2, 'DistMax', 2*smallRadius)
-
-        # Define coarse mesh within largeRadius
         gmsh.model.mesh.field.add('Threshold', 3)
         gmsh.model.mesh.field.setNumber(3, 'InField', 1)
-        gmsh.model.mesh.field.setNumber(3, 'SizeMin', coarseMesh)
+        gmsh.model.mesh.field.setNumber(3, 'SizeMin', fineMesh)
         gmsh.model.mesh.field.setNumber(3, 'SizeMax', backgroundMesh)
-        gmsh.model.mesh.field.setNumber(3, 'DistMin', largeRadius)
-        gmsh.model.mesh.field.setNumber(3, 'DistMax', 2*largeRadius)
+        gmsh.model.mesh.field.setNumber(3, 'DistMin', smallRadius)
+        gmsh.model.mesh.field.setNumber(3, 'DistMax', smallRadius + htransitionWidth)
 
-        # Keep coarse mesh around the entire grid
+        # Define ultra fine mesh inside the entire grid
         gmsh.model.mesh.field.add('Box', 4)
-        gmsh.model.mesh.field.setNumber(4, 'VIn', coarseMesh)
+        gmsh.model.mesh.field.setNumber(4, 'VIn', gridMesh)
         gmsh.model.mesh.field.setNumber(4, 'VOut', backgroundMesh)
         gmsh.model.mesh.field.setNumber(4, 'XMin', bounds['x'][0])
         gmsh.model.mesh.field.setNumber(4, 'XMax', bounds['x'][1])
         gmsh.model.mesh.field.setNumber(4, 'YMin', bounds['y'][0])
         gmsh.model.mesh.field.setNumber(4, 'YMax', bounds['y'][1])
-        gmsh.model.mesh.field.setNumber(4, 'ZMin', -smallRadius)
-        gmsh.model.mesh.field.setNumber(4, 'ZMax', smallRadius)
-        gmsh.model.mesh.field.setNumber(4, 'Thickness', largeRadius)
-
-        #Keep coarse mesh near the cathode
+        gmsh.model.mesh.field.setNumber(4, 'ZMin', -gridThickness)
+        gmsh.model.mesh.field.setNumber(4, 'ZMax', gridThickness)
+        gmsh.model.mesh.field.setNumber(4, 'Thickness', gridThickness*10.)
+        
+        # Define fine mesh in the vicinity around the entire grid
         gmsh.model.mesh.field.add('Box', 5)
-        gmsh.model.mesh.field.setNumber(5, 'VIn', coarseMesh)
+        gmsh.model.mesh.field.setNumber(5, 'VIn', refineMesh)
         gmsh.model.mesh.field.setNumber(5, 'VOut', backgroundMesh)
         gmsh.model.mesh.field.setNumber(5, 'XMin', bounds['x'][0])
         gmsh.model.mesh.field.setNumber(5, 'XMax', bounds['x'][1])
         gmsh.model.mesh.field.setNumber(5, 'YMin', bounds['y'][0])
         gmsh.model.mesh.field.setNumber(5, 'YMax', bounds['y'][1])
-        gmsh.model.mesh.field.setNumber(5, 'ZMin', .95*cathodeHeight)
-        gmsh.model.mesh.field.setNumber(5, 'ZMax', cathodeHeight)
-        gmsh.model.mesh.field.setNumber(5, 'Thickness', .1*cathodeHeight)
-
+        gmsh.model.mesh.field.setNumber(5, 'ZMin', -gridThickness*2.)
+        gmsh.model.mesh.field.setNumber(5, 'ZMax', gridThickness*2.)
+        gmsh.model.mesh.field.setNumber(5, 'Thickness', vtransitionWidth)
+        
+        # Define fine mesh around the pad
+        gmsh.model.mesh.field.add('Box', 6)
+        gmsh.model.mesh.field.setNumber(6, 'VIn', refineMesh)
+        gmsh.model.mesh.field.setNumber(6, 'VOut', backgroundMesh)
+        gmsh.model.mesh.field.setNumber(6, 'XMin', bounds['x'][0])
+        gmsh.model.mesh.field.setNumber(6, 'XMax', bounds['x'][1])
+        gmsh.model.mesh.field.setNumber(6, 'YMin', bounds['y'][0])
+        gmsh.model.mesh.field.setNumber(6, 'YMax', bounds['y'][1])
+        gmsh.model.mesh.field.setNumber(6, 'ZMin', SiO2Height - thicknessSiO2/2.)
+        gmsh.model.mesh.field.setNumber(6, 'ZMax', SiO2Height + thicknessSiO2/2.)
+        gmsh.model.mesh.field.setNumber(6, 'Thickness', vtransitionWidth/2.)
+        
+        # Define coarse mesh near edge/corner refinement lines
+        gmsh.model.mesh.field.add('Threshold', 7)
+        gmsh.model.mesh.field.setNumber(7, 'InField', 2)
+        gmsh.model.mesh.field.setNumber(7, 'SizeMin', refineMesh)
+        gmsh.model.mesh.field.setNumber(7, 'SizeMax', backgroundMesh)
+        gmsh.model.mesh.field.setNumber(7, 'DistMin', refineRadius)
+        gmsh.model.mesh.field.setNumber(7, 'DistMax', refineRadius + vtransitionWidth)
+        
         # Use the smallest mesh size
-        gmsh.model.mesh.field.add('Min', 11)
-        gmsh.model.mesh.field.setNumbers(11, 'FieldsList', [2, 3, 4, 5])
-        gmsh.model.mesh.field.setAsBackgroundMesh(11)
-
+        gmsh.model.mesh.field.add('Min', 8)
+        gmsh.model.mesh.field.setNumbers(8, 'FieldsList', [3,4,5,6,7])
+        gmsh.model.mesh.field.setAsBackgroundMesh(8)
+        
         # Final settings
-        gmsh.option.setNumber('Mesh.MeshSizeFromCurvature', 36)
+        gmsh.option.setNumber('Mesh.MeshSizeFromCurvature', 0) # FEM already defined in volume
+        gmsh.option.setNumber('Mesh.MeshSizeFromPoints', 0) # FEM not set at points
         gmsh.option.setNumber('Mesh.MeshSizeExtendFromBoundary', 1)
-        gmsh.option.setNumber('Mesh.MeshSizeFromPoints', 1)
         gmsh.option.setNumber('Mesh.MeshSizeMax', backgroundMesh)
+        gmsh.option.setNumber('Mesh.Algorithm3D', 10) # Runs faster than default
 
         return
     
@@ -1382,7 +1445,7 @@ class elmerClass:
                 'Linear System Solver': 'Iterative',
                 'Linear System Iterative Method': 'BiCGStab',
                 'Linear System Max Iterations': '500',
-                'Linear System Convergence Tolerance': '1.0e-10',
+                'Linear System Convergence Tolerance': '1.0e-14',
                 'BiCGstabl polynomial degree': '2',
                 'Linear System Preconditioning': 'ILU0',
                 'Linear System ILUT Tolerance': '1.0e-3',

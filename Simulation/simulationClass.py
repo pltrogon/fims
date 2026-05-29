@@ -80,7 +80,7 @@ class FIMS_Simulation:
 
         GARFIELDPATH (str): Filepath to the Garfield++ source script. Read from 'GARFIELDPATH' file.
 
-        geoemetry (geometryClass): A geometry class object representing the geometry and field solvers.
+        geometry (geometryClass): A geometry class object representing the geometry and field solvers.
     """
 
 #**********************************************************************#
@@ -135,16 +135,16 @@ class FIMS_Simulation:
         """
         defaultParameters = {
             'runNumber': -1,
-            'padLength': 20.,
-            'pitch': 60.,
+            'padLength': 15.,
+            'pitch': 65.,
             'gridStandoff': 50.,
             'gridThickness': 1.,
-            'holeRadius': 20.,
+            'holeRadius': 16.,
             'cathodeHeight': 200.,
             'thicknessSiO2': 5.,
             'pillarRadius': 5.,
             'driftField': 280.,
-            'fieldRatio': 100.,
+            'fieldRatio': 135.,
             'numFieldLine': 25,
             'numAvalanche': 5000,
             'avalancheLimit': 500,
@@ -525,6 +525,7 @@ class FIMS_Simulation:
             executable (str): The name of the Garfield++ executable to run. Options are:
                 - 'runAvalanche': Simulates electron avalanches for the central pad.
 
+                - 'runFullField': Generates field lines that populate the full unit cell.
                 - 'runEfficiency': Simulates the efficiency for a given field strength. Requires additional arguments:
                     - targetEfficiency (str): Name of efficiency to consider (net, detection, collection).
                     - targetValue (float): The target efficiency to achieve (default: 0.95).
@@ -534,7 +535,8 @@ class FIMS_Simulation:
 
         executables = [
             'runAvalanche',
-            'runEfficiency'
+            'runEfficiency',
+            'runFullField'
         ]
 
         if executable not in executables:
@@ -1575,9 +1577,4 @@ class FIMS_Simulation:
         optimalFieldData = pd.read_pickle(filename)  
 
         return optimalFieldData
-
-
-
-
-
 

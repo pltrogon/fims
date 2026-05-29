@@ -547,7 +547,7 @@ int main(int argc, char * argv[]) {
       );
       
       
-      avalancheE->EnablePlotting(viewElectronDrift, 250);
+      avalancheE->EnablePlotting(viewElectronDrift, 250); // What does 250 number do?
       driftIon->EnablePlotting(viewIonDrift);
       
       //Filename

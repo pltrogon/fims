@@ -25,6 +25,8 @@ Functions:
     getSetData
     plotDataSets
     getDiffusionData
+    getFullFieldData
+    plotFullField
 """
 
 #********************************************************************************#   
@@ -539,17 +541,107 @@ def getGasData(runNoList):
     allRunData = allRunData.sort_values(by='runNo').reset_index(drop=True)
 
     return allRunData
+ 
+#********************************************************************************#
+
+def getFullFieldData(runNumber):
+    """
+    Gets the field data points for each drift line created by runFullField.
+
+    Args:
+        runNumber (int): Run number of the dataset
+        
+    returns:
+        fieldData (dict): dictionary of numpy arrays for each spacial coordinate.
+    """
+
+    filePath = f'../Data/sim{runNumber}fullFieldLines.dat'
+
+    xData, yData, zData = np.loadtxt(filePath, delimiter=',', unpack=True)
+
+    CMTOMICRON = 1e4
+    fieldData = {
+        'xComp': xData*CMTOMICRON,
+        'yComp': yData*CMTOMICRON,
+        'zComp': zData*CMTOMICRON
+    }
+    
+    return fieldData
+
+#********************************************************************************#
+
+def plotFullField(runNum, zTarget=0):
+    """
+    Plots a 2D slide of the full electric field.
+    
+    args:
+        runNumber (int): Run number of the dataset
+        zTarget (float): height of 2D field slice
+    
+    returns:
+        figure
+    """
+    #Get all field line data
+    fieldData = getFullFieldData(runNum)
+    xData = fieldData['xComp']
+    yData = fieldData['yComp']
+    zData = fieldData['zComp']
+
+    #Find data within slice
+    ##Note - this selects ALL data within a slice.
+    #Todo - if looking to plot this as density plot, ensure exactly 1 datapoint per field line.
+    sliceWidth = 0.5
+    sliceRegion = (zData > (zTarget - sliceWidth)) & (zData < (zTarget + sliceWidth))
+
+    xSlice = xData[sliceRegion]
+    ySlice = yData[sliceRegion]
+    
+    # Plot the x,y components of the field at the given height
+    fieldFig = plt.figure(figsize=(14,6))
+    xySlice = fieldFig.add_subplot(121)
+    xzSlice = fieldFig.add_subplot(122)
+
+    xySlice.scatter(xSlice, ySlice, s=.1, c='r')
+    xySlice.grid()
+    xySlice.set_xlabel('x Position (um)')
+    xySlice.set_ylabel('y Position (um)')
+    
+    # Plot the x,z components of the field along with a line showing the target height
+    xzSlice.scatter(xData, zData, s=.1, c='r')
+    xzSlice.axhline(zTarget, c='y', lw=3, label='Target Height')
+    xzSlice.grid()
+    xzSlice.legend(loc='lower left')
+    xzSlice.set_xlabel('x Position (um)')
+    xzSlice.set_ylabel('z Position (um)')
+    
+    fieldFig.suptitle('2D Field Slice', fontsize = 20)
+    
+    return fieldFig
+
+#********************************************************************************#
+
 
 #********************************************************************************#
 def getAsymErrs(eff, effErr):
-    """TODO"""
+    """
+    Extracts asymmetrical 1-standard deviation baysian errors on efficiencies 
+    based on the mean value and Gaussian errors.
+
+    Args:
+        eff (float): Mean value of the efficiency.
+        effErrs (float): Gaussian error from variance calculations.
+        
+    Returns:
+        errorLow (float): Lower bound of 1 standard deviation from mean.
+        errorHigh (float): Upper bound of 1 standard deviation from mean.
+    """
     
     #Reconstruct the bayesian success, fail, and total values
     variance = effErr*effErr
     
     if variance <= 0 or eff <= 0 or eff >= 1:
         return 0.0, 0.0
-    
+
     total = eff*(1-eff)/variance - 1
     success = eff*total
     fail = (1-eff)*total
