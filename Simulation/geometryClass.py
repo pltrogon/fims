@@ -987,8 +987,10 @@ class gmshClass:
         sqrt3 = math.sqrt(3)
         
         # List of coordinates for each refinement line point in a specified geometry
+        ##FUTURE TODO - fucntion that returns the coners of a hexagon at a given z???
         refinementOptions = {
             'FIMS': [
+                (0, 0, driftLength)
                 (pitch/sqrt3, 0, driftLength), 
                 (pitch/sqrt3/2, pitch/2, driftLength),
                 (0, pitch/2, driftLength)
@@ -1000,23 +1002,23 @@ class gmshClass:
                 (-pitch/sqrt3/2, pitch/2, driftLength),
                 (-pitch/sqrt3, 0, driftLength),
                 (-pitch/sqrt3/2, -pitch/2, driftLength),
-                (pitch/sqrt3/2, -pitch/2, driftLength),
-                (pitch/sqrt3, 0, driftLength)
+                (pitch/sqrt3/2, -pitch/2, driftLength)
             ]
         }
         refinement = refinementOptions[runOption]
         refinementLines = []
         
-        # Use points to generate lines and append those lines to a list
-        refineID = 0
-        while refineID < len(refinement):
-            xCoor, yCoor, zCoor = refinement[refineID]
-            newPoint = self._occ.addPoint(xCoor, yCoor, zCoor)
-            if refineID > 0:
-                refineLine = self._occ.addLine(oldPoint, newPoint)
-                refinementLines.append(refineLine)
-            oldPoint = newPoint
-            refineID += 1
+        firstPoint = self._occ.addPoint(*refinement[0])
+        curPoint = firstPoint
+        for x, y, z in refinement[1:]:
+            newPoint = self._occ.addPoint(x, y, z)
+            newLine = self._occ.addLine(curPoint, newPoint)
+            refinementLines.append(newLine)
+            
+            curPoint = newPoint
+            
+        finalLine = self._occ.addLine(curPoint, firstPoint)
+        refinementLines.append(finalLine)
 
         return refinementLines
 
@@ -1123,9 +1125,9 @@ class gmshClass:
         gmsh.model.mesh.field.setNumber(4, 'XMax', bounds['x'][1])
         gmsh.model.mesh.field.setNumber(4, 'YMin', bounds['y'][0])
         gmsh.model.mesh.field.setNumber(4, 'YMax', bounds['y'][1])
-        gmsh.model.mesh.field.setNumber(4, 'ZMin', -gridThickness/2.)
-        gmsh.model.mesh.field.setNumber(4, 'ZMax', gridThickness/2.)
-        gmsh.model.mesh.field.setNumber(4, 'Thickness', gridThickness*2.)
+        gmsh.model.mesh.field.setNumber(4, 'ZMin', -gridThickness)
+        gmsh.model.mesh.field.setNumber(4, 'ZMax', gridThickness)
+        gmsh.model.mesh.field.setNumber(4, 'Thickness', gridThickness*10.)
         
         # Define fine mesh in the vicinity around the entire grid
         gmsh.model.mesh.field.add('Box', 5)
