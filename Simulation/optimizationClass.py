@@ -37,7 +37,9 @@ class FIMS_Optimizer:
     Utilizes scipy.optimize's minimize method with the COBYQA method 
     to minimize a target parameter. Currently only accepts the hole 
     radius, pitch, grid standoff height (amplification distance), and 
-    pad length as input parameters. Currently only minimizes the IBN.
+    pad length as input parameters. 
+    
+    Note: Currently only minimizes the IBN.
     
     Private Attributes:
         params (dict of lists):
