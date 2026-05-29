@@ -35,123 +35,40 @@
 using namespace Garfield;
 
 int main(int argc, char * argv[]) {
-
-  std::srand(static_cast<unsigned int>(std::time(nullptr)));
-
-  const double MICRON = 1e-6;
-  const double CM = 1e-2;
-  const double MICRONTOCM = 1e-4;
-  bool DEBUG = false;
-  double fieldLineX, fieldLineY, fieldLineZ;
-  
-  //*************** SETUP ***************//
-  // Timing variables
-  clock_t startSim, stopSim, runTime;
-  
-  //***** Run numbering *****//
-  //Read in run number from runNo
-  int runNo;
-  std::string runNoFile = "../runNo";
-  std::ifstream runInFile;
-  runInFile.open(runNoFile);
-
-  if(!runInFile.is_open()){
-    std::cerr << "Error reading file '" << runNoFile << "'." << std::endl;
-    return -1;
+  if(argc != 1){
+      std::cerr << "Format: " << argv[0] << " <GeometryMode>" << std::endl;
+      return -1;
   }
-
-  runInFile >> runNo;
-  runInFile.close();
   
   std::cout << "****************************************\n";
   std::cout << "Building field line simulation: " << "\n";
   std::cout << "****************************************\n";
   
-  //***** Simulation Parameters *****//
-  // Read in simulation parameters from runControl
-  int numInputs;
-  double  padLength, pitch;
-  double gridStandoff, gridThickness, holeRadius;
-  double cathodeHeight, thicknessSiO2, pillarRadius;
-  double fieldRatio;
-  int numFieldLine;
-  double gasCompAr, gasCompCO2, gasCompCF4, gasCompIsobutane;
-  double gasPenning;
-
-  std::ifstream paramFile;
-  std::string runControlFile = "../runControl";
-  paramFile.open(runControlFile);
-
-  if(!paramFile.is_open()){
-    std::cerr << "Error: Could not open control file '" << runControlFile << "'." << std::endl;
-    return -1;
+  // Determine the geometry layout of the simulation
+  std::string geoModeString = argv[1];
+  GeometryMode geometryMode = stringToGeometryMode(argv[1]);
+  if(geometryMode == GeometryMode::Unknown){
+      std::cerr << "Error: Invalid GeometryMode: " << argv[1] << std::endl;
+      return -1;
   }
-
+  
+  // Read in simulation parameters
+  auto simParams = readSimulationParameters();
+  if(!simParams){
+      return -1;
+  }
+  
+  // Miscellaneous constants
+  std::srand(static_cast<unsigned int>(std::time(nullptr)));
+  const double MICRON = 1e-6;
+  const double CM = 1e-2;
+  const double MICRONTOCM = 1e-4;
+  bool DEBUG = false;
+  double fieldLineX, fieldLineY, fieldLineZ;
+  clock_t startSim, stopSim, runTime;
+  
   std::cout << "****************************************\n";
   std::cout << "Setting up field line simulation.\n";
-  std::cout << "****************************************\n";
-  
-  std::string curLine;
-  std::map<std::string, std::string> readParam;
-
-  // Read the file contents to a map
-  int numKeys = 0;
-  while(std::getline(paramFile, curLine)){
-    if(curLine.find('/') == 0){
-      continue;
-    }
-
-    size_t keyPos = curLine.find("=");
-    if (keyPos != std::string::npos){
-      std::string key = curLine.substr(0, keyPos - 1);
-      std::string value = curLine.substr(keyPos + 2);
-      if(value.back() == ';'){
-        value.pop_back();
-      }
-
-      readParam[key] = value;
-      numKeys++;
-    }
-  }
-  paramFile.close();
-
-  // Parse the values from the map
-  numInputs = std::stoi(readParam["numInputs"]);
-  if(numKeys != numInputs){
-    std::cerr << "Error: Invalid simulation parameters in 'runControl'." << std::endl;
-    return -1;
-  }
-
-  // Geometry parameters
-  // Garfield's operational scale is cm. runControl is defined in microns
-  padLength = std::stod(readParam["padLength"])*MICRONTOCM;
-  pitch = std::stod(readParam["pitch"])*MICRONTOCM;
-
-  gridStandoff = std::stod(readParam["gridStandoff"])*MICRONTOCM;
-  gridThickness = std::stod(readParam["gridThickness"])*MICRONTOCM;
-  holeRadius = std::stod(readParam["holeRadius"])*MICRONTOCM;
-
-  cathodeHeight = std::stod(readParam["cathodeHeight"])*MICRONTOCM;
-  thicknessSiO2 = std::stod(readParam["thicknessSiO2"])*MICRONTOCM;
-  pillarRadius = std::stod(readParam["pillarRadius"])*MICRONTOCM;
-
-  // Field parameters
-  fieldRatio = std::stod(readParam["fieldRatio"]);
-  numFieldLine = std::stoi(readParam["numFieldLine"]);
-
-  // Simulation Parameters
- // Gasses defined as percentages
-  gasCompAr = std::stod(readParam["gasCompAr"])*100.;
-  gasCompCO2 = std::stod(readParam["gasCompCO2"])*100.;
-  gasCompCF4 = std::stod(readParam["gasCompCF4"])*100.;
-  gasCompIsobutane = std::stod(readParam["gasCompIsobutane"])*100.;
-
-  gasPenning = std::stod(readParam["gasPenning"]);
-
-  
-  //*************** SIMULATION ***************//
-  std::cout << "****************************************\n";
-  std::cout << "Creating field line simulation: " << "\n";
   std::cout << "****************************************\n";
   
   // Define the gas mixture
@@ -159,15 +76,15 @@ int main(int argc, char * argv[]) {
 
   // Set gas parameters
   gasFIMS->SetComposition(
-    "ar", gasCompAr, 
-    "co2", gasCompCO2,
-    "cf4", gasCompCF4,
-    "iC4H10", gasCompIsobutane
+    "ar", simParams->gasCompAr, 
+    "co2", simParams->gasCompCO2,
+    "cf4", simParams->gasCompCF4,
+    "iC4H10", simParams->gasCompIsobutane
   );
 
   {
 	SilenceCerr guard; 
-	gasFIMS->EnablePenningTransfer(gasPenning, 0.0, "ar");
+	gasFIMS->EnablePenningTransfer(simParams->gasPenning, 0.0, "ar");
   }
   
   gasFIMS->SetTemperature(293.15); // Room temperature
@@ -192,7 +109,7 @@ int main(int argc, char * argv[]) {
     elmerResultsPath+"mesh.elements",
     elmerResultsPath+"mesh.nodes", 
     geometryPath+"dielectrics.dat",
-    elmerResultsPath+"FIMSSurrounding.result", 
+    elmerResultsPath+geoModeString+".result", 
     "mum"
   );
 
@@ -245,26 +162,12 @@ int main(int argc, char * argv[]) {
 
   // ***** Generate field line start points ***** //
   double safetyWidth = std::sqrt(0.98);
-  const double sqrt3 = std::sqrt(3.0);
-  
-  double halfPitch = pitch/2.;
-  double cellLength = pitch/sqrt3;
+  double cellLength = safetyWidth * simParams->pitch/std::sqrt(3.0);
     
-  while(xStart.size() < numFieldLine){
-      static std::mt19937 rng(std::random_device{}());
-      std::uniform_real_distribution<double> dist(-1.0, 1.0);
-
-      // Uniform sample in box
-      double sampleX = dist(rng)*cellLength*safetyWidth;
-      double sampleY = dist(rng)*halfPitch*safetyWidth;
-      
-      // Check if in hexagon (use symmetry of Q1)
-      double absX = std::fabs(sampleX);
-      double absY = std::fabs(sampleY);
-      if(absX <= cellLength - absY/sqrt3){
-          xStart.push_back(sampleX);
-          yStart.push_back(sampleY);
-      }
+  while(xStart.size() < simParams->numFieldLine){
+      auto [sampleX, sampleY] = randomXYInHexagon(cellLength);
+      xStart.push_back(sampleX);
+      yStart.push_back(sampleY);
   }
   
   // ***** Calculate field Lines ***** //
@@ -275,7 +178,7 @@ int main(int argc, char * argv[]) {
   std::cout << "Computing field lines" << std::endl;
   // Create and open field line data file
   
-  std::string fieldFileName = "sim"+std::to_string(runNo)+"fullFieldLines.dat";
+  std::string fieldFileName = "sim"+std::to_string(simParams->runNumber)+"fullFieldLines.dat";
   std::string fieldFilePath = "../../Data/"+fieldFileName;
   std::ofstream fieldFile;
   fieldFile.open(fieldFilePath, std::ios::out);

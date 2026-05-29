@@ -55,9 +55,7 @@ std::pair<double, double> randomXYInHexagon(double sideLength) {
         // Check if in hexagon (use symmetry of Q1)
         double absX = std::fabs(sampleX);
         double absY = std::fabs(sampleY);
-
-        double checkY = 2. * inRadius * (1. - absX / outRadius);
-        if(absY <= checkY) {
+        if(absX <= sideLength - absY/sqrt3){
             return {sampleX, sampleY};
         }
     }
