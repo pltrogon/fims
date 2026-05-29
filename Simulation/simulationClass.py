@@ -37,7 +37,6 @@ class NumPyEncoder(json.JSONEncoder):
         return super(NumPyEncoder, self).default(obj)
 
 from geometryClass import geometryClass
-from geometryClass import gmshClass
 
 class FIMS_Simulation:
     """
