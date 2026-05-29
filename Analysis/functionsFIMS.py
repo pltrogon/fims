@@ -7,6 +7,7 @@ import glob
 import pandas as pd
 
 from scipy.special import gammaincc
+from scipy.stats import beta
 
 
 
@@ -587,6 +588,8 @@ def plotFullField(runNum, zTarget=0):
     zData = fieldData['zComp']
 
     #Find data within slice
+    ##Note - this selects ALL data within a slice.
+    #Todo - if looking to plot this as density plot, ensure exactly 1 datapoint per field line.
     sliceWidth = 0.5
     sliceRegion = (zData > (zTarget - sliceWidth)) & (zData < (zTarget + sliceWidth))
 
@@ -604,8 +607,8 @@ def plotFullField(runNum, zTarget=0):
     xySlice.set_ylabel('y Position (um)')
     
     # Plot the x,z components of the field along with a line showing the target height
-    xzSlice.scatter(xData, zData, s=.1, c = 'r')
-    xzSlice.axhline(zTarget, c='y', linewidth=3, label='Target Height')
+    xzSlice.scatter(xData, zData, s=.1, c='r')
+    xzSlice.axhline(zTarget, c='y', lw=3, label='Target Height')
     xzSlice.grid()
     xzSlice.legend(loc='lower left')
     xzSlice.set_xlabel('x Position (um)')
@@ -617,3 +620,34 @@ def plotFullField(runNum, zTarget=0):
 
 #********************************************************************************#
 
+
+#********************************************************************************#
+def getAsymErrs(eff, effErr):
+    """
+    Extracts asymmetrical 1-standard deviation baysian errors on efficiencies 
+    based on the mean value and Gaussian errors.
+
+    Args:
+        eff (float): Mean value of the efficiency.
+        effErrs (float): Gaussian error from variance calculations.
+        
+    Returns:
+        errorLow (float): Lower bound of 1 standard deviation from mean.
+        errorHigh (float): Upper bound of 1 standard deviation from mean.
+    """
+    
+    #Reconstruct the bayesian success, fail, and total values
+    variance = effErr*effErr
+    
+    if variance <= 0 or eff <= 0 or eff >= 1:
+        return 0.0, 0.0
+
+    total = eff*(1-eff)/variance - 1
+    success = eff*total
+    fail = (1-eff)*total
+
+    # 1 stdDev range of the beta distribution
+    errorLow = eff - beta.ppf(0.16, success, fail)
+    errorHigh = beta.ppf(0.84, success, fail) - eff
+
+    return errorLow, errorHigh

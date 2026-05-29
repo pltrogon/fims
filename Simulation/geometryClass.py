@@ -1034,19 +1034,24 @@ class gmshClass:
         gridThickness = self._param['gridThickness']
         padLength = self._param['padLength']
         thicknessSiO2 = self._param['thicknessSiO2']
-        
+        cathodeHeight = self._param['cathodeHeight']
+        gridStandoff = self._param['gridStandoff']
+
         # Derived cell lengths
-        driftLength = self._param['cathodeHeight'] - gridThickness/2.
-        SiO2Height = thicknessSiO2 - self._param['gridStandoff'] + gridThickness/2.
+        driftLength = cathodeHeight - gridThickness/2.
+        SiO2Height = thicknessSiO2 - gridStandoff + gridThickness/2.
         xLength = pitch*sqrt3/2
         yLength = pitch/2
         outRadius = pitch/sqrt3
         
-        # FEM Sizes
+        #=========================#
+        #=== DEFINE MESH SIZES ===#
+        #=========================#
         fineMesh = gridThickness*(3./4.)
         gridMesh = gridThickness/4.
         refineMesh = gridThickness*(3./2.)
         backgroundMesh = pitch/4.
+        #=========================#
         
         # FEM region scales
         smallRadius = min(holeRadius, padLength)
