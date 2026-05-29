@@ -990,7 +990,7 @@ class gmshClass:
         ##FUTURE TODO - fucntion that returns the coners of a hexagon at a given z???
         refinementOptions = {
             'FIMS': [
-                (0, 0, driftLength)
+                (0, 0, driftLength),
                 (pitch/sqrt3, 0, driftLength), 
                 (pitch/sqrt3/2, pitch/2, driftLength),
                 (0, pitch/2, driftLength)
