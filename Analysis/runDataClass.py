@@ -2290,10 +2290,23 @@ class runData:
     
 #********************************************************************************#
     def _fitPolya(self):
-        """TODO"""
+        """
+        Fits a polya to the avalanche size distribution.
+        
+        Returns:
+            theta (float): The Polya shape parameter
+            gain (float): The mean avalanche size.
+        """
 
-        fitResults = self._fitAvalancheSize(binWidth=1)
-
+        try:
+            fitResults = self._fitAvalancheSize(binWidth=1)
+            theta = fitResults['fitPolya'].theta
+            gain = fitResults['fitPolya'].gain
+            
+        except:#TODO - there may be a better way to handle this within _fitAvalancheSize
+            print('Warning - Error in Polya Fit.')
+            return None, None
+          
         polyaFitResults = {
             'theta': fitResults['fitPolya'].theta,
             'thetaErr': fitResults['fitPolya'].thetaErr,
