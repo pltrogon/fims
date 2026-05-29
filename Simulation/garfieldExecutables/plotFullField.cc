@@ -72,34 +72,7 @@ int main(int argc, char * argv[]) {
   std::cout << "****************************************\n";
   
   // Define the gas mixture
-  MediumMagboltz* gasFIMS = new MediumMagboltz();
-
-  // Set gas parameters
-  gasFIMS->SetComposition(
-    "ar", simParams->gasCompAr, 
-    "co2", simParams->gasCompCO2,
-    "cf4", simParams->gasCompCF4,
-    "iC4H10", simParams->gasCompIsobutane
-  );
-
-  {
-	SilenceCerr guard; 
-	gasFIMS->EnablePenningTransfer(simParams->gasPenning, 0.0, "ar");
-  }
-  
-  gasFIMS->SetTemperature(293.15); // Room temperature
-  gasFIMS->SetPressure(760.);     // Atmospheric pressure
-  gasFIMS->SetMaxElectronEnergy(200);
-  gasFIMS->Initialise(true);
-  
-  // Load the ion mobilities.
-  // Load ion mobilities. 
-  const std::string path = std::getenv("GARFIELD_INSTALL");
-  const std::string posIonPath = path + "/share/Garfield/Data/IonMobility_Ar+_Ar.txt";
-  //const std::string negIonPath = path + "/share/Garfield/Data/IonMobility_CO2+_CO2.txt";
-  const std::string negIonPath = path + "/share/Garfield/Data/IonMobility_CF4+_CF4.txt";
-  gasFIMS->LoadIonMobility(posIonPath);
-  gasFIMS->LoadNegativeIonMobility(negIonPath);//TODO - Is this correct for negative ion drift? 
+  MediumMagboltz* gasFIMS = initializeGas(*simParams); 
   
   // Import elmer-generated field map
   std::string geometryPath = "../Geometry/";
