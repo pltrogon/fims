@@ -1127,7 +1127,7 @@ class gmshClass:
         gmsh.model.mesh.field.setNumber(4, 'YMax', bounds['y'][1])
         gmsh.model.mesh.field.setNumber(4, 'ZMin', -gridThickness)
         gmsh.model.mesh.field.setNumber(4, 'ZMax', gridThickness)
-        gmsh.model.mesh.field.setNumber(4, 'Thickness', gridThickness*10.)
+        gmsh.model.mesh.field.setNumber(4, 'Thickness', gridThickness)
         
         # Define fine mesh in the vicinity around the entire grid
         gmsh.model.mesh.field.add('Box', 5)
