@@ -532,8 +532,6 @@ class runData:
             self._calculatedData['Charge Collection Eff Err (Low)'] = chargeCollectionEff['efficiencyErrLow']
             self._calculatedData['Charge Collection Eff Err (High)'] = chargeCollectionEff['efficiencyErrHigh']
 
-
-
             #Other calculated values can be added here as needed.
 
         return

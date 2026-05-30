@@ -37,6 +37,7 @@ class NumPyEncoder(json.JSONEncoder):
         return super(NumPyEncoder, self).default(obj)
 
 from geometryClass import geometryClass
+from geometryClass import gmshClass
 
 class FIMS_Simulation:
     """
@@ -524,7 +525,6 @@ class FIMS_Simulation:
         Args:
             executable (str): The name of the Garfield++ executable to run. Options are:
                 - 'runAvalanche': Simulates electron avalanches for the central pad.
-
                 - 'runFullField': Generates field lines that populate the full unit cell.
                 - 'runEfficiency': Simulates the efficiency for a given field strength. Requires additional arguments:
                     - targetEfficiency (str): Name of efficiency to consider (net, detection, collection).
@@ -692,6 +692,22 @@ class FIMS_Simulation:
         self._runGarfield()
         
         return runNo
+
+#**********************************************************************#
+    def runFullField(self):
+        """
+        Draws Field Lines inside the full unit cell.
+        """
+        self._checkParam()
+        
+        self.setGeometry(surrounding=True)
+        self._generateGeometry()
+            
+        #Solve fields and run Garfield
+        self._solveEFields(solveWeighting=False)
+        self._runGarfield('runFullField')
+        
+        return
 
 #**********************************************************************#
     def runCapacitance(self):
@@ -948,7 +964,6 @@ class FIMS_Simulation:
             targetValue (float): The target value to reach.
             threshold (int): Electron alanche size that is considered detected.
         """
-
         print('\n'.join([
             'Searching for minimum field...',
             f'Target {targetEfficiency} efficiency is: {targetValue}'
@@ -1577,4 +1592,3 @@ class FIMS_Simulation:
         optimalFieldData = pd.read_pickle(filename)  
 
         return optimalFieldData
-

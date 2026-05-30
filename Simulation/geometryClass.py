@@ -987,7 +987,7 @@ class gmshClass:
         sqrt3 = math.sqrt(3)
         
         # List of coordinates for each refinement line point in a specified geometry
-        ##FUTURE TODO - fucntion that returns the coners of a hexagon at a given z???
+        ##FUTURE TODO - function that returns the corners of a hexagon at a given z???
         refinementOptions = {
             'FIMS': [
                 (0, 0, driftLength),

@@ -149,8 +149,7 @@ int main(int argc, char * argv[]) {
   int prevDriftLine = 0;
 
   std::cout << "Computing field lines" << std::endl;
-  // Create and open field line data file
-  
+  // Create and open field line data file 
   std::string fieldFileName = "sim"+std::to_string(simParams->runNumber)+"fullFieldLines.dat";
   std::string fieldFilePath = "../../Data/"+fieldFileName;
   std::ofstream fieldFile;

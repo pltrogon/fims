@@ -48,6 +48,5 @@ while(EXECUTABLES)
     )
     
     target_include_directories(${EXE_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-    
     target_link_libraries(${EXE_NAME} PRIVATE ${COMMON_LIBS})
 endwhile()

@@ -581,13 +581,13 @@ def plotFullField(runNum, zTarget=0):
     returns:
         figure
     """
-    #Get all field line data
+    # Get all field line data
     fieldData = getFullFieldData(runNum)
     xData = fieldData['xComp']
     yData = fieldData['yComp']
     zData = fieldData['zComp']
 
-    #Find data within slice
+    # Find data within slice
     ##Note - this selects ALL data within a slice.
     #Todo - if looking to plot this as density plot, ensure exactly 1 datapoint per field line.
     sliceWidth = 0.5
@@ -603,23 +603,64 @@ def plotFullField(runNum, zTarget=0):
 
     xySlice.scatter(xSlice, ySlice, s=.1, c='r')
     xySlice.grid()
-    xySlice.set_xlabel('x Position (um)')
-    xySlice.set_ylabel('y Position (um)')
+    xySlice.set_xlabel('x Position (\u03BCm)')
+    xySlice.set_ylabel('y Position (\u03BCm)')
     
     # Plot the x,z components of the field along with a line showing the target height
     xzSlice.scatter(xData, zData, s=.1, c='r')
     xzSlice.axhline(zTarget, c='y', lw=3, label='Target Height')
     xzSlice.grid()
     xzSlice.legend(loc='lower left')
-    xzSlice.set_xlabel('x Position (um)')
-    xzSlice.set_ylabel('z Position (um)')
+    xzSlice.set_xlabel('x Position (\u03BCm)')
+    xzSlice.set_ylabel('z Position (\u03BCm)')
     
     fieldFig.suptitle('2D Field Slice', fontsize = 20)
     
     return fieldFig
 
 #********************************************************************************#
-
+def plotFullFieldMapping(runNum):
+    """
+    Plots a map of the initial radius of a field line vs its final radius.
+    
+    args:
+        runNumber (int): Run number of the dataset
+    
+    returns:
+        figure
+    """
+    # Get all field line data
+    fieldData = getFullFieldData(runNum)
+    xData = fieldData['xComp']
+    yData = fieldData['yComp']
+    zData = fieldData['zComp']
+    initialList = []
+    finalList = []
+    
+    # Find initial and final x/y coordinates of each line
+    pointID = 0
+    for point in zData:
+        if point > zData[pointID-1]:
+            if pointID == 0:
+                initialRadius = math.sqrt(xData[pointID]**2 + yData[pointID]**2)
+                initialList.append(initialRadius)
+            else:
+                finalRadius = math.sqrt(xData[pointID-1]**2 + yData[pointID-1]**2)
+                initialRadius = math.sqrt(xData[pointID]**2 + yData[pointID]**2)
+                finalList.append(finalRadius)
+                initialList.append(initialRadius)
+        pointID += 1
+    finalRadius = math.sqrt(xData[-1]**2 + yData[-1]**2)
+    finalList.append(finalRadius)
+    
+    mapFig = plt.figure()
+    plt.scatter(initialList, finalList, c='b', s=.4, label='Data')
+    plt.xlabel('Initial Radius (\u03BCm)')
+    plt.ylabel('Final Radius (\u03BCm)')
+    plt.title('Field Line Mapping')
+    plt.grid()
+    
+    return mapFig
 
 #********************************************************************************#
 def getAsymErrs(eff, effErr):
