@@ -1048,7 +1048,8 @@ class FIMS_Simulation:
         Executes an avalanche simulation of the FIMS geometry at the minimum field 
         ratio required to achieve a given efficiency.
 
-        This implementation will internally find the field necesary to achive the desired result.
+        This implementation will internally find the field necessary to achieve the 
+        desired result.
         The efficiency values from all attempted fields are not recorded.
         
         Args:
