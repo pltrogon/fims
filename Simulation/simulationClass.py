@@ -956,7 +956,14 @@ class FIMS_Simulation:
 
         saveParam = self.getAllParam()
         self.setParameters({'numAvalanche': 5000})#More is better. Adjust as needed.
-
+        
+        # Setting up variables
+        resultsDictionary = {
+            'Field': [],
+            'Value': [],
+            'Low Error': [],
+            'High Error': []
+        }
         efficiencyAtField = []
         fieldValues = []
         iterNo = 0
@@ -994,9 +1001,16 @@ class FIMS_Simulation:
             
             print(
                 f'\tResult: {currentEff*100:.2f} +/- '
-                f'{currentErrHigh*100:.3f}/{currentErrLow*100:.3f} %'
+                f'({currentErrHigh*100:.2f}/{currentErrLow*100:.2f})% '
                 f'(Stop Condition: {runResults['stopCondition']})'
             )
+            
+            # append results to results dictionary
+            resultsDictionary['Field'].append(newField)
+            resultsDictionary['Value'].append(currentEff)
+            resultsDictionary['Low Error'].append(currentErrLow)
+            resultsDictionary['High Error'].append(currentErrHigh)
+            
             if twoSigmaEff > targetValue:
                 print('Minimum field found. Terminating search...')
                 break
@@ -1016,8 +1030,8 @@ class FIMS_Simulation:
         saveParam['fieldRatio'] = finalField
         self.setParameters(saveParam)
 
-        print(f'Solution found: Field ratio = {finalField}')
-        #self._printFieldSolution(allResults) TODO: investigate implementing
+        #print(f'Solution found: Field ratio = {finalField}')
+        self._printFieldSolution(resultsDictionary) #TODO: investigate implementing
         
         allResults.to_csv('../Data/allEfficiencyResults.csv', index=False)
 
@@ -1040,15 +1054,21 @@ class FIMS_Simulation:
 
         dataLabel = list(resultsAtField.keys())[1]
 
-        header = f'| #     Efield    {dataLabel:<15} Error    |'
+        header = '| #     Efield     Efficiency     Low Error     High Error |'
         boxWidth = len(header)
 
         print('\n\t' + '-'*boxWidth)
         print('\t' + header)
         print('\t|' + '='*(boxWidth-2) + '|')
 
-        for iteration, (field, keyData, error) in enumerate(zip(*resultsAtField.values()), 1):
-            print(f'\t| {iteration:<6} {field:<10.1f} {keyData:<13.3f} {error:<9.3f}|')
+        for testNum, (field, eff, errLow, errHigh) in enumerate(zip(*resultsAtField.values()), 1):
+            print(
+                f'\t| {testNum:<6}' 
+                f'{field:<13.1f}'
+                f'{eff:<15.3f}'
+                f'{errLow:<14.3f}'
+                f'{errHigh:<9.3f}|'
+            )
 
         print('\t' + '-'*boxWidth + '\n')
 
