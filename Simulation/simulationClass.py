@@ -1030,8 +1030,8 @@ class FIMS_Simulation:
         saveParam['fieldRatio'] = finalField
         self.setParameters(saveParam)
 
-        #print(f'Solution found: Field ratio = {finalField}')
-        self._printFieldSolution(resultsDictionary) #TODO: investigate implementing
+        print(f'Solution found: Field ratio = {finalField}')
+        #self._printFieldSolution(resultsDictionary) # TODO: consider implementing
         
         allResults.to_csv('../Data/allEfficiencyResults.csv', index=False)
 
@@ -1042,8 +1042,6 @@ class FIMS_Simulation:
         """
         TODO - Consider if this is better than just printing the raw values (easier
         to copy + paste)
-
-        TODO - formatting of this may be off now that there are low and high errors
 
         Prints the results of the field search in a box format.
 
