@@ -9,8 +9,6 @@ import pandas as pd
 from scipy.special import gammaincc
 from scipy.stats import beta
 
-
-
 """
 Functions:
     getAnalysisNumbers
@@ -386,7 +384,6 @@ def getSetData(runList, xVal, yVal):#TODO account for calcData vs runData here
 
     return xData, yData
 
-
 #********************************************************************************#
 def plotDataSets(dataSets, xVal, yVal, savePlot=False):
     """
@@ -445,7 +442,6 @@ def plotDataSets(dataSets, xVal, yVal, savePlot=False):
         
     plt.show()
     return
-
 
 #********************************************************************************#
 def plot2DGasScan(allData, plotParams):
@@ -543,7 +539,6 @@ def getGasData(runNoList):
     return allRunData
  
 #********************************************************************************#
-
 def getFullFieldData(runNumber):
     """
     Gets the field data points for each drift line created by runFullField.
@@ -569,7 +564,6 @@ def getFullFieldData(runNumber):
     return fieldData
 
 #********************************************************************************#
-
 def plotFullField(runNum, zTarget=0):
     """
     Plots a 2D slide of the full electric field.
@@ -619,7 +613,49 @@ def plotFullField(runNum, zTarget=0):
     return fieldFig
 
 #********************************************************************************#
-
+def plotFullFieldMapping(runNum):
+    """
+    Plots a map of the initial radius of a field line vs its final radius.
+    
+    args:
+        runNumber (int): Run number of the dataset
+    
+    returns:
+        figure
+    """
+    # Get all field line data
+    fieldData = getFullFieldData(runNum)
+    xData = fieldData['xComp']
+    yData = fieldData['yComp']
+    zData = fieldData['zComp']
+    initialList = []
+    finalList = []
+    
+    # Find initial and final x/y coordinates of each line
+    pointID = 0
+    for point in zData:
+        if point > zData[pointID-1]:
+            if pointID == 0:
+                initialRadius = math.sqrt(xData[pointID]**2 + yData[pointID]**2)
+                initialList.append(initialRadius)
+            else:
+                finalRadius = math.sqrt(xData[pointID-1]**2 + yData[pointID-1]**2)
+                initialRadius = math.sqrt(xData[pointID]**2 + yData[pointID]**2)
+                finalList.append(finalRadius)
+                initialList.append(initialRadius)
+        pointID += 1
+    finalRadius = math.sqrt(xData[-1]**2 + yData[-1]**2)
+    finalList.append(finalRadius)
+    
+    mapFig = plt.figure()
+    plt.scatter(initialList, finalList, c='b', s=.4, label='Data')
+    plt.xlabel('Initial Radius (\u03BCm)')
+    plt.ylabel('Final Radius (\u03BCm)')
+    plt.title('Field Line Mapping')
+    #plt.legend()
+    plt.grid()
+    
+    return mapFig
 
 #********************************************************************************#
 def getAsymErrs(eff, effErr):
