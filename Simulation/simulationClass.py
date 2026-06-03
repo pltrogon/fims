@@ -988,7 +988,18 @@ class FIMS_Simulation:
             efficiencyAtField.append(runResults)
 
             currentEff = runResults[f'{targetEfficiency}Eff']
-            print(f"\tResult: {currentEff*100:.2f}% (Stop Condition: {runResults['stopCondition']})")
+            currentErrLow = runResults[f'{targetEfficiency}ErrLow']
+            currentErrHigh = runResults[f'{targetEfficiency}ErrHigh']
+            twoSigmaEff = currentEff - 2*currentErrLow
+            
+            print(
+                f'\tResult: {currentEff*100:.2f} +/- '
+                f'{currentErrHigh*100:.3f}/{currentErrLow*100:.3f} %'
+                f'(Stop Condition: {runResults['stopCondition']})'
+            )
+            if twoSigmaEff > targetValue:
+                print('Minimum field found. Terminating search...')
+                break
         #End of find field loop
 
         allResults = pd.DataFrame(efficiencyAtField)
@@ -1006,7 +1017,8 @@ class FIMS_Simulation:
         self.setParameters(saveParam)
 
         print(f'Solution found: Field ratio = {finalField}')
-
+        #self._printFieldSolution(allResults) TODO: investigate implementing
+        
         allResults.to_csv('../Data/allEfficiencyResults.csv', index=False)
 
         return finalField
