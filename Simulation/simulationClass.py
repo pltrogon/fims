@@ -874,7 +874,7 @@ class FIMS_Simulation:
         
         except Exception as e:
             print(f'Fit failed, falling back to incremental step: {e}')
-            fieldStep = minFieldStep if lastResult <= targetEfficiency else -minFieldStep
+            fieldStep = minFieldStep if lastResult <= targetValue else -minFieldStep
 
         #Limit to maximum and minimum step sizes
         if math.fabs(fieldStep) > maxFieldStep:
