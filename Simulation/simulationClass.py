@@ -957,13 +957,6 @@ class FIMS_Simulation:
         saveParam = self.getAllParam()
         self.setParameters({'numAvalanche': 5000})#More is better. Adjust as needed.
         
-        # Setting up variables
-        resultsDictionary = {
-            'Field': [],
-            'Value': [],
-            'Low Error': [],
-            'High Error': []
-        }
         efficiencyAtField = []
         fieldValues = []
         iterNo = 0
@@ -995,25 +988,13 @@ class FIMS_Simulation:
             efficiencyAtField.append(runResults)
 
             currentEff = runResults[f'{targetEfficiency}Eff']
-            currentErrLow = runResults[f'{targetEfficiency}ErrLow']
-            currentErrHigh = runResults[f'{targetEfficiency}ErrHigh']
-            twoSigmaEff = currentEff - 2*currentErrLow
             
             print(
-                f'\tResult: {currentEff*100:.2f} +/- '
-                f'({currentErrHigh*100:.2f}/{currentErrLow*100:.2f})% '
-                f'(Stop Condition: {runResults['stopCondition']})'
+                f'\tResult: {runResults[f"{targetEfficiency}Eff"]*100:.2f} +/- '
+                f'({runResults[f"{targetEfficiency}ErrHigh"]*100:.2f}/'
+                f'{runResults[f"{targetEfficiency}ErrLow"]*100:.2f})% '
+                f'(Stop Condition: {runResults["stopCondition"]})'
             )
-            
-            # append results to results dictionary
-            resultsDictionary['Field'].append(newField)
-            resultsDictionary['Value'].append(currentEff)
-            resultsDictionary['Low Error'].append(currentErrLow)
-            resultsDictionary['High Error'].append(currentErrHigh)
-            
-            if twoSigmaEff > targetValue:
-                print('Minimum field found. Terminating search...')
-                break
         #End of find field loop
 
         allResults = pd.DataFrame(efficiencyAtField)
@@ -1030,9 +1011,7 @@ class FIMS_Simulation:
         saveParam['fieldRatio'] = finalField
         self.setParameters(saveParam)
 
-        print(f'Solution found: Field ratio = {finalField}')
-        #self._printFieldSolution(resultsDictionary) # TODO: consider implementing
-        
+        #self._printFieldSolution(resultsDictionary)        
         allResults.to_csv('../Data/allEfficiencyResults.csv', index=False)
 
         return finalField
