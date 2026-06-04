@@ -35,7 +35,7 @@
 using namespace Garfield;
 
 int main(int argc, char * argv[]) {
-    if(argc != 4){
+    if(argc != 5){
         std::cerr << "Format: " << argv[0] << " <GeometryMode> <EfficiencyMode> <Target Value> <Detection Threshold>" << std::endl;
         return -1;
     }
