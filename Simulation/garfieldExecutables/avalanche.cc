@@ -68,6 +68,9 @@ using namespace Garfield;
 
 int main(int argc, char * argv[]) {
 
+  //TODO - make this an input or just trial T/F
+  bool distOnPlane = false;
+
   // Handle geometry mode from input
   if(argc != 2){
     std::cerr << "Format: " << argv[0] << " <GeometryMode>" << std::endl;
@@ -455,7 +458,8 @@ int main(int argc, char * argv[]) {
   
   // ***** Prepare Avalanche Electron ***** //
   //Set the Initial electron parameters
-  double x0 = 0., y0 = 0., z0 = 2.*simParams->holeRadius;
+  double z0 = simParams->initialZFraction * simParams->cathodeHeight;
+
   double t0 = 0.;//ns
   double e0 = 0.1;//eV (Garfield is weird when this is 0.)
   double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
@@ -547,7 +551,7 @@ int main(int argc, char * argv[]) {
       );
       
       
-      avalancheE->EnablePlotting(viewElectronDrift, 250); // What does 250 number do?
+      avalancheE->EnablePlotting(viewElectronDrift, 250);
       driftIon->EnablePlotting(viewIonDrift);
       
       //Filename
@@ -649,6 +653,11 @@ int main(int argc, char * argv[]) {
       attachedElectrons = 0;
       totalIons = 0;
       
+      double x0 = 0., y0 = 0.;
+      if(distOnPlane){
+        x0, y0 = randomXYInHexagon(simParams->padLength);
+      }
+
       //Begin single-electron avalanche
       avalancheE->AvalancheElectron(x0, y0, z0, 0., e0, dx0, dy0, dz0);
 
