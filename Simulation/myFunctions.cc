@@ -177,6 +177,7 @@ std::optional<SimulationParameters> readSimulationParameters() {
         params.runNumber = params_json["runNumber"].get<int>();
         params.numAvalanche = params_json["numAvalanche"].get<int>();
         params.avalancheLimit = params_json["avalancheLimit"].get<int>();
+        params.initialZFraction = params_json["initialZFraction"].get<double>();
         
         // Gas parameters (converting from fraction to percentage)
         params.gasCompAr = params_json["gasCompAr"].get<double>() * 100.0;

@@ -52,6 +52,7 @@ struct SimulationParameters {
     int numAvalanche;
     int avalancheLimit;
     int numInputs;
+    double initialZFraction;
     
     // Gas parameters
     double gasCompAr;
