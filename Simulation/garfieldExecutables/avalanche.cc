@@ -21,7 +21,7 @@
  */
 
 //My includes
-#include "myFunctions.h"
+#include "myFunctions.hh"
 
 //Garfield includes
 #include "Garfield/ComponentElmer.hh"
@@ -69,7 +69,7 @@ using namespace Garfield;
 int main(int argc, char * argv[]) {
 
   //TODO - make this an input or just trial T/F
-  bool distOnPlane = false;
+  bool distOnPlane = true;
 
   // Handle geometry mode from input
   if(argc != 2){
@@ -653,10 +653,8 @@ int main(int argc, char * argv[]) {
       attachedElectrons = 0;
       totalIons = 0;
       
-      double x0 = 0., y0 = 0.;
-      if(distOnPlane){
-        x0, y0 = randomXYInHexagon(simParams->padLength);
-      }
+      double cellLength = simParams->pitch/sqrt(3.);
+      auto [x0, y0] = distOnPlane ? randomXYInHexagon(cellLength) : std::pair<double, double>{0.0, 0.0};
 
       //Begin single-electron avalanche
       avalancheE->AvalancheElectron(x0, y0, z0, 0., e0, dx0, dy0, dz0);
@@ -858,6 +856,7 @@ int main(int argc, char * argv[]) {
   metaDataTree->Branch("Number of Field Lines", &simParams->numFieldLine, "numFieldLine/I");
   metaDataTree->Branch("Number of Avalanches", &simParams->numAvalanche, "numAvalanche/I");
   metaDataTree->Branch("Avalanche Limit", &simParams->avalancheLimit, "avalancheLimit/I");
+  metaDataTree->Branch("Initial Z Fraction", &simParams->initialZFraction, "initialZFraction/D");
   
   metaDataTree->Branch("Gas Comp: Ar", &simParams->gasCompAr, "gasCompAr/D");
   metaDataTree->Branch("Gas Comp: CO2", &simParams->gasCompCO2, "gasCompCO2/D");

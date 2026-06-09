@@ -1,4 +1,4 @@
-#include "myFunctions.h"
+#include "myFunctions.hh"
 #include <algorithm>
 
 /**
