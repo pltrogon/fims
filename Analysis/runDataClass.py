@@ -2858,7 +2858,7 @@ class runData:
 
 #********************************************************************************#
 
-    def _calcIonCurrent(self, ionTime=3):
+    def _calcIonCurrent(self, ionTime=5):
         """
         Calculates the estimated ion current contribution to the average signal 
         based on the average signal from all avalanches.
