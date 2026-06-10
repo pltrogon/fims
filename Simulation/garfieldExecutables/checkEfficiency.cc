@@ -119,9 +119,18 @@ int main(int argc, char * argv[]) {
     AvalancheMicroscopic* avalancheE = new AvalancheMicroscopic;
     avalancheE->SetSensor(sensorFIMS);
     avalancheE->EnableAvalancheSizeLimit(electronLimit);
+    
+    // TODO: investigate why this is needed
+    ViewDrift* viewEffDrift = nullptr;
+    viewEffDrift = new ViewDrift();
+    viewEffDrift->SetArea(
+        xBoundary[0], yBoundary[0], zBoundary[0], 
+        xBoundary[1], yBoundary[1], zBoundary[1]
+    );
+    
     {
         SilenceCerr guard;
-        avalancheE->EnablePlotting(nullptr, 10);//For velocity vector
+        avalancheE->EnablePlotting(viewEffDrift, 10);//For velocity vector
     }
 
     //Deafult initial electron parameters

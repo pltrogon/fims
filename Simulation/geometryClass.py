@@ -1089,7 +1089,7 @@ class gmshClass:
         
         # Create a line from the center of the pad to above the center hole
         pipeBottom = self._occ.addPoint(
-            0, 0, -self._param['gridStandoff'], 
+            0, 0, -gridStandoff, 
         )
         pipeTop = self._occ.addPoint( 
             0, 0, driftLength/10.
@@ -1127,9 +1127,9 @@ class gmshClass:
         gmsh.model.mesh.field.setNumber(4, 'YMax', bounds['y'][1])
         gmsh.model.mesh.field.setNumber(4, 'ZMin', -gridThickness)
         gmsh.model.mesh.field.setNumber(4, 'ZMax', gridThickness)
-        gmsh.model.mesh.field.setNumber(4, 'Thickness', gridThickness)
+        gmsh.model.mesh.field.setNumber(4, 'Thickness', vtransitionWidth)
         
-        # Define fine mesh in the vicinity around the entire grid
+        # Define fine mesh around the pad
         gmsh.model.mesh.field.add('Box', 5)
         gmsh.model.mesh.field.setNumber(5, 'VIn', refineMesh)
         gmsh.model.mesh.field.setNumber(5, 'VOut', backgroundMesh)
@@ -1137,34 +1137,22 @@ class gmshClass:
         gmsh.model.mesh.field.setNumber(5, 'XMax', bounds['x'][1])
         gmsh.model.mesh.field.setNumber(5, 'YMin', bounds['y'][0])
         gmsh.model.mesh.field.setNumber(5, 'YMax', bounds['y'][1])
-        gmsh.model.mesh.field.setNumber(5, 'ZMin', -gridThickness*2.)
-        gmsh.model.mesh.field.setNumber(5, 'ZMax', gridThickness*2.)
-        gmsh.model.mesh.field.setNumber(5, 'Thickness', vtransitionWidth)
-        
-        # Define fine mesh around the pad
-        gmsh.model.mesh.field.add('Box', 6)
-        gmsh.model.mesh.field.setNumber(6, 'VIn', refineMesh)
-        gmsh.model.mesh.field.setNumber(6, 'VOut', backgroundMesh)
-        gmsh.model.mesh.field.setNumber(6, 'XMin', bounds['x'][0])
-        gmsh.model.mesh.field.setNumber(6, 'XMax', bounds['x'][1])
-        gmsh.model.mesh.field.setNumber(6, 'YMin', bounds['y'][0])
-        gmsh.model.mesh.field.setNumber(6, 'YMax', bounds['y'][1])
-        gmsh.model.mesh.field.setNumber(6, 'ZMin', SiO2Height - thicknessSiO2/2.)
-        gmsh.model.mesh.field.setNumber(6, 'ZMax', SiO2Height + thicknessSiO2/2.)
-        gmsh.model.mesh.field.setNumber(6, 'Thickness', vtransitionWidth/2.)
+        gmsh.model.mesh.field.setNumber(5, 'ZMin', SiO2Height - thicknessSiO2/2.)
+        gmsh.model.mesh.field.setNumber(5, 'ZMax', SiO2Height + thicknessSiO2/2.)
+        gmsh.model.mesh.field.setNumber(5, 'Thickness', vtransitionWidth/2.)
         
         # Define coarse mesh near edge/corner refinement lines
-        gmsh.model.mesh.field.add('Threshold', 7)
-        gmsh.model.mesh.field.setNumber(7, 'InField', 2)
-        gmsh.model.mesh.field.setNumber(7, 'SizeMin', refineMesh)
-        gmsh.model.mesh.field.setNumber(7, 'SizeMax', backgroundMesh)
-        gmsh.model.mesh.field.setNumber(7, 'DistMin', refineRadius)
-        gmsh.model.mesh.field.setNumber(7, 'DistMax', refineRadius + vtransitionWidth)
+        gmsh.model.mesh.field.add('Threshold', 6)
+        gmsh.model.mesh.field.setNumber(6, 'InField', 2)
+        gmsh.model.mesh.field.setNumber(6, 'SizeMin', refineMesh)
+        gmsh.model.mesh.field.setNumber(6, 'SizeMax', backgroundMesh)
+        gmsh.model.mesh.field.setNumber(6, 'DistMin', refineRadius)
+        gmsh.model.mesh.field.setNumber(6, 'DistMax', refineRadius + vtransitionWidth)
         
         # Use the smallest mesh size
-        gmsh.model.mesh.field.add('Min', 8)
-        gmsh.model.mesh.field.setNumbers(8, 'FieldsList', [3,4,5,6,7])
-        gmsh.model.mesh.field.setAsBackgroundMesh(8)
+        gmsh.model.mesh.field.add('Min', 7)
+        gmsh.model.mesh.field.setNumbers(7, 'FieldsList', [3,4,5,6])
+        gmsh.model.mesh.field.setAsBackgroundMesh(7)
         
         # Final settings
         gmsh.option.setNumber('Mesh.MeshSizeFromCurvature', 0) # FEM already defined in volume
