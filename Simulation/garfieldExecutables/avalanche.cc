@@ -465,7 +465,7 @@ int main(int argc, char * argv[]) {
   double e0 = 0.1;//eV (Garfield is weird when this is 0.)
   double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
 
-  double timeFinal = 5.;//ns
+  double timeFinal = 10.;//ns
   double timeStep = 0.01;//ns
   int nSignalBins = timeFinal/timeStep;
   
@@ -758,7 +758,6 @@ int main(int argc, char * argv[]) {
         double sumAdjacentSignal = 0.;
         int numAdjacent = 0;
 
-
         for(size_t i = 1; i < sensorList.size(); i++){
           std::string inSensor = sensorList.at(i);
           sumAdjacentSignal += parallelSensorFIMS->GetSignal(inSensor, inSignal);
@@ -769,7 +768,7 @@ int main(int argc, char * argv[]) {
         if(numAdjacent > 0){
           adjacentSignal = sumAdjacentSignal / numAdjacent;
         }
-        
+
         //Fill tree
         parallelSignalDataTree->Fill();
       }
