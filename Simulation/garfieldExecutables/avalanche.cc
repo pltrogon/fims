@@ -87,7 +87,6 @@ int main(int argc, char * argv[]) {
   std::vector<std::string> sensorList;
   sensorList.push_back("CentralPad");
 
-
   switch(geometryMode){
 
     case GeometryMode::FIMS: {
@@ -240,7 +239,9 @@ int main(int argc, char * argv[]) {
     xBoundary[0], yBoundary[0], zBoundary[0], 
     xBoundary[1], yBoundary[1], zBoundary[1]
   );
-  sensorFIMS->AddElectrode(&fieldFIMS, "centerPad");
+  for(const auto& inSensor : sensorList){
+    sensorFIMS->AddElectrode(&fieldFIMS, inSensor);
+  }
 
   // ***** Draw field lines for visualization ***** //
   std::cout << "****************************************\n";
@@ -531,7 +532,9 @@ int main(int argc, char * argv[]) {
         xBoundary[1], yBoundary[1], zBoundary[1]
       );      
 
-      parallelSensorFIMS->AddElectrode(parallelFieldFIMS, "centerPad");
+      for(const auto& inSensor : sensorList){
+        parallelSensorFIMS->AddElectrode(&fieldFIMS, inSensor);
+      }
       parallelSensorFIMS->SetTimeWindow(0., timeStep, nSignalBins);
 
       avalancheE->SetSensor(parallelSensorFIMS);
@@ -581,7 +584,7 @@ int main(int argc, char * argv[]) {
     int statIon;
     float electronDriftx, electronDrifty, electronDriftz;
     float ionDriftx, ionDrifty, ionDriftz, ionDriftt;
-    double signalTime, signalStrength;
+    double signalTime, signalStrength, adjacentSignal;
 
     TTree* parallelAvalancheDataTree = new TTree("avalancheDataTree", "Avalanche Results");
     parallelAvalancheDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
@@ -637,6 +640,7 @@ int main(int argc, char * argv[]) {
     parallelSignalDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
     parallelSignalDataTree->Branch("Signal Time", &signalTime, "signalTime/D");
     parallelSignalDataTree->Branch("Signal Strength", &signalStrength, "signalStrength/D");
+    parallelSignalDataTree->Branch("Adjacent Signal Average", &adjacentSignal, "adjacentSignal/D");
   
 
     //***** Parallel Avalanche Loop *****//
@@ -749,7 +753,22 @@ int main(int argc, char * argv[]) {
       //Get signal for each timestep
       for(int inSignal = 0; inSignal < nSignalBins; inSignal++){
         signalTime = inSignal*timeStep;
-        signalStrength = parallelSensorFIMS->GetSignal("centerPad", inSignal);
+        signalStrength = parallelSensorFIMS->GetSignal("CentralPad", inSignal);
+        
+        double sumAdjacentSignal = 0.;
+        int numAdjacent = 0;
+
+
+        for(size_t i = 1; i < sensorList.size(); i++){
+          std::string inSensor = sensorList.at(i);
+          sumAdjacentSignal += parallelSensorFIMS->GetSignal(inSensor, inSignal);
+          numAdjacent++;
+        }
+
+        adjacentSignal = 0.;
+        if(numAdjacent > 0){
+          adjacentSignal = sumAdjacentSignal / numAdjacent;
+        }
         
         //Fill tree
         parallelSignalDataTree->Fill();

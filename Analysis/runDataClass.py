@@ -2624,12 +2624,23 @@ class runData:
         ax2 = fig.add_subplot(122)
         
         ax1.plot(
-            singleData['Signal Time'], singleData['Signal Strength']
+            singleData['Signal Time'], singleData['Signal Strength'],
+            label='Induced Signal'
+        )
+        ax1.plot(
+            singleData['Signal Time'], singleData['Adjacent Signal Average'],
+            ls='--', label='Adjacent Average'
         )
 
         ax2.plot(
-            singleData['Signal Time'], singleData['Signal Strength'].cumsum()
+            singleData['Signal Time'], singleData['Signal Strength'].cumsum(),
+            label='Induced Signal'
         )
+        ax2.plot(
+            singleData['Signal Time'], singleData['Adjacent Signal Average'].cumsum(),
+            ls='--', label='Adjacent Average'
+        )
+
         ax2.axhline(
             totalCharge,
             label=f'Total Charge = {totalCharge:.3f}', c='r', ls='--'
@@ -2645,6 +2656,8 @@ class runData:
 
         ax1.grid()
         ax2.grid()
+
+        ax1.legend()
         ax2.legend()
 
         plt.tight_layout()   
@@ -2660,8 +2673,10 @@ class runData:
         allSignals = self.getDataFrame('signalData')
         
         averageSignal = allSignals.groupby('Signal Time')['Signal Strength'].mean()
+        averageAdjacent = allSignals.groupby('Signal Time')['Adjacent Signal Average'].mean()
 
         averageCharge = averageSignal.values.cumsum()
+        adjacentCharge = averageAdjacent.values.cumsum()
         averageTotalCharge = averageCharge[-1]
 
         rawGain = self.getCalcParameter('Raw Gain')
@@ -2674,10 +2689,21 @@ class runData:
         
         #Plot signals for the central pad
         ax1.plot(
-            averageSignal.index, averageSignal.values
+            averageSignal.index, averageSignal.values,
+            label='Average Induced Signal'
+        )
+        ax1.plot(
+            averageAdjacent.index, averageAdjacent.values,
+            ls='--', label='Average Adjacent Signal'
+        )
+
+        ax2.plot(
+            averageSignal.index, averageCharge,
+            label='Average Charge'
         )
         ax2.plot(
-            averageSignal.index, averageCharge
+            averageAdjacent.index, adjacentCharge,
+            ls='--', label='Average Adjacent Charge'
         )
         ax2.axhline(
             averageTotalCharge,
@@ -2832,7 +2858,7 @@ class runData:
 
 #********************************************************************************#
 
-    def _calcIonCurrent(self, ionTime=2.5):
+    def _calcIonCurrent(self, ionTime=3):
         """
         Calculates the estimated ion current contribution to the average signal 
         based on the average signal from all avalanches.
