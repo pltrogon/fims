@@ -720,13 +720,6 @@ class runData:
         holeXY2 = np.array([pitch, holeRadius, holeRadius, pitch])
         holeZ = halfGrid*np.array([-1, -1, 1, 1])
 
-        #Corners of the geometry cell
-        #geoX = 3./2.*outRadius*np.array([-1, 1, 1, -1, -1])
-        #geoY = inRadius*np.array([1, 1, -1, -1, 1])
-        geoX = pitch*np.array([-1, 1, 1, -1, -1])
-        geoY = pitch*np.array([1, 1, -1, -1, 1])
-
-        #axLim = 1.01*3./2.*outRadius
         axLim = 1.01*pitch
         
         match axes:
@@ -740,10 +733,6 @@ class runData:
                     label='Cell', c='b', ls='--', lw=1
                 )
                 axis.add_patch(hole)
-                axis.plot(
-                    geoX, geoY,
-                    c='g', ls='--', lw=1, label='Simulation Boundary'
-                )
 
                 axis.set_xlabel('x (um)')
                 axis.set_ylabel('y (um)')
@@ -774,17 +763,6 @@ class runData:
                     holeXY2, holeZ, 
                     c='k', ls='-', lw=2
                 )
-                        
-                axis.plot(
-                    [geoX[0], geoX[1], geoX[1], geoX[0], geoX[0]], 
-                    [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight], 
-                    c='g', ls='--', lw=1, label='Simulation Boundary'
-                )
-                axis.plot(
-                    [geoX[0], geoX[1]],
-                    [0, 0],
-                    c='#808080', ls=':', lw=1, label='Grid'
-                )
                 
                 axis.set_xlabel('x (um)')
                 axis.set_ylabel('z (um)')
@@ -813,16 +791,6 @@ class runData:
                 axis.plot(
                     holeXY2, holeZ, 
                     c='k', ls='-', lw=2
-                )
-                axis.plot(
-                    [geoY[1], geoY[2], geoY[2], geoY[1], geoY[1]], 
-                    [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight], 
-                    c='g', ls='--', lw=1, label='Simulation Boundary'
-                )
-                axis.plot(
-                    [geoY[0], geoY[2]],
-                    [0, 0],
-                    c='#808080', ls=':', lw=1, label='Grid'
                 )
 
                 axis.set_xlabel('y (um)')

@@ -214,7 +214,7 @@ int main(int argc, char * argv[]) {
   double xBoundary[2], yBoundary[2], zBoundary[2];
   zBoundary[0] = zmin;
   zBoundary[1] = zmax;
-  //Extend simulation boundary to +/- pitch in x and y
+  //Extend simulation boundary to +/- 2*pitch in x and y
   xBoundary[0] = -2.*simParams->pitch;
   xBoundary[1] = 2.*simParams->pitch;
   yBoundary[0] = -2.*simParams->pitch;
