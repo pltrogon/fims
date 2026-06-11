@@ -147,7 +147,7 @@ class FIMS_Simulation:
             'fieldRatio': 135.,
             'numFieldLine': 25,
             'numAvalanche': 5000,
-            'initialZFraction': .5,
+            'initialZFraction': .75,
             'avalancheLimit': 500,
             'gasCompAr': 0.95,
             'gasCompCO2': 0.00,
@@ -1154,72 +1154,6 @@ class FIMS_Simulation:
         self._runGarfield()
         
         return runNo   
-
-#***********************************************************************************#
-    def _getEfficiency(self, target, **kwargs):
-        """
-        Gets a target efficiency value for the current geometry and field ratio.
-
-        Args:
-            target (str): The target efficiency to get. Options are:
-                - 'detection': The electron detection efficiency.
-                - 'transparency': The electric field line transparency.
-                - 'collection': The charge collection efficiency.
-            kwargs: Additional keyword arguments for specific targets:
-                - efficiencyGoal (float): The target detection efficiency.
-                - efficiencyThreshold (int): The detection threshold for the detection target.
-                - transparencyGoal (float): The target field transparency.
-                - collectionGoal (float): The target charge collection efficiency.
-        
-        Returns:
-            tuple containing:
-                - float: The simulated target efficiency value.
-                - float: The uncertainty in the simulated target efficiency value.
-
-        """
-
-        runSettings = {
-            'detection': {'numAvalanche': 5000, 'avalancheLimit': kwargs.get('efficiencyThreshold', 10) + 5},
-            'collection': {'numAvalanche': 5000, 'avalancheLimit': 5},
-            'transparency': {'numFieldLine': 500}
-        }
-        saveParam = self.getAllParam()
-
-        if target not in runSettings:
-            raise ValueError(f"Invalid target '{target}'. Valid options are: {', '.join(runSettings.keys())}.")
-        self.setParameters(runSettings[target])
-
-        match target:
-            case 'detection':
-                self._runGarfield(
-                    'runDetection', 
-                    targetEfficiency=kwargs.get('efficiencyGoal', 0.95), 
-                    threshold=kwargs.get('efficiencyThreshold', 10)
-                )
-            
-            case 'collection':
-                initialZ = kwargs.get('initialZ', 0.5*self._param['cathodeHeight'])
-                self._runGarfield(
-                    'runCollection', 
-                    initialZ=initialZ
-                )
-
-            case 'transparency':
-                self._runGarfield(
-                    'runTransparency',
-                    targetTransparency=kwargs.get('transparencyGoal', 0.99)
-                )
-
-            case _:
-                raise RuntimeError('Unexpected error in target selection.')
-            
-        
-        results = self._readResultsFile(target)
-        print(f'\t{target}: {results['result']:.3f} +/- {results['resultErr']:.3f}') 
-
-        self.setParameters(saveParam)
-
-        return results['result'], results['resultErr']
 
 #***********************************************************************************#
 #***********************************************************************************#
