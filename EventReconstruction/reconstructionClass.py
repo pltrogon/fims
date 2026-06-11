@@ -136,13 +136,25 @@ class Reconstruction:
             diffusedData (list): list of all data points after being diffused
         """
         diffusedData = []
-        # TODO: can be done all at once with np.random.normal()
         for x,y,z in coordinates:
             diffusedData.append((
                 float(x)+random.gauss(0, diffusionWidths[0]),
                 float(y)+random.gauss(0, diffusionWidths[1]),
                 float(z)+random.gauss(0, diffusionWidths[2])
             ))
+        # TODO: np.random.normal doesn't easily allow for applying different diffusion constants
+        # to different axes
+        
+        # Convert to np.array for efficiency
+        #inputArray = np.array(inputList, dtype=float)
+
+        # Add random offsets to each coordinate
+        #diffusionAmount = np.random.normal(scale=diffusionWidths, size=inputArray.shape)        
+        #inputArray += diffusionAmount
+
+        # Convert back to list of tuples
+        #diffusedData = [tuple(row) for row in inputArray]
+
         
         return diffusedData
         
@@ -161,50 +173,26 @@ class Reconstruction:
         returns:
             discreteData (list): list of discretized coordinates.
         """
-        # TODO: find way to reduce code repetition
+        # Convert to pandas dataframe
+        inputArray = pd.DataFrame(inputData, columns=['x','y','z'])
+        
+        # Bin data
+        binDict = {}
+        binID = 0
         bound = 10000
-        # Unzip Data into separate lists for individual diffusion
-        xData = [float(elem[0]) for elem in inputData]
-        yData = [float(elem[1]) for elem in inputData]
-        zData = [float(elem[2]) for elem in inputData]
-        
-        # Bin x-data
-        if binSize[0] == 0:
-            discreteXData = xData
-        else:
-            dataArray = np.array(xData, dtype=float)
-            binEdges = np.arange(-bound, bound, binSize[0])
-            binnedData = pd.cut(dataArray, binEdges)
-            
-            discreteXData = []
-            for electron in binnedData:
-                discreteXData.append(electron.left+int(binSize[0]/2))
-        
-        # Bin y-data
-        if binSize[1] == 0:
-            discreteYData = yData
-        else:
-            dataArray = np.array(yData, dtype=float)
-            binEdges = np.arange(-bound, bound, binSize[1])
-            binnedData = pd.cut(dataArray, binEdges)
-            
-            discreteYData = []
-            for electron in binnedData:
-                discreteYData.append(electron.left+int(binSize[1]/2))
-        
-        # Bin z-data
-        if binSize[2] == 0:
-            discreteZData = zData
-        else:
-            dataArray = np.array(xData, dtype=float)
-            binEdges = np.arange(-bound, bound, binSize[2])
-            binnedData = pd.cut(dataArray, binEdges)
-            
-            discreteZData = []
-            for electron in binnedData:
-                discreteZData.append(electron.left+int(binSize[2]/2))
-        
-        discreteData = list(zip(discreteXData, discreteYData, discreteZData))
+        for column in inputArray:
+            # Check if data has a bin size
+            if binSize[binID] == 0 or binSize[binID] == None:
+                discreteData = list(inputArray[column])
+            else:
+                binEdges = np.arange(-bound, bound, binSize[binID])
+                binnedData = pd.cut(inputArray[column], binEdges)
+                discreteData = [electron.left+int(binSize[binID]/2) for electron in binnedData]
+            binDict[column] = discreteData
+            binID += 1
+
+        # Combine data into list of tuples
+        discreteData = list(zip(binDict['x'], binDict['y'], binDict['z']))
         
         return discreteData
 
