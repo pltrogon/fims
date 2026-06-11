@@ -2584,6 +2584,22 @@ class runData:
         
         gain = self._getAvalancheGain(avalancheID)
         totalCharge = singleData['Signal Strength'].sum()
+        adjacentCharge = singleData['Adjacent Signal Average'].sum()
+
+        ## IMPORTANT NOTE:
+        # Because of mirroring, 'Signal Strength' can be the signal 
+        # at the center pad OR the top OR the bottom pad. 'Adjacent Signal Average'
+        # is the signal at any/all of the top-right, top-left, bottom-R, bottom-L.
+        # Solution here is to find where the max induced signal is, call that the
+        # primary, and the min the secondary. This essentially just shifts 
+        # the coordiante space around.
+
+        #Find primary and secondary signals
+        primary = 'Signal Strength'
+        secondary = 'Adjacent Signal Average'
+        if math.fabs(totalCharge) <= math.fabs(adjacentCharge):
+            primary, secondary = secondary, primary
+
 
         # Create figure
         fig = plt.figure(figsize=(10, 5))
@@ -2592,21 +2608,21 @@ class runData:
         ax2 = fig.add_subplot(122)
         
         ax1.plot(
-            singleData['Signal Time'], singleData['Signal Strength'],
-            label='Induced Signal'
+            singleData['Signal Time'], singleData[primary],
+            label='Primary Induced Signal'
         )
         ax1.plot(
-            singleData['Signal Time'], singleData['Adjacent Signal Average'],
-            ls='--', label='Adjacent Average'
+            singleData['Signal Time'], singleData[secondary],
+            ls='--', label='Secondary Induced Average'
         )
 
         ax2.plot(
-            singleData['Signal Time'], singleData['Signal Strength'].cumsum(),
-            label='Induced Signal'
+            singleData['Signal Time'], singleData[primary].cumsum(),
+            label='Primary Induced Signal'
         )
         ax2.plot(
-            singleData['Signal Time'], singleData['Adjacent Signal Average'].cumsum(),
-            ls='--', label='Adjacent Average'
+            singleData['Signal Time'], singleData[secondary].cumsum(),
+            ls='--', label='Secondary Adjacent Average'
         )
 
         ax2.axhline(
@@ -2616,11 +2632,11 @@ class runData:
 
         ax1.set_title('Induced Signal')
         ax1.set_xlabel('Time (ns)')
-        ax1.set_ylabel('Signal Strength (fC/ns)')#TODO - The units here seem weird fC/ns should be uA?
+        ax1.set_ylabel('Current (fC/ns)')#TODO - The units here seem weird fC/ns should be uA?
 
         ax2.set_title('Integrated Signal')
         ax2.set_xlabel('Time (ns)')
-        ax2.set_ylabel('Integrated Signal Strength (fC)')
+        ax2.set_ylabel('Charge (fC)')
 
         ax1.grid()
         ax2.grid()
@@ -2636,83 +2652,105 @@ class runData:
     def plotAverageSignal(self):
         """
         Plots the average induced signal from all simulated electron avalanches.
+
+        TODO - Possible exclude single-e and overflowed avalanches from this. if so use trimmed gain.
         """
 
         allSignals = self.getDataFrame('signalData')
-        
-        averageSignal = allSignals.groupby('Signal Time')['Signal Strength'].mean()
-        averageAdjacent = allSignals.groupby('Signal Time')['Adjacent Signal Average'].mean()
+        groupedSignals = allSignals.groupby('Avalanche ID')
+        avalancheData = self.getDataFrame('avalancheData')
+        allGains = avalancheData.set_index('Avalanche ID')['Total Electrons']
 
-        averageCharge = averageSignal.values.cumsum()
-        adjacentCharge = averageAdjacent.values.cumsum()
-        averageTotalCharge = averageCharge[-1]
+        commonTime = groupedSignals.get_group(0).sort_values('Signal Time')['Signal Time'].values
+        numPoints = len(commonTime)
+        alignIndex = int(numPoints*.2)#Guess where electron signal occurs (20% of full scale)
+        relativeTime = commonTime - commonTime[alignIndex]
 
-        rawGain = self.getCalcParameter('Raw Gain')
+        #Align individual electron signals
+        alignPrimary = []
+        alignSecondary = []
+
+        for avID, inSignal in groupedSignals:
+            singleData = inSignal.sort_values('Signal Time').reset_index(drop=True)
+            gain = allGains.loc[avID]
+
+            #Determine primary and secondary signals
+            totalCharge = singleData['Signal Strength'].sum()
+            adjacentCharge = singleData['Adjacent Signal Average'].sum()
+
+            primary = 'Signal Strength' if abs(totalCharge) > abs(adjacentCharge) else 'Adjacent Signal Average'
+            secondary = 'Adjacent Signal Average' if primary == 'Signal Strength' else 'Signal Strength'
+
+            #Normalize by gain (get per-electron signals)
+            normPrimary = (singleData[primary]/gain).values
+            normSecondary = (singleData[secondary]/gain).values
+
+            #find electron signal by max derivitive
+            dy = np.diff(normPrimary)
+            slopeIndex = np.argmin(dy)
+            signalAlign = alignIndex - slopeIndex
+
+            #Shift data to align
+            shiftPrimary = np.roll(normPrimary, signalAlign)
+            shiftSecondary = np.roll(normSecondary, signalAlign)
+
+            #Clean edges
+            if signalAlign > 0:
+                shiftPrimary[:signalAlign] = 0.0
+                shiftSecondary[:signalAlign] = 0.0
+            elif signalAlign < 0:
+                shiftPrimary[signalAlign:] = shiftPrimary[signalAlign-1]
+                shiftSecondary[signalAlign:] = shiftSecondary[signalAlign-1]
+
+            alignPrimary.append(shiftPrimary)
+            alignSecondary.append(shiftSecondary)
+
+        #Get average per-electron
+        averagePrimarySingle = np.mean(alignPrimary, axis=0)
+        averageSecondarySingle = np.mean(alignSecondary, axis=0)
+
+        #Get average signal
+        meanGain = self._calculatedData['Raw Gain'].iloc[0]
+        averagePrimary = averagePrimarySingle*meanGain
+        averageSecondary = averageSecondarySingle*meanGain
 
         # Create figure
         fig = plt.figure(figsize=(10, 5))
-        fig.suptitle(f'Average Induced Signal (Gain={rawGain:.1f})')
+        fig.suptitle(f'Average Induced Signal (Gain={meanGain:.1f})')
         ax1 = fig.add_subplot(121)
         ax2 = fig.add_subplot(122)
         
         #Plot signals for the central pad
         ax1.plot(
-            averageSignal.index, averageSignal.values,
+            relativeTime, averagePrimary,
             label='Average Induced Signal'
         )
         ax1.plot(
-            averageAdjacent.index, averageAdjacent.values,
+            relativeTime, averageSecondary,
             ls='--', label='Average Adjacent Signal'
         )
 
         ax2.plot(
-            averageSignal.index, averageCharge,
-            label='Average Charge'
+            relativeTime, averagePrimary.cumsum(),
+            label='Average Induced Signal'
         )
         ax2.plot(
-            averageAdjacent.index, adjacentCharge,
-            ls='--', label='Average Adjacent Charge'
+            relativeTime, averageSecondary.cumsum(),
+            ls='--', label='Average Adjacent Signal'
         )
+        averageTotalCharge = averagePrimary.sum()
         ax2.axhline(
             averageTotalCharge,
             label=f'Total Charge: {averageTotalCharge:.3f} fC', c='r', ls='--'
         )
 
-        #Plotting the averge signal in adjacent pads
-        if 'Top Signal' in allSignals.columns:
-            adjacents = ['Top', 'Bottom', 'TopRight', 'BottomRight', 'TopLeft', 'BottomLeft']
-            adjacentSignals = []
-            for inPad in adjacents:
-                adjacentSignal = allSignals.groupby('Signal Time')[f'{inPad} Signal'].mean()
-                adjacentSignals.append(adjacentSignal.values)
-
-            #Plot average of all adjacent pads together
-            averageAdjacentSignal = np.mean(adjacentSignals, axis=0)
-            ax1.plot(
-                adjacentSignal.index, averageAdjacentSignal, 
-                label='Adjacent Pads - Average', c='m', ls='--'
-            )
-            ax2.plot(
-                adjacentSignal.index, np.cumsum(averageAdjacentSignal), 
-                label='Adjacent Pads - Average', c='m', ls='--'
-            )
-
-        #Plot ion signal for central pad
-        m, b = self._calcIonCurrent()
-        ionSignal = m*averageSignal.index + b
-        ax2.plot(
-            averageSignal.index, ionSignal,
-            label=f'Estimated Ion Current ({m*1e3:.1f} nA)', c='r', ls=':'
-        )
-
-
         ax1.set_title('Average Induced Signal')
-        ax1.set_xlabel('Time (ns)')
-        ax1.set_ylabel('Signal Strength (fC/ns)')
+        ax1.set_xlabel('Aligned Time (ns)')
+        ax1.set_ylabel('Current (fC/ns)')
 
         ax2.set_title('Average Integrated Signal')
-        ax2.set_xlabel('Time (ns)')
-        ax2.set_ylabel('Integrated Signal Strength (fC)')
+        ax2.set_xlabel('Aligned Time (ns)')
+        ax2.set_ylabel('Charge (fC)')
 
         ax1.grid()
         ax2.grid()
@@ -2823,37 +2861,6 @@ class runData:
         ax.grid()
 
         return fig
-
-#********************************************************************************#
-
-    def _calcIonCurrent(self, ionTime=5):
-        """
-        Calculates the estimated ion current contribution to the average signal 
-        based on the average signal from all avalanches.
-
-        Args:
-            ionTime (float): The time at which the electron contribution is 
-                             assumed to be neglible.
-
-        Returns:
-            tuple: A tuple containing linear fit parameters:
-                   - slope (float): The slope of the estimated ion current.
-                   - intercept (float): The y-intercept of the estimated ion current.
-        """
-
-        allSignals = self.getDataFrame('signalData')
-        
-        averageSignal = allSignals.groupby('Signal Time')['Signal Strength'].mean()
-
-        averageCharge = averageSignal.values.cumsum()
-
-        timeMask = averageSignal.index >= ionTime
-        xIons = averageSignal.index[timeMask]
-        yIons = averageCharge[timeMask]
-
-        slope, intercept = np.polyfit(xIons, yIons, 1)
-
-        return slope, intercept
 
 
 
