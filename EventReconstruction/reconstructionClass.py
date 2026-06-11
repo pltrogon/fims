@@ -118,6 +118,7 @@ class Reconstruction:
         zRaw = []
         treeName = self.reconInfo['Tree Name']
         
+        # TODO: investigate list comprehension instead of for loops
         for elem in dataframes[treeName]['x'][0]:
             xRaw.append(elem*10000)
         for elem in dataframes[treeName]['y'][0]:
@@ -145,6 +146,7 @@ class Reconstruction:
             diffusedData (list): list of all data points after being diffused
         """
         diffusedData = []
+        # TODO: can be done all at once with np.random.normal()
         for x,y,z in coordinates:
             diffusedData.append((
                 float(x)+random.gauss(0, diffusionWidths[0]),
@@ -169,6 +171,7 @@ class Reconstruction:
         returns:
             discreteData (list): list of discretized coordinates.
         """
+        # TODO: find way to reduce code repetition
         bound = 10000
         # Unzip Data into separate lists for individual diffusion
         xData = [float(elem[0]) for elem in inputData]

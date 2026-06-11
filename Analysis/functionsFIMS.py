@@ -623,6 +623,8 @@ def plotFullFieldMapping(runNum):
     returns:
         figure
     """
+    # TODO: rework code for efficiency. Consider using numpy arrays+masking instead of
+    # loops and pandas tables. Also, investigate np.hypot().
     # Get all field line data
     fieldData = getFullFieldData(runNum)
     xData = fieldData['xComp']
