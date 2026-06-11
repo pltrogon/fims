@@ -108,25 +108,15 @@ class Reconstruction:
         Note: Assumes coordinates are given in cm and converts them to microns.
         
         Args:
-            dataframe: root dataframe
+            dataframes: pandas dataframe
         
         Returns:
             rawData (list, tuples): the x,y,z coordinates of every electron
         """
-        xRaw = []
-        yRaw = []
-        zRaw = []
         treeName = self.reconInfo['Tree Name']
         
-        # TODO: investigate list comprehension instead of for loops
-        for elem in dataframes[treeName]['x'][0]:
-            xRaw.append(elem*10000)
-        for elem in dataframes[treeName]['y'][0]:
-            yRaw.append(elem*10000)
-        for elem in dataframes[treeName]['z'][0]:
-            zRaw.append(elem)
-        
-        rawData = list(zip(xRaw, yRaw, zRaw))
+        trialData = dataframes[treeName][['x', 'y', 'z']].iloc[0]
+        rawData = list(zip(trialData['x']*10000, trialData['y']*10000, trialData['z']))
         
         return rawData
 
