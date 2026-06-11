@@ -22,7 +22,7 @@ class Reconstruction:
         discretizeData
         approximateGain
         groupData (TODO: convert to screenData)
-        approximateToT
+        approximateToT (TODO: improve)
         
         TODO (remaining methods)
         More?
@@ -235,6 +235,7 @@ class Reconstruction:
             groupedData (dict): arranged z-coordinates with their corresponding 
             group ID. 
         """
+        # TODO: convert to screenData
         timeRez = self.reconInfo['Time Resolution']
         
         # Identify and grab all electrons on a single pixel
@@ -277,6 +278,7 @@ class Reconstruction:
         returns:
             ToTList (list): ToTs for each separable charge bundle.
         """
+        # TODO: improve function (this method "works", but it is very messy)
         # Find every point where the total charge in the group exceeds the threshold
         startCharge = []
         startPoint = []
