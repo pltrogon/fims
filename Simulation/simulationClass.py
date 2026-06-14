@@ -874,7 +874,7 @@ class FIMS_Simulation:
         
         except Exception as e:
             print(f'Fit failed, falling back to incremental step: {e}')
-            fieldStep = minFieldStep if lastResult <= targetEfficiency else -minFieldStep
+            fieldStep = minFieldStep if lastResult <= targetValue else -minFieldStep
 
         #Limit to maximum and minimum step sizes
         if math.fabs(fieldStep) > maxFieldStep:
@@ -956,7 +956,7 @@ class FIMS_Simulation:
 
         saveParam = self.getAllParam()
         self.setParameters({'numAvalanche': 5000})#More is better. Adjust as needed.
-
+        
         efficiencyAtField = []
         fieldValues = []
         iterNo = 0
@@ -988,7 +988,13 @@ class FIMS_Simulation:
             efficiencyAtField.append(runResults)
 
             currentEff = runResults[f'{targetEfficiency}Eff']
-            print(f"\tResult: {currentEff*100:.2f}% (Stop Condition: {runResults['stopCondition']})")
+            
+            print(
+                f'\tResult: {runResults[f"{targetEfficiency}Eff"]*100:.2f} +/- '
+                f'({runResults[f"{targetEfficiency}ErrHigh"]*100:.2f}/'
+                f'{runResults[f"{targetEfficiency}ErrLow"]*100:.2f})% '
+                f'(Stop Condition: {runResults["stopCondition"]})'
+            )
         #End of find field loop
 
         allResults = pd.DataFrame(efficiencyAtField)
@@ -1005,8 +1011,7 @@ class FIMS_Simulation:
         saveParam['fieldRatio'] = finalField
         self.setParameters(saveParam)
 
-        print(f'Solution found: Field ratio = {finalField}')
-
+        #self._printFieldSolution(resultsDictionary)        
         allResults.to_csv('../Data/allEfficiencyResults.csv', index=False)
 
         return finalField
@@ -1017,8 +1022,6 @@ class FIMS_Simulation:
         TODO - Consider if this is better than just printing the raw values (easier
         to copy + paste)
 
-        TODO - formatting of this may be off now that there are low and high errors
-
         Prints the results of the field search in a box format.
 
         Args:
@@ -1028,15 +1031,21 @@ class FIMS_Simulation:
 
         dataLabel = list(resultsAtField.keys())[1]
 
-        header = f'| #     Efield    {dataLabel:<15} Error    |'
+        header = '| #     Efield     Efficiency     Low Error     High Error |'
         boxWidth = len(header)
 
         print('\n\t' + '-'*boxWidth)
         print('\t' + header)
         print('\t|' + '='*(boxWidth-2) + '|')
 
-        for iteration, (field, keyData, error) in enumerate(zip(*resultsAtField.values()), 1):
-            print(f'\t| {iteration:<6} {field:<10.1f} {keyData:<13.3f} {error:<9.3f}|')
+        for testNum, (field, eff, errLow, errHigh) in enumerate(zip(*resultsAtField.values()), 1):
+            print(
+                f'\t| {testNum:<6}' 
+                f'{field:<13.1f}'
+                f'{eff:<15.3f}'
+                f'{errLow:<14.3f}'
+                f'{errHigh:<9.3f}|'
+            )
 
         print('\t' + '-'*boxWidth + '\n')
 
@@ -1048,7 +1057,8 @@ class FIMS_Simulation:
         Executes an avalanche simulation of the FIMS geometry at the minimum field 
         ratio required to achieve a given efficiency.
 
-        This implementation will internally find the field necesary to achive the desired result.
+        This implementation will internally find the field necessary to achieve the 
+        desired result.
         The efficiency values from all attempted fields are not recorded.
         
         Args:
