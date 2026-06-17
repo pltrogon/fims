@@ -21,11 +21,12 @@ class Reconstruction:
         diffuseData
         discretizeData
         approximateGain
-        groupData (TODO: convert to screenData)
+        groupData
+        screenData
         approximateToT (TODO: improve)
         
         TODO (remaining methods)
-        More?
+        convertToSignal (wrapper for groupData, screenData, and approximate ToT)
         
         ## Wrapper functions ##
         reconstructFIMS
@@ -222,49 +223,59 @@ class Reconstruction:
 
     #********************************************************************************#
 
-    def groupData(self, coordinates, pixelID):
+    def groupData(self, coordinates):
         """
-        Sorts the data of a given x-y coordinate into groups based on their z
-        distribution.
+        Takes the x,y,z coordinates and groups it by the x,y coordinate.
         
         Args:
             coordinates (list): list of x,y,z coordinates of each electron.
-            pixelID (int): ID of the pixel being grouped.
         
         returns:
-            groupedData (dict): arranged z-coordinates with their corresponding 
-            group ID. 
+            groupedData (list): z-coordinates with their corresponding 
+            pixel location. 
         """
-        # TODO: convert to screenData
-        timeRez = self.reconInfo['Time Resolution']
+        #Convert to dataArray for faster data processing
+        dataArray = pd.DataFrame(coordinates, columns=['x','y','z'])
+        groupedArray = list(dataArray.groupby(['x', 'y'])['z'])
         
-        # Identify and grab all electrons on a single pixel
-        isolatedZ = []
-        index = 0
-        for elecX in coordinates['x']:
-            if elecX == coordinates['x'][pixelID] and coordinates['y'][index] == coordinates['y'][pixelID]:
-                isolatedZ.append(coordinates['z'][index])
-            index += 1
-
-        # Sort all electrons on pixel into groups based on z-distance
-        elecPositionList = []
-        elecID = 0
-        groupIDList = []
-        groupID = 1
-        arrangedElectrons = sorted(isolatedZ)
-        for electron in arrangedElectrons:
-            if electron - arrangedElectrons[elecID-1] > timeRez*2:
-                groupID += 1
-            elecPositionList.append(electron)
-            groupIDList.append(groupID)
-            elecID += 1
-
-        groupedData = {
-            'z': elecPositionList,
-            'group ID': groupIDList
-        }
+        #Convert to list for easier data accessing
+        groupedData = []
+        for elem in groupedArray:
+            groupedData.append((elem[0], elem[1].tolist()))
 
         return groupedData
+
+    #********************************************************************************#
+    def screenData(self, groupedData):
+        """
+        TODO: see if using an array+masking is better
+        Removes Electrons groups that do not overcome the threshold.
+        Args:
+            data (list): list of pixel locations with associated electron heights.
+            Note: assumes data has already been grouped by self.groupData 
+            (TODO: consider combining?)
+            
+        Returns:
+            screenedData (list): list of x,y coordinates along with total charge at
+            a given height along with that height.
+        """
+        threshold = self.reconInfo['Signal Threshold']
+        screenedData = []
+        charges = []
+        # Loop through every pixel
+        for elem in groupedData:
+            # Loop through every electron at the pixel
+            for electron in elem[1]:
+                Q = elem[1].count(electron)
+                # Screen charges below the threshold
+                if Q >= threshold and (electron, Q) not in charges:
+                    charges.append((electron, Q))
+            
+            if len(charges) > 0:
+                screenedData.append((int(elem[0][0]), int(elem[0][1]), sorted(charges)))
+            charges = []
+
+        return screenedData
 
     #********************************************************************************#
 
@@ -439,8 +450,7 @@ class Reconstruction:
             if len(newElectrons) > 0:
                 #TODO: find better diffusion metric for diffusion incurred during avalanche
                 newDiffused = self.diffuseData(newElectrons, (transDif/10, transDif/10, lonDif/10)).copy()
-            # Append new electrons to data set
-            avalData.extend(newDiffused)
+                avalData.extend(newDiffused)
 
         # Discretize data to approximate pixels readout
         readoutData = self.discretizeData(avalData, (pitch, pitch, timeRez)).copy()
