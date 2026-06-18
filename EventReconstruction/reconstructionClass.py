@@ -23,10 +23,12 @@ class Reconstruction:
         approximateGain
         groupData
         screenData
-        approximateToT (TODO: improve)
+        _decayEquation
+        convertToSignal
+        approximateToT
         
         TODO (remaining methods)
-        convertToSignal (wrapper for groupData, screenData, and approximate ToT)
+        Wrapper for ToT calculation
         
         ## Wrapper functions ##
         reconstructFIMS
@@ -248,10 +250,10 @@ class Reconstruction:
     #********************************************************************************#
     def screenData(self, groupedData):
         """
-        TODO: see if using an array+masking is better
-        Removes Electrons groups that do not overcome the threshold.
+        Condenses the data down to only the x,y coordinates and the charge profile.
+        
         Args:
-            data (list): list of pixel locations with associated electron heights.
+            groupedData (list): list of pixel locations with associated electron heights.
             Note: assumes data has already been grouped by self.groupData 
             (TODO: consider combining?)
             
@@ -260,99 +262,99 @@ class Reconstruction:
             a given height along with that height.
         """
         threshold = self.reconInfo['Signal Threshold']
-        screenedData = []
+        chargeProfile = []
         charges = []
         # Loop through every pixel
         for elem in groupedData:
             # Loop through every electron at the pixel
             for electron in elem[1]:
                 Q = elem[1].count(electron)
-                # Screen charges below the threshold
-                if Q >= threshold and (electron, Q) not in charges:
+                # Avoid duplicates
+                if (electron, Q) not in charges:
                     charges.append((electron, Q))
             
             if len(charges) > 0:
-                screenedData.append((int(elem[0][0]), int(elem[0][1]), sorted(charges)))
+                chargeProfile.append((int(elem[0][0]), int(elem[0][1]), sorted(charges)))
             charges = []
 
-        return screenedData
+        return chargeProfile
+    #********************************************************************************#
+    
+    def _decayEquation(self, charge, time, startTime):
+        """Equation modeling the decay rate of a signal."""
+        
+        decayRate = self.reconInfo['Signal Decay Rate']
+        chargeHeight = charge*math.e**(-(time-startTime)/decayRate)
+        
+        return chargeHeight
+    
+    #********************************************************************************#
+        
+    def convertToSignal(self, chargeProfile):
+        """
+        Takes the charge profile and converts it to a signal.
+        args:
+            chargeProfile (list): list of positions with the amount of charge at that
+            position.
+        returns:
+            rangeList (list): list of position points
+            netSignal (list): list of signal strengths
+        """
+        minPos = min(list(zip(*chargeProfile))[0])
+        maxPos = max(list(zip(*chargeProfile))[0])
+        rangeList = np.arange(minPos, maxPos+800, 5) #TODO: find max position that ensures ToT always calculable
 
+        decayLists = []
+        for pos, amount in chargeProfile:
+            plotDecay = []
+            for elem in rangeList:
+                if elem < pos:
+                    plotDecay.append(0)
+                else:
+                    plotDecay.append(self._decayEquation(amount, elem, pos))
+            decayLists.append(plotDecay)
+        netSignal = [sum(group) for group in zip(*decayLists)]
+
+        return rangeList, netSignal
+    
     #********************************************************************************#
 
-    def approximateToT(self, timeList):
+    def approximateToT(self, times, signal):
         """
         Approximates the TOT of a given group of electrons.
         
         args:
-            timeList (list): z-positions of electrons converted into arrival time.
+            times (list): list of timestamps for the signal
+            signal (list): list signal strengths 
             
         returns:
             ToTList (list): ToTs for each separable charge bundle.
         """
-        # TODO: improve function (this method "works", but it is very messy)
-        # Find every point where the total charge in the group exceeds the threshold
-        startCharge = []
-        startPoint = []
-        threshold = self.reconInfo['Threshold']
-        decayRate = self.reconInfo['Signal Decay Rate']
+        ToTStart = []
+        ToTEnd = []
+        threshold = self.reconInfo['Signal Threshold']
+        values = range(0,len(signal))
+        prev = 0
         
-        for position in timeList:
-            totalCharge = timeList.count(position)
-            timeList = [z for z in timeList if z != position]
-            if totalCharge > 3:
-                startPoint.append(position)
-                startCharge.append(totalCharge)
-                
-
-        # Determine the crossing points of the ToT
-        startTime = startPoint[0]
-
-        # Equations for ToT decay
-        def decayEquation(charge, time, startTime, decayRate):
-            chargeHeight = charge*math.e**(-(time-startTime)/decayRate)
-            return chargeHeight
-
-        def findCrossing(charge, threshold, startTime, decayRate):
-            crossingTime = -math.log(threshold/charge)*decayRate + startTime
-            return crossingTime
-        
-        ToTList = []
-        activeCharge = startCharge[0]
-        activeTime = startTime
-        testIndex = 0
-        for charge in startCharge:
-            # Verify start time is set. If not, set a start time
-            if not startTime:
-                startTime = startPoint[testIndex]
-                activeCharge = charge
-                activeTime = startPoint[testIndex]
+        #TODO: improve with array or tuple instead of two lists
+        # Scan through the list of points and keep any where that cross the threshold.
+        for index in values:
+            current = signal[index]
+            position = times[index]
             
-            # Check if decay has reached the threshold
-            if decayEquation(activeCharge, startPoint[testIndex], activeTime, decayRate) <= threshold:
-                endTime = findCrossing(activeCharge, threshold, activeTime, decayRate)
-                ToT = abs(endTime - startTime)
-                ToTList.append(ToT)
-                startTime = False
-
-                if charge > threshold:
-                    activeCharge = charge
-                    startTime = startPoint[testIndex]
-                    activeTime = startTime
-                    
-            # Check if decay is reset with later charge
-            elif charge > decayEquation(activeCharge, startPoint[testIndex], activeTime, decayRate):
-                activeCharge = charge
-                activeTime = startPoint[testIndex]
-                
-            testIndex += 1
-        # End ToT loop
-
-        # Find end point of final charge bundle
-        endTime = findCrossing(activeCharge, threshold, activeTime, decayRate)
-        ToT = abs(endTime - startTime)
-        ToTList.append(ToT)
-        startTime = False
-
+            if prev < threshold and current >= threshold:
+                ToTStart.append(position)
+            if prev > threshold and current <= threshold:
+                ToTEnd.append(position)
+            
+            prev = current
+        
+        # Take the list of start and end times and calculate the ToTs
+        if ToTStart:
+            ToTList = [end-start for start,end in list(zip(ToTStart,ToTEnd))]
+        else:
+            ToTList = None
+        
         return ToTList
 
     #********************************************************************************#
@@ -447,11 +449,12 @@ class Reconstruction:
             newElectrons = self.approximateGain((xElec, yElec, zElec)).copy()
             
             # Diffuse each new electron to approximate diffusion during avalanche
-            if len(newElectrons) > 0:
+            if newElectrons:
                 #TODO: find better diffusion metric for diffusion incurred during avalanche
                 newDiffused = self.diffuseData(newElectrons, (transDif/10, transDif/10, lonDif/10)).copy()
                 avalData.extend(newDiffused)
-
+            newDiffused = []
+        
         # Discretize data to approximate pixels readout
         readoutData = self.discretizeData(avalData, (pitch, pitch, timeRez)).copy()
         
