@@ -19,7 +19,7 @@ import re
 import copy
 
 from scipy.optimize import curve_fit
-
+from scipy.special import expit, logit
 
 #Include the analysis object        
 sys.path.insert(1, '../Analysis')
@@ -815,7 +815,7 @@ class FIMS_Simulation:
         return results
     
 #**********************************************************************#
-    def _fitForNextField(self, targetEfficiency, efficiencyValues, targetValue):
+    def _fitForNextField(self, targetEfficiency, efficiencyValues, targetValue, fieldStepLimits=[1, 10]):
         """
         Calculates the next field ratio using a sigmoid fit of historical data.
         Ensures forward progress by enforcing a minimum positive step.
@@ -830,12 +830,12 @@ class FIMS_Simulation:
         """
 
         def mySigmoid(x, k, x0):
-            return 1.0 / (1.0 + np.exp(-k * (x - x0)))
+            return 0.999*expit(k * (x - x0))
         
         targetValue = min(targetValue, 0.999)
             
-        minFieldStep = 1
-        maxFieldStep = 10
+        minFieldStep = fieldStepLimits[0]
+        maxFieldStep = fieldStepLimits[1]
 
         allPrevData = pd.DataFrame(efficiencyValues)
 
@@ -844,64 +844,102 @@ class FIMS_Simulation:
         yErrHigh = allPrevData[f'{targetEfficiency}ErrHigh'].values
         yErrLow = allPrevData[f'{targetEfficiency}ErrLow'].values
         yErrs = np.maximum(yErrLow, yErrHigh)#Use the maximum error for the fit
+        yErrsWeighted = (yErrLow + yErrHigh) / 2.0
 
         lastField = xData[-1]
         lastResult = yData[-1]
+        lastBound = lastResult - 2*yErrLow[-1]
         
         try:
-            # Fit the sigmoid parameters
-            popt, pcov = curve_fit(
-                mySigmoid, xData, yData, 
-                p0=[1.0, np.median(xData)], 
-                sigma=yErrs, absolute_sigma=True
-            )
-            k, x0 = popt
+            numBootstraps = 200
+            bootstrapCurves = []
+            numFails = 0
+
+            for _ in range(numBootstraps):
+                yPerturbed = np.zeros_like(yData)
+                for i in range(len(yData)):
+                    # Randomly decide whether to perturb up or down
+                    if np.random.rand() > 0.5:
+                        yPerturbed[i] = yData[i] + abs(np.random.normal(0, yErrHigh[i]))
+                    else:
+                        yPerturbed[i] = yData[i] - abs(np.random.normal(0, yErrLow[i]))
+
+                yPerturbed = np.clip(yPerturbed, 0.0, 0.999)
+
+                try:
+                    inPopt, _ = curve_fit(
+                        mySigmoid, xData, yPerturbed, 
+                        p0=[0.1, np.median(xData)], 
+                        sigma=yErrsWeighted, absolute_sigma=True,
+                        bounds=([1e-3, -np.inf], [10.0, np.inf])
+                    )
+                    bootstrapCurves.append(inPopt)
+                except Exception:
+                    numFails += 1
+                    continue
+
+            if numFails > 0:
+                print(f'\tFit failed {numFails}/{numBootstraps} times.')
+
+            if lastBound < targetValue:
+                fieldGrid = np.arange(int(lastField), int(self._fieldLimit + 1))
+            else:
+                fieldGrid = np.arange(int(min(xData)), int(self._fieldLimit + 1))
             
-            # Invert the sigmoid to find x for a given y
-            numSolveField = x0 - (1/k) * np.log((1.0 / targetValue) - 1)
+            checkFields = []
 
-            # Find errors of the fit
-            perr = np.sqrt(np.diag(pcov))
+            for inField in fieldGrid:
+                allPredicts = []
+                for inPopt in bootstrapCurves:
+                    allPredicts.append(mySigmoid(inField, inPopt[0], inPopt[1]))
 
-            # The uncertainty in x (field) due to uncertainties in x0 and k
-            kErr = (1.0 / (k**2)) * np.log((1.0 / targetValue) - 1)
-            fieldErr = np.sqrt(perr[1]**2 + (kErr * perr[0])**2)
+                if allPredicts:
+                    lowerBound = np.percentile(allPredicts, 2.27)
+                    if lowerBound >= targetValue:
+                        checkFields.append(inField)
+                
 
-            #shift solution by 2-sigma
-            numSolveField = numSolveField + (2*fieldErr)
-
-            #round step down to int
-            fieldStep = numSolveField - lastField
+            if checkFields:
+                targetField = min(checkFields)
+                fieldStep = targetField - lastField
+                if fieldStep == 0:
+                    fieldStep = minFieldStep      
+            else:
+                print('Warning - No nearby fields at 2-sigma.')
+                fieldStep = maxFieldStep if lastResult < targetValue else minFieldStep
         
         except Exception as e:
-            print(f'Fit failed, falling back to incremental step: {e}')
-            fieldStep = minFieldStep if lastResult <= targetValue else -minFieldStep
+            print(f'Something failed, falling back to incremental step: {e}')
+            if yData.max() < .5:
+                fieldStep = maxFieldStep
+            else:
+                fieldStep = minFieldStep if lastResult <= targetValue else -minFieldStep
 
         #Limit to maximum and minimum step sizes
-        if math.fabs(fieldStep) > maxFieldStep:
+        if abs(fieldStep) > maxFieldStep:
             fieldStep = np.sign(fieldStep) * maxFieldStep
-        if math.fabs(fieldStep) < minFieldStep:
+        if abs(fieldStep) < minFieldStep:
             fieldStep = np.sign(fieldStep) * minFieldStep
 
         #Proposed new field
-        newField = int(lastField + fieldStep)
+        newField = int(np.round(lastField + fieldStep))
 
         #Check to make sure this field has not been tried
-        
         if newField in xData:
             print(f'Warning - Field of {newField} already tried. Step to nearest neighbor...')
-            index = np.where(xData == newField)[0][-1]
-            oldEfficiency = yData[index]
-            oldEffMin = oldEfficiency - yErrLow[index]
+            stepDirection = 1 if fieldStep >= 0 else -1
 
-            stepDirection = 1 if oldEffMin < targetValue else -1
+            searchField = newField
+            while searchField in xData:
+                searchField += stepDirection * minFieldStep
+                
+                #Make sure to not hit a limit
+                if searchField <= 0 or searchField > self._fieldLimit:
+                    stepDirection *= -1
+                    searchField = int(np.round(lastField)) + stepDirection*minFieldStep
 
-            numSteps = 0
-            while numSteps < 3 and newField in xData:
-                numSteps = numSteps+1
-                newField = newField + stepDirection*minFieldStep
-
-            print(f'Took {numSteps} steps to {newField}.')
+            newField = searchField
+            print(f'\tStepped to field: {newField}')    
 
         return newField
 
@@ -921,21 +959,28 @@ class FIMS_Simulation:
         """
 
         numIterations = len(efficiencyValues)
+        curField = int(self._param['fieldRatio'])
 
         # Determine new field strength
-        initialStep = 5 #TODO - This can be adjusted
-
         if numIterations == 0:
-            newField = self._param['fieldRatio']
+            newField = curField
 
         elif numIterations == 1:
-            newField = self._param['fieldRatio'] + initialStep
+            initialStep = 25 if curField < 50 else 5 #TODO - This can be adjusted
+            newField = curField + initialStep
 
         # Determine new field from fit
         else:
-            newField = self._fitForNextField(targetEfficiency, efficiencyValues, targetValue)
+            maxEfficiency = max(run[f'{targetEfficiency}Eff'] for run in efficiencyValues)
+            maxRun = next(run for run in efficiencyValues if run[f'{targetEfficiency}Eff'] == maxEfficiency)
+            maxStopCondition = maxRun['stopCondition']
+
+            fineSearch = maxStopCondition == 'CONVERGED' and maxEfficiency >= targetValue
+            fieldStepLimits = [1, 5] if fineSearch else [5, 25]
+
+            newField = self._fitForNextField(targetEfficiency, efficiencyValues, targetValue, fieldStepLimits)
         
-        return newField
+        return int(newField)
 
 #**********************************************************************#
     def _findMinimumField(self, targetEfficiency='net', targetValue=.95, threshold=10):
@@ -959,23 +1004,14 @@ class FIMS_Simulation:
         self.setParameters({'numAvalanche': 5000})#More is better. Adjust as needed.
         
         efficiencyAtField = []
-        fieldValues = []
+        fieldValues = set()
         iterNo = 0
+
+        newField = self._getNextField(targetEfficiency, efficiencyAtField, targetValue)
+        fieldValues.add(newField)
 
         while iterNo <= self._iterationNumberLimit:
             iterNo += 1
-
-            newField = self._getNextField(targetEfficiency, efficiencyAtField, targetValue)
-
-            if newField > self._fieldLimit:
-                print(f'Warning - Field ratio exceeds limit. Escaping...')
-                break
-
-            if newField in fieldValues:
-                print(f'Warning - Repeat field. Escaping.')
-                break
-            fieldValues.append(newField)
-
             self.setParameters({'fieldRatio': newField})
             print(f'Iteration {iterNo}: Field ratio = {newField}')
 
@@ -989,24 +1025,41 @@ class FIMS_Simulation:
             efficiencyAtField.append(runResults)
 
             currentEff = runResults[f'{targetEfficiency}Eff']
+            errLow = runResults[f'{targetEfficiency}ErrLow']
+            errHigh = runResults[f'{targetEfficiency}ErrHigh']
+            lowBound = currentEff - 2*errLow
             
             print(
-                f'\tResult: {runResults[f"{targetEfficiency}Eff"]*100:.2f} +/- '
-                f'({runResults[f"{targetEfficiency}ErrHigh"]*100:.2f}/'
-                f'{runResults[f"{targetEfficiency}ErrLow"]*100:.2f})% '
+                f'\tResult: {currentEff*100:.2f} +/- '
+                f'({errHigh*100:.2f}/{errLow*100:.2f})'
                 f'(Stop Condition: {runResults["stopCondition"]})'
             )
+
+            nextField = self._getNextField(targetEfficiency, efficiencyAtField, targetValue)
+            if lowBound > targetValue:
+                if nextField == newField or nextField in fieldValues:
+                    print('CONVERGED')
+                    break
+            
+            if nextField > self._fieldLimit:
+                print(f'Warning - Proposed field exceeds field limit. Escaping...')
+                break
+
+            newField = nextField
+            fieldValues.add(newField)
         #End of find field loop
 
         allResults = pd.DataFrame(efficiencyAtField)
         converged = allResults[allResults['stopCondition'] == 'CONVERGED']
-        isEfficient = converged[converged[f'{targetEfficiency}Eff'] >= targetValue]
+        converged['lowerBound2Sigma'] = converged[f'{targetEfficiency}Eff'] - (2 * converged[f'{targetEfficiency}ErrLow'])
+        isEfficient = converged[converged['lowerBound2Sigma'] >= targetValue]
 
         if not isEfficient.empty:
             finalField = int(isEfficient['fieldRatio'].min())
             print(f'Solution found: Minimum field ratio = {finalField}')
         else:
-            finalField = int(allResults['fieldRatio'].iloc[-1])
+            closestField = converged['lowerBound2Sigma'].idxmax()
+            finalField = int(converged['fieldRatio'].loc[closestField])
             print(f'Warning: Target not reached. Closest field: {finalField}')
 
         saveParam['fieldRatio'] = finalField
