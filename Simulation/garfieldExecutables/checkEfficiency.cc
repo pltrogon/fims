@@ -283,7 +283,6 @@ int main(int argc, char * argv[]) {
 
         }//end of avalanche bunch loop
         std::cout << "Done " << numInitialElectrons << " trials." << std::endl;
-        std::cerr << "Number of surpressed Garfield errors: " << numFailure << std::endl;
 
         numInBunch = 100;//do bunches of 100 after first iteration
 
@@ -315,11 +314,13 @@ int main(int argc, char * argv[]) {
                 return -1;
         }
 
-        if(activeEff->maxValue < targetEfficiency || activeEff->minValue >= targetEfficiency){
+        double sigma2bound = activeEff->meanValue - (2*activeEff->lowError);
+        if(activeEff->maxValue < targetEfficiency || sigma2bound >= targetEfficiency){
             runAvalanche = false;
         }
     }//End of all avalanches
 
+    std::cerr << "Number of surpressed Garfield errors: " << numFailure << std::endl;
 
     //***** Output efficiency value *****//	
     //create output file
