@@ -926,6 +926,10 @@ class FIMS_Simulation:
 
         #Check to make sure this field has not been tried
         if newField in xData:
+
+            if lastBound >= targetValue:
+                return newField
+            
             print(f'Warning - Field of {newField} already tried. Step to nearest neighbor...')
             stepDirection = 1 if fieldStep >= 0 else -1
 
@@ -973,10 +977,13 @@ class FIMS_Simulation:
         else:
             maxEfficiency = max(run[f'{targetEfficiency}Eff'] for run in efficiencyValues)
             maxRun = next(run for run in efficiencyValues if run[f'{targetEfficiency}Eff'] == maxEfficiency)
-            maxStopCondition = maxRun['stopCondition']
 
-            fineSearch = maxStopCondition == 'CONVERGED' and maxEfficiency >= targetValue
-            fieldStepLimits = [1, 5] if fineSearch else [5, 25]
+            # Do a broad search if target has not yet been reached.
+            # Coarse search if it has but without 2-sigma convergence.
+            # Fine-search thereafter.
+            fieldStepLimits = (
+                [1, 5] if maxRun['stopCondition'] == 'CONVERGED' else [3, 10]
+            ) if maxEfficiency >= targetValue else [5, 25]
 
             newField = self._fitForNextField(targetEfficiency, efficiencyValues, targetValue, fieldStepLimits)
         
