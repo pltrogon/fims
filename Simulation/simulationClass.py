@@ -881,10 +881,15 @@ class FIMS_Simulation:
             if numFails > 0:
                 print(f'\tFit failed {numFails}/{numBootstraps} times.')
 
-            if lastBound < targetValue:
-                fieldGrid = np.arange(int(lastField), int(self._fieldLimit + 1))
-            else:
-                fieldGrid = np.arange(int(min(xData)), int(self._fieldLimit + 1))
+            failFields = [
+                run['fieldRatio'] for run in efficiencyValues 
+                if (run[f'{targetEfficiency}Eff'] - 2 * run[f'{targetEfficiency}ErrLow']) < targetValue
+            ]
+            fieldFloor = int(max(failFields) + 1) if failFields else int(min(xData))
+            searchMin = max(fieldFloor, int(min(xData)))
+
+            gridStart = max(int(lastField), searchMin) if lastBound < targetValue else searchMin            
+            fieldGrid = np.arange(gridStart, int(self._fieldLimit + 1))
             
             checkFields = []
 
@@ -982,8 +987,8 @@ class FIMS_Simulation:
             # Coarse search if it has but without 2-sigma convergence.
             # Fine-search thereafter.
             fieldStepLimits = (
-                [1, 5] if maxRun['stopCondition'] == 'CONVERGED' else [3, 10]
-            ) if maxEfficiency >= targetValue else [5, 25]
+                [1, 5] if maxRun['stopCondition'] == 'CONVERGED' else [5, 10]
+            ) if maxEfficiency >= targetValue else [10, 25]
 
             newField = self._fitForNextField(targetEfficiency, efficiencyValues, targetValue, fieldStepLimits)
         
@@ -1008,7 +1013,7 @@ class FIMS_Simulation:
         ]))
 
         saveParam = self.getAllParam()
-        self.setParameters({'numAvalanche': 5000})#More is better. Adjust as needed.
+        self.setParameters({'numAvalanche': 10000})#More is better. Adjust as needed.
         
         efficiencyAtField = []
         fieldValues = set()
@@ -1057,7 +1062,7 @@ class FIMS_Simulation:
         #End of find field loop
 
         allResults = pd.DataFrame(efficiencyAtField)
-        converged = allResults[allResults['stopCondition'] == 'CONVERGED']
+        converged = allResults[allResults['stopCondition'] == 'CONVERGED'].copy()
         converged['lowerBound2Sigma'] = converged[f'{targetEfficiency}Eff'] - (2 * converged[f'{targetEfficiency}ErrLow'])
         isEfficient = converged[converged['lowerBound2Sigma'] >= targetValue]
 
