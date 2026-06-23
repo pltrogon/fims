@@ -651,3 +651,46 @@ def getAsymErrs(eff, effErr):
     errorHigh = beta.ppf(0.84, success, fail) - eff
 
     return errorLow, errorHigh
+
+#********************************************************************************#
+def plotAllEfficiencies():
+    """
+    TODO
+    """
+
+    runData = pd.read_csv('../Data/allEfficiencyResults.csv')
+    runData.sort_values(by='fieldRatio', inplace=True)
+
+    fig = plt.figure(figsize=(8, 5))
+
+    plt.errorbar(
+        runData['fieldRatio'], runData['collectionEff'], 
+        yerr=[runData['collectionErrLow'], runData['collectionErrHigh']],
+        c='r', ls='-', marker='x',
+        label='Collection Efficiency'
+    )
+
+    plt.errorbar(
+        runData['fieldRatio'], runData['detectionEff'], 
+        yerr=[runData['detectionErrLow'], runData['detectionErrHigh']],
+        c='b', ls='-', marker='x',
+        label='Detection Efficiency'
+    )
+
+    plt.errorbar(
+        runData['fieldRatio'], runData['netEff'], 
+        yerr=[runData['netErrLow'], runData['netErrHigh']],
+        c='g', ls='-', marker='x',
+        label='Net Efficiency'
+    )
+
+    plt.axhline(.95, c='m', ls=':', label='Target Efficiency = 95%')
+    plt.title('Minimum Field Finder')
+    plt.xlabel('Field Ratio')
+    plt.ylabel('Efficiency (%)')
+    plt.legend()
+    plt.grid()
+    plt.tight_layout()
+    plt.show()
+
+    return fig
