@@ -392,17 +392,18 @@ class FIMS_Simulation:
         return
 
 #**********************************************************************#
-    def _resetParam(self, verbose=True):
+    def resetParam(self, verbose=True):
         """
-        Resets the simulation to the default parameters.
+        Resets the simulation to the default parameters and removes any geometry links.
     
         Args:
             verbose (bool): Option available to supress reset notification.
         """
         self._param = self._defaultParam()
+        self._geometry = None
     
         if verbose:
-            print('Parameters have been reset.')
+            print('Simulation have been reset.')
         
         return
 
@@ -518,21 +519,18 @@ class FIMS_Simulation:
 
 #**********************************************************************#
     def _runGarfield(self, executable='runAvalanche', **kwargs):
-        #TODO - Can we consolidate any of these executables?
         """
         Runs a Garfield++ simulation with the specified executable.
 
         Args:
             executable (str): The name of the Garfield++ executable to run. Options are:
                 - 'runAvalanche': Simulates electron avalanches for the central pad.
-
                 - 'runFullField': Generates field lines that populate the full unit cell.
                 - 'runEfficiency': Simulates the efficiency for a given field strength. Requires additional arguments:
                     - targetEfficiency (str): Name of efficiency to consider (net, detection, collection).
                     - targetValue (float): The target efficiency to achieve (default: 0.95).
                     - threshold (int): The number of electrons to consider an avalanche successful (default: 10).
         """
-        #TODOHERE
 
         executables = [
             'runAvalanche',
@@ -975,7 +973,7 @@ class FIMS_Simulation:
             newField = curField
 
         elif numIterations == 1:
-            initialStep = 25 if curField < 50 else 5 #TODO - This can be adjusted
+            initialStep = 25 if curField < 50 else 5 #Can be adjusted
             newField = curField + initialStep
 
         # Determine new field from fit
@@ -1087,6 +1085,7 @@ class FIMS_Simulation:
         """
         TODO - Consider if this is better than just printing the raw values (easier
         to copy + paste)
+        Unused?
 
         Prints the results of the field search in a box format.
 
@@ -1587,4 +1586,43 @@ class FIMS_Simulation:
         optimalFieldData = pd.read_pickle(filename)  
 
         return optimalFieldData
+    
+#**********************************************************************#
+    def getMinimumField(self, initialField=None):
+        """
+        Gets the minimum field required to achieve a net efficiency > 95%.
+        Plots the efficiencies from the field search trials.
+
+        Args:
+            initialField (int): Initial field ratio to begin search.
+
+        Returns:
+            int: Minimum field solution.
+        """
+        from functionsFIMS import plotAllEfficiencies
+
+        #Ensure all parameters exist
+        self._checkParam()
+
+        #Get absolute drift field value
+        driftField = self._param['driftField']
+        print(f'Finding minimum field ratio for geometry with drift field: {driftField} V/cm')
+
+        #Choose initial field ratio guess
+        if initialField is not None:
+            minFieldGuess = initialField
+        else:
+            minFieldGuess = 10
+
+        self.setParameters({'fieldRatio': minFieldGuess})
+
+        #Generate the FEM geometry
+        self._generateGeometry()
+
+        # Determine minimum field ratio
+        minFieldSolution = self._findMinimumField()
+
+        _ = plotAllEfficiencies()
+
+        return minFieldSolution
 
