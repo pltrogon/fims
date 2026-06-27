@@ -50,9 +50,7 @@ class Reconstruction:
         ## Wrapper functions ##
         reconstructFIMS
         reconstructBEAST
-        reconstructMigdal (TODO: is this actually different from BEAST in terms of function?)
-                
-        TODO:
+        reconstructMigdal (TODO: functionally the same as BEAST?)
         GridPix wrapper
     """
     #********************************************************************************#
@@ -69,8 +67,15 @@ class Reconstruction:
         # Set constant values
         self.timeRez = 25 # microns
         self.initialDriftDistance = 25 # cm
-        self.transDifCoef = 320 # microns/sqrt(cm)
-        self.lonDifCoef = 200 # microns/sqrt(cm)
+        
+        # Values from Tanner sim
+        #self.transDifCoef = 320 # microns/sqrt(cm)
+        #self.lonDifCoef = 200 # microns/sqrt(cm)
+        
+        # Values from Majd paper
+        self.transDifCoef = 136 # microns/sqrt(cm)
+        self.lonDifCoef = 114 # microns/sqrt(cm)
+        
         
         return
     
@@ -449,8 +454,8 @@ class Reconstruction:
         )
         
         # Remove depreciated columns and rows with no ToT
-        readoutData = readoutData.dropna(how='any')
         readoutData.drop(columns=['signal','charge profile', 'z'], inplace=True)
+        readoutData = readoutData.dropna(how='any')
         
         return readoutData
     
@@ -458,16 +463,13 @@ class Reconstruction:
     ############## Reconstruction Wrapper Functions for Specific Setups ##############
     #********************************************************************************#
     
-    def reconstructFIMS(self, includeRaw=False):
+    def reconstructFIMS(self):
         """
         Approximates an event reconstruction using a FIMS readout.
         
         Amplification produced by a thin aluminum mesh that induces amplification 
         below it. Uses a pixel-pad readout with instant reset time, enabling clear 
         distinction of electrons in the vertical direction.
-        
-        args:
-            includeRaw (bool): optionally include raw data in plot.
         
         returns:
             FIMSfig: matplotlib figure
@@ -478,9 +480,10 @@ class Reconstruction:
         timeRez = self.timeRez
         transDif = self.transDifCoef*math.sqrt(self.initialDriftDistance)
         lonDif = self.lonDifCoef*math.sqrt(self.initialDriftDistance)
+        firstDifWidths = (transDif, transDif, lonDif)
         
         # Apply Gaussian smear to approximate diffusion
-        smearData = self.diffuseData(self.rawData, (transDif, transDif, lonDif))
+        smearData = self.diffuseData(self.rawData, firstDifWidths)
 
         # Discretize data to approximate falling into grid holes
         discreteData = self.discretizeData(smearData, (pitch, pitch, 0))
@@ -489,31 +492,43 @@ class Reconstruction:
         # second time. TODO: data should probably still be avalanched
         
         ## Plot Data ##
-        # Create figure
-        FIMSfig = plt.figure()
-        FIMS3D = FIMSfig.add_subplot(projection='3d')
-            
+        # Create figures
+        FIMSfig = plt.figure(figsize=(10, 10))
+        FIMS3D = FIMSfig.add_subplot(221, projection='3d')
+        FIMS2D = FIMSfig.add_subplot(222)
+        
+        # Plot data in 2D and 3D
         FIMS3D.scatter(
             discreteData['x'], 
             discreteData['y'],
-            s=.02,
+            discreteData['z'],
+            s=.01,
             c='g',
-            label=f'Binned Fims Data [Pitch = {pitch} (\u03BCm)]'
+            label='FIMS Data'
+        )
+
+        FIMS2D.scatter(
+            discreteData['x'], 
+            discreteData['y'],
+            s=.01,
+            c='g',
+            label='FIMS Data'
         )
         
-        if includeRaw:
-            FIMS3D.scatter(
-                self.rawData['x'],
-                self.rawData['y'],
-                s=.01,
-                c='b',
-                label = 'Raw Data'
-            )
+        # Add labels and adjust formatting
+        FIMS3D.set_xlabel('x pixels')
+        FIMS3D.set_ylabel('y pixels')
+        FIMS3D.set_zlabel('z height')
+        FIMS3D.set_title('FIMS 3D Event Reconstruction')
 
-        plt.xlabel('x pixels')
-        plt.ylabel('y pixels')
-        plt.legend(markerscale=20)
-        plt.title('FIMS Event Reconstruction')
+        FIMS2D.set_xlabel('x pixels')
+        FIMS2D.set_ylabel('y pixels')
+        FIMS2D.set_title('FIMS 2D Event Reconstruction')
+        FIMS2D.yaxis.set_label_position("right")
+        FIMS2D.yaxis.tick_right()
+        FIMS2D.grid(True, alpha=.5)
+
+        plt.subplots_adjust(wspace=0.5)
         
         return FIMSfig
         
@@ -712,19 +727,42 @@ class Reconstruction:
         zPlot = [z for x,y,z,t in extendedList]
         tPlot = [t for x,y,z,t in extendedList]
 
-        gridPixFig = plt.figure()
-        subPlot = gridPixFig.add_subplot(111, projection='3d')
+        gridPixFig = plt.figure(figsize=(10, 10))
+        GridPix3D = gridPixFig.add_subplot(221, projection='3d')
+        GridPix2D = gridPixFig.add_subplot(222)
 
-        # Create scatter plot with color mapping
-        subPlotRef = subPlot.scatter(xPlot, yPlot, zPlot, s=.1, c=tPlot, cmap='viridis')
-        colorBar = plt.colorbar(subPlotRef, ax=subPlot, pad=0.1)
+        # Create 2D and 3D scatter plots with color mapping
+        GridPix3DRef = GridPix3D.scatter(
+            xPlot,
+            yPlot,
+            zPlot,
+            s=.1,
+            c=tPlot,
+            cmap='viridis'
+        )
         
-        # Set labels
-        subPlot.set_xlabel('x pixels')
-        subPlot.set_ylabel('y pixels')
-        subPlot.set_zlabel('Height')
+        GridPix2DRef = GridPix2D.scatter(
+            xPlot,
+            yPlot,
+            s=.1,
+            c=tPlot,
+            cmap='viridis'
+        )
+        colorBar = plt.colorbar(GridPix2DRef, ax=GridPix2D)
+        
+        # Add labels and adjust formatting
+        GridPix3D.set_xlabel('x pixels')
+        GridPix3D.set_ylabel('y pixels')
+        GridPix3D.set_zlabel('z height')
+        GridPix3D.set_title('GridPix 3D Event Reconstruction')
+
+        GridPix2D.set_xlabel('x pixels')
+        GridPix2D.set_ylabel('y pixels')
         colorBar.set_label('ToT')
-        plt.title('GridPix Event Reconstruction')
+        GridPix2D.set_title('GridPix 2D Event Reconstruction')
+        GridPix2D.grid(True, alpha=.5)
+
+        plt.subplots_adjust(wspace=0.6)
         
         return gridPixFig
 
