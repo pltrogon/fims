@@ -201,7 +201,7 @@ class Reconstruction:
                 return 0
 
         inputData['charge profile'] = inputData['z'].apply(lambda z: getChargeProfile(z))
-
+        
         return inputData
     
     #********************************************************************************#
@@ -282,7 +282,7 @@ class Reconstruction:
         
         # Verify that the signal crosses threshold at least once
         if len(aboveID) == 0:
-            return (ToTStart, ToTList)
+            return np.nan
         
         # Find all the upwards crossing points
         ID = 0
@@ -448,8 +448,9 @@ class Reconstruction:
             columns = ['ToT']
         )
         
-        # Remove depreciated columns
-        readoutData.drop(columns=['signal','charge profile'], inplace=True)
+        # Remove depreciated columns and rows with no ToT
+        readoutData = readoutData.dropna(how='any')
+        readoutData.drop(columns=['signal','charge profile', 'z'], inplace=True)
         
         return readoutData
     
@@ -538,8 +539,8 @@ class Reconstruction:
         lonDif = self.lonDifCoef*math.sqrt(self.initialDriftDistance)
         firstDifWidths = (transDif, transDif, lonDif)
         
-        secondTransDif = self.transDifCoef*math.sqrt(self.reconInfo['Standoff'])
-        secondLonDif = self.lonDifCoef*math.sqrt(self.reconInfo['Standoff'])
+        secondTransDif = self.transDifCoef*math.sqrt(self.reconInfo['Standoff']/10000.)
+        secondLonDif = self.lonDifCoef*math.sqrt(self.reconInfo['Standoff']/10000.)
         secondDifWidths = (secondTransDif, secondTransDif, secondLonDif)
         
         # Apply Gaussian smear to approximate diffusion
@@ -600,8 +601,8 @@ class Reconstruction:
         lonDif = self.lonDifCoef*math.sqrt(self.initialDriftDistance)
         firstDifWidths = (transDif, transDif, lonDif)
         
-        secondTransDif = self.transDifCoef*math.sqrt(self.reconInfo['Standoff'])
-        secondLonDif = self.lonDifCoef*math.sqrt(self.reconInfo['Standoff'])
+        secondTransDif = self.transDifCoef*math.sqrt(self.reconInfo['Standoff']/10000.)
+        secondLonDif = self.lonDifCoef*math.sqrt(self.reconInfo['Standoff']/10000.)
         secondDifWidths = (secondTransDif, secondTransDif, secondLonDif)
         
         # Apply Gaussian smear to approximate initial drift diffusion
@@ -659,69 +660,73 @@ class Reconstruction:
         returns:
             gridpixFig: matplotlib figure
         """
-        ## Extract and calculate relevant data ##
-        # discretization values
+        # Extract and calculate relevant data
         pitch = self.reconInfo['Hole Pitch']
         pixPitch = self.reconInfo['Pixel Pitch']
         timeRez = self.timeRez
         
-        # Diffusion values
         transDif = self.transDifCoef*math.sqrt(self.initialDriftDistance)
         lonDif = self.lonDifCoef*math.sqrt(self.initialDriftDistance)
-        secondTransDif = self.transDifCoef*math.sqrt(self.reconInfo['Standoff'])
-        secondLonDif = self.lonDifCoef*math.sqrt(self.reconInfo['Standoff'])
+        firstDifWidths = (transDif, transDif, lonDif)
         
-        ## Apply Gaussian smear to approximate initial drift diffusion ##
-        smearData = self.diffuseData(self.rawData, (transDif, transDif, lonDif))
+        secondTransDif = self.transDifCoef*math.sqrt(self.reconInfo['Standoff']/10000.)
+        secondLonDif = self.lonDifCoef*math.sqrt(self.reconInfo['Standoff']/10000.)
+        secondDifWidths = (secondTransDif, secondTransDif, secondLonDif)
+        
+        # Apply Gaussian smear to approximate initial drift diffusion
+        smearData = self.diffuseData(self.rawData, firstDifWidths)
 
-        ## Discretize data to approximate falling into grid holes ##
+        # Discretize data to approximate falling into grid holes
         discreteData = self.discretizeData(smearData, (pitch, pitch, 0))
         
-        ## Approximate avalanches ##
-        avalData = discreteData.copy()
-
         # Approximate avalanche
-        electronID = 0
-        for xElec,yElec,zElec in discreteData:
-            # Multiply each individual electron to approximate gain
-            newElectrons = self.approximateGain((xElec, yElec, zElec))
-            
-            # Diffuse each new electron to approximate diffusion during avalanche
-            if newElectrons:
-                newDiffused = self.diffuseData(newElectrons, (secondTransDif, secondTransDif, secondLonDif))
-                avalData.extend(newDiffused)
-            newDiffused = []
-        # End Avalanche loop
-        
-        ## Discretize data to approximate pixels readout ##
-        padData = self.discretizeData(avalData, (pixPitch, pixPitch, timeRez))
+        newElectrons = self.approximateGain(discreteData)   
+        avalData = self.diffuseData(newElectrons, secondDifWidths)
 
-        ## Approximate Signal Readout ##
-        #readoutData = self.approximateReadout(padData) TODO: implement this
-        readoutData = padData.copy()
+        # Discretize data to approximate pixels readout
+        padData = self.discretizeData(avalData, (pitch, pitch, timeRez))
+
+        # Approximate Signal Readout
+        readoutData = self.approximateReadout(padData)
         
         ## Plot GridPix data ##
-        # Extract Data
-        totalXWidth = max(readoutData['x']) - min(readoutData['x'])
-        totalYWidth = max(readoutData['y']) - min(readoutData['y'])
-        numXBins = int(totalXWidth/pixPitch)
-        numYBins = int(totalYWidth/pixPitch)
+        # Get data and combine into single list
+        xPlot = [x for x,y in readoutData['pixel id']]
+        yPlot = [y for x,y in readoutData['pixel id']]
+        zPlot = [z for z,time in readoutData['ToT']]
+        densityPlot = [time for z,time in readoutData['ToT']]
+        fullZip = list(zip(xPlot, yPlot, zPlot, densityPlot))
+
+        # Unpack pixels with multiple charge bundles
+        extendedList = []
+        for x,y,z,t in fullZip.copy():
+            if len(z) > 1:
+                for height, time in list(zip(z,t)):
+                    extendedList.append((int(x),int(y),int(height),int(time)))
+            else:
+                extendedList.append((int(x),int(y),int(z[0]),int(t[0])))
+
+        # Re-seperate data for plotting
+        xPlot = [x for x,y,z,t in extendedList]
+        yPlot = [y for x,y,z,t in extendedList]
+        zPlot = [z for x,y,z,t in extendedList]
+        tPlot = [t for x,y,z,t in extendedList]
+
+        gridPixFig = plt.figure()
+        subPlot = gridPixFig.add_subplot(111, projection='3d')
+
+        # Create scatter plot with color mapping
+        subPlotRef = subPlot.scatter(xPlot, yPlot, zPlot, s=.1, c=tPlot, cmap='viridis')
+        colorBar = plt.colorbar(subPlotRef, ax=subPlot, pad=0.1)
         
-        # Create figure
-        gridpixFig = plt.figure()
-        plt.hist2d(
-            readoutData['x'],
-            readoutData['y'],
-            bins=(numXBins, numYBins)
-        )
-        
-        # Add plot elements
-        plt.colorbar().set_label('Charge')
-        plt.xlabel('x pixels')
-        plt.ylabel('y pixels')
+        # Set labels
+        subPlot.set_xlabel('x pixels')
+        subPlot.set_ylabel('y pixels')
+        subPlot.set_zlabel('Height')
+        colorBar.set_label('ToT')
         plt.title('GridPix Event Reconstruction')
         
-        return gridpixFig
+        return gridPixFig
 
     #********************************************************************************#
 
