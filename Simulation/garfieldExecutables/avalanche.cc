@@ -478,7 +478,6 @@ int main(int argc, char * argv[]) {
   std::cout << "Starting " << simParams->numAvalanche << " avalanches." << std::endl;
 
   //*** Set up parallel avalanche loops ***//
-  omp_set_num_threads(24); // TODO: download more RAM to lab computer
   std::vector<std::string> parallelFileNames;
   #pragma omp parallel
   {
