@@ -51,3 +51,28 @@ while(EXECUTABLES)
     
     target_link_libraries(${EXE_NAME} PRIVATE ${COMMON_LIBS})
 endwhile()
+
+# --- Verify Garfield and ROOT ABI Compatibility ---
+if(Garfield_FOUND AND ROOT_FOUND)
+    include(CheckCXXSourceCompiles)
+    
+    # We use a core Garfield symbol to force the linker to check 
+    # if libGarfield can successfully resolve its own internal ROOT symbols.
+    set(CMAKE_REQUIRED_LIBRARIES Garfield::Garfield ROOT::Core)
+    check_cxx_source_compiles("
+        #include <Garfield/MediumMagboltz.hh>
+        int main() {
+            Garfield::MediumMagboltz med;
+            return 0;
+        }
+    " GARFIELD_ABI_MATCHES)
+    
+    if(NOT GARFIELD_ABI_MATCHES)
+        message(FATAL_ERROR "\n\n[FATAL ABI MISMATCH]\nThe central Garfield++ library found via GARFIELDPATH is broken or out of sync with the system ROOT library.\nTo fix this, please navigate to your central Garfield++ directory, clear its build cache, and run:\ncmake -DCMAKE_INSTALL_PREFIX=../install .. && make install\n\n")
+    endif()
+endif()
+
+if(ROOT_FOUND)
+    get_filename_component(ROOT_LIB_DIR "${ROOT_Hist_LIBRARY}" DIRECTORY)
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/ROOT_LIB_PATH.txt" "${ROOT_LIB_DIR}")
+endif()

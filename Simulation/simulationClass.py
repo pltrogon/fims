@@ -288,18 +288,12 @@ class FIMS_Simulation:
 #**********************************************************************#
     def _setupSimulation(self):
         """
-        Initializes Garfield++ and creates an avalanche executable.
-        
-        Reads the Garfiled++ source path, and ensures a log and build directory.
-        Compiles the executable using cmake and make.
-        Initializes a simulation run counter if it does not already exist.
-    
-        Note: If a segmentation fault occurs, it is most likely that the
-              Garfield++ library is not sourced correctly.
-    
+        Initializes Garfield++ and creates project executables. Automatically 
+        handles cross-platform dynamic linking environments safely.
         """
+        import shutil
 
-        #Check for necessary pathways and create if not present
+        # Check for necessary pathways and create if not present
         paths = [
             'log', 
             'build',
@@ -309,16 +303,23 @@ class FIMS_Simulation:
         for inPath in paths:
             os.makedirs(inPath, exist_ok=True)
 
-        # Get garfield path into environment
+        # Get garfield path variables directly into active environment
         newEnv = self._getGarfieldEnvironment()
         os.environ.update(newEnv)
-        
-        #Make executables
-        makeBuild = ('cmake .. && make')
 
-        # Change to the build directory and run cmake and make
+        # Clean up local project build directory to force fresh discovery
         originalCWD = os.getcwd()
         os.chdir('build')
+
+        for item in ['CMakeCache.txt', 'CMakeFiles']:
+            if os.path.exists(item):
+                if os.path.isdir(item):
+                    shutil.rmtree(item)
+                else:
+                    os.remove(item)
+        
+        # Use CMake to configure and build the executables
+        makeBuild = 'cmake .. && make'
         
         try:
             subprocess.run(
@@ -329,12 +330,24 @@ class FIMS_Simulation:
                 capture_output=True,
                 text=True
             )
+
+            # Extract the exact ROOT path found by CMake for the runtime linker
+            if os.path.exists('ROOT_LIB_PATH.txt'):
+                with open('ROOT_LIB_PATH.txt', 'r') as f:
+                    discovered_root_lib = f.read().strip()
+                
+                for var in ["DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"]:
+                    current_path = os.environ.get(var, "")
+                    if discovered_root_lib not in current_path:
+                        os.environ[var] = f"{discovered_root_lib}:{current_path}".strip(":")
+
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f'ERROR - Failed to build project: {e.stderr}')
+            # If our CMake FATAL_ERROR trips, it will bubble up here 
+            raise RuntimeError(f'ERROR - Failed to build project:\n{e.stderr}')
         finally:
             os.chdir(originalCWD)
 
-        #Check for run number file and create if not present
+        # Check for run number file and create if not present
         if not os.path.exists('runNo'):
             self.setRunNumber()
                 
