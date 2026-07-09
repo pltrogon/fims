@@ -223,7 +223,10 @@ class FIMS_Simulation:
         """
         Ensures that the run number is valid.
         """
-        runNumber = self.getParam('runNumber')
+        runNumber = self._getRunNumber()
+
+        if runNumber != self.getParam('runNumber'):
+            raise RuntimeError('Error - Run number mismatch.')
         if runNumber < 1:
             raise ValueError(f'Error - Invalid run number: {runNumber}.')
         
@@ -449,8 +452,12 @@ class FIMS_Simulation:
         """
         try:
             currentRun = self._param['runNumber']
+            nextRun = currentRun+1
             with open('runNo', 'w') as file:
-                file.write(str(currentRun + 1))
+                file.write(str(nextRun))
+            
+            self._param['runNumber'] = self._getRunNumber()
+            
         except Exception as e:
             print(f'Warning: Could not increment run number: {e}')
         return
@@ -543,12 +550,14 @@ class FIMS_Simulation:
                     - targetEfficiency (str): Name of efficiency to consider (net, detection, collection).
                     - targetValue (float): The target efficiency to achieve (default: 0.95).
                     - threshold (int): The number of electrons to consider an avalanche successful (default: 10).
+                - 'runBreakdown': Computes the Paschen breakdown fields for a given gas.
         """
 
         executables = [
             'runAvalanche',
             'runEfficiency',
-            'runFullField'
+            'runFullField',
+            'runBreakdown'
         ]
 
         if executable not in executables:
@@ -702,7 +711,7 @@ class FIMS_Simulation:
         #Solve fields and run Garfield
         self._solveEFields(solveWeighting=True)
         self._runGarfield()
-        
+
         return runNo
 
 #**********************************************************************#
@@ -1639,3 +1648,11 @@ class FIMS_Simulation:
 
         return minFieldSolution
 
+#**********************************************************************#
+    def getBreakdown(self):
+        '''TODO'''
+
+        self._checkGasComp()
+        self._runGarfield('runBreakdown')
+
+        return

@@ -2168,7 +2168,8 @@ class runData:
         avalancheLimit = self.getRunParameter('Avalanche Limit')
 
         if threshold > avalancheLimit:
-            raise ValueError('Error - Threshold higher than simulation limit.')
+            print('Error - Threshold higher than simulation limit.')
+            threshold = avalancheLimit-1
         
         numSimulated = self.getRunParameter('Number of Avalanches')
         numAvalanches = len(allAvalancheData)
@@ -2187,7 +2188,7 @@ class runData:
         simEff = (numAboveThresh+1)/(numAvalanches+2)
         varience = ((numAboveThresh+1)*(numAboveThresh+2))/((numAvalanches+2)*(numAvalanches+3)) - simEff*simEff
 
-        simEffErr = math.sqrt(varience)
+        simEffErr = math.sqrt(max(0, varience))
 
         simEffErrLow, simEffErrHigh = functionsFIMS.getAsymErrs(simEff, simEffErr)
 
@@ -2223,7 +2224,8 @@ class runData:
         avalancheLimit = self.getRunParameter('Avalanche Limit')
 
         if threshold > avalancheLimit:
-            raise ValueError('Error - Threshold higher than simulation limit.')
+            print('Error - Threshold higher than simulation limit.')
+            threshold = avalancheLimit-1
         
         numSimulated = self.getRunParameter('Number of Avalanches')
         totalAvalanches = len(allAvalancheData)
@@ -2243,7 +2245,7 @@ class runData:
         simEff = (numAboveThresh+1)/(numAvalanches+2)
         varience = ((numAboveThresh+1)*(numAboveThresh+2))/((numAvalanches+2)*(numAvalanches+3)) - simEff*simEff
 
-        simEffErr = math.sqrt(varience)
+        simEffErr = math.sqrt(max(0, varience))
 
         errorLow, errorHigh = functionsFIMS.getAsymErrs(simEff, simEffErr)
 
@@ -2273,7 +2275,8 @@ class runData:
             
         except:#TODO - there may be a better way to handle this within _fitAvalancheSize
             print('Warning - Error in Polya Fit.')
-            return None, None
+
+            return {'theta': 0, 'thetaErr': 1, 'gain': 1, 'gainErr':1}
           
         polyaFitResults = {
             'theta': fitResults['fitPolya'].theta,

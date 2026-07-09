@@ -36,6 +36,7 @@ set(EXECUTABLES
     runMagboltz             	magboltz.cc
     runEfficiency               checkEfficiency.cc
     runFullField		        plotFullField.cc
+    runBreakdown                gasBreakdown.cc
 )
 
 # --- Loop to create and link everything ---
