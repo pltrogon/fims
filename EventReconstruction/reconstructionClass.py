@@ -385,7 +385,41 @@ class Reconstruction:
         return discreteDataFrame
 
     #********************************************************************************#
-
+    
+    def avalancheData(self, coordinates, difWidths):
+        """
+        Takes the x,y,z coordinates of an electron dataframe and approximates an avalanche.
+        
+        Note: also applies diffusion to the new electrons
+        
+        args:
+            coordinates (dataframe): the x,y,z coordinates of each initial electron
+            difWidths (tuple, floats): diffusion values for each axis
+        
+        returns:
+            avalData (dataframe): list of x,y,z coordinates for each new electron
+        """
+        sigma = self.reconInfo['Avalanche Sigma']
+        meanGain = self.reconInfo['Gain']
+        index = 0
+        
+        postAvalElec = []
+        while index < len(coordinates['x']): 
+            gain = int(random.gauss(meanGain, sigma))
+            if gain > 0:
+                postAvalElec.append(np.random.normal(
+                    loc=(coordinates['x'][index], coordinates['y'][index], coordinates['z'][index]),
+                    scale=difWidths,
+                    size=(gain,3)
+                ))
+            index+=1
+        
+        postDataFrame = pd.concat([pd.DataFrame(elem, columns=['x','y','z']) for elem in postAvalElec])
+        
+        return postDataFrame
+    
+    #********************************************************************************#
+    
     def approximateGain(self, discreteDataFrame):
         """
         Takes the x,y,z coordinates of an electron dataframe and approximates an avalanche.
@@ -565,9 +599,8 @@ class Reconstruction:
         discreteData = self.discretizeData(smearData, (pitch, pitch, 0))
         
         # Approximate avalanches
-        newElectrons = self.approximateGain(discreteData)
-        avalData = self.diffuseData(newElectrons, secondDifWidths)
-            
+        avalData = self.avalancheData(discreteData, secondDifWidths)
+
         # Discretize data to approximate pixels readout
         readoutData = self.discretizeData(avalData, (pitch, pitch, timeRez))
         
@@ -627,8 +660,7 @@ class Reconstruction:
         discreteData = self.discretizeData(smearData, (pitch, pitch, 0))
         
         # Approximate avalanches
-        newElectrons = self.approximateGain(discreteData)
-        avalData = self.diffuseData(newElectrons, secondDifWidths)
+        avalData = self.avalancheData(discreteData, secondDifWidths)
         
         # Discretize data to approximate pixels readout
         padData = self.discretizeData(avalData, (pixPitch, pixPitch, timeRez))
@@ -695,8 +727,7 @@ class Reconstruction:
         discreteData = self.discretizeData(smearData, (pitch, pitch, 0))
         
         # Approximate avalanche
-        newElectrons = self.approximateGain(discreteData)   
-        avalData = self.diffuseData(newElectrons, secondDifWidths)
+        avalData = self.avalancheData(discreteData, secondDifWidths)
 
         # Discretize data to approximate pixels readout
         padData = self.discretizeData(avalData, (pitch, pitch, timeRez))
