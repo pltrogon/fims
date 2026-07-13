@@ -583,7 +583,7 @@ class runData:
         hole[0] = plt.Circle(
             (0, 0), holeRadius, 
             facecolor='none', edgecolor='k', lw=1,
-            label=f'Hole (r = {holeRadius:.0f} um)'
+            label=f'Hole (r = {holeRadius:.0f} '+ r'$\mu$m)'
         )
         # Neighboring cell holes (#808080 = Grey)
         for i in range(len(neighborX)):
@@ -601,7 +601,7 @@ class runData:
                  facecolor='none', edgecolor='#808080', ls='--', lw=1
             )
 
-        pillar[0].set_label(f'Pillar  (r = {pillarRadius:.0f} um)')
+        pillar[0].set_label(f'Pillar  (r = {pillarRadius:.0f} ' + '$\mu$m)')
 
         # Make figure and add plots
         fig = plt.figure()
@@ -649,11 +649,11 @@ class runData:
         #Add dimensions
         ax1.plot(
             [0, neighborX[4]], [0, neighborY[4]],
-            label=f'Pitch ({pitch:.0f} um)', c='r', ls=':', lw=1
+            label=f'Pitch ({pitch:.0f} ' + r'$\mu$m)', c='r', ls=':', lw=1
         )
         ax1.plot(
             [0, padLength], [0, 0],
-            label=f'Pad Length ({padLength:.0f} um)', c='r', ls='-', lw=1
+            label=f'Pad Length ({padLength:.0f} ' + r'$\mu$m)', c='r', ls='-', lw=1
         )
         ax1.plot(
             [0, 0], [0, holeRadius],
@@ -666,8 +666,8 @@ class runData:
         ax1.set_xlim(-axLim, axLim)
         ax1.set_ylim(-axLim, axLim)
         ax1.set_aspect('equal')
-        ax1.set_xlabel('x (um)')
-        ax1.set_ylabel('y (um)')
+        ax1.set_xlabel(r'x ($\mu$m)')
+        ax1.set_ylabel(r'y ($\mu$m)')
         ax1.legend(loc='center left', bbox_to_anchor=(1, 0.5))
         plt.tight_layout()   
         
@@ -734,8 +734,8 @@ class runData:
                 )
                 axis.add_patch(hole)
 
-                axis.set_xlabel('x (um)')
-                axis.set_ylabel('y (um)')
+                axis.set_xlabel(r'x ($\mu$m)')
+                axis.set_ylabel(r'y ($\mu$m)')
                 axis.set_xlim(-axLim, axLim)
                 axis.set_ylim(-axLim, axLim)
                 axis.set_aspect('equal')
@@ -764,8 +764,8 @@ class runData:
                     c='k', ls='-', lw=2
                 )
                 
-                axis.set_xlabel('x (um)')
-                axis.set_ylabel('z (um)')
+                axis.set_xlabel(r'x ($\mu$m)')
+                axis.set_ylabel(r'z ($\mu$m)')
                 axis.set_xlim(-axLim, axLim)
                 axis.set_ylim(padHeight, cathodeHeight)
 
@@ -793,8 +793,8 @@ class runData:
                     c='k', ls='-', lw=2
                 )
 
-                axis.set_xlabel('y (um)')
-                axis.set_ylabel('z (um)')
+                axis.set_xlabel(r'y ($\mu$m)')
+                axis.set_ylabel(r'z ($\mu$m)')
                 axis.set_xlim(-axLim, axLim)
                 axis.set_ylim(padHeight, cathodeHeight)
                 
@@ -1405,10 +1405,10 @@ class runData:
         
         #Add plot labels
         subZ.set_title('Drift in z')
-        subZ.set_xlabel('Drift in z (um)')
+        subZ.set_xlabel(r'Drift in z ($\mu$m)')
         
         subXY.set_title('Drift in xy Plane')
-        subXY.set_xlabel('Drift in r (um)')
+        subXY.set_xlabel(r'Drift in r ($\mu$m)')
 
         subZ.legend()
         subXY.legend()
@@ -2857,7 +2857,7 @@ class runData:
             ls='--', c='k'
         )
 
-        ax.set_xlabel('z (um)')
+        ax.set_xlabel(r'z ($\mu$m)')
         ax.set_ylabel('Electric Field Strength (kV/cm)')
 
         ax.legend()
