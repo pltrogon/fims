@@ -63,7 +63,7 @@ int main(){
     }
 
     // Header for readability
-    dataFile << "Distance_cm, Distance_um, Field_Vcm, BreakdownVoltage_V" << std::endl;
+    dataFile << "paschenX_Torrcm, paschenY_V, dist_um, breakdownField_kVcm" << std::endl;
 
     //Get the data
     std::cout << "Getting coeficencts..." << std::endl;
@@ -78,12 +78,17 @@ int main(){
 
             if(logAlpha < -5.0){continue;}
 
-            double alpha = std::exp(logAlpha)*gasPressure;
+            double alpha = std::exp(logAlpha);
             double dist_cm = logGammaTerm / alpha;
             double dist_um = dist_cm*1e4;
             double breakdownV = inField*dist_cm;
+            double field_kV = inField/1000.;
 
-            dataFile << dist_cm << "," << dist_um << "," << inField << "," << breakdownV << std::endl;
+            //Paschen parameters
+            double paschenX = dist_cm*gasPressure;
+            double paschenY = breakdownV;
+
+            dataFile << paschenX << ", " << paschenY << ", " << dist_um << ", " << field_kV << std::endl;
         }
     }
 
