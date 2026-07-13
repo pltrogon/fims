@@ -397,8 +397,8 @@ class FIMS_Simulation:
             surrounding (bool): Option to include surrounding cells in the geometry.
         """
 
-        if unitCell not in ['FIMS', 'GridPix']:
-            raise ValueError('Error - Invalid unit cell. Options are "FIMS" and "GridPix".')
+        if unitCell not in ['FIMS', 'GridPix', 'FIMSHexagonal']:
+            raise ValueError('Error - Invalid unit cell.')
         
         self._unitCell = unitCell
         self._surroundingCells = surrounding

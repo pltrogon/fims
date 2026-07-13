@@ -1003,6 +1003,13 @@ class gmshClass:
                 (-pitch/sqrt3, 0, driftLength),
                 (-pitch/sqrt3/2, -pitch/2, driftLength),
                 (pitch/sqrt3/2, -pitch/2, driftLength)
+            ],
+
+            'GridPix': [
+                (0, 0, driftLength), 
+                (pitch/2, 0, driftLength), 
+                (pitch/2, pitch/2, driftLength),
+                (0, pitch/2, driftLength)
             ]
         }
         refinement = refinementOptions[runOption]
