@@ -611,7 +611,7 @@ class runData:
         #Add the pad
         ax1.plot(
             padX, padY, 
-            label='Pad', c='m', lw=1
+            label='Pixel Pad', c='m', lw=1
         )
 
         #Add the cell boundary

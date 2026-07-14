@@ -30,7 +30,7 @@ int main(){
 
 
     // ----- Define Gamma here ----- //
-    const double gamma = 1e-4;
+    const double gamma = 1e-3;
 
 
     // Define the range of Electric Fields
@@ -63,7 +63,7 @@ int main(){
     }
 
     // Header for readability
-    dataFile << "paschenX_Torrcm, paschenY_V, dist_um, breakdownField_kVcm" << std::endl;
+    dataFile << "paschenX_Torrcm,paschenY_V,dist_um,breakdownField_kVcm" << std::endl;
 
     //Get the data
     std::cout << "Getting coeficencts..." << std::endl;
@@ -88,7 +88,7 @@ int main(){
             double paschenX = dist_cm*gasPressure;
             double paschenY = breakdownV;
 
-            dataFile << paschenX << ", " << paschenY << ", " << dist_um << ", " << field_kV << std::endl;
+            dataFile << paschenX << "," << paschenY << "," << dist_um << "," << field_kV << std::endl;
         }
     }
 

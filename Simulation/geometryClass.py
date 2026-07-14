@@ -1012,7 +1012,8 @@ class gmshClass:
                 (0, pitch/2, driftLength)
             ]
         }
-        refinement = refinementOptions[runOption]
+        refineKey = 'FIMSSurrounding' if 'Hexagonal' in runOption else runOption
+        refinement = refinementOptions[refineKey]
         refinementLines = []
         
         firstPoint = self._occ.addPoint(*refinement[0])

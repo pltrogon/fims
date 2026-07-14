@@ -774,7 +774,7 @@ def plotEfficiencyContours(allData, xLabel):
             linewidths=2.5
         )
         plt.clabel(contourLine, inline=True, fontsize=fontsize, fmt=f"{inLevel*100:.0f} %%")
-        plt.plot([], [], c='m', ls=inLine, lw=2.5, label=f"{inLevel*100:.0f}%")
+        plt.plot([], [], c='m', ls=inLine, lw=2.5, label=r"$\epsilon_{\text{Net}}$"+f" = {inLevel*100:.0f}%")
 
     # Plot breakdown region
     xBreakdown = allData['xBreakdown']
