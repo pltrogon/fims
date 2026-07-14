@@ -601,7 +601,7 @@ class runData:
                  facecolor='none', edgecolor='#808080', ls='--', lw=1
             )
 
-        pillar[0].set_label(f'Pillar  (r = {pillarRadius:.0f} ' + '$\mu$m)')
+        pillar[0].set_label(f'Pillar  (r = {pillarRadius:.0f} ' + r'$\mu$m)')
 
         # Make figure and add plots
         fig = plt.figure()

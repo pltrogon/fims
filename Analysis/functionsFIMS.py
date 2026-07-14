@@ -5,9 +5,11 @@ import math
 import matplotlib.pyplot as plt
 import glob
 import pandas as pd
+import json
 
 from scipy.special import gammaincc
 from scipy.stats import beta
+from scipy.interpolate import griddata
 
 
 
@@ -690,6 +692,108 @@ def plotAllEfficiencies():
     plt.ylabel('Efficiency (%)')
     plt.legend()
     plt.grid()
+    plt.tight_layout()
+    plt.show()
+
+    return fig
+
+#********************************************************************************#
+def getOT(hole, pitch):
+    holeArea = math.pi*hole**2
+    inRadius = pitch/2
+    hexArea = 2*math.sqrt(3)*inRadius**2
+
+    return holeArea / hexArea
+
+#********************************************************************************#
+def readScanData(filename):
+    """
+    TODO
+    """
+
+    rawLines = []
+    with open(filename, 'r') as f:
+        for line in f:
+            rawLines.append(json.loads(line))
+
+    flatData = []
+    for run in rawLines:
+        pitch = run['params']['pitch']
+        radius = run['params']['holeRadius']
+        transparency = getOT(radius, pitch)
+        standoff = run['params']['gridStandoff']
+        
+        for result in run['results']:
+            flatData.append({
+                'pitch': pitch,
+                'holeRadius': radius,
+                'transparency': transparency,
+                'standoff': standoff,
+                'fieldRatio': result['fieldRatio'],
+                'netEfficiency': result['efficiencies']['netEff']
+            })
+
+    scanData = pd.DataFrame(flatData)
+
+    return scanData
+
+    
+#********************************************************************************#
+def plotEfficiencyContours(allData, xLabel):
+    """
+    TODO
+    """
+    
+    fontsize = 14
+
+    x = np.array(allData['xData'])
+    y = np.array(allData['yData'])
+    z = np.array(allData['zData'])
+
+    fig = plt.figure(figsize=(10, 6))
+
+    # Plot the data
+    contour = plt.tricontourf(
+        x, y, z,
+        levels=np.linspace(0, 1, 101),
+        cmap="viridis",
+    )
+    cbar = plt.colorbar(contour)
+    cbar.set_ticks(np.linspace(0, 1, 11))
+    cbar.set_label('Net Efficiency', rotation=270, labelpad=15, fontsize=fontsize)
+
+    # Plot the contour lines
+    effLines = [.95, .90, .75, .50]
+    effLineStyle = ['-', '--', ':', '-.']
+    for inLevel, inLine in zip(effLines, effLineStyle):
+        contourLine = plt.tricontour(
+            x, y, z, 
+            levels=[inLevel], 
+            colors='m', 
+            linestyles=inLine,
+            linewidths=2.5
+        )
+        plt.clabel(contourLine, inline=True, fontsize=fontsize, fmt=f"{inLevel*100:.0f} %%")
+        plt.plot([], [], c='m', ls=inLine, lw=2.5, label=f"{inLevel*100:.0f}%")
+
+    # Plot breakdown region
+    xBreakdown = allData['xBreakdown']
+    yBreakdown = allData['yBreakdown']
+    plt.fill_between(
+        xBreakdown, yBreakdown, y.max()*np.ones(len(yBreakdown)),
+        color='r', alpha=0.4, hatch='//')
+    plt.plot(
+        xBreakdown, yBreakdown, 
+        c='r', label='Breakdown Region', ls='-', lw=2.5
+    )
+
+    plt.xlabel(xLabel, fontsize=fontsize)
+    plt.ylabel('Field Ratio', fontsize=fontsize)
+    plt.legend(fontsize=fontsize)
+
+    plt.xlim([x.min(), x.max()])
+    plt.ylim([y.min(), y.max()])
+
     plt.tight_layout()
     plt.show()
 
