@@ -135,19 +135,19 @@ class FIMS_Simulation:
         """
         defaultParameters = {
             'runNumber': -1,
-            'padLength': 15.,
-            'pitch': 65.,
-            'gridStandoff': 50.,
+            'padLength': 25.,
+            'pitch': 55.,
+            'gridStandoff': 30.,
             'gridThickness': 1.,
             'holeRadius': 16.,
             'cathodeHeight': 200.,
             'thicknessSiO2': 5.,
             'pillarRadius': 5.,
             'driftField': 280.,
-            'fieldRatio': 135.,
+            'fieldRatio': 150.,
             'numFieldLine': 25,
             'numAvalanche': 5000,
-            'avalancheLimit': 500,
+            'avalancheLimit': 600,
             'gasCompAr': 0.95,
             'gasCompCO2': 0.00,
             'gasCompCF4': 0.03,
@@ -1134,21 +1134,24 @@ class FIMS_Simulation:
             int: The run number of the simulation that was executed.
         """
 
-        #get the run number for this simulation
+        # Get the run number for this simulation
         runNo = self._param['runNumber']
         print(f'Running simulation - Run number: {runNo}')
 
-        #Get the optimal drift field for this gas
-        self.setParameters({'driftField': self._getOptimalDriftField()})
+        # Set the initial field conditions
+        initField = 75.
+        driftField = self._getOptimalDriftField() #TODO
+        self.setParameters({'driftField': driftField})
+        self.setParameters({'fieldRatio': initField})
 
         # Generate Geometry
         self._generateGeometry()
 
-        #Find the minimum field ratio for this geometry
+        # Find the minimum field ratio for this geometry
         minField = self._findMinimumField()
         self.setParameters({'fieldRatio': minField})
 
-        #Solve fields and run Garfield
+        # Solve fields and run Garfield
         self._solveEFields(solveWeighting=True)
         self._runGarfield()
         

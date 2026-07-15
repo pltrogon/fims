@@ -50,8 +50,9 @@ class FIMS_Optimizer:
             last param name: [minimum value, maximum value]
         
         initialValues (list): list of initial values for each parameter.
-        Note: initial values currently taken from FIMS.Simulation class'
-        default parameters (TODO: allow default params as input?)
+        
+        initialGeometry (dict): dictionary of geometry values to be used
+        as initial values for the optimizer.
         
         simFIMS (simulationClass): a simulation class object that 
     represents the simulation pipeline.
@@ -83,6 +84,16 @@ class FIMS_Optimizer:
         """
         self.params = params
         self._initialValues = []
+        self.initialGeometry = {
+            'padLength': 25.,
+            'pitch': 55.,
+            'gridStandoff': 30.,
+            'gridThickness': 1.,
+            'holeRadius': 16.,
+            'cathodeHeight': 200.,
+            'thicknessSiO2': 5.,
+            'pillarRadius': 5.,
+        }
         self.simFIMS = FIMS_Simulation()
         
         self._checkParameters()
@@ -152,7 +163,23 @@ class FIMS_Optimizer:
                 raise ValueError(f'Error: {name} not a valid parameter.')
 
         return 
-    
+
+#**********************************************************************#
+
+    def _setInitialParameters(self, initialGuess=[]):
+        """
+        initial value for each parameter. Dimensions in microns.
+        
+        args: 
+            initialGuess (dict): dictionary of initial values to be used
+            in the optimizer.
+        """
+        # Update default values with given values, if any provided
+        for geo in initialGuess:
+            self.initialGeometry[geo] = initialGuess[geo]
+        
+        return
+
 #**********************************************************************#
 
     def _getGeometryConstraints(self):
@@ -402,7 +429,7 @@ class FIMS_Optimizer:
 
 #**********************************************************************#
 
-    def optimizeForIBN(self):
+    def optimizeForIBN(self, initialGuess):
         """
         Runs an optimization routine to find the FIMS parameters that 
         minimize the Ion Backflow Number (IBN).
@@ -411,7 +438,10 @@ class FIMS_Optimizer:
         Bounds are set based on the input parameters. 
         Terminated based on criteria in _checkConvergence.
         Parameters are constrained to prevent unphysical combinations.
-
+        
+        Args:
+            initialGuess (dict): dictionary of initial optimizer values
+        
         Returns:
             dict: A dictionary containing:
                 - params (dict): Optimal FIMS parameters.
@@ -429,10 +459,13 @@ class FIMS_Optimizer:
             minBounds.append(min(activeParameters[paramName]))
             maxBounds.append(max(activeParameters[paramName]))
         
-        # Set initial guess as simFIMS default values
+        # Set initial guess
+        self._setInitialParameters(initialGuess)
+        
+        # Normalize inputs
         initialGuess = np.empty(0)
         for param in inputList:
-            self._initialValues.append(self.simFIMS.getParam(param))
+            self._initialValues.append(self.initialGeometry[param])
             initialGuess = np.append(initialGuess, 1) # All inputs initially normalized to 1
         
         # Set bounds for variables
