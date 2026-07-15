@@ -48,10 +48,11 @@ class Reconstruction:
             approximateReadout
 
         ## Wrapper functions ##
+        plotRaw
         reconstructFIMS
         reconstructBEAST
-        reconstructMigdal (TODO: functionally the same as BEAST?)
-        GridPix wrapper
+        reconstructMigdal
+        reconstructGridPix
     """
     #********************************************************************************#
     def __init__(self, reconInfo=None):
@@ -66,15 +67,18 @@ class Reconstruction:
         
         # Set constant values
         self.timeRez = 25 # microns
-        self.initialDriftDistance = 25 # cm
+        self.initialDriftDistance = 10 # cm
         
         # Values from Tanner sim
-        #self.transDifCoef = 320 # microns/sqrt(cm)
-        #self.lonDifCoef = 200 # microns/sqrt(cm)
+        self.transDriftDifCoef = 320 # microns/sqrt(cm)
+        self.lonDriftDifCoef = 200 # microns/sqrt(cm)
+        
+        self.transAmpDifCoef = 190 # microns/sqrt(cm)
+        self.lonAmpDifCoef = 150 # microns/sqrt(cm)
         
         # Values from Majd paper
-        self.transDifCoef = 136 # microns/sqrt(cm)
-        self.lonDifCoef = 114 # microns/sqrt(cm)
+        #self.transDriftDifCoef = 136 # microns/sqrt(cm)
+        #self.lonDriftDifCoef = 114 # microns/sqrt(cm)
         
         
         return
@@ -192,6 +196,7 @@ class Reconstruction:
             inputData (dataframe): original dataframe with an extra column for the charge
             profile.
         """
+        #TODO: improve efficiency
         def getChargeProfile(val):
             charges = []
             for electron in val:
@@ -205,7 +210,7 @@ class Reconstruction:
             else:
                 return 0
 
-        inputData['charge profile'] = inputData['z'].apply(lambda z: getChargeProfile(z))
+        inputData['charge profile'] = inputData['z'].map(lambda z: getChargeProfile(z))
         
         return inputData
     
@@ -232,6 +237,7 @@ class Reconstruction:
         returns:
             signalPlot (np.array): array of signal points.
         """
+        #TODO: improve efficiency
         threshold = self.reconInfo['Signal Threshold']
         decayRate = self.reconInfo['Signal Decay Rate']
         
@@ -337,9 +343,9 @@ class Reconstruction:
             diffusedData (list): list of all data points after being diffused
         """
         diffusedData = pd.DataFrame({
-            'x': coordinates['x'].apply(lambda x: x + random.gauss(0, diffusionWidths[0])),
-            'y': coordinates['y'].apply(lambda y: y + random.gauss(0, diffusionWidths[1])),
-            'z': coordinates['z'].apply(lambda z: z + random.gauss(0, diffusionWidths[2]))
+            'x': coordinates['x'].map(lambda x: x + random.gauss(0, diffusionWidths[0])),
+            'y': coordinates['y'].map(lambda y: y + random.gauss(0, diffusionWidths[1])),
+            'z': coordinates['z'].map(lambda z: z + random.gauss(0, diffusionWidths[2]))
         })
 
         return diffusedData
@@ -497,6 +503,59 @@ class Reconstruction:
     ############## Reconstruction Wrapper Functions for Specific Setups ##############
     #********************************************************************************#
     
+    def plotRaw(self):
+        """
+        Plots the raw data from an event.
+        
+        returns:
+            rawFig: matplotlib figure
+        """
+        # Extract relevant data from dictionary and set constant values
+        avalData = self.rawData
+        
+        ## Plot Data ##
+        # Create figures
+        rawFig = plt.figure(figsize=(10, 10))
+        raw3D = rawFig.add_subplot(221, projection='3d')
+        raw2D = rawFig.add_subplot(222)
+        
+        # Plot data in 2D and 3D
+        raw3D.scatter(
+            avalData['x'], 
+            avalData['y'],
+            avalData['z'],
+            s=.01,
+            c='g',
+            label='raw Data'
+        )
+
+        raw2D.scatter(
+            avalData['x'], 
+            avalData['y'],
+            s=.01,
+            c='g',
+            label='Raw Data'
+        )
+        
+        # Add labels and adjust formatting
+        raw3D.set_xlabel('x pixels')
+        raw3D.set_ylabel('y pixels')
+        raw3D.set_zlabel('z height')
+        raw3D.set_title('Raw 3D Event Reconstruction')
+
+        raw2D.set_xlabel('x pixels')
+        raw2D.set_ylabel('y pixels')
+        raw2D.set_title('Raw 2D Event Reconstruction')
+        raw2D.yaxis.set_label_position("right")
+        raw2D.yaxis.tick_right()
+        raw2D.grid(True, alpha=.5)
+
+        plt.subplots_adjust(wspace=0.5)
+        
+        return rawFig
+        
+    #********************************************************************************#
+    
     def reconstructFIMS(self):
         """
         Approximates an event reconstruction using a FIMS readout.
@@ -512,8 +571,9 @@ class Reconstruction:
         pitch = self.reconInfo['Hole Pitch']
         pixPitch = self.reconInfo['Pixel Pitch']
         timeRez = self.timeRez
-        transDif = self.transDifCoef*math.sqrt(self.initialDriftDistance)
-        lonDif = self.lonDifCoef*math.sqrt(self.initialDriftDistance)
+        
+        transDif = self.transDriftDifCoef*math.sqrt(self.initialDriftDistance)
+        lonDif = self.lonDriftDifCoef*math.sqrt(self.initialDriftDistance)
         firstDifWidths = (transDif, transDif, lonDif)
         
         # Apply Gaussian smear to approximate diffusion
@@ -522,8 +582,12 @@ class Reconstruction:
         # Discretize data to approximate falling into grid holes
         discreteData = self.discretizeData(smearData, (pitch, pitch, 0))
         
-        # Assume one hole per readout pixel, so data does not need to be discretized a
-        # second time. TODO: data should probably still be avalanched
+        # Approximate avalanches
+        # Diffusion is smaller than the pitch between pixels, so there
+        # is zero net diffusion in the amplification region.
+        numBelowThresh = int(len(discreteData)*0.05)
+        belowID = np.random.choice(discreteData.index, size=numBelowThresh, replace=False)
+        avalData = discreteData.drop(belowID).reset_index(drop=True)
         
         ## Plot Data ##
         # Create figures
@@ -533,18 +597,18 @@ class Reconstruction:
         
         # Plot data in 2D and 3D
         FIMS3D.scatter(
-            discreteData['x'], 
-            discreteData['y'],
-            discreteData['z'],
-            s=.01,
+            avalData['x'], 
+            avalData['y'],
+            avalData['z'],
+            s=.2,
             c='g',
             label='FIMS Data'
         )
 
         FIMS2D.scatter(
-            discreteData['x'], 
-            discreteData['y'],
-            s=.01,
+            avalData['x'], 
+            avalData['y'],
+            s=.1,
             c='g',
             label='FIMS Data'
         )
@@ -577,57 +641,102 @@ class Reconstruction:
         so final readout is purely 2D (x,y).
         
         returns:
-            BEASTFig: matplotlib figure
+            beastFig: matplotlib figure
         """
-        #TODO: BEAST uses double GEM stack
-        
         # Extract relevant data from dictionary
         pitch = self.reconInfo['Hole Pitch']
         pixPitch = self.reconInfo['Pixel Pitch']
+        standoff = self.reconInfo['Standoff']
         timeRez = self.timeRez
         
-        transDif = self.transDifCoef*math.sqrt(self.initialDriftDistance)
-        lonDif = self.lonDifCoef*math.sqrt(self.initialDriftDistance)
+        transDif = self.transDriftDifCoef*math.sqrt(self.initialDriftDistance)
+        lonDif = self.lonDriftDifCoef*math.sqrt(self.initialDriftDistance)
         firstDifWidths = (transDif, transDif, lonDif)
         
-        secondTransDif = self.transDifCoef*math.sqrt(self.reconInfo['Standoff']/10000.)
-        secondLonDif = self.lonDifCoef*math.sqrt(self.reconInfo['Standoff']/10000.)
+        secondTransDif = self.transDriftDifCoef*math.sqrt(standoff/10000.) # Convert to cm
+        secondLonDif = self.lonDriftDifCoef*math.sqrt(standoff/10000.)
         secondDifWidths = (secondTransDif, secondTransDif, secondLonDif)
+        
+        # Convert net avalanche stats to stats of an individual GEM (double GEM stack)
+        self.reconInfo['Gain'] = int(math.sqrt(self.reconInfo['Gain']))
+        self.reconInfo['Avalanche Sigma'] = int(math.sqrt(self.reconInfo['Avalanche Sigma']))
         
         # Apply Gaussian smear to approximate diffusion
         smearData = self.diffuseData(self.rawData, firstDifWidths)
 
-        # Discretize data to approximate falling into grid holes
-        discreteData = self.discretizeData(smearData, (pitch, pitch, 0))
+        # Discretize data to approximate falling into first GEM holes
+        discreteData1 = self.discretizeData(smearData, (pitch, pitch, 0))
         
-        # Approximate avalanches
-        avalData = self.avalancheData(discreteData, secondDifWidths)
-
+        # Approximate first set of avalanches
+        avalData1 = self.avalancheData(discreteData1, secondDifWidths)
+        
+        # Discretize data to approximate falling into second GEM holes
+        discreteData2 = self.discretizeData(avalData1, (pitch, pitch, 0))
+        
+        # Approximate second set of avalanches
+        avalData2 = self.avalancheData(discreteData2, secondDifWidths)
+        
         # Discretize data to approximate pixels readout
-        readoutData = self.discretizeData(avalData, (pitch, pitch, timeRez))
+        readoutData = self.discretizeData(avalData2, (pixPitch, pixPitch, timeRez))
         
         ## Plot BEAST data ##
-        # Extract Data
-        totalXWidth = max(readoutData['x']) - min(readoutData['x'])
-        totalYWidth = max(readoutData['y']) - min(readoutData['y'])
-        numXBins = int(totalXWidth/pixPitch)
-        numYBins = int(totalYWidth/pixPitch)
+        # Group and sort data for plotting
+        groupData = self._groupData(readoutData)
+        sortedData = self._sortData(groupData)
+
+        # Separate Data
+        xPlot = [x for x,y in sortedData['pixel id']]
+        yPlot = [y for x,y in sortedData['pixel id']]
+        zPlot = [z[0] for z in sortedData['z']]
+        chargeProfile = [prof for prof in sortedData['charge profile']]
+        qPlot = []
+        for pixel in chargeProfile:
+            charges = []
+            for elec in pixel:
+                charges.append(elec[1])
+            netQ = sum(charges)
+            qPlot.append(netQ)
         
-        # Create figure
-        BEASTFig = plt.figure()
-        plt.hist2d(
-            readoutData['x'],
-            readoutData['y'],
-            bins=(numXBins, numYBins)
+        beastFig = plt.figure(figsize=(10, 10))
+        beast3D = beastFig.add_subplot(221, projection='3d')
+        beast2D = beastFig.add_subplot(222)
+
+
+        beast3DRef = beast3D.scatter(
+            xPlot,
+            yPlot,
+            zPlot,
+            s=.5,
+            c=qPlot,
+            cmap='viridis'
         )
+
+        beast2DRef = beast2D.scatter(
+            xPlot,
+            yPlot,
+            s=3,
+            c=qPlot,
+            cmap='viridis'
+        )
+
+        colorBar = plt.colorbar(beast2DRef, ax=beast2D)
+
+        # Add labels and adjust formatting
+        beast3D.set_xlabel('x pixels')
+        beast3D.set_ylabel('y pixels')
+        beast3D.set_zlabel('Height')
+        beast3D.set_title('Beast 3D Event Reconstruction')
+        #beast3D.view_init(elev=25, azim=20)
+
+        beast2D.set_xlabel('x pixels')
+        beast2D.set_ylabel('y pixels')
+        colorBar.set_label('Charge')
+        beast2D.set_title('Beast 2D Event Reconstruction')
+        beast2D.grid(True, alpha=.5)
+
+        plt.subplots_adjust(wspace=0.6)
         
-        # Add plot elements
-        plt.colorbar().set_label('Charge')
-        plt.xlabel('x pixels')
-        plt.ylabel('y pixels')
-        plt.title('BEAST Event Reconstruction')
-        
-        return BEASTFig
+        return beastFig
 
     #********************************************************************************#
     
@@ -645,14 +754,15 @@ class Reconstruction:
         # Extract and calculate relevant data
         pitch = self.reconInfo['Hole Pitch']
         pixPitch = self.reconInfo['Pixel Pitch']
+        standoff = self.reconInfo['Standoff']
         timeRez = self.timeRez
         
-        transDif = self.transDifCoef*math.sqrt(self.initialDriftDistance)
-        lonDif = self.lonDifCoef*math.sqrt(self.initialDriftDistance)
+        transDif = self.transDriftDifCoef*math.sqrt(self.initialDriftDistance)
+        lonDif = self.lonDriftDifCoef*math.sqrt(self.initialDriftDistance)
         firstDifWidths = (transDif, transDif, lonDif)
         
-        secondTransDif = self.transDifCoef*math.sqrt(self.reconInfo['Standoff']/10000.)
-        secondLonDif = self.lonDifCoef*math.sqrt(self.reconInfo['Standoff']/10000.)
+        secondTransDif = self.transDriftDifCoef*math.sqrt(standoff/10000.) # Convert to cm
+        secondLonDif = self.lonDriftDifCoef*math.sqrt(standoff/10000.)
         secondDifWidths = (secondTransDif, secondTransDif, secondLonDif)
         
         # Apply Gaussian smear to approximate initial drift diffusion
@@ -712,14 +822,15 @@ class Reconstruction:
         # Extract and calculate relevant data
         pitch = self.reconInfo['Hole Pitch']
         pixPitch = self.reconInfo['Pixel Pitch']
+        standoff = self.reconInfo['Standoff']
         timeRez = self.timeRez
         
-        transDif = self.transDifCoef*math.sqrt(self.initialDriftDistance)
-        lonDif = self.lonDifCoef*math.sqrt(self.initialDriftDistance)
+        transDif = self.transDriftDifCoef*math.sqrt(self.initialDriftDistance)
+        lonDif = self.lonDriftDifCoef*math.sqrt(self.initialDriftDistance)
         firstDifWidths = (transDif, transDif, lonDif)
         
-        secondTransDif = self.transDifCoef*math.sqrt(self.reconInfo['Standoff']/10000.)
-        secondLonDif = self.lonDifCoef*math.sqrt(self.reconInfo['Standoff']/10000.)
+        secondTransDif = self.transAmpDifCoef*math.sqrt(standoff/10000.) # Convert to cm
+        secondLonDif = self.lonAmpDifCoef*math.sqrt(standoff/10000.)
         secondDifWidths = (secondTransDif, secondTransDif, secondLonDif)
         
         # Apply Gaussian smear to approximate initial drift diffusion
@@ -769,7 +880,7 @@ class Reconstruction:
             xPlot,
             yPlot,
             zPlot,
-            s=.1,
+            s=.3,
             c=tPlot,
             cmap='viridis'
         )

@@ -120,7 +120,7 @@ int main(int argc, char * argv[]) {
     avalancheE->SetSensor(sensorFIMS);
     avalancheE->EnableAvalancheSizeLimit(electronLimit);
     
-    // TODO: investigate why this is needed
+    // Define drift view boundaries
     ViewDrift* viewEffDrift = nullptr;
     viewEffDrift = new ViewDrift();
     viewEffDrift->SetArea(
@@ -128,10 +128,8 @@ int main(int argc, char * argv[]) {
         xBoundary[1], yBoundary[1], zBoundary[1]
     );
     
-    {
-        SilenceCerr guard;
-        avalancheE->EnablePlotting(viewEffDrift, 10);//For velocity vector
-    }
+
+    avalancheE->EnablePlotting(viewEffDrift, 10);//For velocity vector
 
     //Deafult initial electron parameters
     double x0 = 0., y0 = 0., z0 = 0.75*simParams->cathodeHeight;
@@ -178,9 +176,8 @@ int main(int argc, char * argv[]) {
             while(repopulate){
                 //Populate with an electron
                 numTotalTrials++;
-                {//Guarding against Garfield error. See notes below.
+                {
                     SilenceCerr guard;
-                
                     avalancheE->AvalancheElectron(
                         curX, curY, curZ, 
                         curTime, curEnergy, 
@@ -190,7 +187,7 @@ int main(int argc, char * argv[]) {
 
                 int numAvalancheElectrons = avalancheE->GetNumberOfElectronEndpoints();
 
-                //Ensure electron didnt disappear. Reinitialize if so. 
+                //Ensure electron didn't disappear. Reinitialize if so. 
                 if(numAvalancheElectrons >= 1){
                     avalancheE->GetElectronEndpoint(0, xi, yi, zi, ti, Ei, xf, yf, zf, tf, Ef, exitStatus);
                 }
@@ -210,14 +207,14 @@ int main(int argc, char * argv[]) {
                      * Garfield error: AvalancheMicroscopic::TransportElectrons: Starting point is not in a valid medium.
                      * Tanner notes (13/05/2026)
                      * Still not exactly sure what/why/how this occurs. 
-                     * It seesm that when this is happening y = pitch ALWAYS.
+                     * It seems that when this is happening y = pitch ALWAYS.
                      * But the area is defined to +/- 2*pitch, so it should be fine.
                      * x values seems like they can be anything, but cap at (-cellLength, cellLength)
                      * Again, defined as 2x this, so not sure.
                      * The z values are + and -. Thought maybe they were "in" a hole and translated weird, but must not be the case
                      * Z range is +5, -2 (not hard limits as far as I can tell)
                      * 
-                     * The current implementation is that this is just restarting, so although inefficienct it shouldnt affect results
+                     * The current implementation is that this is just restarting, so although inefficient it shouldn't affect results
                      */
                 }
 
