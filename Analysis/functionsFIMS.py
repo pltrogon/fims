@@ -623,36 +623,32 @@ def plotFullFieldMapping(runNum):
     returns:
         figure
     """
-    # TODO: rework code for efficiency. Consider using numpy arrays+masking instead of
-    # loops and pandas tables. Also, investigate np.hypot().
     # Get all field line data
     fieldData = getFullFieldData(runNum)
-    xData = fieldData['xComp']
-    yData = fieldData['yComp']
-    zData = fieldData['zComp']
-    initialList = []
-    finalList = []
+    xData = np.asarray(fieldData['xComp'])
+    yData = np.asarray(fieldData['yComp'])
+    zData = np.asarray(fieldData['zComp'])
+
+    #Calaculate all radii
+    radii = np.hypot(xData, yData)
+
+    #Identify jumps between lines
+    lineID = np.where(np.diff(zData) <= 0)[0]
     
-    # Find initial and final x/y coordinates of each line
-    pointID = 0
-    for point in zData:
-        if point > zData[pointID-1]:
-            if pointID == 0:
-                initialRadius = math.sqrt(xData[pointID]**2 + yData[pointID]**2)
-                initialList.append(initialRadius)
-            else:
-                finalRadius = math.sqrt(xData[pointID-1]**2 + yData[pointID-1]**2)
-                initialRadius = math.sqrt(xData[pointID]**2 + yData[pointID]**2)
-                finalList.append(finalRadius)
-                initialList.append(initialRadius)
-        pointID += 1
-    finalRadius = math.sqrt(xData[-1]**2 + yData[-1]**2)
-    finalList.append(finalRadius)
-    
+    #Initial indices - Beginning and each point after a jump
+    initialID = np.insert(lineID+1, 0, 0)
+
+    #Final indices - First jump point and last
+    finalID = np.append(lineID, len(zData)-1)
+
+    #Make plot
     mapFig = plt.figure()
-    plt.scatter(initialList, finalList, c='b', s=.4, label='Data')
-    plt.xlabel('Initial Radius (\u03BCm)')
-    plt.ylabel('Final Radius (\u03BCm)')
+    plt.scatter(
+        radii[initialID], radii[finalID], 
+        c='b', s=.4, label='Data'
+    )
+    plt.xlabel('Initial Radius (um)')
+    plt.ylabel('Final Radius (um)')
     plt.title('Field Line Mapping')
     #plt.legend()
     plt.grid()
