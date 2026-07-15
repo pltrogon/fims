@@ -579,6 +579,8 @@ class Reconstruction:
         returns:
             BEASTFig: matplotlib figure
         """
+        #TODO: BEAST uses double GEM stack
+        
         # Extract relevant data from dictionary
         pitch = self.reconInfo['Hole Pitch']
         pixPitch = self.reconInfo['Pixel Pitch']
