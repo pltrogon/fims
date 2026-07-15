@@ -877,22 +877,17 @@ class Reconstruction:
 
         # Create 2D and 3D scatter plots with color mapping
         GridPix3DRef = GridPix3D.scatter(
-            xPlot,
-            yPlot,
-            zPlot,
-            s=.3,
-            c=tPlot,
-            cmap='viridis'
+            xPlot, yPlot, zPlot,
+            s=.3, c=tPlot, cmap='viridis'
         )
         
         GridPix2DRef = GridPix2D.scatter(
-            xPlot,
-            yPlot,
-            s=.1,
-            c=tPlot,
-            cmap='viridis'
+            xPlot, yPlot,
+            s=.1, c=tPlot, cmap='viridis'
         )
+        
         colorBar = plt.colorbar(GridPix2DRef, ax=GridPix2D)
+        colorBar.set_label('ToT')
         
         # Add labels and adjust formatting
         GridPix3D.set_xlabel('x pixels')
@@ -902,7 +897,6 @@ class Reconstruction:
 
         GridPix2D.set_xlabel('x pixels')
         GridPix2D.set_ylabel('y pixels')
-        colorBar.set_label('ToT')
         GridPix2D.set_title('GridPix 2D Event Reconstruction')
         GridPix2D.grid(True, alpha=.5)
 
