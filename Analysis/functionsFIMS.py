@@ -414,8 +414,8 @@ def plotDataSets(dataSets, xVal, yVal, savePlot=False):
         'Thickness SiO2',
         'Field Bundle Radius'
     ]
-    xLabel = xVal + ' (um)' if xVal in dimensionalParam else xVal
-    yLabel = yVal + ' (um)' if yVal in dimensionalParam else yVal
+    xLabel = xVal + r' ($\mu$m)' if xVal in dimensionalParam else xVal
+    yLabel = yVal + r' ($\mu$m)' if yVal in dimensionalParam else yVal
 
     # Make plot and add data
     fig, ax = plt.subplots()
@@ -597,16 +597,16 @@ def plotFullField(runNum, zTarget=0):
 
     xySlice.scatter(xSlice, ySlice, s=.1, c='r')
     xySlice.grid()
-    xySlice.set_xlabel('x Position (um)')
-    xySlice.set_ylabel('y Position (um)')
+    xySlice.set_xlabel(r'x Position ($\mu$m)')
+    xySlice.set_ylabel(r'y Position ($\mu$m)')
     
     # Plot the x,z components of the field along with a line showing the target height
     xzSlice.scatter(xData, zData, s=.1, c='r')
     xzSlice.axhline(zTarget, c='y', lw=3, label='Target Height')
     xzSlice.grid()
     xzSlice.legend(loc='lower left')
-    xzSlice.set_xlabel('x Position (um)')
-    xzSlice.set_ylabel('z Position (um)')
+    xzSlice.set_xlabel(r'x Position ($\mu$m)')
+    xzSlice.set_ylabel(r'z Position ($\mu$m)')
     
     fieldFig.suptitle('2D Field Slice', fontsize = 20)
     
@@ -647,8 +647,8 @@ def plotFullFieldMapping(runNum):
         radii[initialID], radii[finalID], 
         c='b', s=.4, label='Data'
     )
-    plt.xlabel('Initial Radius (um)')
-    plt.ylabel('Final Radius (um)')
+    plt.xlabel(r'Initial Radius ($\mu$m)')
+    plt.ylabel(r'Final Radius ($\mu$m)')
     plt.title('Field Line Mapping')
     #plt.legend()
     plt.grid()
