@@ -38,12 +38,12 @@ class Reconstruction:
             _getCoordinates
             _groupData
             _convertToSignal
-            _approximateToT
             _format3DPlot
+        
         Public:
             diffuseData
             discretizeData
-            approximateGain
+            avalancheData
             approximateReadout
 
         ## Wrapper functions ##
@@ -53,7 +53,9 @@ class Reconstruction:
         reconstructMigdal
         reconstructGridPix
     """
+    
     #********************************************************************************#
+    
     def __init__(self, reconInfo=None):
         """Initializes Reconstruction class."""
         # Validate Input
@@ -182,13 +184,14 @@ class Reconstruction:
         
     def _convertToSignal(self, pixel):
         """
-        Takes data of a single pixel and calculates the voltage signal.
+        Takes data of a single pixel and calculates ToT and threshold crossing time.
         
         args:
             pixel (dataframe): coordinates and charges of a single pixel.
         
         returns:
-            signalData (dataframe): voltage signal data.
+            upCrossPoints (list): list of threshold crossing times
+            ToTList (list): list of ToT times
         """
         threshold = self.reconInfo['Signal Threshold']
         decayRate = self.reconInfo['Signal Decay Rate']
@@ -226,20 +229,6 @@ class Reconstruction:
         ToTList = [end-start for start,end in list(zip(upCrossPoints, downCrossPoints))]
         
         return upCrossPoints, ToTList
-    
-    #********************************************************************************#
-
-    def _approximateToT(self, signalPlot):
-        """
-        Approximates the TOT of a given group of electrons.
-        
-        args:
-            signalPlot (dataframe): dataframe of signal points 
-            
-        returns:
-            ToTDF (dataframe): dataframe of initial crossing times and ToTs
-        """
-        return
     
     #********************************************************************************#
 
@@ -324,44 +313,6 @@ class Reconstruction:
         )
         avalData = pd.concat([pd.DataFrame(elem, columns=['x','y','z']) for elem in newElec], ignore_index=True)
 
-        return avalData
-    
-    #********************************************************************************#
-    
-    def approximateGain(self, discreteDataFrame):
-        """
-        Takes the x,y,z coordinates of an electron dataframe and approximates an avalanche.
-        
-        Note: does not apply any diffusion to the new electrons.
-        
-        args:
-            coordinates (dataframe): the x,y,z coordinates of each initial electron
-        
-        returns:
-            avalData (dataframe): list of x,y,z coordinates for each new electron
-        """
-        gain = self.reconInfo['Gain']
-        sigma = self.reconInfo['Avalanche Sigma']
-        # convert to np.array for easier manipulation
-        preAvalancheElectrons = np.array(list(zip(
-            discreteDataFrame['x'],
-            discreteDataFrame['y'],
-            discreteDataFrame['z']
-        )))
-        
-        postAvalancheElectrons = np.empty((1,3))
-        for elem in preAvalancheElectrons:
-            newElectrons = [elem]*int(random.gauss(gain, sigma))
-            # Check if random.gauss was positive and ensure initial electron survives
-            if len(newElectrons):
-                postAvalancheElectrons = np.concatenate((postAvalancheElectrons, newElectrons))
-            else:
-                postAvalancheElectrons = np.concatenate((postAvalancheElectrons, [elem]))
-        
-        # Convert back to dataframe and remove first index (blank index from np.empty)
-        avalData = pd.DataFrame(postAvalancheElectrons, columns=['x','y','z'])
-        avalData = avalData.drop(avalData.index[0])
-        
         return avalData
 
     #********************************************************************************#
