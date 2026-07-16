@@ -166,7 +166,7 @@ class FIMS_Optimizer:
 
 #**********************************************************************#
 
-    def _setInitialParameters(self, initialGuess=[]):
+    def _setInitialParameters(self, initialGuess={}):
         """
         initial value for each parameter. Dimensions in microns.
         
@@ -429,7 +429,7 @@ class FIMS_Optimizer:
 
 #**********************************************************************#
 
-    def optimizeForIBN(self, initialGuess):
+    def optimizeForIBN(self, initialGuess={}):
         """
         Runs an optimization routine to find the FIMS parameters that 
         minimize the Ion Backflow Number (IBN).
@@ -459,7 +459,14 @@ class FIMS_Optimizer:
             minBounds.append(min(activeParameters[paramName]))
             maxBounds.append(max(activeParameters[paramName]))
         
-        # Set initial guess
+        # Verify and set initial guess
+        if not isinstance(initialGuess, dict):
+            print('Error: Initial guess is not a dictionary')
+            return -1
+        for param in initialGuess:
+            if not isinstance(initialGuess[param], (int, float))
+                print(f'Error: {param} value is not valid. Must be a number.')
+                return -1
         self._setInitialParameters(initialGuess)
         
         # Normalize inputs
