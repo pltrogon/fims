@@ -500,6 +500,78 @@ class Reconstruction:
         return readoutData
     
     #********************************************************************************#
+    
+    def format3DPlot(self, plotData, title='', charge=False):
+        """
+        Creates a 3D and 2D plot of a given dataset.
+        
+        args:
+            plotData (pd.array): pandas array of data.
+            title (str): Name of the data set
+            charge (bool): boolean indicating if charge density is used as a color
+            map.
+        returns:
+            fig3D (figure): matplotlib figure
+        """
+        
+        # Create figures
+        fig3D = plt.figure(figsize=(10, 5), dpi=200)
+        sub3D = fig3D.add_subplot(121, projection='3d')
+        sub2D = fig3D.add_subplot(122)
+        
+        # Assign point color, if given
+        if charge:
+            color = plotData['q']
+        else:
+            color = 'g'
+        
+        # Plot data in 2D and 3D
+        sub3DRef = sub3D.scatter(
+            plotData['x'], 
+            plotData['y'],
+            plotData['z'],
+            s=.2,
+            c=color,
+            cmap='viridis',
+            label=f'{title} Readout Data'
+        )
+        
+        sub2DRef = sub2D.scatter(
+            plotData['x'], 
+            plotData['y'],
+            s=.3,
+            c=color,
+            cmap='viridis',
+            label=f'{title} Readout Data'
+        )
+        
+        # Add color bar
+        if charge:
+            colorBar = plt.colorbar(
+                sub2DRef, 
+                pad=.2
+            )
+            colorBar.set_label('Charge')
+
+        # Add labels and adjust formatting
+        sub3D.set_xlabel('x pixels')
+        sub3D.set_ylabel('y pixels')
+        sub3D.set_zlabel('Height')
+        sub3D.set_title(f'{title} 3D Event Reconstruction')
+        
+        sub2D.set_xlabel('x pixels')
+        sub2D.set_ylabel('y pixels')
+        sub2D.set_title(f'{title} 2D Event Reconstruction')
+        sub2D.yaxis.set_label_position("right")
+        sub2D.yaxis.tick_right()
+        sub2D.grid(True, alpha=.5)
+        
+        plt.tight_layout()
+        plt.subplots_adjust(wspace=0.2)
+        
+        return fig3D
+
+    #********************************************************************************#
     ############## Reconstruction Wrapper Functions for Specific Setups ##############
     #********************************************************************************#
     
@@ -510,47 +582,7 @@ class Reconstruction:
         returns:
             rawFig: matplotlib figure
         """
-        # Extract relevant data from dictionary and set constant values
-        avalData = self.rawData
-        
-        ## Plot Data ##
-        # Create figures
-        rawFig = plt.figure(figsize=(10, 10))
-        raw3D = rawFig.add_subplot(221, projection='3d')
-        raw2D = rawFig.add_subplot(222)
-        
-        # Plot data in 2D and 3D
-        raw3D.scatter(
-            avalData['x'], 
-            avalData['y'],
-            avalData['z'],
-            s=.01,
-            c='g',
-            label='raw Data'
-        )
-
-        raw2D.scatter(
-            avalData['x'], 
-            avalData['y'],
-            s=.01,
-            c='g',
-            label='Raw Data'
-        )
-        
-        # Add labels and adjust formatting
-        raw3D.set_xlabel('x pixels')
-        raw3D.set_ylabel('y pixels')
-        raw3D.set_zlabel('z height')
-        raw3D.set_title('Raw 3D Event Reconstruction')
-
-        raw2D.set_xlabel('x pixels')
-        raw2D.set_ylabel('y pixels')
-        raw2D.set_title('Raw 2D Event Reconstruction')
-        raw2D.yaxis.set_label_position("right")
-        raw2D.yaxis.tick_right()
-        raw2D.grid(True, alpha=.5)
-
-        plt.subplots_adjust(wspace=0.5)
+        rawFig = self.format3DPlot(self.rawData, title='Raw Data')
         
         return rawFig
         
@@ -589,44 +621,8 @@ class Reconstruction:
         belowID = np.random.choice(discreteData.index, size=numBelowThresh, replace=False)
         avalData = discreteData.drop(belowID).reset_index(drop=True)
         
-        ## Plot Data ##
-        # Create figures
-        FIMSfig = plt.figure(figsize=(10, 10))
-        FIMS3D = FIMSfig.add_subplot(221, projection='3d')
-        FIMS2D = FIMSfig.add_subplot(222)
-        
-        # Plot data in 2D and 3D
-        FIMS3D.scatter(
-            avalData['x'], 
-            avalData['y'],
-            avalData['z'],
-            s=.2,
-            c='g',
-            label='FIMS Data'
-        )
-
-        FIMS2D.scatter(
-            avalData['x'], 
-            avalData['y'],
-            s=.1,
-            c='g',
-            label='FIMS Data'
-        )
-        
-        # Add labels and adjust formatting
-        FIMS3D.set_xlabel('x pixels')
-        FIMS3D.set_ylabel('y pixels')
-        FIMS3D.set_zlabel('z height')
-        FIMS3D.set_title('FIMS 3D Event Reconstruction')
-
-        FIMS2D.set_xlabel('x pixels')
-        FIMS2D.set_ylabel('y pixels')
-        FIMS2D.set_title('FIMS 2D Event Reconstruction')
-        FIMS2D.yaxis.set_label_position("right")
-        FIMS2D.yaxis.tick_right()
-        FIMS2D.grid(True, alpha=.5)
-
-        plt.subplots_adjust(wspace=0.5)
+        # Plot data
+        FIMSfig = self.format3DPlot(avalData, title='FIMS')
         
         return FIMSfig
         
@@ -679,62 +675,17 @@ class Reconstruction:
         # Discretize data to approximate pixels readout
         readoutData = self.discretizeData(avalData2, (pixPitch, pixPitch, timeRez))
         
-        ## Plot BEAST data ##
-        # Group and sort data for plotting
+        # Configure data for plotting
         groupData = self._groupData(readoutData)
-        sortedData = self._sortData(groupData)
-
-        # Separate Data
-        xPlot = [x for x,y in sortedData['pixel id']]
-        yPlot = [y for x,y in sortedData['pixel id']]
-        zPlot = [z[0] for z in sortedData['z']]
-        chargeProfile = [prof for prof in sortedData['charge profile']]
-        qPlot = []
-        for pixel in chargeProfile:
-            charges = []
-            for elec in pixel:
-                charges.append(elec[1])
-            netQ = sum(charges)
-            qPlot.append(netQ)
+        plotData = pd.DataFrame({
+            'x': [x for x,y in groupData['pixel id']],
+            'y': [y for x,y in groupData['pixel id']],
+            'z': [min(z) for z in groupData['z']],
+            'q': [len(z) for z in groupData['z']]
+        })
         
-        beastFig = plt.figure(figsize=(10, 10))
-        beast3D = beastFig.add_subplot(221, projection='3d')
-        beast2D = beastFig.add_subplot(222)
-
-
-        beast3DRef = beast3D.scatter(
-            xPlot,
-            yPlot,
-            zPlot,
-            s=.5,
-            c=qPlot,
-            cmap='viridis'
-        )
-
-        beast2DRef = beast2D.scatter(
-            xPlot,
-            yPlot,
-            s=3,
-            c=qPlot,
-            cmap='viridis'
-        )
-
-        colorBar = plt.colorbar(beast2DRef, ax=beast2D)
-
-        # Add labels and adjust formatting
-        beast3D.set_xlabel('x pixels')
-        beast3D.set_ylabel('y pixels')
-        beast3D.set_zlabel('Height')
-        beast3D.set_title('Beast 3D Event Reconstruction')
-        #beast3D.view_init(elev=25, azim=20)
-
-        beast2D.set_xlabel('x pixels')
-        beast2D.set_ylabel('y pixels')
-        colorBar.set_label('Charge')
-        beast2D.set_title('Beast 2D Event Reconstruction')
-        beast2D.grid(True, alpha=.5)
-
-        plt.subplots_adjust(wspace=0.6)
+        # Plot data
+        beastFig = self.format3DPlot(plotData, title='BEAST', charge=True)
         
         return beastFig
 
@@ -847,8 +798,8 @@ class Reconstruction:
 
         # Approximate Signal Readout
         readoutData = self.approximateReadout(padData)
-        
-        ## Plot GridPix data ##
+
+        ###########################################################################
         # Get data and combine into single list
         xPlot = [x for x,y in readoutData['pixel id']]
         yPlot = [y for x,y in readoutData['pixel id']]
@@ -866,47 +817,15 @@ class Reconstruction:
                 extendedList.append((int(x),int(y),int(z[0]),int(t[0])))
 
         # Re-seperate data for plotting
-        xPlot = [x for x,y,z,t in extendedList]
-        yPlot = [y for x,y,z,t in extendedList]
-        zPlot = [z for x,y,z,t in extendedList]
-        tPlot = [t for x,y,z,t in extendedList]
-
-        gridPixFig = plt.figure(figsize=(10, 10))
-        GridPix3D = gridPixFig.add_subplot(221, projection='3d')
-        GridPix2D = gridPixFig.add_subplot(222)
-
-        # Create 2D and 3D scatter plots with color mapping
-        GridPix3DRef = GridPix3D.scatter(
-            xPlot,
-            yPlot,
-            zPlot,
-            s=.3,
-            c=tPlot,
-            cmap='viridis'
-        )
-        
-        GridPix2DRef = GridPix2D.scatter(
-            xPlot,
-            yPlot,
-            s=.1,
-            c=tPlot,
-            cmap='viridis'
-        )
-        colorBar = plt.colorbar(GridPix2DRef, ax=GridPix2D)
-        
-        # Add labels and adjust formatting
-        GridPix3D.set_xlabel('x pixels')
-        GridPix3D.set_ylabel('y pixels')
-        GridPix3D.set_zlabel('z height')
-        GridPix3D.set_title('GridPix 3D Event Reconstruction')
-
-        GridPix2D.set_xlabel('x pixels')
-        GridPix2D.set_ylabel('y pixels')
-        colorBar.set_label('ToT')
-        GridPix2D.set_title('GridPix 2D Event Reconstruction')
-        GridPix2D.grid(True, alpha=.5)
-
-        plt.subplots_adjust(wspace=0.6)
+        plotData = pd.DataFrame({
+            'x': [x for x,y,z,t in extendedList],
+            'y': [y for x,y,z,t in extendedList],
+            'z': [z for x,y,z,t in extendedList],
+            'q': [t for x,y,z,t in extendedList],
+        })
+        ###########################################################################
+        # Plot data
+        gridPixFig = self.format3DPlot(plotData, title='GridPix', charge=True)
         
         return gridPixFig
 
