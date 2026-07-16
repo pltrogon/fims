@@ -135,11 +135,11 @@ class FIMS_Simulation:
         """
         defaultParameters = {
             'runNumber': -1,
-            'padLength': 25.,
+            'padLength': 20.,
             'pitch': 55.,
-            'gridStandoff': 30.,
+            'gridStandoff': 50.,
             'gridThickness': 1.,
-            'holeRadius': 16.,
+            'holeRadius': 17.5,
             'cathodeHeight': 200.,
             'thicknessSiO2': 5.,
             'pillarRadius': 5.,
