@@ -37,10 +37,9 @@ class Reconstruction:
             _getDataFrames
             _getCoordinates
             _groupData
-            _sortData
-            _decayEquation
             _convertToSignal
             _approximateToT
+            _format3DPlot
         Public:
             diffuseData
             discretizeData
@@ -163,111 +162,70 @@ class Reconstruction:
     
     #********************************************************************************#
 
-    def _groupData(self, coordinates):
+    def _groupData(self, inputData):
         """
-        Takes the x,y,z coordinates and groups it by the x,y coordinate.
+        Takes the x,y,z coordinates and groups the amount of charge by location.
         
         Args:
             coordinates (dataframe): list of x,y,z coordinates of each electron.
         
         returns:
             groupedData (dataframe): z-coordinates with their corresponding 
-            pixel location. 
+            pixel location and amount of charge. 
         """
-        groupedArray = list(coordinates.groupby(['x', 'y'])['z'])
-        
-        groupedData = []
-        for elem in groupedArray:
-            groupedData.append((elem[0], elem[1].tolist()))
-        groupedDataFrame = pd.DataFrame(groupedData, columns=['pixel id','z'])
+        countedData = inputData.groupby(['x', 'y', 'z']).size().reset_index(name='q')
+        groupedData = countedData.groupby(['x','y']).agg(z=('z', list), q=('q',list)).reset_index()
 
-        return groupedDataFrame
+        return groupedData
 
     #********************************************************************************#
-    
-    def _sortData(self, inputData):
+        
+    def _convertToSignal(self, pixel):
         """
-        Condenses the data down to only the x,y coordinates and the charge profile.
-        
-        Args:
-            inputData (dataframe): pixel locations (x,y) with associated electron heights.
-            
-        Returns:
-            inputData (dataframe): original dataframe with an extra column for the charge
-            profile.
-        """
-        #TODO: improve efficiency
-        def getChargeProfile(val):
-            charges = []
-            for electron in val:
-                Q = val.count(electron)
-                # Avoid duplicates
-                if (electron, Q) not in charges:
-                    charges.append((electron, Q))
-            
-            if len(charges) > 0:
-                return np.array(sorted(charges))
-            else:
-                return 0
-
-        inputData['charge profile'] = inputData['z'].map(lambda z: getChargeProfile(z))
-        
-        return inputData
-    
-    #********************************************************************************#
-    
-    def _decayEquation(self, charge, time, startTime):
-        """Equation modeling the decay rate of a signal."""
-        
-        decayRate = self.reconInfo['Signal Decay Rate']
-        chargeHeight = charge*math.e**(-(time-startTime)/decayRate)
-        
-        return chargeHeight
-    
-    #********************************************************************************#
-        
-    def _convertToSignal(self, chargeProfile):
-        """
-        Takes the charge profile and converts it to a signal.
+        Takes data of a single pixel and calculates the voltage signal.
         
         args:
-            chargeProfile (dataframe): heights of each electron with the amount of
-            charge at that height.
+            pixel (dataframe): coordinates and charges of a single pixel.
         
         returns:
-            signalPlot (np.array): array of signal points.
+            signalData (dataframe): voltage signal data.
         """
-        #TODO: improve efficiency
         threshold = self.reconInfo['Signal Threshold']
         decayRate = self.reconInfo['Signal Decay Rate']
         
         # Generate a signal range that guarantees that the full signal is included
-        minPos = min(list(zip(*chargeProfile))[0])
+        rangeList = np.linspace(
+            min(pixel['z']),
+            max(pixel['z']) - math.log(threshold/sum(pixel['q']))*decayRate,
+            1000
+        )
 
-        maxPos = max(list(zip(*chargeProfile))[0])
-        maxCharge = max(list(zip(*chargeProfile))[1])
-        maxTime = maxPos - math.log(threshold/maxCharge)*decayRate
-        
-        minRange = int(minPos)
-        maxRange = int(max(maxTime, maxPos)+500)*2
-        rangeList = np.arange(minPos, maxRange, self.timeRez)
+        # Calculate the net signal of all charges
+        netSignal = np.array([sum(pixel['q']*math.e**(-(height-pixel['z'])/decayRate)) for height in rangeList])
 
-        decayLists = []
-        for pos, amount in chargeProfile:
-            plotDecay = []
-            for elem in rangeList:
-                if elem < pos:
-                    plotDecay.append(0)
-                else:
-                    plotDecay.append(self._decayEquation(amount, elem, pos))
-                
-            decayLists.append(plotDecay)
+        # Identify which points are above and below threshold
+        isAbove = netSignal >= threshold
+        aboveRange = rangeList[isAbove]
+        belowRange = rangeList[~isAbove]
+        aboveID = np.flatnonzero(aboveRange)
+        belowID = np.flatnonzero(belowRange)
+
+        # Find the upwards crossing points
+        upCrossMask = aboveID[1:]-aboveID[:-1] > 1
+        upCrossMask = np.append(True, upCrossMask)
+        upCrossPoints = aboveRange[upCrossMask]
+
+        # Find all the downwards crossing points, using the last point if none are found
+        if len(belowID > 0):
+            downCrossMask = belowID[1:]-belowID[:-1] > 1
+            downCrossMask = np.append(True, downCrossMask)
+            downCrossPoints = belowRange[downCrossMask]
+        else:
+            downCrossPoints = [rangeList[-1]]
+
+        ToTList = [end-start for start,end in list(zip(upCrossPoints, downCrossPoints))]
         
-        netSignal = [sum(group) for group in zip(*decayLists)]
-        
-        signalPlot = np.array([rangeList, netSignal])
-        
-        return signalPlot
+        return upCrossPoints, ToTList
     
     #********************************************************************************#
 
@@ -276,56 +234,12 @@ class Reconstruction:
         Approximates the TOT of a given group of electrons.
         
         args:
-            signalPlot (np.array): array of signal points 
+            signalPlot (dataframe): dataframe of signal points 
             
         returns:
             ToTDF (dataframe): dataframe of initial crossing times and ToTs
         """
-        ToTStart = []
-        ToTEnd = []
-        ToTList = []
-        threshold = self.reconInfo['Signal Threshold']
-        
-        # Identify all the points above threshold
-        aboveCheck = signalPlot[1] >= threshold
-        above = signalPlot[0]*aboveCheck
-        aboveID = np.flatnonzero(above)
-        
-        # Verify that the signal crosses threshold at least once
-        if len(aboveID) == 0:
-            return np.nan
-        
-        # Find all the upwards crossing points
-        ID = 0
-        while ID < len(aboveID):
-            check = aboveID[ID]-aboveID[ID-1]
-            if check != 1:
-                ToTStart.append(above[aboveID[ID]])
-            ID+=1
-
-        # Identify all the points below threshold after the first upwards crossing
-        belowCheck = signalPlot[1][aboveID[0]:] < threshold
-        below = signalPlot[0][aboveID[0]:]*belowCheck
-        belowID = np.flatnonzero(below)
-
-        # Find all the downwards crossing points
-        ID = 0
-        while ID < len(belowID):
-            check = belowID[ID]-belowID[ID-1]
-            if check != 1:
-                ToTEnd.append(below[belowID[ID]])
-            ID+=1
-        # Ensure every start has an end. Pad lists with edge values if not.
-        if len(ToTStart) != len(ToTEnd):
-            max_len = max(len(ToTStart), len(ToTEnd))
-            ToTStart += [min(signalPlot[0])] * (max_len - len(ToTStart))
-            ToTEnd += [max(signalPlot[0])] * (max_len - len(ToTEnd))
-        
-        # Take the list of start and end times and calculate the ToTs
-        if ToTStart:
-            ToTList = [end-start for start,end in list(zip(ToTStart,ToTEnd))]
-    
-        return (ToTStart, ToTList)
+        return
     
     #********************************************************************************#
 
@@ -342,11 +256,14 @@ class Reconstruction:
         Returns:
             diffusedData (list): list of all data points after being diffused
         """
-        diffusedData = pd.DataFrame({
-            'x': coordinates['x'].map(lambda x: x + random.gauss(0, diffusionWidths[0])),
-            'y': coordinates['y'].map(lambda y: y + random.gauss(0, diffusionWidths[1])),
-            'z': coordinates['z'].map(lambda z: z + random.gauss(0, diffusionWidths[2]))
+        size = len(coordinates['x'])
+        diffusionAmount = pd.DataFrame({
+            'x': np.random.normal(0, diffusionWidths[0], size),
+            'y': np.random.normal(0, diffusionWidths[1], size),
+            'z': np.random.normal(0, diffusionWidths[2], size)
         })
+        
+        diffusedData = coordinates.add(diffusionAmount, fill_value=0)
 
         return diffusedData
         
@@ -360,69 +277,54 @@ class Reconstruction:
         
         Args:
             inputArray (dataframe): list of data points to be binned.
-            binSize (dataframe): width of each bin.
+            binSize (dict): widths bins for each coordinate axis.
         
         returns:
             discreteData (list): list of discretized coordinates.
         """
         # Get bounds
-        boundMin = abs(np.min(inputArray))
-        boundMax = abs(np.max(inputArray))
-        rawBound = max(boundMin, boundMax) + 100
-        bound = round(rawBound/10)*10
-        
-        discreteDataFrame = pd.DataFrame({
-            'x': [],
-            'y': [],
-            'z': []
-        })
-        binID = 0
+        boundMin = round(np.min(inputArray)/10)*10 - 100
+        boundMax = round(np.max(inputArray)/10)*10 + 100
+
+        discreteDataFrame = pd.DataFrame()
         for column in inputArray:
             # Check if data has a bin size
-            if binSize[binID] == 0 or binSize[binID] == None:
-                discreteData = list(inputArray[column])
+            if binSize[column] == 0 or binSize[column] == None:
+                discreteData = inputArray[column]
             else:
-                binEdges = np.arange(-bound, bound, binSize[binID])
-                binnedData = pd.cut(inputArray[column], binEdges)
-                discreteData = [electron.left+int(binSize[binID]/2) for electron in binnedData]
+                binEdges = np.arange(boundMin, boundMax, binSize[column])
+                binnedData = pd.cut(inputArray[column], binEdges, labels=binEdges[:-1])
+                discreteData = binnedData.astype(int) + int(binSize[column]/2)
             discreteDataFrame[column] = discreteData
-            binID += 1
 
         return discreteDataFrame
 
     #********************************************************************************#
     
-    def avalancheData(self, coordinates, difWidths):
+    def avalancheData(self, coord, difWidths):
         """
         Takes the x,y,z coordinates of an electron dataframe and approximates an avalanche.
         
         Note: also applies diffusion to the new electrons
         
         args:
-            coordinates (dataframe): the x,y,z coordinates of each initial electron
+            coord (dataframe): the x,y,z coordinates of each initial electron
             difWidths (tuple, floats): diffusion values for each axis
         
         returns:
             avalData (dataframe): list of x,y,z coordinates for each new electron
         """
         sigma = self.reconInfo['Avalanche Sigma']
-        meanGain = self.reconInfo['Gain']
-        index = 0
-        
-        postAvalElec = []
-        while index < len(coordinates['x']): 
-            gain = int(random.gauss(meanGain, sigma))
-            if gain > 0:
-                postAvalElec.append(np.random.normal(
-                    loc=(coordinates['x'][index], coordinates['y'][index], coordinates['z'][index]),
-                    scale=difWidths,
-                    size=(gain,3)
-                ))
-            index+=1
-        
-        postDataFrame = pd.concat([pd.DataFrame(elem, columns=['x','y','z']) for elem in postAvalElec])
-        
-        return postDataFrame
+        gain = self.reconInfo['Gain']
+    
+        newElec = coord.apply(lambda x: np.random.normal(
+            loc=(x['x'], x['y'], x['z']), scale=difWidths, 
+            size=(abs(int(random.gauss(gain, sigma)))+1, 3)
+            ), axis=1
+        )
+        avalData = pd.concat([pd.DataFrame(elem, columns=['x','y','z']) for elem in newElec], ignore_index=True)
+
+        return avalData
     
     #********************************************************************************#
     
@@ -473,35 +375,34 @@ class Reconstruction:
         returns:
             readoutData (dataframe): x,y,z coordinates of the charge bundles as well as the time over threshold.
         """
+        threshold = self.reconInfo['Signal Threshold']
+
         # Group data by pixel
         groupedData = self._groupData(inputData)
+
+        # Filter pixels with total charge less than the threshold
+        mask = groupedData['q'].apply(lambda q: sum(q) > threshold and sum(q) > len(q))
+        filteredData = groupedData[mask].reset_index(drop=True)
         
-        # Sort and compress data by pixel
-        readoutData = self._sortData(groupedData)
-        
+        print('Calculating ToT...')
         # Convert charge to voltage signal
-        vectSignalFunction = np.vectorize(self._convertToSignal, otypes=[np.ndarray])
-        readoutData['signal'] = pd.DataFrame(
-            vectSignalFunction(readoutData['charge profile'].values), 
-            columns=['signal']
-        )
-        
-        # Use voltage signal to calculate ToT
-        vectToTFunction = np.vectorize(self._approximateToT, otypes=[list])
-        readoutData['ToT'] = pd.DataFrame(
-            vectToTFunction(readoutData['signal'].values),
-            columns = ['ToT']
-        )
-        
-        # Remove depreciated columns and rows with no ToT
-        readoutData.drop(columns=['signal','charge profile', 'z'], inplace=True)
-        readoutData = readoutData.dropna(how='any')
-        
+        signalData = filteredData.apply(self._convertToSignal, axis=1)
+        crossing, ToT = list(zip(*signalData))
+        filteredData['ToT'] = ToT
+        filteredData['crossing'] = crossing
+
+        # Remove depreciated columns
+        filteredData.drop(['z', 'q'], axis=1, inplace=True)
+
+        # Expand data for easier use
+        readoutData = filteredData.explode('ToT', ignore_index=True)
+        readoutData = readoutData.explode('crossing', ignore_index=True)
+ 
         return readoutData
     
     #********************************************************************************#
     
-    def format3DPlot(self, plotData, title='', charge=False):
+    def _format3DPlot(self, plotData, title='', charge=False):
         """
         Creates a 3D and 2D plot of a given dataset.
         
@@ -528,12 +429,12 @@ class Reconstruction:
         # Plot data in 2D and 3D
         sub3DRef = sub3D.scatter(
             plotData['x'], plotData['y'], plotData['z'],
-            s=.2, c=color, cmap='viridis', label=f'{title} Readout Data'
+            s=.2, c=color, label=f'{title} Readout Data', cmap='viridis'
         )
         
         sub2DRef = sub2D.scatter(
             plotData['x'], plotData['y'],
-            s=.3, c=color, cmap='viridis', label=f'{title} Readout Data'
+            s=.3, c=color, label=f'{title} Readout Data', cmap='viridis'
         )
         
         # Add color bar
@@ -570,7 +471,7 @@ class Reconstruction:
         returns:
             rawFig: matplotlib figure
         """
-        rawFig = self.format3DPlot(self.rawData, title='Raw Data')
+        rawFig = self._format3DPlot(self.rawData, title='Raw Data')
         
         return rawFig
         
@@ -600,7 +501,8 @@ class Reconstruction:
         smearData = self.diffuseData(self.rawData, firstDifWidths)
 
         # Discretize data to approximate falling into grid holes
-        discreteData = self.discretizeData(smearData, (holePitch, holePitch, 0))
+        bins = {'x': holePitch, 'y': holePitch, 'z': 0}
+        discreteData = self.discretizeData(smearData, bins)
         
         # Approximate avalanches
         # Diffusion is smaller than the pitch between pixels, so there
@@ -610,7 +512,7 @@ class Reconstruction:
         avalData = discreteData.drop(belowID).reset_index(drop=True)
         
         # Plot data
-        FIMSfig = self.format3DPlot(avalData, title='FIMS')
+        FIMSfig = self._format3DPlot(avalData, title='FIMS')
         
         return FIMSfig
         
@@ -649,31 +551,27 @@ class Reconstruction:
         smearData = self.diffuseData(self.rawData, firstDifWidths)
 
         # Discretize data to approximate falling into first GEM holes
-        discreteData1 = self.discretizeData(smearData, (holePitch, holePitch, 0))
+        holeBins = {'x': holePitch, 'y': holePitch, 'z': 0}
+        discreteData1 = self.discretizeData(smearData, holeBins)
         
         # Approximate first set of avalanches
         avalData1 = self.avalancheData(discreteData1, secondDifWidths)
         
         # Discretize data to approximate falling into second GEM holes
-        discreteData2 = self.discretizeData(avalData1, (holePitch, holePitch, 0))
+        discreteData2 = self.discretizeData(avalData1, holeBins)
         
         # Approximate second set of avalanches
         avalData2 = self.avalancheData(discreteData2, secondDifWidths)
         
         # Discretize data to approximate pixels readout
-        readoutData = self.discretizeData(avalData2, (pixPitch, pixPitch, timeRez))
+        pixBins = {'x': pixPitch, 'y': pixPitch, 'z': timeRez}
+        readoutData = self.discretizeData(avalData2, pixBins)
         
         # Configure data for plotting
-        groupData = self._groupData(readoutData)
-        plotData = pd.DataFrame({
-            'x': [x for x,y in groupData['pixel id']],
-            'y': [y for x,y in groupData['pixel id']],
-            'z': [min(z) for z in groupData['z']],
-            'q': [len(z) for z in groupData['z']]
-        })
+        plotData = inputData.groupby(['x', 'y', 'z']).size().reset_index(name='q')
         
         # Plot data
-        beastFig = self.format3DPlot(plotData, title='BEAST', charge=True)
+        beastFig = self._format3DPlot(plotData, title='BEAST', charge=True)
         
         return beastFig
 
@@ -708,19 +606,21 @@ class Reconstruction:
         smearData = self.diffuseData(self.rawData, firstDifWidths)
 
         # Discretize data to approximate falling into grid holes
-        discreteData = self.discretizeData(smearData, (holePitch, holePitch, 0))
+        holeBins = {'x': holePitch, 'y': holePitch, 'z': 0}
+        discreteData = self.discretizeData(smearData, holeBins)
         
         # Approximate avalanches
         avalData = self.avalancheData(discreteData, secondDifWidths)
         
         # Discretize data to approximate pixels readout
-        padData = self.discretizeData(avalData, (pixPitch, pixPitch, timeRez))
+        pixBins = {'x': pixPitch, 'y': pixPitch, 'z': timeRez}
+        padData = self.discretizeData(avalData, pixBins)
 
         # Approximate Signal Readout
         #readoutData = self.approximateReadout(padData)
         readoutData = padData.copy()
         
-        ## Plot Migdal data ##
+        # Plot data
         # Extract Data
         totalXWidth = max(readoutData['x']) - min(readoutData['x'])
         totalYWidth = max(readoutData['y']) - min(readoutData['y'])
@@ -776,44 +676,24 @@ class Reconstruction:
         smearData = self.diffuseData(self.rawData, firstDifWidths)
 
         # Discretize data to approximate falling into grid holes
-        discreteData = self.discretizeData(smearData, (holePitch, holePitch, 0))
+        holeBins = {'x': holePitch, 'y': holePitch, 'z': 0}
+        discreteData = self.discretizeData(smearData, holeBins)
         
         # Approximate avalanche
         avalData = self.avalancheData(discreteData, secondDifWidths)
 
         # Discretize data to approximate pixels readout
-        padData = self.discretizeData(avalData, (pixPitch, pixPitch, timeRez))
+        pixBins = {'x': pixPitch, 'y': pixPitch, 'z': timeRez}
+        padData = self.discretizeData(avalData, pixBins)
 
         # Approximate Signal Readout
         readoutData = self.approximateReadout(padData)
-
-        ###########################################################################
-        # Get data and combine into single list
-        xPlot = [x for x,y in readoutData['pixel id']]
-        yPlot = [y for x,y in readoutData['pixel id']]
-        zPlot = [z for z,time in readoutData['ToT']]
-        densityPlot = [time for z,time in readoutData['ToT']]
-        fullZip = list(zip(xPlot, yPlot, zPlot, densityPlot))
-
-        # Unpack pixels with multiple charge bundles
-        extendedList = []
-        for x,y,z,t in fullZip.copy():
-            if len(z) > 1:
-                for height, time in list(zip(z,t)):
-                    extendedList.append((int(x),int(y),int(height),int(time)))
-            else:
-                extendedList.append((int(x),int(y),int(z[0]),int(t[0])))
-
-        # Re-seperate data for plotting
-        plotData = pd.DataFrame({
-            'x': [x for x,y,z,t in extendedList],
-            'y': [y for x,y,z,t in extendedList],
-            'z': [z for x,y,z,t in extendedList],
-            'q': [t for x,y,z,t in extendedList],
-        })
-        ###########################################################################
+        
+        # Format data for plotting
+        plotData = readoutData.rename(columns={'crossing': 'z', 'ToT': 'q'})
+        
         # Plot data
-        gridPixFig = self.format3DPlot(plotData, title='GridPix', charge=True)
+        gridPixFig = self._format3DPlot(plotData, title='GridPix', charge=True)
         
         return gridPixFig
 
