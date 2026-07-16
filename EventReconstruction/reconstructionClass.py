@@ -588,7 +588,7 @@ class Reconstruction:
             FIMSfig: matplotlib figure
         """
         # Extract relevant data from dictionary and set constant values
-        pitch = self.reconInfo['Hole Pitch']
+        holePitch = self.reconInfo['Hole Pitch']
         pixPitch = self.reconInfo['Pixel Pitch']
         timeRez = self.timeRez
         
@@ -600,7 +600,7 @@ class Reconstruction:
         smearData = self.diffuseData(self.rawData, firstDifWidths)
 
         # Discretize data to approximate falling into grid holes
-        discreteData = self.discretizeData(smearData, (pitch, pitch, 0))
+        discreteData = self.discretizeData(smearData, (holePitch, holePitch, 0))
         
         # Approximate avalanches
         # Diffusion is smaller than the pitch between pixels, so there
@@ -628,7 +628,7 @@ class Reconstruction:
             beastFig: matplotlib figure
         """
         # Extract relevant data from dictionary
-        pitch = self.reconInfo['Hole Pitch']
+        holePitch = self.reconInfo['Hole Pitch']
         pixPitch = self.reconInfo['Pixel Pitch']
         standoff = self.reconInfo['Standoff']
         timeRez = self.timeRez
@@ -649,13 +649,13 @@ class Reconstruction:
         smearData = self.diffuseData(self.rawData, firstDifWidths)
 
         # Discretize data to approximate falling into first GEM holes
-        discreteData1 = self.discretizeData(smearData, (pitch, pitch, 0))
+        discreteData1 = self.discretizeData(smearData, (holePitch, holePitch, 0))
         
         # Approximate first set of avalanches
         avalData1 = self.avalancheData(discreteData1, secondDifWidths)
         
         # Discretize data to approximate falling into second GEM holes
-        discreteData2 = self.discretizeData(avalData1, (pitch, pitch, 0))
+        discreteData2 = self.discretizeData(avalData1, (holePitch, holePitch, 0))
         
         # Approximate second set of avalanches
         avalData2 = self.avalancheData(discreteData2, secondDifWidths)
@@ -691,7 +691,7 @@ class Reconstruction:
             migdalfig: matplotlib figure
         """
         # Extract and calculate relevant data
-        pitch = self.reconInfo['Hole Pitch']
+        holePitch = self.reconInfo['Hole Pitch']
         pixPitch = self.reconInfo['Pixel Pitch']
         standoff = self.reconInfo['Standoff']
         timeRez = self.timeRez
@@ -708,7 +708,7 @@ class Reconstruction:
         smearData = self.diffuseData(self.rawData, firstDifWidths)
 
         # Discretize data to approximate falling into grid holes
-        discreteData = self.discretizeData(smearData, (pitch, pitch, 0))
+        discreteData = self.discretizeData(smearData, (holePitch, holePitch, 0))
         
         # Approximate avalanches
         avalData = self.avalancheData(discreteData, secondDifWidths)
@@ -759,7 +759,7 @@ class Reconstruction:
             gridpixFig: matplotlib figure
         """
         # Extract and calculate relevant data
-        pitch = self.reconInfo['Hole Pitch']
+        holePitch = self.reconInfo['Hole Pitch']
         pixPitch = self.reconInfo['Pixel Pitch']
         standoff = self.reconInfo['Standoff']
         timeRez = self.timeRez
@@ -776,13 +776,13 @@ class Reconstruction:
         smearData = self.diffuseData(self.rawData, firstDifWidths)
 
         # Discretize data to approximate falling into grid holes
-        discreteData = self.discretizeData(smearData, (pitch, pitch, 0))
+        discreteData = self.discretizeData(smearData, (holePitch, holePitch, 0))
         
         # Approximate avalanche
         avalData = self.avalancheData(discreteData, secondDifWidths)
 
         # Discretize data to approximate pixels readout
-        padData = self.discretizeData(avalData, (pitch, pitch, timeRez))
+        padData = self.discretizeData(avalData, (pixPitch, pixPitch, timeRez))
 
         # Approximate Signal Readout
         readoutData = self.approximateReadout(padData)
