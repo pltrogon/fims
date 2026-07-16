@@ -527,30 +527,18 @@ class Reconstruction:
         
         # Plot data in 2D and 3D
         sub3DRef = sub3D.scatter(
-            plotData['x'], 
-            plotData['y'],
-            plotData['z'],
-            s=.2,
-            c=color,
-            cmap='viridis',
-            label=f'{title} Readout Data'
+            plotData['x'], plotData['y'], plotData['z'],
+            s=.2, c=color, cmap='viridis', label=f'{title} Readout Data'
         )
         
         sub2DRef = sub2D.scatter(
-            plotData['x'], 
-            plotData['y'],
-            s=.3,
-            c=color,
-            cmap='viridis',
-            label=f'{title} Readout Data'
+            plotData['x'], plotData['y'],
+            s=.3, c=color, cmap='viridis', label=f'{title} Readout Data'
         )
         
         # Add color bar
         if charge:
-            colorBar = plt.colorbar(
-                sub2DRef, 
-                pad=.2
-            )
+            colorBar = plt.colorbar(sub2DRef, pad=.2)
             colorBar.set_label('Charge')
 
         # Add labels and adjust formatting
