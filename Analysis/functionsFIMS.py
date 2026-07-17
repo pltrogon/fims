@@ -735,7 +735,180 @@ def readScanData(filename):
 
     return scanData
 
+#********************************************************************************#
+def getPolyaData(scanData):
+    """
+    TODO
+    """
+    from runDataClass import runData
 
+    allSimData = []
+    for _, inRow in scanData.iterrows():
+        inRun = int(inRow['runNumber'])
+        inField = inRow['fieldRatio']
+        inColEff = inRow['colEfficiency']
+    
+        simData = runData(inRun)
+        inGain = simData.getCalcParameter('Trimmed Gain')
+        inTheta = simData.getCalcParameter('Polya Theta')
+        inThetaErr = simData.getCalcParameter('Polya Theta Error')
+        inPGain = simData.getCalcParameter('Polya Gain')
+        inPGainErr = simData.getCalcParameter('Polya Gain Error')
+    
+        if not math.isnan(inGain):
+            inGain = int(inGain)
+        else:
+            inGain = 10
+    
+        for inThresh in range(1, 101):
+            inDetectEff = simData._getEfficiency(threshold=inThresh)
+            detectEff = inDetectEff['efficiency']
+            
+            if detectEff < 0.001:
+                detectEff = 0.0
+                
+            netEfficiency = float(inColEff) * detectEff
+    
+            allSimData.append({ 
+                'runNumber': inRun,
+                'fieldRatio': inField,
+                'gain': inGain,
+                'threshold': inThresh,
+                'netEfficiency': netEfficiency,
+                'detectEff': detectEff,
+                'theta': inTheta,
+                'thetaErr': inThetaErr,
+                'pGain': inPGain,
+                'pGainErr': inPGainErr
+            })
+    
+    allSimData = pd.DataFrame(allSimData)
+
+    return allSimData
+    
+#********************************************************************************#
+def getDataToPlot(dataFile):
+    scanData = readScanData(dataFile)
+    allData = getPolyaData(scanData)
+
+    return allData
+
+#********************************************************************************#
+def plotPolyaData(datasets, absField=False):
+
+    fig, ax = plt.subplots(3, 1, figsize=(12, 8), sharex=True)
+
+    for i, (name, data) in enumerate(datasets.items()):
+        if absField:
+            fieldScale = .280 if name == 'T2K' else 1
+        else:
+            fieldScale = 1
+
+        plotData = data[['fieldRatio', 'pGain', 'pGainErr', 'theta', 'thetaErr']].drop_duplicates().sort_values('fieldRatio')
+
+        aboveEff = data[data['detectEff'] >= 0.95].copy()
+        aboveEff['GTR'] = aboveEff['gain'] / aboveEff['threshold']
+        minGTR = aboveEff.groupby('fieldRatio')['GTR'].min().reset_index()
+
+
+        ax[0].errorbar(
+            plotData['fieldRatio']*fieldScale, plotData['pGain'],
+            yerr=plotData['pGainErr'],
+            marker='x', ls='', 
+            label=f'{name}'
+        )
+
+        ax[1].errorbar(
+            plotData['fieldRatio']*fieldScale, plotData['theta'],
+            yerr=plotData['thetaErr'],
+            marker='x', ls='', 
+            label=f'{name}'
+        )
+
+        ax[2].scatter(
+            minGTR['fieldRatio']*fieldScale, minGTR['GTR'],
+            marker='x', 
+            label=f'{name}'
+        )
+
+    for inAx in ax:
+        inAx.set_xlim([10, None])
+        inAx.grid()
+
+    ax[0].set_ylim([1, 1e3])
+    ax[1].set_ylim([0, None])
+    ax[2].set_ylim([0, None])
+    
+    ax[0].set_yscale('log')
+
+    ax[0].set_ylabel(r'Gas Gain: $\bar{n}$', fontsize=14)
+    ax[1].set_ylabel(r'Polya Shape: $\theta$', fontsize=14)
+    ax[2].set_ylabel(r'GTR for $\epsilon_{\text{d}}$=95%', fontsize=14)
+
+    if absField:
+        ax[2].set_xlabel(r'Amplification Field: $E_{\text{Amp}}$ (kV/cm)', fontsize=14)
+    else:
+        ax[2].set_xlabel(r'Field Ratio: $E_{\text{Amp}}~/~E_{\text{Drift}}$', fontsize=14)
+
+    ax[0].legend(fontsize=14, loc='upper left')
+
+    plt.tight_layout()
+    plt.show()
+
+#********************************************************************************#
+def plotPolyaDataVsGain(datasets):
+
+    fig, ax = plt.subplots(3, 1, figsize=(12, 8), sharex=True)
+
+    for i, (name, data) in enumerate(datasets.items()):
+
+        plotData = data[['fieldRatio', 'pGain', 'pGainErr', 'theta', 'thetaErr']].drop_duplicates().sort_values('pGain')
+        
+        aboveEff = data[data['detectEff'] >= 0.95].copy()
+        aboveEff['GTR'] = aboveEff['gain'] / aboveEff['threshold']
+
+        idxMin = aboveEff.groupby('fieldRatio')['GTR'].idxmin()
+        minGTR = aboveEff.loc[idxMin]
+
+        ax[0].errorbar(
+            plotData['pGain'], plotData['fieldRatio'],
+            xerr=plotData['pGainErr'],
+            marker='x', ls='', 
+            label=f'{name}'     
+        )
+        
+        ax[1].errorbar(
+            plotData['pGain'], plotData['theta'],
+            xerr=plotData['pGainErr'], yerr=plotData['thetaErr'],
+            marker='x', ls='', 
+            label=f'{name}'
+        )
+
+        ax[2].plot(
+            minGTR['gain'], minGTR['GTR'],
+            ls='', label=name, marker='x'
+        )
+
+    for inAx in ax:
+        inAx.set_xlim([1, None])
+        inAx.set_xscale('log')
+        inAx.grid()
+
+    ax[0].set_ylim([10, None])
+    ax[1].set_ylim([0, None])
+    ax[2].set_ylim([0, None])
+    
+
+    ax[2].set_xlabel(r'Gas Gain: $\bar{n}$', fontsize=14)
+
+    ax[0].set_ylabel(r'Field Ratio: $E_{\text{Amp}}~/~E_{\text{Drift}}$', fontsize=14)
+    ax[1].set_ylabel(r'Polya Shape: $\theta$', fontsize=14)
+    ax[2].set_ylabel(r'GTR for $\epsilon_{\text{d}}$=95%', fontsize=14)
+
+    ax[0].legend(fontsize=14, loc='upper left')
+
+    plt.tight_layout()
+    plt.show()
     
 #********************************************************************************#
 def plotEfficiencyContours(allData, xLabel):
@@ -797,3 +970,7 @@ def plotEfficiencyContours(allData, xLabel):
     plt.show()
 
     return fig
+
+
+
+
