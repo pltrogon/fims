@@ -277,6 +277,7 @@ class Reconstruction:
         returns:
             discreteData (list): list of discretized coordinates.
         """
+        '''OLD - Verify new
         # Get bounds
         boundMin = round(np.min(inputArray)/10)*10 - 100
         boundMax = round(np.max(inputArray)/10)*10 + 100
@@ -291,6 +292,20 @@ class Reconstruction:
                 binnedData = pd.cut(inputArray[column], binEdges, labels=binEdges[:-1])
                 discreteData = binnedData.astype(int) + int(binSize[column]/2)
             discreteDataFrame[column] = discreteData
+        '''
+
+        # NEW -- Verify
+        discreteDataFrame = pd.DataFrame(index=inputArray.index)
+
+        for inColumn in inputArray.columns:
+            size = binSize.get(inColumn)
+
+            if not size:
+                discreteDataFrame[inColumn] = inputArray[inColumn]
+            else:
+                #Floor divide to snap to lower bin edge. Add half to center in bin.
+                binnedData = (inputArray[inColumn] // size) * size + (size/2)
+                discreteDataFrame[inColumn] = binnedData.astype(int)
 
         return discreteDataFrame
 
