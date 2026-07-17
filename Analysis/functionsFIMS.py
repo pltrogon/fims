@@ -419,8 +419,8 @@ def plotDataSets(dataSets, xVal, yVal, savePlot=False):
         'Thickness SiO2',
         'Field Bundle Radius'
     ]
-    xLabel = xVal + ' (um)' if xVal in dimensionalParam else xVal
-    yLabel = yVal + ' (um)' if yVal in dimensionalParam else yVal
+    xLabel = xVal + r' ($\mu$m)' if xVal in dimensionalParam else xVal
+    yLabel = yVal + r' ($\mu$m)' if yVal in dimensionalParam else yVal
 
     # Make plot and add data
     fig, ax = plt.subplots()
@@ -605,16 +605,16 @@ def plotFullField(runNum, zTarget=0):
 
     xySlice.scatter(xSlice, ySlice, s=.1, c='r')
     xySlice.grid()
-    xySlice.set_xlabel('x Position (um)')
-    xySlice.set_ylabel('y Position (um)')
+    xySlice.set_xlabel(r'x Position ($\mu$m)')
+    xySlice.set_ylabel(r'y Position ($\mu$m)')
     
     # Plot the x,z components of the field along with a line showing the target height
     xzSlice.scatter(xData, zData, s=.1, c='r')
     xzSlice.axhline(zTarget, c='y', lw=3, label='Target Height')
     xzSlice.grid()
     xzSlice.legend(loc='lower left')
-    xzSlice.set_xlabel('x Position (um)')
-    xzSlice.set_ylabel('z Position (um)')
+    xzSlice.set_xlabel(r'x Position ($\mu$m)')
+    xzSlice.set_ylabel(r'z Position ($\mu$m)')
     
     fieldFig.suptitle('2D Field Slice', fontsize = 20)
     
@@ -717,25 +717,24 @@ def readScanData(filename):
             rawLines.append(json.loads(line))
 
     flatData = []
-    for run in rawLines:
-        pitch = run['params']['pitch']
-        radius = run['params']['holeRadius']
-        transparency = getOT(radius, pitch)
-        standoff = run['params']['gridStandoff']
-        
+    for run in rawLines:       
         for result in run['results']:
             flatData.append({
-                'pitch': pitch,
-                'holeRadius': radius,
-                'transparency': transparency,
-                'standoff': standoff,
+                'pitch': run['params']['pitch'],
+                'holeRadius': run['params']['holeRadius'],
+                'standoff': run['params']['gridStandoff'],
                 'fieldRatio': result['fieldRatio'],
-                'netEfficiency': result['efficiencies']['netEff']
+                'runNumber': result['runNumber'],
+                'netEfficiency': result['efficiencies']['netEff'],
+                'colEfficiency': result['efficiencies']['collectionEff'],
+                'detEfficiency': result['efficiencies']['detectionEff']
+
             })
 
     scanData = pd.DataFrame(flatData)
 
     return scanData
+
 
     
 #********************************************************************************#

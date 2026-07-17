@@ -30,7 +30,7 @@ int main(){
 
 
     // ----- Define Gamma here ----- //
-    const double gamma = 1e-3;
+    const double gamma = 1e-4;
 
 
     // Define the range of Electric Fields
