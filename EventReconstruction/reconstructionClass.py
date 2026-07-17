@@ -303,6 +303,8 @@ class Reconstruction:
         returns:
             avalData (dataframe): list of x,y,z coordinates for each new electron
         """
+
+        '''OLD -- Keep until verify
         sigma = self.reconInfo['Avalanche Sigma']
         gain = self.reconInfo['Gain']
     
@@ -312,7 +314,26 @@ class Reconstruction:
             ), axis=1
         )
         avalData = pd.concat([pd.DataFrame(elem, columns=['x','y','z']) for elem in newElec], ignore_index=True)
+        '''
 
+        # NEW -- TODO Verify
+        #Get parameters
+        sigma = self.reconInfo['Avalanche Sigma']
+        gain = self.reconInfo['Gain']
+        numInitial = len(coord)
+
+        #Get gain for eaach initial electron from normal dist.
+        allGains = np.random.normal(gain, sigma, size=numInitial)
+        allGains = np.abs(allGains.astype(int)) + 1
+
+        #Duplicate coordinates based on individual gains
+        allElectrons = np.repeat(coord[['x', 'y', 'z']].to_numpy(), allGains, axis=0)
+        numNewElectrons = len(allElectrons)
+
+        #Get diffusion amounts and add to initial locations
+        diffusion = np.random.normal(0, difWidths, size=(numNewElectrons, 3))
+        avalData = pd.DataFrame(allElectrons + diffusion, columns=['x', 'y', 'z'])
+        
         return avalData
 
     #********************************************************************************#
