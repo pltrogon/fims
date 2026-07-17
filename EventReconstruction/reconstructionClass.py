@@ -246,11 +246,17 @@ class Reconstruction:
             diffusedData (list): list of all data points after being diffused
         """
         size = len(coordinates['x'])
+        '''OLD --  Keep until verify
         diffusionAmount = pd.DataFrame({
             'x': np.random.normal(0, diffusionWidths[0], size),
             'y': np.random.normal(0, diffusionWidths[1], size),
             'z': np.random.normal(0, diffusionWidths[2], size)
         })
+        '''
+        diffusionAmount = pd.DataFrame(
+            np.random.normal(0, diffusionWidths, size=(size, 3)),
+            columns=['x', 'y', 'z']
+        )
         
         diffusedData = coordinates.add(diffusionAmount, fill_value=0)
 
