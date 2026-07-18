@@ -9,8 +9,6 @@ import pandas as pd
 from scipy.special import gammaincc
 from scipy.stats import beta
 
-
-
 """
 Functions:
     getAnalysisNumbers
@@ -386,7 +384,6 @@ def getSetData(runList, xVal, yVal):#TODO account for calcData vs runData here
 
     return xData, yData
 
-
 #********************************************************************************#
 def plotDataSets(dataSets, xVal, yVal, savePlot=False):
     """
@@ -417,8 +414,8 @@ def plotDataSets(dataSets, xVal, yVal, savePlot=False):
         'Thickness SiO2',
         'Field Bundle Radius'
     ]
-    xLabel = xVal + ' (um)' if xVal in dimensionalParam else xVal
-    yLabel = yVal + ' (um)' if yVal in dimensionalParam else yVal
+    xLabel = xVal + r' ($\mu$m)' if xVal in dimensionalParam else xVal
+    yLabel = yVal + r' ($\mu$m)' if yVal in dimensionalParam else yVal
 
     # Make plot and add data
     fig, ax = plt.subplots()
@@ -445,7 +442,6 @@ def plotDataSets(dataSets, xVal, yVal, savePlot=False):
         
     plt.show()
     return
-
 
 #********************************************************************************#
 def plot2DGasScan(allData, plotParams):
@@ -543,7 +539,6 @@ def getGasData(runNoList):
     return allRunData
  
 #********************************************************************************#
-
 def getFullFieldData(runNumber):
     """
     Gets the field data points for each drift line created by runFullField.
@@ -569,7 +564,6 @@ def getFullFieldData(runNumber):
     return fieldData
 
 #********************************************************************************#
-
 def plotFullField(runNum, zTarget=0):
     """
     Plots a 2D slide of the full electric field.
@@ -603,23 +597,63 @@ def plotFullField(runNum, zTarget=0):
 
     xySlice.scatter(xSlice, ySlice, s=.1, c='r')
     xySlice.grid()
-    xySlice.set_xlabel('x Position (um)')
-    xySlice.set_ylabel('y Position (um)')
+    xySlice.set_xlabel(r'x Position ($\mu$m)')
+    xySlice.set_ylabel(r'y Position ($\mu$m)')
     
     # Plot the x,z components of the field along with a line showing the target height
     xzSlice.scatter(xData, zData, s=.1, c='r')
     xzSlice.axhline(zTarget, c='y', lw=3, label='Target Height')
     xzSlice.grid()
     xzSlice.legend(loc='lower left')
-    xzSlice.set_xlabel('x Position (um)')
-    xzSlice.set_ylabel('z Position (um)')
+    xzSlice.set_xlabel(r'x Position ($\mu$m)')
+    xzSlice.set_ylabel(r'z Position ($\mu$m)')
     
     fieldFig.suptitle('2D Field Slice', fontsize = 20)
     
     return fieldFig
 
 #********************************************************************************#
+def plotFullFieldMapping(runNum):
+    """
+    Plots a map of the initial radius of a field line vs its final radius.
+    
+    args:
+        runNumber (int): Run number of the dataset
+    
+    returns:
+        figure
+    """
+    # Get all field line data
+    fieldData = getFullFieldData(runNum)
+    xData = np.asarray(fieldData['xComp'])
+    yData = np.asarray(fieldData['yComp'])
+    zData = np.asarray(fieldData['zComp'])
 
+    #Calaculate all radii
+    radii = np.hypot(xData, yData)
+
+    #Identify jumps between lines
+    lineID = np.where(np.diff(zData) <= 0)[0]
+    
+    #Initial indices - Beginning and each point after a jump
+    initialID = np.insert(lineID+1, 0, 0)
+
+    #Final indices - First jump point and last
+    finalID = np.append(lineID, len(zData)-1)
+
+    #Make plot
+    mapFig = plt.figure()
+    plt.scatter(
+        radii[initialID], radii[finalID], 
+        c='b', s=.4, label='Data'
+    )
+    plt.xlabel(r'Initial Radius ($\mu$m)')
+    plt.ylabel(r'Final Radius ($\mu$m)')
+    plt.title('Field Line Mapping')
+    #plt.legend()
+    plt.grid()
+    
+    return mapFig
 
 #********************************************************************************#
 def getAsymErrs(eff, effErr):
