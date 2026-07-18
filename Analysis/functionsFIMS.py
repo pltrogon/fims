@@ -718,17 +718,21 @@ def readScanData(filename):
 
     flatData = []
     for run in rawLines:       
-        for result in run['results']:
+        params = run.get('params', {})
+        results = run.get('results', [])
+        
+        for result in results:
+            efficiencies = result.get('efficiencies', {})
+            
             flatData.append({
-                'pitch': run['params']['pitch'],
-                'holeRadius': run['params']['holeRadius'],
-                'standoff': run['params']['gridStandoff'],
-                'fieldRatio': result['fieldRatio'],
-                'runNumber': result['runNumber'],
-                'netEfficiency': result['efficiencies']['netEff'],
-                'colEfficiency': result['efficiencies']['collectionEff'],
-                'detEfficiency': result['efficiencies']['detectionEff']
-
+                'pitch': params.get('pitch', -1),
+                'holeRadius': params.get('holeRadius', -1),
+                'standoff': params.get('gridStandoff', -1),
+                'fieldRatio': result.get('fieldRatio', -1),
+                'runNumber': result.get('runNumber', -1),
+                'netEfficiency': efficiencies.get('netEff', 0),
+                'colEfficiency': efficiencies.get('collectionEff', 0),
+                'detEfficiency': efficiencies.get('detectionEff', 0)
             })
 
     scanData = pd.DataFrame(flatData)
@@ -760,14 +764,16 @@ def getPolyaData(scanData):
         else:
             inGain = 10
     
+        collectEff = float(inColEff)
+
         for inThresh in range(1, 101):
             inDetectEff = simData._getEfficiency(threshold=inThresh)
             detectEff = inDetectEff['efficiency']
             
-            if detectEff < 0.001:
+            if detectEff < 0.01:
                 detectEff = 0.0
                 
-            netEfficiency = float(inColEff) * detectEff
+            netEfficiency = collectEff*detectEff
     
             allSimData.append({ 
                 'runNumber': inRun,
@@ -776,6 +782,7 @@ def getPolyaData(scanData):
                 'threshold': inThresh,
                 'netEfficiency': netEfficiency,
                 'detectEff': detectEff,
+                'collectEff': collectEff,
                 'theta': inTheta,
                 'thetaErr': inThetaErr,
                 'pGain': inPGain,
