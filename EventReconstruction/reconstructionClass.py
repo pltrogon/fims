@@ -422,7 +422,7 @@ class Reconstruction:
         # Plot data in 2D and 3D
         sub3DRef = sub3D.scatter(
             plotData['x'], plotData['y'], plotData['z'],
-            s=.2, c=color, label=f'{title} Readout Data', cmap='viridis'
+            s=.1, c=color, label=f'{title} Readout Data', cmap='viridis'
         )
         
         sub2DRef = sub2D.scatter(
@@ -561,7 +561,7 @@ class Reconstruction:
         readoutData = self.discretizeData(avalData2, pixBins)
         
         # Configure data for plotting
-        plotData = inputData.groupby(['x', 'y', 'z']).size().reset_index(name='q')
+        plotData = readoutData.groupby(['x', 'y', 'z']).size().reset_index(name='q')
         
         # Plot data
         beastFig = self._format3DPlot(plotData, title='BEAST', charge=True)
