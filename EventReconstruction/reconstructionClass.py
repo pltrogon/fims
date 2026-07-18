@@ -246,13 +246,7 @@ class Reconstruction:
             diffusedData (list): list of all data points after being diffused
         """
         size = len(coordinates['x'])
-        '''OLD --  Keep until verify
-        diffusionAmount = pd.DataFrame({
-            'x': np.random.normal(0, diffusionWidths[0], size),
-            'y': np.random.normal(0, diffusionWidths[1], size),
-            'z': np.random.normal(0, diffusionWidths[2], size)
-        })
-        '''
+        
         diffusionAmount = pd.DataFrame(
             np.random.normal(0, diffusionWidths, size=(size, 3)),
             columns=['x', 'y', 'z']
@@ -277,24 +271,6 @@ class Reconstruction:
         returns:
             discreteData (list): list of discretized coordinates.
         """
-        '''OLD - Verify new
-        # Get bounds
-        boundMin = round(np.min(inputArray)/10)*10 - 100
-        boundMax = round(np.max(inputArray)/10)*10 + 100
-
-        discreteDataFrame = pd.DataFrame()
-        for column in inputArray:
-            # Check if data has a bin size
-            if binSize[column] == 0 or binSize[column] == None:
-                discreteData = inputArray[column]
-            else:
-                binEdges = np.arange(boundMin, boundMax, binSize[column])
-                binnedData = pd.cut(inputArray[column], binEdges, labels=binEdges[:-1])
-                discreteData = binnedData.astype(int) + int(binSize[column]/2)
-            discreteDataFrame[column] = discreteData
-        '''
-
-        # NEW -- Verify
         discreteDataFrame = pd.DataFrame(index=inputArray.index)
 
         for inColumn in inputArray.columns:
@@ -324,34 +300,20 @@ class Reconstruction:
         returns:
             avalData (dataframe): list of x,y,z coordinates for each new electron
         """
-
-        '''OLD -- Keep until verify
-        sigma = self.reconInfo['Avalanche Sigma']
-        gain = self.reconInfo['Gain']
-    
-        newElec = coord.apply(lambda x: np.random.normal(
-            loc=(x['x'], x['y'], x['z']), scale=difWidths, 
-            size=(abs(int(random.gauss(gain, sigma)))+1, 3)
-            ), axis=1
-        )
-        avalData = pd.concat([pd.DataFrame(elem, columns=['x','y','z']) for elem in newElec], ignore_index=True)
-        '''
-
-        # NEW -- TODO Verify
-        #Get parameters
+        # Get parameters
         sigma = self.reconInfo['Avalanche Sigma']
         gain = self.reconInfo['Gain']
         numInitial = len(coord)
 
-        #Get gain for eaach initial electron from normal dist.
+        # Get gain for each initial electron from normal dist.
         allGains = np.random.normal(gain, sigma, size=numInitial)
         allGains = np.abs(allGains.astype(int)) + 1
 
-        #Duplicate coordinates based on individual gains
+        # Duplicate coordinates based on individual gains
         allElectrons = np.repeat(coord[['x', 'y', 'z']].to_numpy(), allGains, axis=0)
         numNewElectrons = len(allElectrons)
 
-        #Get diffusion amounts and add to initial locations
+        # Get diffusion amounts and add to initial locations
         diffusion = np.random.normal(0, difWidths, size=(numNewElectrons, 3))
         avalData = pd.DataFrame(allElectrons + diffusion, columns=['x', 'y', 'z'])
         
