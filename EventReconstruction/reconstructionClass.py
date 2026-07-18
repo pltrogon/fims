@@ -522,9 +522,15 @@ class Reconstruction:
         pixBins = {'x': pixPitch, 'y': pixPitch, 'z': timeRez}
         readoutData = self.discretizeData(avalData2, pixBins)
         
-        # Configure data for plotting
-        plotData = readoutData.groupby(['x', 'y', 'z']).size().reset_index(name='q')
+        # Group Data by pixel
+        groupedData = self._groupData(readoutData)
         
+        # Configure data for plotting
+        plotData = pd.DataFrame()
+        plotData[['x', 'y']] = groupedData[['x', 'y']]
+        plotData['z'] = groupedData['z'].apply(min)
+        plotData['q'] = groupedData['q'].apply(sum)
+
         # Plot data
         beastFig = self._format3DPlot(plotData, title='BEAST', charge=True)
         
