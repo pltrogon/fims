@@ -102,9 +102,9 @@ class FIMS_Simulation:
             raise RuntimeError('Error initializing parameters.')
         
         self._geometry = None
-        self._unitCell = 'FIMS'
+        self._unitCell = 'Hexagonal'
         self._surroundingCells = False
-        self._runMode = 'FIMS'
+        self._runMode = 'Hexagonal'
 
         self._filenames = None
         
@@ -371,7 +371,7 @@ class FIMS_Simulation:
         return garfieldEnv
 
 #**********************************************************************#
-    def setGeometry(self, unitCell='FIMS', surrounding=False):
+    def setGeometry(self, unitCell='Hexagonal', surrounding=False):
         """
         Sets the geometry for the simulation.
 
@@ -380,13 +380,14 @@ class FIMS_Simulation:
             surrounding (bool): Option to include surrounding cells in the geometry.
         """
 
-        if unitCell not in ['FIMS', 'GridPix']:
-            raise ValueError('Error - Invalid unit cell. Options are "FIMS" and "GridPix".')
+        if unitCell not in ['Square', 'Hexagonal']:
+            raise ValueError('Error - Invalid unit cell. Options are "Square" and "Hexagonal".')
         
         self._unitCell = unitCell
         self._surroundingCells = surrounding
+        self._runMode = unitCell
         if self._surroundingCells:
-            self._runMode = unitCell + 'Surrounding'
+            self._runMode += 'Surrounding'
 
         return
 
@@ -470,6 +471,7 @@ class FIMS_Simulation:
         """
         Generates the geometry for the simulation using the geometryClass.
         """
+        # TODO: add dictionary for grid hole shape, pad shape, and surrounding cells?
         self._geometry = geometryClass(self._param)
         self._geometry.setUnitCell(self._unitCell)
         self._geometry.setSurroundingCells(self._surroundingCells)
@@ -684,7 +686,7 @@ class FIMS_Simulation:
     
         self._checkParam()
     
-        self.setGeometry(unitCell='GridPix')
+        self.setGeometry(unitCell='Square')
         self._generateGeometry()
             
         #Solve fields and run Garfield
@@ -718,7 +720,7 @@ class FIMS_Simulation:
 
         # Create surrounding-cell geometry
         self._geometryCapacitance = geometryClass(self._param)
-        self._geometryCapacitance.setUnitCell('FIMSHexagonal')
+        self._geometryCapacitance.setUnitCell('Hexagonal')
         self._geometryCapacitance.setSurroundingCells(True)
         self._geometryCapacitance.buildGeometry()
 

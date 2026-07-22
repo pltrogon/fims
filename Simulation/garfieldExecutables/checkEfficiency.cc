@@ -57,7 +57,7 @@ int main(int argc, char * argv[]) {
     double targetEfficiency = std::atof(argv[3]);
     int electronThreshold = std::atoi(argv[4]);
 
-    //Randon seed
+    //Random seed
     std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
     const double MICRONTOCM = 1e-4;
@@ -91,7 +91,31 @@ int main(int argc, char * argv[]) {
     fieldFIMS.GetBoundingBox(xmin, ymin, zmin, xmax, ymax, zmax);
 
     //Define boundary region for simulation
-    double cellLength = simParams->pitch/std::sqrt(3.);
+    double cellLength = simParams->pitch;
+    bool hexCell = false;
+    
+    switch(geometryMode){
+      case GeometryMode::Square: {
+        cellLength = simParams->pitch;
+        break;
+      }
+      case GeometryMode::SquareSurrounding: {
+        cellLength = simParams->pitch;
+        break;
+      }
+      case GeometryMode::Hexagonal: {
+        cellLength = simParams->pitch/std::sqrt(3.);
+        hexCell = true;
+        break;
+      }
+      case GeometryMode::HexagonalSurrounding: {
+        cellLength = simParams->pitch/std::sqrt(3.);
+        hexCell = true;
+        break;
+      }
+      default:
+        return -1;
+    }
 
     double xBoundary[2], yBoundary[2], zBoundary[2];
     zBoundary[0] = zmin;
@@ -152,9 +176,18 @@ int main(int argc, char * argv[]) {
     while(runAvalanche && numInitialElectrons < simParams->numAvalanche){
         for(int inAvalanche=0; inAvalanche < numInBunch; inAvalanche++){
             numInitialElectrons++;
-
+            
+            double sampleX, sampleY;
             //Random xy on plane
-            auto [sampleX, sampleY] = randomXYInHexagon(cellLength);
+            if (hexCell) {
+              auto [randX, randY] = randomXYInHexagon(cellLength);
+              sampleX = randX, sampleY = randY;
+            }
+            else {
+              auto [randX, randY] = randomXYInSquare(cellLength);
+              sampleX = randX, sampleY = randY;
+            }
+            
             double curX = sampleX, curY = sampleY, curZ = z0;
             double curTime = t0;
             double curEnergy = e0;
@@ -181,7 +214,7 @@ int main(int argc, char * argv[]) {
 
                 int numAvalancheElectrons = avalancheE->GetNumberOfElectronEndpoints();
 
-                //Ensure electron didnt disappear. Reinitialize if so. 
+                //Ensure electron didn't disappear. Reinitialize if so. 
                 if(numAvalancheElectrons >= 1){
                     avalancheE->GetElectronEndpoint(0, xi, yi, zi, ti, Ei, xf, yf, zf, tf, Ef, exitStatus);
                 }
@@ -189,8 +222,17 @@ int main(int argc, char * argv[]) {
                     //std::cerr << "Error: No electrons in avalanche - Restarting." << std::endl;
                     //std::cerr << "\tError at (" << curX << ", " << curY << ", " << curZ << ")" << std::endl;
                     numFailure++;
-
-                    auto [newX, newY] = randomXYInHexagon(cellLength);
+                    
+                    double newX, newY;
+                    if (hexCell) {
+                      auto [randX, randY] = randomXYInHexagon(cellLength);
+                      newX = randX, newY = randY;
+                    }
+                    else {
+                      auto [randX, randY] = randomXYInSquare(cellLength);
+                      newX = randX, newY = randY;
+                    }
+                    
                     curX = newX, curY = newY, curZ = z0;
                     curTime = t0;
                     curEnergy = e0;

@@ -62,6 +62,24 @@ std::pair<double, double> randomXYInHexagon(double sideLength) {
 }
 
 /**
+ * @brief Generates a random (x,y) point uniformly distributed within a square centered at the origin with the specified side length.
+ * @param sideLength The length of each side of the square.
+ * 
+ * @return A pair of doubles representing the (x,y) coordinates of the random point.
+ */
+std::pair<double, double> randomXYInSquare(double sideLength) {
+
+    thread_local static std::mt19937 rng(std::random_device{}());
+    std::uniform_real_distribution<double> dist(-1.0, 1.0);
+
+    // Uniform sample in box
+    double sampleX = dist(rng) * sideLength/2.;
+    double sampleY = dist(rng) * sideLength/2.;
+    
+    return {sampleX, sampleY};
+}
+
+/**
  * @brief Utility to temporarily silence std::cerr.
  */
 SilenceCerr::SilenceCerr() {
@@ -236,12 +254,17 @@ EfficiencyResults calculateEfficiencyStats(int nSuccess, int nTotal) {
  */
 GeometryMode stringToGeometryMode(std::string str) {
     std::transform(str.begin(), str.end(), str.begin(), ::tolower);
-
-    if(str == "fims") {
-        return GeometryMode::FIMS;
+    if(str == "square") {
+        return GeometryMode::Square;
     }
-    if(str == "fimssurrounding") {
-        return GeometryMode::FIMSSurrounding;
+    if(str == "squaresurrounding") {
+        return GeometryMode::SquareSurrounding;
+    }
+    if(str == "hexagonal") {
+        return GeometryMode::Hexagonal;
+    }
+    if(str == "hexagonalsurrounding") {
+        return GeometryMode::HexagonalSurrounding;
     }
     
     return GeometryMode::Unknown;

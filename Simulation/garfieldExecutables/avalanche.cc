@@ -83,29 +83,62 @@ int main(int argc, char * argv[]) {
 
   std::vector<std::string> sensorList;
   sensorList.push_back("CentralPad");
-
-
+  double cellXScale = 1;
+  double cellYScale = 1;
+  bool hexCell = false;
+  
   switch(geometryMode){
-
-    case GeometryMode::FIMS: {
+    case GeometryMode::Square: {
+      // Adjust E-Field line generation points
+      cellXScale = 0.5;
+      cellYScale = 0.5;
+      break;
+    }
+    case GeometryMode::SquareSurrounding: {
+      // Add pads to sensor list
+      sensorList.push_back("TopPad");
+      sensorList.push_back("RightTopPad");
+      sensorList.push_back("RightPad");
+      sensorList.push_back("RightBottomPad");
+      sensorList.push_back("BottomPad");
+      sensorList.push_back("LeftBottomPad");
+      sensorList.push_back("LeftPad");
+      sensorList.push_back("LeftTopPad");
+      // Adjust E-Field line generation points
+      cellXScale = 0.5;
+      cellYScale = 0.5;
+      break;
+    }
+    
+    case GeometryMode::Hexagonal: {
+      // Add pads to sensor list
       sensorList.push_back("CornerPad");
+      // Adjust E-Field line generation points
+      cellXScale = 1./sqrt(3.);
+      cellYScale = 0.5;
+      hexCell = true;
       break;
     }
 
-    case GeometryMode::FIMSSurrounding: {
+    case GeometryMode::HexagonalSurrounding: {
+      // Add pads to sensor list
       sensorList.push_back("TopPad");
       sensorList.push_back("BottomPad");
       sensorList.push_back("RightTopPad");
       sensorList.push_back("RightBottomPad");
       sensorList.push_back("LeftTopPad");
       sensorList.push_back("LeftBottomPad");
+      // Adjust E-Field line generation points
+      cellXScale = 1./sqrt(3.);
+      cellYScale = 0.5;
+      hexCell = true;
       break;
     }
 
     default:
       return -1;
   }
-    
+  
   //Random seed
   std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
@@ -254,11 +287,9 @@ int main(int argc, char * argv[]) {
   std::vector<double> yEdgeStart;
   double rangeScale = 0.99;
   double fieldLineScale = 1.*(simParams->numFieldLine-1);
-
-  // The x-direction is the long axis of the geometry. 
-  const double xLineLimit = simParams->pitch/sqrt(3.)*rangeScale;
-  const double yLineLimit = simParams->pitch/2.*rangeScale;
-  
+  const double xLineLimit = simParams->pitch*cellXScale*rangeScale;
+  const double yLineLimit = simParams->pitch*cellYScale*rangeScale;
+      
   //Note that the total number of field lines is x2 the given number of field lines (x and y)
   // Field Lines along x:
   for(int i = 0; i < simParams->numFieldLine; i++){
@@ -281,13 +312,26 @@ int main(int argc, char * argv[]) {
   // Lines generated along the perimeter of the unit cell
   //Upper edge from left to right
   for(int i = 0; i < simParams->numFieldLine; i++){
-    xEdgeStart.push_back(xLineLimit*(i/fieldLineScale - 0.5));
-    yEdgeStart.push_back(yLineLimit);
+    if (hexCell) {
+      xEdgeStart.push_back(xLineLimit*(i/fieldLineScale - 0.5));
+      yEdgeStart.push_back(yLineLimit);
+    }
+    else {
+      xEdgeStart.push_back(xLineLimit*i/fieldLineScale);
+      yEdgeStart.push_back(yLineLimit);
+    }
   }
-  //Slanted edge - From right corner to top-right corner
+  
+  //Right edge - From bottom right corner to top-right corner
   for(int i = 0; i < simParams->numFieldLine; i++){
-    xEdgeStart.push_back(xLineLimit*(1. - i/fieldLineScale/2.));
-    yEdgeStart.push_back(yLineLimit*i/fieldLineScale);
+    if (hexCell) {
+      xEdgeStart.push_back(xLineLimit*(1. - i/fieldLineScale/2.));
+      yEdgeStart.push_back(yLineLimit*i/fieldLineScale);
+    }
+    else {
+      xEdgeStart.push_back(xLineLimit);
+      yEdgeStart.push_back(yLineLimit*i/fieldLineScale);
+    }
   }
 
   // ***** Calculate field Lines ***** //
@@ -547,7 +591,7 @@ int main(int argc, char * argv[]) {
       );
       
       
-      avalancheE->EnablePlotting(viewElectronDrift, 250); // What does 250 number do?
+      avalancheE->EnablePlotting(viewElectronDrift, 250);
       driftIon->EnablePlotting(viewIonDrift);
       
       //Filename

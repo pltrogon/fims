@@ -86,6 +86,14 @@ std::string getGitVersion();
 std::pair<double, double> randomXYInHexagon(double sideLength);
 
 /**
+ * @brief Generates a random (x,y) point uniformly distributed within a square centered at the origin with the specified side length.
+ * @param sideLength The length of each side of the square.
+ * 
+ * @return A pair of doubles representing the (x,y) coordinates of the random point.
+ */
+std::pair<double, double> randomXYInSquare(double sideLength);
+
+/**
  * @brief Utility to temporarily silence std::cerr.
  */
 class SilenceCerr {
@@ -130,8 +138,10 @@ EfficiencyResults calculateEfficiencyStats(int nSuccess, int nTotal);
 
 // Geometry mode enumeration and conversion
 enum class GeometryMode {
-    FIMS,
-    FIMSSurrounding,
+    Square,
+    SquareSurrounding,
+    Hexagonal,
+    HexagonalSurrounding,
     Unknown
 };
 
