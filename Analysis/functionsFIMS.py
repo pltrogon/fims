@@ -863,11 +863,13 @@ def plotPolyaData(datasets, absField=False):
     plt.show()
 
 #********************************************************************************#
-def plotPolyaDataVsGain(datasets):
+def plotPolyaDataVsGain(datasets, absField=False):
 
     fig, ax = plt.subplots(3, 1, figsize=(12, 8), sharex=True)
 
     for i, (name, data) in enumerate(datasets.items()):
+
+        fieldScale = .280 if (name=='T2K') and absField else 1
 
         plotData = data[['fieldRatio', 'pGain', 'pGainErr', 'theta', 'thetaErr']].drop_duplicates().sort_values('pGain')
         
@@ -878,7 +880,7 @@ def plotPolyaDataVsGain(datasets):
         minGTR = aboveEff.loc[idxMin]
 
         ax[0].errorbar(
-            plotData['pGain'], plotData['fieldRatio'],
+            plotData['pGain'], plotData['fieldRatio']*fieldScale,
             xerr=plotData['pGainErr'],
             marker='x', ls='', 
             label=f'{name}'     
@@ -908,7 +910,10 @@ def plotPolyaDataVsGain(datasets):
 
     ax[2].set_xlabel(r'Gas Gain: $\bar{n}$', fontsize=14)
 
-    ax[0].set_ylabel(r'Field Ratio: $E_{\text{Amp}}~/~E_{\text{Drift}}$', fontsize=14)
+    if absField:
+        ax[0].set_ylabel(r'Field: $E_{\text{Amp}}$ (kV/cm)', fontsize=14)
+    else:
+        ax[0].set_ylabel(r'Field Ratio: $E_{\text{Amp}}~/~E_{\text{Drift}}$', fontsize=14)
     ax[1].set_ylabel(r'Polya Shape: $\theta$', fontsize=14)
     ax[2].set_ylabel(r'GTR for $\epsilon_{\text{d}}$=95%', fontsize=14)
 
