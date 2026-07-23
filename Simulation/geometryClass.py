@@ -1415,8 +1415,9 @@ class gmshClass:
         gmsh.option.setNumber('Mesh.MeshSizeFromPoints', 1)
 
         gmsh.model.add(filename)
-        # TODO: restore singleHexagon? 
-        # Or, perhaps extending the bounds in the existing methods is sufficient?
+        # TODO: Add single unit cell option
+        # Perhaps this "match" should be for bounds (corner, full, surrounding)
+        # and the unit cell shape can be determined later.
         match self._unitCell:
             case 'Square':
                 allCellsMap = self._makeSquareCell()

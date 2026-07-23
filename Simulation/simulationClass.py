@@ -102,7 +102,7 @@ class FIMS_Simulation:
             raise RuntimeError('Error initializing parameters.')
         
         self._geometry = None
-        self._geoConfiguration = {
+        self.geoConfiguration = {
             'unitCell': 'Hexagonal',
             'holeShape': 'circle',
             'padShape': 'hexagon',
@@ -188,6 +188,9 @@ class FIMS_Simulation:
         """
         Checks that the geometry options are valid.
         """
+        # TODO: code should be immune to case. Use input.lower()? 
+        # (see myFunctions for example)
+        # TODO: investigate dataclass for input instead of dictionary.
         geometryKeys = [
             'unitCell',
             'surrounding',
@@ -421,10 +424,10 @@ class FIMS_Simulation:
                 surrounding (bool): whether to include surrounding cells.
         """
         self._checkGeometryConfiguration(geoConfig)
-        self._geoConfiguration = geoConfig
+        self.geoConfiguration = geoConfig
         
-        self._runMode = self._geoConfiguration['unitCell']
-        if self._geoConfiguration['surrounding']:
+        self._runMode = self.geoConfiguration['unitCell']
+        if self.geoConfiguration['surrounding']:
             self._runMode += 'Surrounding'
 
         return
@@ -510,7 +513,7 @@ class FIMS_Simulation:
         Generates the geometry for the simulation using the geometryClass.
         """
         self._geometry = geometryClass(self._param)
-        self._geometry.setGeometryConfiguration(self._geoConfiguration)
+        self._geometry.setGeometryConfiguration(self.geoConfiguration)
         self._geometry.buildGeometry()
 
         return        
@@ -522,7 +525,7 @@ class FIMS_Simulation:
         print('Visualizing geometry...')
         self._geometry = geometryClass(self._param)
         self._geometry.setGUI(runGUI=True)
-        self._geometry.setGeometryConfiguration(self._geoConfiguration)
+        self._geometry.setGeometryConfiguration(self.geoConfiguration)
         self._geometry.buildGeometry()
 
         return
@@ -686,7 +689,7 @@ class FIMS_Simulation:
         self._checkParam()
     
         #Generate geometry for surrounding cells
-        self._geoConfiguration['surrounding'] = True
+        self.geoConfiguration['surrounding'] = True
         self._generateGeometry()
 
         #Solve fields and run Garfield
@@ -719,9 +722,9 @@ class FIMS_Simulation:
         self._checkParam()
         
         # Create surrounding-cell geometry
-        self._geoConfiguration['surrounding'] = True
+        self.geoConfiguration['surrounding'] = True
         self._geoCapacitance = geometryClass(self._param)
-        self._geoCapacitance.setGeometryConfiguration(self._geoConfiguration)
+        self._geoCapacitance.setGeometryConfiguration(self.geoConfiguration)
         self._geoCapacitance.buildGeometry()
 
         # Solve the capacitance matrix
