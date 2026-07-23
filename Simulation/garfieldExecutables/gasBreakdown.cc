@@ -82,13 +82,13 @@ int main(){
             double dist_cm = logGammaTerm / alpha;
             double dist_um = dist_cm*1e4;
             double breakdownV = inField*dist_cm;
-            double field_kV = inField/1000.;
+            double field_kVcm = inField/1000.;
 
             //Paschen parameters
             double paschenX = dist_cm*gasPressure;
             double paschenY = breakdownV;
 
-            dataFile << paschenX << "," << paschenY << "," << dist_um << "," << field_kV << std::endl;
+            dataFile << paschenX << "," << paschenY << "," << dist_um << "," << field_kVcm << std::endl;
         }
     }
 
