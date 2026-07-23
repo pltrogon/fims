@@ -490,6 +490,240 @@ class gmshClass:
         return dielectricVolume, padSurfaces
 
 #**********************************************************************#
+    
+    def _buildSurroundingGrid(self, holeShape='circle', hexCell=True):
+        """
+        Constructs the volume for the amplification grid with surrounding Cells.
+        
+        args:
+            holeShape (str): shape of the hole to be made
+            hexCell (bool): Determines whether the holes have a square or 
+        hexagonal arrangement.
+        
+        returns:
+            gridVolume: object representing the volume of the amplification grid.
+        """
+        # Get relevant geometry parameters
+        gridThickness = self._param['gridThickness']
+        holeRadius = self._param['holeRadius']
+        pitch = self._param['pitch']
+        
+        # Create hole cut tool based on given hole shape.
+        match holeShape:
+            case 'circle':
+                centerGridHole = self._occ.addCylinder(
+                    0, 0, -gridThickness/2,
+                    0, 0, gridThickness,
+                    holeRadius
+                )
+            case 'hexagon':
+                centerGridHole = self._createHexagon(
+                    holeRadius, -gridThickness/2, gridThickness
+                )
+            case 'octagon':
+                centerGridHole = self._createOctagon(
+                    holeRadius, -gridThickness/2, gridThickness
+                )
+        
+        # Determine if the unit cell is hexagonal or not.
+        if hexCell:
+            # Create a grid without holes
+            gridBox = self._occ.addBox(
+                -pitch*math.sqrt(3)/2, -pitch, -gridThickness/2,
+                pitch*math.sqrt(3), 2*pitch, gridThickness
+            )
+            
+            # Locate the center points for all surrounding holes
+            xLength = pitch*math.sqrt(3)/2
+            yLength = pitch
+            neighborCenters = [
+                (0, yLength), #Top
+                (0, -yLength), #Bottom
+                (xLength, yLength/2), #Top-Right
+                (xLength, -yLength/2), #Bottom-Right
+                (-xLength, yLength/2), #Top-Left
+                (-xLength, -yLength/2) #Bottom-Left
+            ]
+            
+        else:
+            # Create grid without holes
+            gridBox = self._occ.addBox(
+                -pitch, -pitch, -gridThickness/2,
+                2*pitch, 2*pitch, gridThickness
+            )
+            
+            # Locate the center points of all surrounding holes
+            neighborCenters = [
+                (0, pitch), # Top
+                (pitch, pitch), # Top-Right
+                (pitch, 0), # Right
+                (pitch, -pitch), # Bottom-Right
+                (0, -pitch), # Bottom
+                (-pitch, -pitch), #Bottom-Left
+                (-pitch, 0), # Left
+                (-pitch, pitch) # Top-Left
+            ]
+
+        # Create the surrounding holes
+        gridHoleTools = [(3, centerGridHole)]
+        for x, y in neighborCenters:
+            newHole = self._occ.copy([(3, centerGridHole)])
+            self._occ.translate(newHole, x, y, 0)
+            gridHoleTools.extend(newHole)
+        
+        gridVolume, _ = self._occ.cut(
+            [(3, gridBox)],
+            gridHoleTools
+        )
+        
+        return gridVolume
+
+#**********************************************************************#
+
+    def _buildSurroundingDielectric(self, holeShape='hexagon', hexCell=True):
+        """
+        Builds the volume associated with the dielectric, including surrounding cells.
+        
+        args:
+            holeShape (str): shape of the holes for the readout pads.
+            hexCell (bool): determines if the arangement is hexagonal or square.
+        
+        returns:
+            dielectricVolume: object for the volume of the dielectric.
+        """
+        # Get relevant geometry parameters
+        pitch = self._param['pitch']
+        padLength = self._param['padLength']
+        gridStandoff = self._param['gridStandoff']
+        thicknessSiO2 = self._param['thicknessSiO2']
+        padSurfaces = []
+        
+        # Determine hole and pad shape
+        match holeShape:
+            case 'square':
+                # Add central pad hole
+                centerPadHole = self._occ.addBox(
+                    -padLength/2, -padLength/2, -gridStandoff,
+                    padLength, padLength, thicknessSiO2
+                )
+                # Add central readout pad
+                centerPadSurface = self._occ.addRectangle(
+                    -padLength/2, -padLength/2, -gridStandoff,
+                    padLength, padLength
+                )
+                centerPadSurface = (2, centerPadSurface)
+
+            case 'hexagon':
+                # Add central pad hole
+                centerPadHole = self._createHexagon(
+                    padLength, -gridStandoff, thicknessSiO2
+                )
+                
+                # Add central readout pad
+                centerPadHex = self._createHexagon(
+                    padLength, -gridStandoff
+                )
+                fullReadoutPlane = self._occ.addBox(
+                    -pitch, -pitch, -gridStandoff,
+                    2*pitch, 2*pitch, 1.0
+                )
+                centerPadSurface, _ = self._occ.intersect(
+                    [(2, centerPadHex)],
+                    [(3, fullReadoutPlane)],
+                    removeObject=True, removeTool=True
+                )
+                centerPadSurface = centerPadSurface[0]
+                
+            case 'octagon':
+                # Add central pad hole
+                centerPadHole = self._createOctagon(
+                    padLength, -gridStandoff, thicknessSiO2
+                )
+                
+                # Add central readout pad
+                centerPadHex = self._createOctagon(
+                    padLength, -gridStandoff
+                )
+                fullReadoutPlane = self._occ.addBox(
+                    -pitch, -pitch, -gridStandoff,
+                    2*pitch, 2*pitch, 1.0
+                )
+                centerPadSurface, _ = self._occ.intersect(
+                    [(2, centerPadHex)],
+                    [(3, fullReadoutPlane)],
+                    removeObject=True, removeTool=True
+                )
+                centerPadSurface = centerPadSurface[0]
+
+        # Determine if the unit cell is hexagonal or not.
+        if hexCell:
+            xLength = pitch*math.sqrt(3)/2
+            yLength = pitch
+            
+            # Locate the centers of all surrounding holes
+            neighborCenters = [
+                (0, yLength), #Top
+                (0, -yLength), #Bottom
+                (xLength, yLength/2), #Top-Right
+                (xLength, -yLength/2), #Bottom-Right
+                (-xLength, yLength/2), #Top-Left
+                (-xLength, -yLength/2) #Bottom-Left
+            ]
+        
+        else:
+            xLength = pitch
+            yLength = pitch
+            # Locate the centers of all surrounding holes
+            neighborCenters = [
+                (0, pitch), # Top
+                (pitch, pitch), # Top-Right
+                (pitch, 0), # Right
+                (pitch, -pitch), # Bottom-Right
+                (0, -pitch), # Bottom
+                (-pitch, -pitch), #Bottom-Left
+                (-pitch, 0), # Left
+                (-pitch, pitch) # Top-Left
+            ]
+        
+        # Create a dielectric without holes
+        dielectricBox = self._occ.addBox(
+            -xLength, -yLength, -gridStandoff, 
+            2*xLength, 2*yLength, thicknessSiO2
+        )
+        # Create readout surface
+        padCutBox = self._occ.addBox(
+            -xLength, -yLength, -gridStandoff,
+            2*xLength, 2*yLength, 1.0
+        )
+
+        # Create pad hole tools for each surrounding pad
+        padHoleTools = [(3, centerPadHole)]
+        for x, y in neighborCenters:
+            newHole = self._occ.copy([(3, centerPadHole)])
+            self._occ.translate(newHole, x, y, 0)
+            padHoleTools.extend(newHole)
+                
+        # Cut holes in dielectric
+        dielectricVolume, _ = self._occ.cut(
+            [(3, dielectricBox)],
+            padHoleTools,
+        )
+        
+        # Add surrounding readout pads
+        padSurfaces.append(centerPadSurface)
+        for x, y in neighborCenters:
+            newPad = self._occ.copy([centerPadSurface])
+            self._occ.translate(newPad, x, y, 0)
+            padSurface, _ = self._occ.intersect(
+                newPad,
+                [(3, padCutBox)],
+                removeObject=True, removeTool=False
+            )
+            padSurfaces.append(padSurface[0])
+        
+        return dielectricVolume, padSurfaces
+
+#**********************************************************************#
 
     def _buildSquareCell(self):
         """
@@ -610,78 +844,19 @@ class gmshClass:
     def _buildSquareCellSurrounding(self):
         """
         """
-
         pitch = self._param['pitch']
-        holeRadius = self._param['holeRadius']
-        padLength = self._param['padLength']
         gridStandoff = self._param['gridStandoff']
         cathodeHeight = self._param['cathodeHeight']
-        gridThickness = self._param['gridThickness']
-        thicknessSiO2 = self._param['thicknessSiO2']
-        pillarRadius = self._param['pillarRadius']
-
-        xLength = pitch
-        yLength = pitch
-
-        neighborCenters = [
-            (0, yLength), # Top
-            (xLength, yLength), # Top-Right
-            (xLength, 0), # Right
-            (xLength, -yLength), # Bottom-Right
-            (0, -yLength), # Bottom
-            (-xLength, -yLength), #Bottom-Left
-            (-xLength, 0), # Left
-            (-xLength, yLength) # Top-Left
-        ]
 
         ## Dielectric
-        dielectricBox = self._occ.addBox(
-            -pitch, -pitch, -gridStandoff, 
-            2*pitch, 2*pitch, thicknessSiO2
+        dielectricVolume, padSurfaces = self._buildSurroundingDielectric(
+            holeShape=self._padShape, 
+            hexCell=False
         )
-
-        # Define holes for the pads
-        centerPadHole = self._occ.addBox(
-            -padLength/2, -padLength/2, -gridStandoff,
-            padLength, padLength, thicknessSiO2
-        )
-        
-        padHoleTools = [(3, centerPadHole)]
-        for x, y in neighborCenters:
-            newHole = self._occ.copy([(3, centerPadHole)])
-            self._occ.translate(newHole, x, y, 0)
-            padHoleTools.extend(newHole)
-        
-        # Cut holes in dielectric
-        dielectricVolume, _ = self._occ.cut(
-            [(3, dielectricBox)],
-            padHoleTools
-        )
-
+    
         ## Grid
-        gridBox = self._occ.addBox(
-            -pitch, -pitch, -gridThickness/2, 
-            2*pitch, 2*pitch, gridThickness
-        )
-        # Define holes
-        centerGridHole = self._occ.addCylinder(
-            0, 0, -gridThickness/2,
-            0, 0, gridThickness,
-            holeRadius
-        )
+        gridVolume = self._buildSurroundingGrid(holeShape=self._holeShape, hexCell=False)
         
-        gridHoleTools = [(3, centerGridHole)]
-        for x, y in neighborCenters:
-            newHole = self._occ.copy([(3, centerGridHole)])
-            self._occ.translate(newHole, x, y, 0)
-            gridHoleTools.extend(newHole)
-
-        # Cut holes in grid
-        gridVolume, _ = self._occ.cut(
-            [(3, gridBox)],
-            gridHoleTools
-        )
-
         ## Gas
         gasHeight = cathodeHeight + gridStandoff
         gasBox = self._occ.addBox(
@@ -694,32 +869,6 @@ class gmshClass:
             removeObject=True, removeTool=False
         )
 
-        ## Pads
-        centerPadFull = self._occ.addRectangle(
-            -padLength/2, -padLength/2, -gridStandoff,
-            padLength, padLength
-        )
-        
-        padList = [(2, centerPadFull)]
-        for x, y in neighborCenters:
-            newPad = self._occ.copy([(2, centerPadFull)])
-            self._occ.translate(newPad, x, y, 0)
-            padList.extend(newPad)
-        
-        padCutBox = self._occ.addRectangle(
-            -xLength, -yLength, -gridStandoff,
-            2*xLength, 2*yLength
-        )
-
-        padSurfaces = []
-        for pad in padList:
-            padSurface, _ = self._occ.intersect(
-                [pad],
-                [(2, padCutBox)],
-                removeObject=True, removeTool=False
-            )
-            padSurfaces.append(padSurface[0])
-        
         ## Cathode
         cathodeSurface = self._occ.addRectangle(
             -pitch, -pitch, cathodeHeight,
@@ -748,72 +897,20 @@ class gmshClass:
     def _buildHexagonalCellSurrounding(self):
         """
         """
-
         pitch = self._param['pitch']
-        holeRadius = self._param['holeRadius']
-        padLength = self._param['padLength']
         gridStandoff = self._param['gridStandoff']
         cathodeHeight = self._param['cathodeHeight']
-        gridThickness = self._param['gridThickness']
-        thicknessSiO2 = self._param['thicknessSiO2']
-        pillarRadius = self._param['pillarRadius']
-
         xLength = pitch*math.sqrt(3)/2
         yLength = pitch
 
-        neighborCenters = [
-            (0, yLength), #Top
-            (0, -yLength), #Bottom
-            (xLength, yLength/2), #Top-Right
-            (xLength, -yLength/2), #Bottom-Right
-            (-xLength, yLength/2), #Top-Left
-            (-xLength, -yLength/2) #Bottom-Left
-        ]
-
         ## Dielectric
-        dielectricBox = self._occ.addBox(
-            -1*xLength, -1*yLength, -gridStandoff, 
-            2*xLength, 2*yLength, thicknessSiO2
+        dielectricVolume, padSurfaces = self._buildSurroundingDielectric(
+            holeShape=self._padShape, 
+            hexCell=True
         )
-
-        # Define holes for the pads
-        centerPadHole = self._createHexagon(
-            padLength, -gridStandoff, thicknessSiO2
-        )
-        padHoleTools = [(3, centerPadHole)]
-        for x, y in neighborCenters:
-            newHole = self._occ.copy([(3, centerPadHole)])
-            self._occ.translate(newHole, x, y, 0)
-            padHoleTools.extend(newHole)
         
-        # Cut holes in dielectric
-        dielectricVolume, _ = self._occ.cut(
-            [(3, dielectricBox)],
-            padHoleTools
-        )
-
         ## Grid
-        gridBox = self._occ.addBox(
-            -1*xLength, -1*yLength, -gridThickness/2, 
-            2*xLength, 2*yLength, gridThickness
-        )
-        # Define holes
-        centerGridHole = self._occ.addCylinder(
-            0, 0, -gridThickness/2,
-            0, 0, gridThickness,
-            holeRadius
-        )
-        gridHoleTools = [(3, centerGridHole)]
-        for x, y in neighborCenters:
-            newHole = self._occ.copy([(3, centerGridHole)])
-            self._occ.translate(newHole, x, y, 0)
-            gridHoleTools.extend(newHole)
-
-        # Cut holes in grid
-        gridVolume, _ = self._occ.cut(
-            [(3, gridBox)],
-            gridHoleTools
-        )
+        gridVolume = self._buildSurroundingGrid(holeShape=self._holeShape, hexCell=True)
 
         ## Gas
         gasHeight = cathodeHeight + gridStandoff
@@ -826,32 +923,6 @@ class gmshClass:
             [(3, dielectricVolume[0][1]), (3, gridVolume[0][1])], 
             removeObject=True, removeTool=False
         )
-
-        ## Pads
-        centerPadFull = self._createHexagon(
-            padLength, -gridStandoff
-        )
-
-        padList = [(2, centerPadFull)]
-        for x, y in neighborCenters:
-            newPad = self._occ.copy([(2, centerPadFull)])
-            self._occ.translate(newPad, x, y, 0)
-            padList.extend(newPad)
-
-        padCutBox = self._occ.addBox(
-            -xLength, -yLength, -gridStandoff,
-            2*xLength, 2*yLength, 1.0
-        )
-
-        padSurfaces = []
-        for pad in padList:
-            padSurface, _ = self._occ.intersect(
-                [pad],
-                [(3, padCutBox)],
-                removeObject=True, removeTool=False
-            )
-            padSurfaces.append(padSurface[0])
-        
 
         ## Cathode
         cathodeSurface = self._occ.addRectangle(
@@ -1131,129 +1202,6 @@ class gmshClass:
 
             allCellData.append(inCell)
             allObjects.extend(inCell.values())
-
-        _, entityMap = self._occ.fragment(allObjects, [])
-        self._occ.synchronize()
-
-        return allCellData, entityMap
-    
-
-#**********************************************************************#
-    def _buildGridPix(self):
-        """
-        Builds the geometry for a single unit cell of the gridPix geometry.
-
-        Returns:
-            A dictionary containing the following parts of the unit cell:
-                Gas: The gas volume in the unit cell.
-                Dielectric: The dielectric volume in the unit cell.
-                Grid: The grid volume in the unit cell.
-                CenterPad: The center pad surface in the unit cell.
-                Cathode: The cathode surface in the unit cell.
-        """
-
-        pitch = self._param['pitch']
-        holeRadius = self._param['holeRadius']
-        padLength = self._param['padLength']
-        gridStandoff = self._param['gridStandoff']
-        cathodeHeight = self._param['cathodeHeight']
-        gridThickness = self._param['gridThickness']
-        thicknessSiO2 = self._param['thicknessSiO2']
-        pillarRadius = self._param['pillarRadius']
-
-        xLength = pitch/2
-        yLength = pitch/2
-
-        ## Dielectric
-        dielectricBox = self._occ.addBox(
-            0, 0, -gridStandoff, 
-            xLength, yLength, thicknessSiO2
-        )
-        # Define holes for the pads
-        centerPadHole = self._createOctagon(
-            padLength, -gridStandoff, thicknessSiO2
-        )
-        #Cut holes in dielectric
-        dielectricVolume, _ = self._occ.cut(
-            [(3, dielectricBox)],
-            [(3, centerPadHole)]
-        )
-
-        ## Grid
-        gridBox = self._occ.addBox(
-            0, 0, -gridThickness/2,
-            xLength, yLength, gridThickness
-        )
-        centerGridHole = self._occ.addCylinder(
-            0, 0, -gridThickness/2,
-            0, 0, gridThickness,
-            holeRadius
-        )
-        gridVolume, _ = self._occ.cut(
-            [(3, gridBox)],
-            [(3, centerGridHole)]
-        )
-
-        
-        ## Gas
-        gasHeight = cathodeHeight + gridStandoff
-        gasBox = self._occ.addBox(
-            0, 0, -gridStandoff,
-            xLength, yLength, gasHeight
-        )
-        gasVolume, _ = self._occ.cut(
-            [(3, gasBox)], 
-            [(3, dielectricVolume[0][1]), (3, gridVolume[0][1])], 
-            removeObject=True, removeTool=False
-        )
-
-        ## Pads
-        centerPadFull = self._createOctagon(
-            padLength, -gridStandoff
-        )
-
-        padCutBox = self._occ.addBox(
-            0, 0, -gridStandoff,
-            xLength, yLength, 1.0
-        )
-
-        centerPadSurface, _ = self._occ.intersect(
-            [(2, centerPadFull)],
-            [(3, padCutBox)],
-            removeObject=True, removeTool=True
-        )
-
-        ## Cathode
-        cathodeSurface = self._occ.addRectangle(
-            0, 0, cathodeHeight,
-            xLength, yLength
-        )
-
-        cellParts = {
-            'Gas': (3, gasVolume[0][1]),
-            'Dielectric': (3, dielectricVolume[0][1]),
-            'Grid': (3, gridVolume[0][1]),
-            'Pad': centerPadSurface[0],
-            'Cathode': (2, cathodeSurface)
-        }
-
-        return cellParts
-    
-#**********************************************************************#
-
-    def _makeGridPix(self):
-        """
-        Builds the GridPix geometry.
-        """
-
-        allCellData = []
-        allObjects = []
-
-
-        inCell = self._buildGridPix()
-
-        allCellData.append(inCell)
-        allObjects.extend(inCell.values())
 
         _, entityMap = self._occ.fragment(allObjects, [])
         self._occ.synchronize()
