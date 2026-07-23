@@ -38,8 +38,8 @@ class geometryClass:
     Output files are saved in /Geometry/ and /elmerResults/ directories.
     """
 
-
 #**********************************************************************#
+
     def __init__(self, inputParam=None):
 
         self._param = inputParam
@@ -59,6 +59,7 @@ class geometryClass:
         return
 
 #**********************************************************************#
+
     def _checkParameters(self):
         """
         Checks that the parameters are valid
@@ -80,7 +81,6 @@ class geometryClass:
 
         if self._param is None:
             raise ValueError('Error - Invalid parameters.')
-
 
         for key in neededParameters:
             if key not in self._param:
@@ -105,8 +105,43 @@ class geometryClass:
         #    raise ValueError('Error - Pillar cannot fit.')
 
         return
-    
+
 #**********************************************************************#
+
+    def _checkGeometryOptions(self, geoConfiguration):
+        """
+        Checks that the geometry options are valid.
+        """
+        geometryKeys = [
+            'unitCell',
+            'surrounding',
+            'holeShape',
+            'padShape'
+        ]
+        unitCellOptions = ['Square', 'Hexagonal',]
+        holeOptions = ['circle', 'hexagon']
+        padOptions = ['square', 'hexagon']
+        
+        for key in geometryKeys:
+            if key not in geoConfiguration:
+                raise ValueError(f"Error - Missing '{key}'")
+        
+        if geoConfiguration['unitCell'] not in unitCellOptions:
+            raise ValueError(f'Unit cell must be one of {uniCellOptions}.')
+        
+        if geoConfiguration['holeShape'] not in holeOptions:
+            raise ValueError(f'Hole shape must be one of {holeOptions}.')
+        
+        if geoConfiguration['padShape'] not in padOptions:
+            raise ValueError(f'Pad shape must be one of {padOptions}.')
+        
+        if not isinstance(geoConfiguration['surrounding'], bool):
+            raise ValueError('"surrounding" option must be type "bool".')
+        
+        return
+
+#**********************************************************************#
+
     def setGUI(self, runGUI=True):
         """
         Sets whether the Gmsh GUI runs when creating the geometry.
@@ -116,6 +151,7 @@ class geometryClass:
         return
     
 #**********************************************************************#
+
     def setGeometryConfiguration(self, geoConfig):
         """
         Sets the configuration of the geometry.
@@ -127,12 +163,13 @@ class geometryClass:
                 padShape (str): shape of the readout pad.
                 unitCell (str): shape of the unit cell.
         """
-        #TODO: add check
+        self._checkGeometryOptions(geoConfig)
         self._geoConfig = geoConfig
         
         return
 
 #**********************************************************************#
+
     def buildGeometry(self):
         """
         Builds the geometry for the FIMS simulation using Gmsh.
@@ -155,6 +192,7 @@ class geometryClass:
         return
 
 #**********************************************************************#
+
     def _generateElmerFiles(self, capacitance=False):
         """
         Generates the SIF files for Elmer based on the created geometry.
@@ -1524,27 +1562,6 @@ class gmshClass:
     
 #**********************************************************************#
 
-    def _checkRunOption(self, runOption):
-        """
-        Checks that the run option is valid.
-        """
-
-        runOptions = [
-            'Square',
-            'SquareSurrounding',
-            'Hexagonal',
-            'HexagonalSurrounding',
-            'singleHexagon',
-            'singleHexagonSurrounding'
-        ]
-
-        if runOption not in runOptions:
-            raise ValueError(f'Option must be one of {runOptions}.')
-        
-        return
-
-#**********************************************************************#
-
     def generateMesh(self, geoConfig, runGUI=False):
         """
         Generates the mesh for the given run option using Gmsh.
@@ -1553,10 +1570,9 @@ class gmshClass:
             geoConfig (dict): The run options for the geometry.
             runGUI (bool): Whether to launch the Gmsh GUI.
         """
+        
         runOption = geoConfig['unitCell']
         surroundingCells = geoConfig['surrounding']
-        self._checkRunOption(runOption)
-
         self._holeShape = geoConfig['holeShape']
         self._padShape = geoConfig['padShape']
         

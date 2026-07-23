@@ -182,8 +182,42 @@ class FIMS_Simulation:
         self._checkRunNumber()
                 
         return
-    
+    #**********************************************************************#
+
+    def _checkGeometryConfiguration(self, geoConfiguration):
+        """
+        Checks that the geometry options are valid.
+        """
+        geometryKeys = [
+            'unitCell',
+            'surrounding',
+            'holeShape',
+            'padShape'
+        ]
+        unitCellOptions = ['Square', 'Hexagonal',]
+        holeOptions = ['circle', 'hexagon']
+        padOptions = ['square', 'hexagon']
+        
+        for key in geometryKeys:
+            if key not in geoConfiguration:
+                raise ValueError(f"Error - Missing '{key}'")
+        
+        if geoConfiguration['unitCell'] not in unitCellOptions:
+            raise ValueError(f'Unit cell must be one of {uniCellOptions}.')
+        
+        if geoConfiguration['holeShape'] not in holeOptions:
+            raise ValueError(f'Hole shape must be one of {holeOptions}.')
+        
+        if geoConfiguration['padShape'] not in padOptions:
+            raise ValueError(f'Pad shape must be one of {padOptions}.')
+        
+        if not isinstance(geoConfiguration['surrounding'], bool):
+            raise ValueError('"surrounding" option must be type "bool".')
+        
+        return
+
     #******************************************************************#    
+    
     def setParameters(self, paramDict):
         """
         Updates the parameter dictionary with the provided values.
@@ -380,9 +414,13 @@ class FIMS_Simulation:
         Sets the geometry for the simulation.
 
         Args:
-            geoConfig (dict): todo:
+            geoConfig (dict): parameters defining the geometry to be generated.
+                unitCell (str): shape of the unit cell.
+                padShape (str): shape of the readout pad.
+                holeShape (str): shape of the grid holes.
+                surrounding (bool): whether to include surrounding cells.
         """
-        # TODO: add input check
+        self._checkGeometryConfiguration(geoConfig)
         self._geoConfiguration = geoConfig
         
         self._runMode = self._geoConfiguration['unitCell']
@@ -471,7 +509,6 @@ class FIMS_Simulation:
         """
         Generates the geometry for the simulation using the geometryClass.
         """
-
         self._geometry = geometryClass(self._param)
         self._geometry.setGeometryConfiguration(self._geoConfiguration)
         self._geometry.buildGeometry()
