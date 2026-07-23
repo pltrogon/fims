@@ -48,10 +48,14 @@ class geometryClass:
         self._runOption = None
 
         self._runGUI = False
-
-        self._unitCell = 'FIMS'
-        self._surroundingCells = False
-
+        
+        self._geoConfig = {
+            'unitCell': 'Hexagonal',
+            'holeShape': 'circle',
+            'padShape': 'hexagon',
+            'surrounding': False 
+        }
+        
         return
 
 #**********************************************************************#
@@ -112,37 +116,20 @@ class geometryClass:
         return
     
 #**********************************************************************#
-    def setUnitCell(self, unitCell='FIMS'):
+    def setGeometryConfiguration(self, geoConfig):
         """
-        Sets the unit cell type.
-
-        Options are:
-            - Square: a square shaped unit cell.
-            - Hexagonal: A hexagonal shaped unit cell.
-            - Single Hexagon
-        Note: Square and Hexagonal require mirroring. Single Hexagon is standalone.
-        """
-
-        cellOptions = ['Square', 'Hexagonal', 'singleHexagon']
-
-        if unitCell not in cellOptions:
-            raise ValueError(f'Error - Invalid unit cell type. Must be one of {cellOptions}.')
+        Sets the configuration of the geometry.
         
-        self._unitCell = unitCell
-
-        return
-
-#**********************************************************************#
-    def setSurroundingCells(self, surrounding=True):
+        args: 
+            geoConfig (dict): dictionary with the following optional parameters
+                surrounding (bool): whether to include surrounding unit cells.
+                holeShape (str): shape of the amplification grid holes.
+                padShape (str): shape of the readout pad.
+                unitCell (str): shape of the unit cell.
         """
-        Sets whether to include the surrounding cells in the geometry.
-
-        In hexagonal geometry, this will be the entirety of each cell.
-        For FIMS, this will only be half of each cell.
-        """
-
-        self._surroundingCells = surrounding
-
+        #TODO: add check
+        self._geoConfig = geoConfig
+        
         return
 
 #**********************************************************************#
@@ -155,15 +142,14 @@ class geometryClass:
     
         self._checkParameters()
         self._gmshClass = gmshClass(self._param)
-
-        self._runOption = self._unitCell
-        if self._surroundingCells:
+        
+        self._runOption = self._geoConfig['unitCell']
+        if self._geoConfig['surrounding']:
             self._runOption += 'Surrounding'
         
         self._gmshClass.generateMesh(
-            runOption=self._unitCell,
+            geoConfig=self._geoConfig,
             runGUI=self._runGUI,
-            surroundingCells=self._surroundingCells
         )
 
         return
@@ -269,6 +255,179 @@ class gmshClass:
         return
 
 #**********************************************************************#
+    
+    def _buildGrid(self, holeShape='circle', hexCell=True):
+        """
+        Constructs the volume for the amplification grid.
+        
+        args:
+            holeShape (str): shape of the hole to be made
+            hexCell (bool): Determines whether the holes have a square or 
+        hexagonal arrangement.
+        
+        returns:
+            gridVolume: object representing the volume of the amplification grid.
+        """
+        # Get relevant geometry parameters
+        gridThickness = self._param['gridThickness']
+        holeRadius = self._param['holeRadius']
+        pitch = self._param['pitch']
+        
+        # Create hole cut tool based on given hole shape.
+        match holeShape:
+            case 'circle':
+                centerGridHole = self._occ.addCylinder(
+                    0, 0, -gridThickness/2,
+                    0, 0, gridThickness,
+                    holeRadius
+                )
+            case 'hexagon':
+                centerGridHole = self._createHexagon(
+                    holeRadius, -gridThickness/2, gridThickness
+                )
+        
+        # Determine if the unit cell is hexagonal or not.
+        if hexCell:
+            # Create a grid without holes
+            gridBox = self._occ.addBox(
+                0, 0, -gridThickness/2,
+                pitch*math.sqrt(3)/2, pitch/2, gridThickness
+            )
+            
+            # Add corner hole
+            cornerGridHole = self._occ.copy([(3, centerGridHole)])
+            self._occ.translate(
+                cornerGridHole, 
+                pitch*math.sqrt(3)/2, 
+                pitch/2,
+                0
+            )
+            
+            # Use the hole cut tools to cut a hole into the grid volume.
+            gridVolume, _ = self._occ.cut(
+                [(3, gridBox)],
+                [(3, centerGridHole), cornerGridHole[0]]
+            )
+
+        else:
+            # Create grid without holes
+            gridBox = self._occ.addBox(
+                0, 0, -gridThickness/2,
+                pitch/2, pitch/2, gridThickness
+            )
+            
+            # Use the hole cut tool to cut a hole into the grid volume.
+            gridVolume, _ = self._occ.cut(
+                [(3, gridBox)],
+                [(3, centerGridHole)]
+            )
+
+        return gridVolume
+
+#**********************************************************************#
+
+    def _buildDielectric(self, holeShape='hexagon', hexCell=True):
+        """
+        Builds the volume associated with the dielectric.
+        
+        args:
+            holeShape (str): shape of the holes for the readout pads.
+            hexCell (bool): determines if the arangement is hexagonal or square.
+        
+        returns:
+            dielectricVolume: object for the volume of the dielectric.
+        """
+        # Get relevant geometry parameters
+        pitch = self._param['pitch']
+        padLength = self._param['padLength']
+        gridStandoff = self._param['gridStandoff']
+        thicknessSiO2 = self._param['thicknessSiO2']
+        padSurfaces = []
+        
+        # Determine hole and pad shape
+        match holeShape:
+            case 'square':
+                # Add central pad hole
+                centerPadHole = self._occ.addBox(
+                    0, 0, -gridStandoff,
+                    padLength/2, padLength/2, thicknessSiO2
+                )
+                # Add central readout pad
+                centerPadSurface = self._occ.addRectangle(
+                    0, 0, -gridStandoff,
+                    padLength/2, padLength/2
+                )
+                centerPadSurface = (2, centerPadSurface)
+
+            case 'hexagon':
+                # Add central pad hole
+                centerPadHole = self._createHexagon(
+                    padLength, -gridStandoff, thicknessSiO2
+                )
+                
+                # Add central readout pad
+                centerPadHex = self._createHexagon(
+                    padLength, -gridStandoff
+                )
+                fullReadoutPlane = self._occ.addBox(
+                    0, 0, -gridStandoff,
+                    pitch*math.sqrt(3)/2, pitch/2, 1.0
+                )
+                centerPadSurface, _ = self._occ.intersect(
+                    [(2, centerPadHex)],
+                    [(3, fullReadoutPlane)],
+                    removeObject=True, removeTool=True
+                )
+                centerPadSurface = centerPadSurface[0]
+                
+        padSurfaces.append(centerPadSurface)
+        
+        # Determine if the unit cell is hexagonal or not.
+        if hexCell:
+            # Create a dielectric without holes
+            dielectricBox = self._occ.addBox(
+                0, 0, -gridStandoff, 
+                pitch*math.sqrt(3)/2, pitch/2, thicknessSiO2
+            )
+            
+            # Add corner pad hole
+            cornerPadHole = self._occ.copy([(3, centerPadHole)])
+            self._occ.translate(cornerPadHole, pitch*math.sqrt(3)/2, pitch/2, 0)
+            
+            # Cut holes in dielectric
+            dielectricVolume, _ = self._occ.cut(
+                [(3, dielectricBox)],
+                [(3, centerPadHole), cornerPadHole[0]]
+            )
+            
+            # Add corner readout pad
+            cornerPadSurface = self._occ.copy([centerPadSurface])
+            self._occ.rotate(
+                cornerPadSurface,
+                0, 0, 0,
+                0, 0, 1,
+                math.pi
+            )
+            self._occ.translate(cornerPadSurface, pitch*math.sqrt(3)/2, pitch/2, 0)
+            padSurfaces.append(cornerPadSurface[0])
+        
+        else:
+            # Create a dielectric without holes
+            dielectricBox = self._occ.addBox(
+                0, 0, -gridStandoff, 
+                pitch/2, pitch/2, thicknessSiO2
+            )
+            
+            #Cut holes in dielectric
+            dielectricVolume, _ = self._occ.cut(
+                [(3, dielectricBox)],
+                [(3, centerPadHole)]
+            )
+        
+        return dielectricVolume, padSurfaces
+
+#**********************************************************************#
+
     def _buildSquareCell(self):
         """
         Builds the geometry for a single, square unit cell.
@@ -281,62 +440,25 @@ class gmshClass:
                 Dielectric: The dielectric volume in the unit cell.
                 Grid: The grid volume in the unit cell.
                 CenterPad: The center pad surface in the unit cell.
-                CornerPad: The corner pad surface in the unit cell.
                 Cathode: The cathode surface in the unit cell.
         """
-
         pitch = self._param['pitch']
-        holeRadius = self._param['holeRadius']
-        padLength = self._param['padLength']
         gridStandoff = self._param['gridStandoff']
         cathodeHeight = self._param['cathodeHeight']
-        gridThickness = self._param['gridThickness']
-        thicknessSiO2 = self._param['thicknessSiO2']
-        pillarRadius = self._param['pillarRadius']
-
-        xLength = pitch/2
-        yLength = pitch/2
-
-        outRadius = pitch/math.sqrt(3)
-
+        holeShape = self._holeShape
+        padShape = self._padShape
+        
         ## Dielectric
-        dielectricBox = self._occ.addBox(
-            0, 0, -gridStandoff, 
-            xLength, yLength, thicknessSiO2
-        )
-        # Define holes for the pads
-        centerPadHole = self._occ.addBox(
-            0, 0, -gridStandoff,
-            padLength/2, padLength/2, thicknessSiO2
-        )
+        dielectricVolume, padSurfaces = self._buildDielectric(holeShape=padShape, hexCell=False)
         
-        #Cut holes in dielectric
-        dielectricVolume, _ = self._occ.cut(
-            [(3, dielectricBox)],
-            [(3, centerPadHole)]
-        )
-
         ## Grid
-        gridBox = self._occ.addBox(
-            0, 0, -gridThickness/2,
-            xLength, yLength, gridThickness
-        )
-        centerGridHole = self._occ.addCylinder(
-            0, 0, -gridThickness/2,
-            0, 0, gridThickness,
-            holeRadius
-        )
+        gridVolume = self._buildGrid(holeShape=holeShape, hexCell=False)
         
-        gridVolume, _ = self._occ.cut(
-            [(3, gridBox)],
-            [(3, centerGridHole)]
-        )
-
         ## Gas
         gasHeight = cathodeHeight + gridStandoff
         gasBox = self._occ.addBox(
             0, 0, -gridStandoff,
-            xLength, yLength, gasHeight
+            pitch/2, pitch/2, gasHeight
         )
         gasVolume, _ = self._occ.cut(
             [(3, gasBox)], 
@@ -344,23 +466,17 @@ class gmshClass:
             removeObject=True, removeTool=False
         )
 
-        ## Pads
-        padSurface = self._occ.addRectangle(
-            0, 0, -gridStandoff,
-            padLength/2, padLength/2
-        )
-
         ## Cathode
         cathodeSurface = self._occ.addRectangle(
             0, 0, cathodeHeight,
-            xLength, yLength
+            pitch/2, pitch/2
         )
 
         cellParts = {
             'Gas': (3, gasVolume[0][1]),
             'Dielectric': (3, dielectricVolume[0][1]),
             'Grid': (3, gridVolume[0][1]),
-            'CenterPad': (2, padSurface),
+            'CenterPad': padSurfaces[0],
             'Cathode': (2, cathodeSurface)
         }
 
@@ -382,55 +498,21 @@ class gmshClass:
                 CornerPad: The corner pad surface in the unit cell.
                 Cathode: The cathode surface in the unit cell.
         """
-
         pitch = self._param['pitch']
-        holeRadius = self._param['holeRadius']
-        padLength = self._param['padLength']
         gridStandoff = self._param['gridStandoff']
         cathodeHeight = self._param['cathodeHeight']
-        gridThickness = self._param['gridThickness']
-        thicknessSiO2 = self._param['thicknessSiO2']
-        pillarRadius = self._param['pillarRadius']
-
+        holeShape = self._holeShape
+        padShape = self._padShape
+        
         xLength = pitch*math.sqrt(3)/2
         yLength = pitch/2
-
         outRadius = pitch/math.sqrt(3)
 
         ## Dielectric
-        dielectricBox = self._occ.addBox(
-            0, 0, -gridStandoff, 
-            xLength, yLength, thicknessSiO2
-        )
-        # Define holes for the pads
-        centerPadHole = self._createHexagon(
-            padLength, -gridStandoff, thicknessSiO2
-        )
-        cornerPadHole = self._occ.copy([(3, centerPadHole)])
-        self._occ.translate(cornerPadHole, xLength, yLength, 0)
-        #Cut holes in dielectric
-        dielectricVolume, _ = self._occ.cut(
-            [(3, dielectricBox)],
-            [(3, centerPadHole), cornerPadHole[0]]
-        )
-
+        dielectricVolume, padSurfaces = self._buildDielectric(holeShape=padShape, hexCell=True)
+        
         ## Grid
-        gridBox = self._occ.addBox(
-            0, 0, -gridThickness/2,
-            xLength, yLength, gridThickness
-        )
-        centerGridHole = self._occ.addCylinder(
-            0, 0, -gridThickness/2,
-            0, 0, gridThickness,
-            holeRadius
-        )
-        cornerGridHole = self._occ.copy([(3, centerGridHole)])
-        self._occ.translate(cornerGridHole, xLength, yLength, 0)
-        gridVolume, _ = self._occ.cut(
-            [(3, gridBox)],
-            [(3, centerGridHole), cornerGridHole[0]]
-        )
-
+        gridVolume = self._buildGrid(holeShape=holeShape, hexCell=True)
         
         ## Gas
         gasHeight = cathodeHeight + gridStandoff
@@ -444,29 +526,6 @@ class gmshClass:
             removeObject=True, removeTool=False
         )
 
-        ## Pads
-        centerPadFull = self._createHexagon(
-            padLength, -gridStandoff
-        )
-        cornerPadFull = self._occ.copy([(2, centerPadFull)])
-        self._occ.translate(cornerPadFull, xLength, yLength, 0)
-
-        padCutBox = self._occ.addBox(
-            0, 0, -gridStandoff,
-            xLength, yLength, 1.0
-        )
-
-        centerPadSurface, _ = self._occ.intersect(
-            [(2, centerPadFull)],
-            [(3, padCutBox)],
-            removeObject=True, removeTool=False
-        )
-        cornerPadSurface, _ = self._occ.intersect(
-            [(2, cornerPadFull[0][1])],
-            [(3, padCutBox)],
-            removeObject=True, removeTool=True
-        )
-
         ## Cathode
         cathodeSurface = self._occ.addRectangle(
             0, 0, cathodeHeight,
@@ -477,8 +536,8 @@ class gmshClass:
             'Gas': (3, gasVolume[0][1]),
             'Dielectric': (3, dielectricVolume[0][1]),
             'Grid': (3, gridVolume[0][1]),
-            'CenterPad': centerPadSurface[0],
-            'CornerPad': cornerPadSurface[0],
+            'CenterPad': padSurfaces[0],
+            'CornerPad': padSurfaces[1],
             'Cathode': (2, cathodeSurface)
         }
 
@@ -1318,8 +1377,8 @@ class gmshClass:
         pitch = self._param['pitch']
         holeRadius = self._param['holeRadius']
         gridThickness = self._param['gridThickness']
-        padLength = self._param['padLength']
         thicknessSiO2 = self._param['thicknessSiO2']
+        padLength = self._param['padLength']
         cathodeHeight = self._param['cathodeHeight']
         gridStandoff = self._param['gridStandoff']
 
@@ -1332,7 +1391,7 @@ class gmshClass:
         
         #=========================#
         #=== DEFINE MESH SIZES ===#
-        #=========================#
+        #=========================# #TODO: revert values
         fineMesh = 2#gridThickness*(3./4.)
         gridMesh = 2#gridThickness/4.
         refineMesh = 2#gridThickness*(3./2.)
@@ -1486,18 +1545,21 @@ class gmshClass:
 
 #**********************************************************************#
 
-    def generateMesh(self, runOption, runGUI=False, surroundingCells=False):
+    def generateMesh(self, geoConfig, runGUI=False):
         """
         Generates the mesh for the given run option using Gmsh.
 
         Args:
-            runOption (str): The run option for the geometry.
+            geoConfig (dict): The run options for the geometry.
             runGUI (bool): Whether to launch the Gmsh GUI.
-            surroundignCells (bool): Whether to generate the surrounding unit cells.
         """
-        
+        runOption = geoConfig['unitCell']
+        surroundingCells = geoConfig['surrounding']
         self._checkRunOption(runOption)
 
+        self._holeShape = geoConfig['holeShape']
+        self._padShape = geoConfig['padShape']
+        
         filePath = 'Geometry'
         if surroundingCells:
             filename = os.path.join(filePath, f'{runOption}Surrounding.msh')
