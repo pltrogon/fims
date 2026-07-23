@@ -45,8 +45,6 @@ class geometryClass:
         self._param = inputParam
         self._checkParameters()
 
-        self._runOption = None
-
         self._runGUI = False
         
         self._geoConfig = {
@@ -179,11 +177,6 @@ class geometryClass:
     
         self._checkParameters()
         self._gmshClass = gmshClass(self._param)
-        
-        self._runOption = self._geoConfig['unitCell']
-        if self._geoConfig['surrounding']:
-            self._runOption += 'Surrounding'
-        
         self._gmshClass.generateMesh(
             geoConfig=self._geoConfig,
             runGUI=self._runGUI,
@@ -197,14 +190,17 @@ class geometryClass:
         """
         Generates the SIF files for Elmer based on the created geometry.
         """
-
+        runOption = self._geoConfig['unitCell']
+        if self._geoConfig['surrounding']:
+            runOption += 'Surrounding'
+        
         self._elmerClass = elmerClass(
-            self._runOption, capacitance=False
+            runOption, capacitance=False
         )
 
         if capacitance:
             self._elmerClassCapacitance = elmerClass(
-                self._runOption, capacitance=True
+                runOption, capacitance=True
             )
 
         return
@@ -289,12 +285,17 @@ class gmshClass:
     
         self._occ = gmsh.model.occ
         self._param = inputParams
+        
+        self._unitCell = 'Hexagonal'
+        self._surrounding = False
+        self._holeShape = 'circle'
+        self._padShape = 'hexagon'
 
         return
 
 #**********************************************************************#
     
-    def _buildGrid(self, holeShape='circle', hexCell=True):
+    def _buildGrid(self, hexCell=True):
         """
         Constructs the volume for the amplification grid.
         
@@ -306,10 +307,12 @@ class gmshClass:
         returns:
             gridVolume: object representing the volume of the amplification grid.
         """
+        # TODO: can this be combined with buildSurroundingGrid?
         # Get relevant geometry parameters
         gridThickness = self._param['gridThickness']
         holeRadius = self._param['holeRadius']
         pitch = self._param['pitch']
+        holeShape = self._holeShape
         
         # Create hole cut tool based on given hole shape.
         match holeShape:
@@ -368,7 +371,7 @@ class gmshClass:
 
 #**********************************************************************#
 
-    def _buildDielectric(self, holeShape='hexagon', hexCell=True):
+    def _buildDielectric(self, hexCell=True):
         """
         Builds the volume associated with the dielectric.
         
@@ -379,11 +382,14 @@ class gmshClass:
         returns:
             dielectricVolume: object for the volume of the dielectric.
         """
+        # TODO: can this be combined with buildSurroundingDielectric?
+        
         # Get relevant geometry parameters
         pitch = self._param['pitch']
         padLength = self._param['padLength']
         gridStandoff = self._param['gridStandoff']
         thicknessSiO2 = self._param['thicknessSiO2']
+        holeShape = self._padShape
         padSurfaces = []
         
         # Determine hole and pad shape
@@ -491,7 +497,7 @@ class gmshClass:
 
 #**********************************************************************#
     
-    def _buildSurroundingGrid(self, holeShape='circle', hexCell=True):
+    def _buildSurroundingGrid(self, hexCell=True):
         """
         Constructs the volume for the amplification grid with surrounding Cells.
         
@@ -509,7 +515,7 @@ class gmshClass:
         pitch = self._param['pitch']
         
         # Create hole cut tool based on given hole shape.
-        match holeShape:
+        match self._holeShape:
             case 'circle':
                 centerGridHole = self._occ.addCylinder(
                     0, 0, -gridThickness/2,
@@ -580,7 +586,7 @@ class gmshClass:
 
 #**********************************************************************#
 
-    def _buildSurroundingDielectric(self, holeShape='hexagon', hexCell=True):
+    def _buildSurroundingDielectric(self, hexCell=True):
         """
         Builds the volume associated with the dielectric, including surrounding cells.
         
@@ -599,7 +605,7 @@ class gmshClass:
         padSurfaces = []
         
         # Determine hole and pad shape
-        match holeShape:
+        match self._padShape:
             case 'square':
                 # Add central pad hole
                 centerPadHole = self._occ.addBox(
@@ -742,14 +748,12 @@ class gmshClass:
         pitch = self._param['pitch']
         gridStandoff = self._param['gridStandoff']
         cathodeHeight = self._param['cathodeHeight']
-        holeShape = self._holeShape
-        padShape = self._padShape
         
         ## Dielectric
-        dielectricVolume, padSurfaces = self._buildDielectric(holeShape=padShape, hexCell=False)
+        dielectricVolume, padSurfaces = self._buildDielectric(hexCell=False)
         
         ## Grid
-        gridVolume = self._buildGrid(holeShape=holeShape, hexCell=False)
+        gridVolume = self._buildGrid(hexCell=False)
         
         ## Gas
         gasHeight = cathodeHeight + gridStandoff
@@ -780,6 +784,7 @@ class gmshClass:
         return cellParts
     
 #**********************************************************************#
+
     def _buildHexagonalCell(self):
         """
         Builds the geometry for a single unit cell of the FIMS geometry.
@@ -798,18 +803,16 @@ class gmshClass:
         pitch = self._param['pitch']
         gridStandoff = self._param['gridStandoff']
         cathodeHeight = self._param['cathodeHeight']
-        holeShape = self._holeShape
-        padShape = self._padShape
         
         xLength = pitch*math.sqrt(3)/2
         yLength = pitch/2
         outRadius = pitch/math.sqrt(3)
 
         ## Dielectric
-        dielectricVolume, padSurfaces = self._buildDielectric(holeShape=padShape, hexCell=True)
+        dielectricVolume, padSurfaces = self._buildDielectric(hexCell=True)
         
         ## Grid
-        gridVolume = self._buildGrid(holeShape=holeShape, hexCell=True)
+        gridVolume = self._buildGrid(hexCell=True)
         
         ## Gas
         gasHeight = cathodeHeight + gridStandoff
@@ -849,13 +852,10 @@ class gmshClass:
         cathodeHeight = self._param['cathodeHeight']
 
         ## Dielectric
-        dielectricVolume, padSurfaces = self._buildSurroundingDielectric(
-            holeShape=self._padShape, 
-            hexCell=False
-        )
+        dielectricVolume, padSurfaces = self._buildSurroundingDielectric(hexCell=False)
     
         ## Grid
-        gridVolume = self._buildSurroundingGrid(holeShape=self._holeShape, hexCell=False)
+        gridVolume = self._buildSurroundingGrid(hexCell=False)
         
         ## Gas
         gasHeight = cathodeHeight + gridStandoff
@@ -904,13 +904,10 @@ class gmshClass:
         yLength = pitch
 
         ## Dielectric
-        dielectricVolume, padSurfaces = self._buildSurroundingDielectric(
-            holeShape=self._padShape, 
-            hexCell=True
-        )
+        dielectricVolume, padSurfaces = self._buildSurroundingDielectric(hexCell=True)
         
         ## Grid
-        gridVolume = self._buildSurroundingGrid(holeShape=self._holeShape, hexCell=True)
+        gridVolume = self._buildSurroundingGrid(hexCell=True)
 
         ## Gas
         gasHeight = cathodeHeight + gridStandoff
@@ -948,135 +945,52 @@ class gmshClass:
 
 #**********************************************************************#
 
-    def _makeSquareCell(self, surrounding=False):
+    def _makeSquareCell(self):
         """
-        Builds the FIMS geometry.
+        Constructs a complete square unit cell structure.
 
-        Args:
-            surrounding (bool): Option to include the surrounding cells.
+        returns:
+            entityMap: map of geometry objects and their values
         """
 
-        allCellData = []
         allObjects = []
 
-        if surrounding:
+        # TODO: can these be combined?
+        if self._surrounding:
             inCell = self._buildSquareCellSurrounding()
         else:
             inCell = self._buildSquareCell()
 
-        allCellData.append(inCell)
         allObjects.extend(inCell.values())
 
         _, entityMap = self._occ.fragment(allObjects, [])
         self._occ.synchronize()
 
-        return allCellData, entityMap
-
+        return entityMap
     
 #**********************************************************************#
 
-    def _makeHexagonalCell(self, surrounding=False):
+    def _makeHexagonalCell(self):
         """
-        Builds the FIMS geometry.
+        Constructs a complete square unit cell structure.
 
-        Args:
-            surrounding (bool): Option to include the surrounding cells.
+        returns:
+            entityMap: map of geometry objects and their values
         """
 
-        allCellData = []
         allObjects = []
-
-        if surrounding:
+        # TODO: can these be combined?
+        if self._surrounding:
             inCell = self._buildHexagonalCellSurrounding()
         else:
             inCell = self._buildHexagonalCell()
 
-        allCellData.append(inCell)
         allObjects.extend(inCell.values())
 
         _, entityMap = self._occ.fragment(allObjects, [])
         self._occ.synchronize()
 
-        return allCellData, entityMap
-
-#**********************************************************************#
-
-    def _buildSingleHexagon(self):
-        """
-        build the geometry for a single hexagonal unit cell 
-        of the FIMS geometry.
-        
-        Returns:
-            A dictionary containing the following parts of the unit cell:
-                Gas: The gas volume in the unit cell.
-                Dielectric: The dielectric volume in the unit cell.
-                Grid: The grid volume in the unit cell.
-                Pad: The pad surface in the unit cell.
-                Cathode: The cathode surface in the unit cell.
-        """
-        pitch = self._param['pitch']
-        holeRadius = self._param['holeRadius']
-        padLength = self._param['padLength']
-        gridStandoff = self._param['gridStandoff']
-        cathodeHeight = self._param['cathodeHeight']
-        gridThickness = self._param['gridThickness']
-        thicknessSiO2 = self._param['thicknessSiO2']
-
-        outRadius = pitch/math.sqrt(3)
-
-        ## Dielectric
-        hexagonBase = self._createHexagon(
-            outRadius, -gridStandoff, thicknessSiO2
-        )
-        padHole = self._createHexagon(
-            padLength, -gridStandoff, thicknessSiO2
-        )
-        dielectricVolume, _ = self._occ.cut(
-            [(3, hexagonBase)],
-            [(3, padHole)]
-        )
-
-        ## Grid
-        gridContainer = self._createHexagon(
-            outRadius, -gridThickness/2, gridThickness
-        )
-        gridHole = self._occ.addCylinder(
-            0, 0, -gridThickness/2,
-            0, 0, gridThickness,
-            holeRadius        
-        )
-        gridVolume, _ = self._occ.cut(
-            [(3, gridContainer)],
-            [(3, gridHole)]
-        )
-
-        ## Gas
-        gasHeight = cathodeHeight + gridStandoff
-        gasContainer = self._createHexagon(
-            outRadius, -gridStandoff, gasHeight
-        )
-        gasVolume, _ = self._occ.cut(
-            [(3, gasContainer)], 
-            [(3, dielectricVolume[0][1]), (3, gridVolume[0][1])], 
-            removeObject=True, removeTool=False
-        )
-        
-        padSurface = self._createHexagon(
-            padLength, -gridStandoff
-        )
-        cathodeSurface = self._createHexagon(
-            outRadius, cathodeHeight
-        )
-
-        cellParts = {
-            'Gas': (3, gasVolume[0][1]),
-            'Dielectric': (3, dielectricVolume[0][1]),
-            'Grid': (3, gridVolume[0][1]),
-            'Pad': (2, padSurface),
-            'Cathode': (2, cathodeSurface)
-        }
-
-        return cellParts
+        return entityMap
     
 #**********************************************************************#
     def _createHexagon(self, outRadius, z, zDist=None):
@@ -1117,6 +1031,7 @@ class gmshClass:
             return surface
         
 #**********************************************************************#
+
     def _createOctagon(self, outRadius, z, zDist=None):
         """
         Makes an octagon in the xy-plane with the center at the origin.
@@ -1153,64 +1068,10 @@ class gmshClass:
             return octagon[1][1]
         else:
             return surface
-        
-#**********************************************************************#
-    def _makeSingleHexagon(self, surrounding=False):
-        """
-        builds a hexagonal array of unit cells.
-
-        Central cell is always created.
-        The 6 adjacent cells are created if surrounding is True.
-
-        Args:
-            surrounding (bool): Option to include the surrounding cells.
-
-        Returns:
-            A tuple containing:
-                allCellData - A list of dictionaries, 
-                            where each dictionary contains
-                            the parts of a unit cell.
-                entityMap - A mapping from the original entities 
-                            to the new entities after fragmentation.
-        """
-
-        pitch = self._param['pitch']
-        xShift = pitch*math.sqrt(3)/2.0
-        yShift = pitch/2.0
-
-        cellCenters = [(0.0, 0.0)]
-        if surrounding:
-            cellCenters = [
-                (0.0, 0.0), #Center
-                (0.0, pitch), #Top
-                (0.0, -pitch), #Bottom
-                (xShift, yShift), #Top-Right
-                (xShift, -yShift), #Bottom-Right
-                (-xShift, yShift), #Top-Left
-                (-xShift, -yShift) #Bottom-Left
-            ]
-
-        allCellData = []
-        allObjects = []
-
-        for dx, dy in cellCenters:
-
-            inCell = self._buildSingleHexagon()
-
-            for inPart in inCell.values():
-                self._occ.translate([inPart], dx, dy, 0)
-
-            allCellData.append(inCell)
-            allObjects.extend(inCell.values())
-
-        _, entityMap = self._occ.fragment(allObjects, [])
-        self._occ.synchronize()
-
-        return allCellData, entityMap
-    
+            
 #**********************************************************************#
 
-    def _assignPhysicalGroups(self, entityMap, mode):
+    def _assignPhysicalGroups(self, entityMap):
         """
         Assigns physical groups to the geometry entities based 
         on their type and location.
@@ -1250,20 +1111,15 @@ class gmshClass:
                 'keys': allVolumes + allHexPads + otherSurfaces,
                 'pads': allHexPads
             },
-            'SingleHexagon': {
-                'keys': allVolumes + ['Pad'] + otherSurfaces,
-                'pads': ['CentralPad']
-            },
-            'SingleHexagonSurrounding': {
-                'keys': allVolumes + ['Pad'] + otherSurfaces,
-                'pads': allHexPads
-            },
         }
 
+        runOption = self._unitCell
+        if self._surrounding:
+            runOption += 'Surrounding'
+            
+        config = configuration[runOption]
 
-        config = configuration[mode]
-
-        isHex = 'Hexagonal' in mode
+        isHex = 'Hexagonal' in runOption
 
         partKey = config['keys']
         padNames = config['pads']
@@ -1359,6 +1215,7 @@ class gmshClass:
                 (pitch/sqrt3/2, -pitch/2, driftLength)
             ]
         }
+        
         refinement = refinementOptions[runOption]
         refinementLines = []
         
@@ -1378,10 +1235,8 @@ class gmshClass:
 
 #**********************************************************************#
 
-    def _setMeshSizes(self, runOption):
-        """
-        Sets the mesh sizes for the geometry based on the run option.
-        """
+    def _setMeshSizes(self):
+        """Sets the mesh sizes for the geometry based on the run option."""
         sqrt3 = math.sqrt(3)
 
         # Cell dimensions
@@ -1402,10 +1257,10 @@ class gmshClass:
         
         #=========================#
         #=== DEFINE MESH SIZES ===#
-        #=========================# #TODO: revert values
-        fineMesh = 2#gridThickness*(3./4.)
-        gridMesh = 2#gridThickness/4.
-        refineMesh = 2#gridThickness*(3./2.)
+        #=========================#
+        fineMesh = gridThickness*(3./4.)
+        gridMesh = gridThickness/4.
+        refineMesh = gridThickness*(3./2.)
         backgroundMesh = pitch/4.
         #=========================#
         
@@ -1433,16 +1288,11 @@ class gmshClass:
             'HexagonalSurrounding': {
                 'x': (-xLength, xLength), 
                 'y': (-yLength, yLength)
-            },
-            'singleHexagon': {
-                'x': (-outRadius, outRadius), 
-                'y': (-yLength, yLength)
-            },
-            'singleHexagonSurrounding': {
-                'x': (-outRadius, outRadius), 
-                'y': (-yLength, yLength)
-            },
+            }
         }
+        runOption = self._unitCell
+        if self._surrounding:
+            runOption += 'Surrounding'
         bounds = meshSettings[runOption]
         
         # Create a line from the center of the pad to above the center hole
@@ -1543,17 +1393,16 @@ class gmshClass:
             geoConfig (dict): The run options for the geometry.
             runGUI (bool): Whether to launch the Gmsh GUI.
         """
-        
-        runOption = geoConfig['unitCell']
-        surroundingCells = geoConfig['surrounding']
+        self._unitCell = geoConfig['unitCell']
+        self._surrounding = geoConfig['surrounding']
         self._holeShape = geoConfig['holeShape']
         self._padShape = geoConfig['padShape']
         
         filePath = 'Geometry'
-        if surroundingCells:
-            filename = os.path.join(filePath, f'{runOption}Surrounding.msh')
+        if self._surrounding:
+            filename = os.path.join(filePath, f'{self._unitCell}Surrounding.msh')
         else:
-            filename = os.path.join(filePath, f'{runOption}.msh')
+            filename = os.path.join(filePath, f'{self._unitCell}.msh')
 
         gmsh.initialize()
         gmsh.option.setNumber("General.Terminal", 0)
@@ -1566,21 +1415,17 @@ class gmshClass:
         gmsh.option.setNumber('Mesh.MeshSizeFromPoints', 1)
 
         gmsh.model.add(filename)
-
-        match runOption:
+        # TODO: restore singleHexagon? 
+        # Or, perhaps extending the bounds in the existing methods is sufficient?
+        match self._unitCell:
             case 'Square':
-                _, allCellsMap = self._makeSquareCell(surrounding=surroundingCells)
+                allCellsMap = self._makeSquareCell()
             
             case 'Hexagonal':
-                _, allCellsMap = self._makeHexagonalCell(surrounding=surroundingCells)
-                
-            case 'singleHexagon':
-                _, allCellsMap = self._makeSingleHexagon(surrounding=surroundingCells)
-        
-        if surroundingCells:
-            runOption += 'Surrounding'
-        self._assignPhysicalGroups(allCellsMap, runOption)
-        self._setMeshSizes(runOption)
+                allCellsMap = self._makeHexagonalCell()
+             
+        self._assignPhysicalGroups(allCellsMap)
+        self._setMeshSizes()
 
         print('\tCreating mesh...')
         gmsh.model.mesh.generate(3)
@@ -1665,23 +1510,13 @@ class elmerClass:
                 self._electrodeMap.update({
                     4: 'TopPad', 5: 'RightTopPad', 6: 'RightPad',
                     7: 'RightBottomPad', 8: 'BottomPad', 9: 'LeftBottomPad',
-                    10: 'LeftPad', 11: 'leftTopPad'
+                    10: 'LeftPad', 11: 'LeftTopPad'
                 })
 
             case 'Hexagonal':
                 self._electrodeMap.update({4: 'CornerPad'})
 
             case 'HexagonalSurrounding':
-                self._electrodeMap.update({
-                    4: 'TopPad', 5: 'BottomPad',
-                    6: 'RightTopPad', 7: 'RightBottomPad',
-                    8: 'LeftTopPad', 9: 'LeftBottomPad'
-                })
-
-            case 'singleHexagon':
-                pass
-
-            case 'singleHexagonSurrounding':
                 self._electrodeMap.update({
                     4: 'TopPad', 5: 'BottomPad',
                     6: 'RightTopPad', 7: 'RightBottomPad',
@@ -1817,9 +1652,7 @@ class elmerClass:
 #**********************************************************************#
 
     def _addMaterials(self):
-        """
-        Adds materials to the simulation.
-        """
+        """Adds materials to the simulation."""
 
         allMaterials = [
             {
@@ -1882,9 +1715,7 @@ class elmerClass:
 #**********************************************************************#
 
     def _makeDielectricsFile(self):
-        """
-        Writes the dielectric properties to a file.
-        """
+        """Writes the dielectric properties to a file."""
 
         dielectricValues = ['1e10', '3.9', '1.0', '3.0']
 
@@ -2000,9 +1831,7 @@ class elmerClass:
 #**********************************************************************#
 
     def _writeSIFWeighting(self):
-        """
-        Writes the SIF weighing files for the Elmer simulation.
-        """
+        """Writes the SIF weighing files for the Elmer simulation."""
         for i, electrode in self._electrodeMap.items():
             if electrode == 'Cathode' or electrode == 'Grid':
                 continue
@@ -2174,10 +2003,7 @@ class elmerClass:
 #**********************************************************************#
 
     def resetPotentials(self):
-
-        """
-        Resets the potentials for all electrodes in the SIF file.
-        """
+        """Resets the potentials for all electrodes in the SIF file."""
 
         with open(f'Geometry/{self._runOption}.sif', 'r') as f:
             sifContent = f.read()
