@@ -801,122 +801,76 @@ def getDataToPlot(dataFile):
     return allData
 
 #********************************************************************************#
-def plotPolyaData(datasets, absField=False):
-
+def plotPolyaData(datasets, absField=False, vsGain=False):
     fig, ax = plt.subplots(3, 1, figsize=(12, 8), sharex=True)
 
-    for i, (name, data) in enumerate(datasets.items()):
-        if absField:
-            fieldScale = .280 if name == 'T2K' else 1
-        else:
-            fieldScale = 1
+    for name, data in datasets.items():
+        # Determine field scale factor
+        fieldScale = 1.0 if (not absField or name == 'ArCO2') else 0.280
 
+        # Extract and process core dataset
+        plotData = (
+            data[['fieldRatio', 'pGain', 'pGainErr', 'theta', 'thetaErr']]
+            .drop_duplicates()
+            .sort_values('fieldRatio')
+        )
+        
+        # Extract core dataset and minimum GTR at >= 95% efficiency
         plotData = data[['fieldRatio', 'pGain', 'pGainErr', 'theta', 'thetaErr']].drop_duplicates().sort_values('fieldRatio')
-
         aboveEff = data[data['detectEff'] >= 0.95].copy()
         aboveEff['GTR'] = aboveEff['gain'] / aboveEff['threshold']
-        minGTR = aboveEff.groupby('fieldRatio')['GTR'].min().reset_index()
+        minGTR = aboveEff.loc[aboveEff.groupby('fieldRatio')['GTR'].idxmin()]
 
+        # Define raw physical quantities
+        field = (plotData['fieldRatio'] * fieldScale, None)
+        gain = (plotData['pGain'], plotData['pGainErr'])
+        theta = (plotData['theta'], plotData['thetaErr'])
+        gtr = (minGTR['GTR'], None)
+        gtrField = (minGTR['fieldRatio'] * fieldScale, None)
+        gtrGain = (minGTR['gain'], None)
 
-        ax[0].errorbar(
-            plotData['fieldRatio']*fieldScale, plotData['pGain'],
-            yerr=plotData['pGainErr'],
-            marker='x', ls='', 
-            label=f'{name}'
-        )
+        # Configure and make plots
+        if vsGain:
+            panels = [(gain, field), (gain, theta), (gtrGain, gtr)]
+        else:
+            panels = [(field, gain), (field, theta), (gtrField, gtr)]
 
-        ax[1].errorbar(
-            plotData['fieldRatio']*fieldScale, plotData['theta'],
-            yerr=plotData['thetaErr'],
-            marker='x', ls='', 
-            label=f'{name}'
-        )
+        for inAx, ((x, xerr), (y, yerr)) in zip(ax, panels):
+            inAx.errorbar(
+                x, y, 
+                xerr=xerr, yerr=yerr, 
+                marker='x', ls='-', label=name
+            )
 
-        ax[2].scatter(
-            minGTR['fieldRatio']*fieldScale, minGTR['GTR'],
-            marker='x', 
-            label=f'{name}'
-        )
-
-    for inAx in ax:
-        inAx.set_xlim([10, None])
-        inAx.grid()
-
-    ax[0].set_ylim([1, 1e3])
-    ax[1].set_ylim([0, None])
-    ax[2].set_ylim([0, None])
+    # Configure Labels and Formatting
+    fieldLabel = r'Amplification Field: $E_{\text{Amp}}$ (kV/cm)' if absField else r'Field Ratio: $E_{\text{Amp}}~/~E_{\text{Drift}}$'
+    gainLabel = r'Gas Gain: $\bar{n}$'
     
-    ax[0].set_yscale('log')
+    xLabel = gainLabel if vsGain else fieldLabel
+    yLabels = [
+        fieldLabel if vsGain else gainLabel,
+        r'Polya Shape: $\theta$',
+        r'GTR for $\epsilon_{\text{d}}$=95%'
+    ]
 
-    ax[0].set_ylabel(r'Gas Gain: $\bar{n}$', fontsize=14)
-    ax[1].set_ylabel(r'Polya Shape: $\theta$', fontsize=14)
-    ax[2].set_ylabel(r'GTR for $\epsilon_{\text{d}}$=95%', fontsize=14)
-
-    if absField:
-        ax[2].set_xlabel(r'Amplification Field: $E_{\text{Amp}}$ (kV/cm)', fontsize=14)
+    # Set log scale and Y limits for gain and field plot
+    if vsGain:
+        ax[0].set_xscale('log')
+        ax[0].set_xlim(1, None)
+        ax[0].set_ylim(10, None)
     else:
-        ax[2].set_xlabel(r'Field Ratio: $E_{\text{Amp}}~/~E_{\text{Drift}}$', fontsize=14)
+        ax[0].set_yscale('log')
+        ax[0].set_xlim(10, None)
+        ax[0].set_ylim(1, None)
 
-    ax[0].legend(fontsize=14, loc='upper left')
-
-    plt.tight_layout()
-    plt.show()
-
-#********************************************************************************#
-def plotPolyaDataVsGain(datasets, absField=False):
-
-    fig, ax = plt.subplots(3, 1, figsize=(12, 8), sharex=True)
-
-    for i, (name, data) in enumerate(datasets.items()):
-
-        fieldScale = .280 if (name=='T2K') and absField else 1
-
-        plotData = data[['fieldRatio', 'pGain', 'pGainErr', 'theta', 'thetaErr']].drop_duplicates().sort_values('pGain')
-        
-        aboveEff = data[data['detectEff'] >= 0.95].copy()
-        aboveEff['GTR'] = aboveEff['gain'] / aboveEff['threshold']
-
-        idxMin = aboveEff.groupby('fieldRatio')['GTR'].idxmin()
-        minGTR = aboveEff.loc[idxMin]
-
-        ax[0].errorbar(
-            plotData['pGain'], plotData['fieldRatio']*fieldScale,
-            xerr=plotData['pGainErr'],
-            marker='x', ls='', 
-            label=f'{name}'     
-        )
-        
-        ax[1].errorbar(
-            plotData['pGain'], plotData['theta'],
-            xerr=plotData['pGainErr'], yerr=plotData['thetaErr'],
-            marker='x', ls='', 
-            label=f'{name}'
-        )
-
-        ax[2].plot(
-            minGTR['gain'], minGTR['GTR'],
-            ls='', label=name, marker='x'
-        )
-
-    for inAx in ax:
-        inAx.set_xlim([1, None])
-        inAx.set_xscale('log')
+    # Apply remaining panel formatting
+    for inAx, label in zip(ax, yLabels):
         inAx.grid()
+        inAx.set_ylabel(label, fontsize=14)
+        if inAx != ax[0]:
+            inAx.set_ylim(0, None)
 
-    ax[0].set_ylim([10, None])
-    ax[1].set_ylim([0, None])
-    ax[2].set_ylim([0, None])
-    
-
-    ax[2].set_xlabel(r'Gas Gain: $\bar{n}$', fontsize=14)
-
-    if absField:
-        ax[0].set_ylabel(r'Field: $E_{\text{Amp}}$ (kV/cm)', fontsize=14)
-    else:
-        ax[0].set_ylabel(r'Field Ratio: $E_{\text{Amp}}~/~E_{\text{Drift}}$', fontsize=14)
-    ax[1].set_ylabel(r'Polya Shape: $\theta$', fontsize=14)
-    ax[2].set_ylabel(r'GTR for $\epsilon_{\text{d}}$=95%', fontsize=14)
-
+    ax[2].set_xlabel(xLabel, fontsize=14)
     ax[0].legend(fontsize=14, loc='upper left')
 
     plt.tight_layout()
@@ -948,7 +902,7 @@ def plotEfficiencyContours(allData, xLabel):
 
     # Plot the contour lines
     effLines = [.95, .90, .75, .50]
-    effLineStyle = ['-', '--', ':', '-.']
+    effLineStyle = ['-', '--', '-.', ':']
     for inLevel, inLine in zip(effLines, effLineStyle):
         contourLine = plt.tricontour(
             x, y, z, 
