@@ -19,7 +19,7 @@ import re
 import copy
 
 from scipy.optimize import curve_fit
-
+from scipy.special import expit, logit
 
 #Include the analysis object        
 sys.path.insert(1, '../Analysis')
@@ -139,18 +139,20 @@ class FIMS_Simulation:
         """
         defaultParameters = {
             'runNumber': -1,
-            'padLength': 15.,
-            'pitch': 65.,
+            'padLength': 20.,
+            'pitch': 55.,
             'gridStandoff': 50.,
             'gridThickness': 1.,
-            'holeRadius': 16.,
+            'holeRadius': 17.5,
             'cathodeHeight': 200.,
             'thicknessSiO2': 5.,
             'pillarRadius': 5.,
             'driftField': 280.,
-            'fieldRatio': 135.,
+            'fieldRatio': 150.,
             'numFieldLine': 25,
             'numAvalanche': 5000,
+            'avalancheLimit': 600,
+            'initialZFraction': .75,
             'avalancheLimit': 500,
             'gasCompAr': 0.95,
             'gasCompCO2': 0.00,
@@ -433,17 +435,18 @@ class FIMS_Simulation:
         return
 
 #**********************************************************************#
-    def _resetParam(self, verbose=True):
+    def resetParam(self, verbose=True):
         """
-        Resets the simulation to the default parameters.
+        Resets the simulation to the default parameters and removes any geometry links.
     
         Args:
             verbose (bool): Option available to supress reset notification.
         """
         self._param = self._defaultParam()
+        self._geometry = None
     
         if verbose:
-            print('Parameters have been reset.')
+            print('Simulation have been reset.')
         
         return
 
@@ -547,21 +550,18 @@ class FIMS_Simulation:
 
 #**********************************************************************#
     def _runGarfield(self, executable='runAvalanche', **kwargs):
-        #TODO - Can we consolidate any of these executables?
         """
         Runs a Garfield++ simulation with the specified executable.
 
         Args:
             executable (str): The name of the Garfield++ executable to run. Options are:
                 - 'runAvalanche': Simulates electron avalanches for the central pad.
-
                 - 'runFullField': Generates field lines that populate the full unit cell.
                 - 'runEfficiency': Simulates the efficiency for a given field strength. Requires additional arguments:
                     - targetEfficiency (str): Name of efficiency to consider (net, detection, collection).
                     - targetValue (float): The target efficiency to achieve (default: 0.95).
                     - threshold (int): The number of electrons to consider an avalanche successful (default: 10).
         """
-        #TODOHERE
 
         executables = [
             'runAvalanche',
@@ -819,7 +819,7 @@ class FIMS_Simulation:
         return results
     
 #**********************************************************************#
-    def _fitForNextField(self, targetEfficiency, efficiencyValues, targetValue):
+    def _fitForNextField(self, targetEfficiency, efficiencyValues, targetValue, fieldStepLimits=[1, 10]):
         """
         Calculates the next field ratio using a sigmoid fit of historical data.
         Ensures forward progress by enforcing a minimum positive step.
@@ -834,12 +834,12 @@ class FIMS_Simulation:
         """
 
         def mySigmoid(x, k, x0):
-            return 1.0 / (1.0 + np.exp(-k * (x - x0)))
+            return 0.999*expit(k * (x - x0))
         
         targetValue = min(targetValue, 0.999)
             
-        minFieldStep = 1
-        maxFieldStep = 10
+        minFieldStep = fieldStepLimits[0]
+        maxFieldStep = fieldStepLimits[1]
 
         allPrevData = pd.DataFrame(efficiencyValues)
 
@@ -848,64 +848,111 @@ class FIMS_Simulation:
         yErrHigh = allPrevData[f'{targetEfficiency}ErrHigh'].values
         yErrLow = allPrevData[f'{targetEfficiency}ErrLow'].values
         yErrs = np.maximum(yErrLow, yErrHigh)#Use the maximum error for the fit
+        yErrsWeighted = (yErrLow + yErrHigh) / 2.0
 
         lastField = xData[-1]
         lastResult = yData[-1]
+        lastBound = lastResult - 2*yErrLow[-1]
         
         try:
-            # Fit the sigmoid parameters
-            popt, pcov = curve_fit(
-                mySigmoid, xData, yData, 
-                p0=[1.0, np.median(xData)], 
-                sigma=yErrs, absolute_sigma=True
-            )
-            k, x0 = popt
+            numBootstraps = 200
+            bootstrapCurves = []
+            numFails = 0
+
+            for _ in range(numBootstraps):
+                yPerturbed = np.zeros_like(yData)
+                for i in range(len(yData)):
+                    # Randomly decide whether to perturb up or down
+                    if np.random.rand() > 0.5:
+                        yPerturbed[i] = yData[i] + abs(np.random.normal(0, yErrHigh[i]))
+                    else:
+                        yPerturbed[i] = yData[i] - abs(np.random.normal(0, yErrLow[i]))
+
+                yPerturbed = np.clip(yPerturbed, 0.0, 0.999)
+
+                try:
+                    inPopt, _ = curve_fit(
+                        mySigmoid, xData, yPerturbed, 
+                        p0=[0.1, np.median(xData)], 
+                        sigma=yErrsWeighted, absolute_sigma=True,
+                        bounds=([1e-3, -np.inf], [10.0, np.inf])
+                    )
+                    bootstrapCurves.append(inPopt)
+                except Exception:
+                    numFails += 1
+                    continue
+
+            if numFails > 0:
+                print(f'\tFit failed {numFails}/{numBootstraps} times.')
+
+            failFields = [
+                run['fieldRatio'] for run in efficiencyValues 
+                if (run[f'{targetEfficiency}Eff'] - 2 * run[f'{targetEfficiency}ErrLow']) < targetValue
+            ]
+            fieldFloor = int(max(failFields) + 1) if failFields else int(min(xData))
+            searchMin = max(fieldFloor, int(min(xData)))
+
+            gridStart = max(int(lastField), searchMin) if lastBound < targetValue else searchMin            
+            fieldGrid = np.arange(gridStart, int(self._fieldLimit + 1))
             
-            # Invert the sigmoid to find x for a given y
-            numSolveField = x0 - (1/k) * np.log((1.0 / targetValue) - 1)
+            checkFields = []
 
-            # Find errors of the fit
-            perr = np.sqrt(np.diag(pcov))
+            for inField in fieldGrid:
+                allPredicts = []
+                for inPopt in bootstrapCurves:
+                    allPredicts.append(mySigmoid(inField, inPopt[0], inPopt[1]))
 
-            # The uncertainty in x (field) due to uncertainties in x0 and k
-            kErr = (1.0 / (k**2)) * np.log((1.0 / targetValue) - 1)
-            fieldErr = np.sqrt(perr[1]**2 + (kErr * perr[0])**2)
+                if allPredicts:
+                    lowerBound = np.percentile(allPredicts, 2.27)
+                    if lowerBound >= targetValue:
+                        checkFields.append(inField)
+                
 
-            #shift solution by 2-sigma
-            numSolveField = numSolveField + (2*fieldErr)
-
-            #round step down to int
-            fieldStep = numSolveField - lastField
+            if checkFields:
+                targetField = min(checkFields)
+                fieldStep = targetField - lastField
+                if fieldStep == 0:
+                    fieldStep = minFieldStep      
+            else:
+                print('Warning - No nearby fields at 2-sigma.')
+                fieldStep = maxFieldStep if lastResult < targetValue else minFieldStep
         
         except Exception as e:
-            print(f'Fit failed, falling back to incremental step: {e}')
-            fieldStep = minFieldStep if lastResult <= targetValue else -minFieldStep
+            print(f'Something failed, falling back to incremental step: {e}')
+            if yData.max() < .5:
+                fieldStep = maxFieldStep
+            else:
+                fieldStep = minFieldStep if lastResult <= targetValue else -minFieldStep
 
         #Limit to maximum and minimum step sizes
-        if math.fabs(fieldStep) > maxFieldStep:
+        if abs(fieldStep) > maxFieldStep:
             fieldStep = np.sign(fieldStep) * maxFieldStep
-        if math.fabs(fieldStep) < minFieldStep:
+        if abs(fieldStep) < minFieldStep:
             fieldStep = np.sign(fieldStep) * minFieldStep
 
         #Proposed new field
-        newField = int(lastField + fieldStep)
+        newField = int(np.round(lastField + fieldStep))
 
         #Check to make sure this field has not been tried
-        
         if newField in xData:
+
+            if lastBound >= targetValue:
+                return newField
+            
             print(f'Warning - Field of {newField} already tried. Step to nearest neighbor...')
-            index = np.where(xData == newField)[0][-1]
-            oldEfficiency = yData[index]
-            oldEffMin = oldEfficiency - yErrLow[index]
+            stepDirection = 1 if fieldStep >= 0 else -1
 
-            stepDirection = 1 if oldEffMin < targetValue else -1
+            searchField = newField
+            while searchField in xData:
+                searchField += stepDirection * minFieldStep
+                
+                #Make sure to not hit a limit
+                if searchField <= 0 or searchField > self._fieldLimit:
+                    stepDirection *= -1
+                    searchField = int(np.round(lastField)) + stepDirection*minFieldStep
 
-            numSteps = 0
-            while numSteps < 3 and newField in xData:
-                numSteps = numSteps+1
-                newField = newField + stepDirection*minFieldStep
-
-            print(f'Took {numSteps} steps to {newField}.')
+            newField = searchField
+            print(f'\tStepped to field: {newField}')    
 
         return newField
 
@@ -925,21 +972,31 @@ class FIMS_Simulation:
         """
 
         numIterations = len(efficiencyValues)
+        curField = int(self._param['fieldRatio'])
 
         # Determine new field strength
-        initialStep = 5 #TODO - This can be adjusted
-
         if numIterations == 0:
-            newField = self._param['fieldRatio']
+            newField = curField
 
         elif numIterations == 1:
-            newField = self._param['fieldRatio'] + initialStep
+            initialStep = 25 if curField < 50 else 5 #Can be adjusted
+            newField = curField + initialStep
 
         # Determine new field from fit
         else:
-            newField = self._fitForNextField(targetEfficiency, efficiencyValues, targetValue)
+            maxEfficiency = max(run[f'{targetEfficiency}Eff'] for run in efficiencyValues)
+            maxRun = next(run for run in efficiencyValues if run[f'{targetEfficiency}Eff'] == maxEfficiency)
+
+            # Do a broad search if target has not yet been reached.
+            # Coarse search if it has but without 2-sigma convergence.
+            # Fine-search thereafter.
+            fieldStepLimits = (
+                [1, 5] if maxRun['stopCondition'] == 'CONVERGED' else [5, 10]
+            ) if maxEfficiency >= targetValue else [10, 25]
+
+            newField = self._fitForNextField(targetEfficiency, efficiencyValues, targetValue, fieldStepLimits)
         
-        return newField
+        return int(newField)
 
 #**********************************************************************#
     def _findMinimumField(self, targetEfficiency='net', targetValue=.95, threshold=10):
@@ -960,26 +1017,17 @@ class FIMS_Simulation:
         ]))
 
         saveParam = self.getAllParam()
-        self.setParameters({'numAvalanche': 5000})#More is better. Adjust as needed.
+        self.setParameters({'numAvalanche': 10000})#More is better. Adjust as needed.
         
         efficiencyAtField = []
-        fieldValues = []
+        fieldValues = set()
         iterNo = 0
+
+        newField = self._getNextField(targetEfficiency, efficiencyAtField, targetValue)
+        fieldValues.add(newField)
 
         while iterNo <= self._iterationNumberLimit:
             iterNo += 1
-
-            newField = self._getNextField(targetEfficiency, efficiencyAtField, targetValue)
-
-            if newField > self._fieldLimit:
-                print(f'Warning - Field ratio exceeds limit. Escaping...')
-                break
-
-            if newField in fieldValues:
-                print(f'Warning - Repeat field. Escaping.')
-                break
-            fieldValues.append(newField)
-
             self.setParameters({'fieldRatio': newField})
             print(f'Iteration {iterNo}: Field ratio = {newField}')
 
@@ -993,24 +1041,41 @@ class FIMS_Simulation:
             efficiencyAtField.append(runResults)
 
             currentEff = runResults[f'{targetEfficiency}Eff']
+            errLow = runResults[f'{targetEfficiency}ErrLow']
+            errHigh = runResults[f'{targetEfficiency}ErrHigh']
+            lowBound = currentEff - 2*errLow
             
             print(
-                f'\tResult: {runResults[f"{targetEfficiency}Eff"]*100:.2f} +/- '
-                f'({runResults[f"{targetEfficiency}ErrHigh"]*100:.2f}/'
-                f'{runResults[f"{targetEfficiency}ErrLow"]*100:.2f})% '
+                f'\tResult: {currentEff*100:.2f} +/- '
+                f'({errHigh*100:.2f}/{errLow*100:.2f})'
                 f'(Stop Condition: {runResults["stopCondition"]})'
             )
+
+            nextField = self._getNextField(targetEfficiency, efficiencyAtField, targetValue)
+            if lowBound > targetValue:
+                if nextField == newField or nextField in fieldValues:
+                    print('CONVERGED')
+                    break
+            
+            if nextField > self._fieldLimit:
+                print(f'Warning - Proposed field exceeds field limit. Escaping...')
+                break
+
+            newField = nextField
+            fieldValues.add(newField)
         #End of find field loop
 
         allResults = pd.DataFrame(efficiencyAtField)
-        converged = allResults[allResults['stopCondition'] == 'CONVERGED']
-        isEfficient = converged[converged[f'{targetEfficiency}Eff'] >= targetValue]
+        converged = allResults[allResults['stopCondition'] == 'CONVERGED'].copy()
+        converged['lowerBound2Sigma'] = converged[f'{targetEfficiency}Eff'] - (2 * converged[f'{targetEfficiency}ErrLow'])
+        isEfficient = converged[converged['lowerBound2Sigma'] >= targetValue]
 
         if not isEfficient.empty:
             finalField = int(isEfficient['fieldRatio'].min())
             print(f'Solution found: Minimum field ratio = {finalField}')
         else:
-            finalField = int(allResults['fieldRatio'].iloc[-1])
+            closestField = converged['lowerBound2Sigma'].idxmax()
+            finalField = int(converged['fieldRatio'].loc[closestField])
             print(f'Warning: Target not reached. Closest field: {finalField}')
 
         saveParam['fieldRatio'] = finalField
@@ -1026,6 +1091,7 @@ class FIMS_Simulation:
         """
         TODO - Consider if this is better than just printing the raw values (easier
         to copy + paste)
+        Unused?
 
         Prints the results of the field search in a box format.
 
@@ -1139,91 +1205,28 @@ class FIMS_Simulation:
             int: The run number of the simulation that was executed.
         """
 
-        #get the run number for this simulation
+        # Get the run number for this simulation
         runNo = self._param['runNumber']
         print(f'Running simulation - Run number: {runNo}')
 
-        #Get the optimal drift field for this gas
-        self.setParameters({'driftField': self._getOptimalDriftField()})
+        # Set the initial field conditions
+        initField = 75.
+        driftField = self._getOptimalDriftField() #TODO
+        self.setParameters({'driftField': driftField})
+        self.setParameters({'fieldRatio': initField})
 
         # Generate Geometry
         self._generateGeometry()
 
-        #Find the minimum field ratio for this geometry
+        # Find the minimum field ratio for this geometry
         minField = self._findMinimumField()
         self.setParameters({'fieldRatio': minField})
 
-        #Solve fields and run Garfield
+        # Solve fields and run Garfield
         self._solveEFields(solveWeighting=True)
         self._runGarfield()
         
         return runNo   
-
-#***********************************************************************************#
-    def _getEfficiency(self, target, **kwargs):
-        """
-        Gets a target efficiency value for the current geometry and field ratio.
-
-        Args:
-            target (str): The target efficiency to get. Options are:
-                - 'detection': The electron detection efficiency.
-                - 'transparency': The electric field line transparency.
-                - 'collection': The charge collection efficiency.
-            kwargs: Additional keyword arguments for specific targets:
-                - efficiencyGoal (float): The target detection efficiency.
-                - efficiencyThreshold (int): The detection threshold for the detection target.
-                - transparencyGoal (float): The target field transparency.
-                - collectionGoal (float): The target charge collection efficiency.
-        
-        Returns:
-            tuple containing:
-                - float: The simulated target efficiency value.
-                - float: The uncertainty in the simulated target efficiency value.
-
-        """
-
-        runSettings = {
-            'detection': {'numAvalanche': 5000, 'avalancheLimit': kwargs.get('efficiencyThreshold', 10) + 5},
-            'collection': {'numAvalanche': 5000, 'avalancheLimit': 5},
-            'transparency': {'numFieldLine': 500}
-        }
-        saveParam = self.getAllParam()
-
-        if target not in runSettings:
-            raise ValueError(f"Invalid target '{target}'. Valid options are: {', '.join(runSettings.keys())}.")
-        self.setParameters(runSettings[target])
-
-        match target:
-            case 'detection':
-                self._runGarfield(
-                    'runDetection', 
-                    targetEfficiency=kwargs.get('efficiencyGoal', 0.95), 
-                    threshold=kwargs.get('efficiencyThreshold', 10)
-                )
-            
-            case 'collection':
-                initialZ = kwargs.get('initialZ', 0.5*self._param['cathodeHeight'])
-                self._runGarfield(
-                    'runCollection', 
-                    initialZ=initialZ
-                )
-
-            case 'transparency':
-                self._runGarfield(
-                    'runTransparency',
-                    targetTransparency=kwargs.get('transparencyGoal', 0.99)
-                )
-
-            case _:
-                raise RuntimeError('Unexpected error in target selection.')
-            
-        
-        results = self._readResultsFile(target)
-        print(f'\t{target}: {results['result']:.3f} +/- {results['resultErr']:.3f}') 
-
-        self.setParameters(saveParam)
-
-        return results['result'], results['resultErr']
 
 #***********************************************************************************#
 #***********************************************************************************#
@@ -1592,4 +1595,43 @@ class FIMS_Simulation:
         optimalFieldData = pd.read_pickle(filename)  
 
         return optimalFieldData
+    
+#**********************************************************************#
+    def getMinimumField(self, initialField=None):
+        """
+        Gets the minimum field required to achieve a net efficiency > 95%.
+        Plots the efficiencies from the field search trials.
+
+        Args:
+            initialField (int): Initial field ratio to begin search.
+
+        Returns:
+            int: Minimum field solution.
+        """
+        from functionsFIMS import plotAllEfficiencies
+
+        #Ensure all parameters exist
+        self._checkParam()
+
+        #Get absolute drift field value
+        driftField = self._param['driftField']
+        print(f'Finding minimum field ratio for geometry with drift field: {driftField} V/cm')
+
+        #Choose initial field ratio guess
+        if initialField is not None:
+            minFieldGuess = initialField
+        else:
+            minFieldGuess = 10
+
+        self.setParameters({'fieldRatio': minFieldGuess})
+
+        #Generate the FEM geometry
+        self._generateGeometry()
+
+        # Determine minimum field ratio
+        minFieldSolution = self._findMinimumField()
+
+        _ = plotAllEfficiencies()
+
+        return minFieldSolution
 

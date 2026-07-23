@@ -7,7 +7,7 @@
  */
 
 // My includes
-#include "myFunctions.h"
+#include "myFunctions.hh"
 
 //Garfield includes
 #include "Garfield/ComponentElmer.hh"
@@ -143,13 +143,20 @@ int main(int argc, char * argv[]) {
     AvalancheMicroscopic* avalancheE = new AvalancheMicroscopic;
     avalancheE->SetSensor(sensorFIMS);
     avalancheE->EnableAvalancheSizeLimit(electronLimit);
-    {
-        SilenceCerr guard;
-        avalancheE->EnablePlotting(nullptr, 10);//For velocity vector
-    }
+    
+    // Define drift view boundaries
+    ViewDrift* viewEffDrift = nullptr;
+    viewEffDrift = new ViewDrift();
+    viewEffDrift->SetArea(
+        xBoundary[0], yBoundary[0], zBoundary[0], 
+        xBoundary[1], yBoundary[1], zBoundary[1]
+    );
+    
+
+    avalancheE->EnablePlotting(viewEffDrift, 10);//For velocity vector
 
     //Deafult initial electron parameters
-    double x0 = 0., y0 = 0., z0 = 0.75*simParams->cathodeHeight;
+    double x0 = 0., y0 = 0., z0 = simParams->initialZFraction*simParams->cathodeHeight;
     double t0 = 0.;//ns
     double e0 = 0.1;//eV (Garfield is weird when this is 0.)
     double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
@@ -202,9 +209,8 @@ int main(int argc, char * argv[]) {
             while(repopulate){
                 //Populate with an electron
                 numTotalTrials++;
-                {//Guarding against Garfield error. See notes below.
+                {
                     SilenceCerr guard;
-                
                     avalancheE->AvalancheElectron(
                         curX, curY, curZ, 
                         curTime, curEnergy, 
@@ -243,14 +249,14 @@ int main(int argc, char * argv[]) {
                      * Garfield error: AvalancheMicroscopic::TransportElectrons: Starting point is not in a valid medium.
                      * Tanner notes (13/05/2026)
                      * Still not exactly sure what/why/how this occurs. 
-                     * It seesm that when this is happening y = pitch ALWAYS.
+                     * It seems that when this is happening y = pitch ALWAYS.
                      * But the area is defined to +/- 2*pitch, so it should be fine.
                      * x values seems like they can be anything, but cap at (-cellLength, cellLength)
                      * Again, defined as 2x this, so not sure.
                      * The z values are + and -. Thought maybe they were "in" a hole and translated weird, but must not be the case
                      * Z range is +5, -2 (not hard limits as far as I can tell)
                      * 
-                     * The current implementation is that this is just restarting, so although inefficienct it shouldnt affect results
+                     * The current implementation is that this is just restarting, so although inefficient it shouldn't affect results
                      */
                 }
 
@@ -325,7 +331,6 @@ int main(int argc, char * argv[]) {
 
         }//end of avalanche bunch loop
         std::cout << "Done " << numInitialElectrons << " trials." << std::endl;
-        std::cerr << "Number of surpressed Garfield errors: " << numFailure << std::endl;
 
         numInBunch = 100;//do bunches of 100 after first iteration
 
@@ -357,11 +362,13 @@ int main(int argc, char * argv[]) {
                 return -1;
         }
 
-        if(activeEff->maxValue < targetEfficiency || activeEff->minValue >= targetEfficiency){
+        double sigma2bound = activeEff->meanValue - (2*activeEff->lowError);
+        if(activeEff->maxValue < targetEfficiency || sigma2bound >= targetEfficiency){
             runAvalanche = false;
         }
     }//End of all avalanches
 
+    std::cerr << "Number of surpressed Garfield errors: " << numFailure << std::endl;
 
     //***** Output efficiency value *****//	
     //create output file

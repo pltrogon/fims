@@ -1297,7 +1297,7 @@ class gmshClass:
         
         # Create a line from the center of the pad to above the center hole
         pipeBottom = self._occ.addPoint(
-            0, 0, -self._param['gridStandoff'], 
+            0, 0, -gridStandoff, 
         )
         pipeTop = self._occ.addPoint( 
             0, 0, driftLength/10.
@@ -1324,32 +1324,28 @@ class gmshClass:
         gmsh.model.mesh.field.setNumber(3, 'SizeMax', backgroundMesh)
         gmsh.model.mesh.field.setNumber(3, 'DistMin', smallRadius)
         gmsh.model.mesh.field.setNumber(3, 'DistMax', smallRadius + htransitionWidth)
-
-        # Define ultra fine mesh inside the entire grid
-        gmsh.model.mesh.field.add('Box', 4)
-        gmsh.model.mesh.field.setNumber(4, 'VIn', gridMesh)
-        gmsh.model.mesh.field.setNumber(4, 'VOut', backgroundMesh)
-        gmsh.model.mesh.field.setNumber(4, 'XMin', bounds['x'][0])
-        gmsh.model.mesh.field.setNumber(4, 'XMax', bounds['x'][1])
-        gmsh.model.mesh.field.setNumber(4, 'YMin', bounds['y'][0])
-        gmsh.model.mesh.field.setNumber(4, 'YMax', bounds['y'][1])
-        gmsh.model.mesh.field.setNumber(4, 'ZMin', -gridThickness)
-        gmsh.model.mesh.field.setNumber(4, 'ZMax', gridThickness)
-        gmsh.model.mesh.field.setNumber(4, 'Thickness', gridThickness)
         
-        # Define fine mesh in the vicinity around the entire grid
+        # Define coarse mesh near edge/corner refinement lines
+        gmsh.model.mesh.field.add('Threshold', 4)
+        gmsh.model.mesh.field.setNumber(4, 'InField', 2)
+        gmsh.model.mesh.field.setNumber(4, 'SizeMin', refineMesh)
+        gmsh.model.mesh.field.setNumber(4, 'SizeMax', backgroundMesh)
+        gmsh.model.mesh.field.setNumber(4, 'DistMin', refineRadius)
+        gmsh.model.mesh.field.setNumber(4, 'DistMax', refineRadius + vtransitionWidth)
+        
+        # Define ultra fine mesh around the entire grid
         gmsh.model.mesh.field.add('Box', 5)
-        gmsh.model.mesh.field.setNumber(5, 'VIn', refineMesh)
+        gmsh.model.mesh.field.setNumber(5, 'VIn', gridMesh)
         gmsh.model.mesh.field.setNumber(5, 'VOut', backgroundMesh)
         gmsh.model.mesh.field.setNumber(5, 'XMin', bounds['x'][0])
         gmsh.model.mesh.field.setNumber(5, 'XMax', bounds['x'][1])
         gmsh.model.mesh.field.setNumber(5, 'YMin', bounds['y'][0])
         gmsh.model.mesh.field.setNumber(5, 'YMax', bounds['y'][1])
-        gmsh.model.mesh.field.setNumber(5, 'ZMin', -gridThickness*2.)
-        gmsh.model.mesh.field.setNumber(5, 'ZMax', gridThickness*2.)
-        gmsh.model.mesh.field.setNumber(5, 'Thickness', vtransitionWidth)
+        gmsh.model.mesh.field.setNumber(5, 'ZMin', -gridThickness/2.)
+        gmsh.model.mesh.field.setNumber(5, 'ZMax', gridThickness/2.)
+        gmsh.model.mesh.field.setNumber(5, 'Thickness', vtransitionWidth/4.)
         
-        # Define fine mesh around the pad
+        # Define coarse mesh as a transition region around the grid
         gmsh.model.mesh.field.add('Box', 6)
         gmsh.model.mesh.field.setNumber(6, 'VIn', refineMesh)
         gmsh.model.mesh.field.setNumber(6, 'VOut', backgroundMesh)
@@ -1357,17 +1353,21 @@ class gmshClass:
         gmsh.model.mesh.field.setNumber(6, 'XMax', bounds['x'][1])
         gmsh.model.mesh.field.setNumber(6, 'YMin', bounds['y'][0])
         gmsh.model.mesh.field.setNumber(6, 'YMax', bounds['y'][1])
-        gmsh.model.mesh.field.setNumber(6, 'ZMin', SiO2Height - thicknessSiO2/2.)
-        gmsh.model.mesh.field.setNumber(6, 'ZMax', SiO2Height + thicknessSiO2/2.)
-        gmsh.model.mesh.field.setNumber(6, 'Thickness', vtransitionWidth/2.)
+        gmsh.model.mesh.field.setNumber(6, 'ZMin', -gridThickness*2.)
+        gmsh.model.mesh.field.setNumber(6, 'ZMax', gridThickness*2.)
+        gmsh.model.mesh.field.setNumber(6, 'Thickness', vtransitionWidth)
         
-        # Define coarse mesh near edge/corner refinement lines
-        gmsh.model.mesh.field.add('Threshold', 7)
-        gmsh.model.mesh.field.setNumber(7, 'InField', 2)
-        gmsh.model.mesh.field.setNumber(7, 'SizeMin', refineMesh)
-        gmsh.model.mesh.field.setNumber(7, 'SizeMax', backgroundMesh)
-        gmsh.model.mesh.field.setNumber(7, 'DistMin', refineRadius)
-        gmsh.model.mesh.field.setNumber(7, 'DistMax', refineRadius + vtransitionWidth)
+        # Define fine mesh around the pad
+        gmsh.model.mesh.field.add('Box', 7)
+        gmsh.model.mesh.field.setNumber(7, 'VIn', refineMesh)
+        gmsh.model.mesh.field.setNumber(7, 'VOut', backgroundMesh)
+        gmsh.model.mesh.field.setNumber(7, 'XMin', bounds['x'][0])
+        gmsh.model.mesh.field.setNumber(7, 'XMax', bounds['x'][1])
+        gmsh.model.mesh.field.setNumber(7, 'YMin', bounds['y'][0])
+        gmsh.model.mesh.field.setNumber(7, 'YMax', bounds['y'][1])
+        gmsh.model.mesh.field.setNumber(7, 'ZMin', SiO2Height - thicknessSiO2/2.)
+        gmsh.model.mesh.field.setNumber(7, 'ZMax', SiO2Height + thicknessSiO2/2.)
+        gmsh.model.mesh.field.setNumber(7, 'Thickness', vtransitionWidth/2.)
         
         # Use the smallest mesh size
         gmsh.model.mesh.field.add('Min', 8)

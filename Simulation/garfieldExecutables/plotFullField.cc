@@ -9,7 +9,7 @@
  */
 
 // My includes
-#include "myFunctions.h"
+#include "myFunctions.hh"
 
 // Garfield includes
 #include "Garfield/ComponentElmer.hh"

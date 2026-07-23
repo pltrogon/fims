@@ -21,7 +21,7 @@
  */
 
 //My includes
-#include "myFunctions.h"
+#include "myFunctions.hh"
 
 //Garfield includes
 #include "Garfield/ComponentElmer.hh"
@@ -68,6 +68,9 @@ using namespace Garfield;
 
 int main(int argc, char * argv[]) {
 
+  //TODO - make this an input or just trial T/F
+  bool distOnPlane = true;
+
   // Handle geometry mode from input
   if(argc != 2){
     std::cerr << "Format: " << argv[0] << " <GeometryMode>" << std::endl;
@@ -86,7 +89,6 @@ int main(int argc, char * argv[]) {
   double cellXScale = 1;
   double cellYScale = 1;
   bool hexCell = false;
-  
   switch(geometryMode){
     case GeometryMode::Square: {
       // Adjust E-Field line generation points
@@ -245,7 +247,7 @@ int main(int argc, char * argv[]) {
   double xBoundary[2], yBoundary[2], zBoundary[2];
   zBoundary[0] = zmin;
   zBoundary[1] = zmax;
-  //Extend simulation boundary to +/- pitch in x and y
+  //Extend simulation boundary to +/- 2*pitch in x and y
   xBoundary[0] = -2.*simParams->pitch;
   xBoundary[1] = 2.*simParams->pitch;
   yBoundary[0] = -2.*simParams->pitch;
@@ -270,7 +272,9 @@ int main(int argc, char * argv[]) {
     xBoundary[0], yBoundary[0], zBoundary[0], 
     xBoundary[1], yBoundary[1], zBoundary[1]
   );
-  sensorFIMS->AddElectrode(&fieldFIMS, "centerPad");
+  for(const auto& inSensor : sensorList){
+    sensorFIMS->AddElectrode(&fieldFIMS, inSensor);
+  }
 
   // ***** Draw field lines for visualization ***** //
   std::cout << "****************************************\n";
@@ -499,12 +503,13 @@ int main(int argc, char * argv[]) {
   
   // ***** Prepare Avalanche Electron ***** //
   //Set the Initial electron parameters
-  double x0 = 0., y0 = 0., z0 = 2.*simParams->holeRadius;
+  double z0 = simParams->initialZFraction * simParams->cathodeHeight;
+
   double t0 = 0.;//ns
   double e0 = 0.1;//eV (Garfield is weird when this is 0.)
   double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
 
-  double timeFinal = 5.;//ns
+  double timeFinal = 10.;//ns
   double timeStep = 0.01;//ns
   int nSignalBins = timeFinal/timeStep;
   
@@ -571,7 +576,9 @@ int main(int argc, char * argv[]) {
         xBoundary[1], yBoundary[1], zBoundary[1]
       );      
 
-      parallelSensorFIMS->AddElectrode(parallelFieldFIMS, "centerPad");
+      for(const auto& inSensor : sensorList){
+        parallelSensorFIMS->AddElectrode(&fieldFIMS, inSensor);
+      }
       parallelSensorFIMS->SetTimeWindow(0., timeStep, nSignalBins);
 
       avalancheE->SetSensor(parallelSensorFIMS);
@@ -621,7 +628,7 @@ int main(int argc, char * argv[]) {
     int statIon;
     float electronDriftx, electronDrifty, electronDriftz;
     float ionDriftx, ionDrifty, ionDriftz, ionDriftt;
-    double signalTime, signalStrength;
+    double signalTime, signalStrength, adjacentSignal;
 
     TTree* parallelAvalancheDataTree = new TTree("avalancheDataTree", "Avalanche Results");
     parallelAvalancheDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
@@ -677,6 +684,7 @@ int main(int argc, char * argv[]) {
     parallelSignalDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
     parallelSignalDataTree->Branch("Signal Time", &signalTime, "signalTime/D");
     parallelSignalDataTree->Branch("Signal Strength", &signalStrength, "signalStrength/D");
+    parallelSignalDataTree->Branch("Adjacent Signal Average", &adjacentSignal, "adjacentSignal/D");
   
 
     //***** Parallel Avalanche Loop *****//
@@ -693,6 +701,9 @@ int main(int argc, char * argv[]) {
       attachedElectrons = 0;
       totalIons = 0;
       
+      double cellLength = simParams->pitch/sqrt(3.);
+      auto [x0, y0] = distOnPlane ? randomXYInHexagon(cellLength) : std::pair<double, double>{0.0, 0.0};
+
       //Begin single-electron avalanche
       avalancheE->AvalancheElectron(x0, y0, z0, 0., e0, dx0, dy0, dz0);
 
@@ -786,8 +797,22 @@ int main(int argc, char * argv[]) {
       //Get signal for each timestep
       for(int inSignal = 0; inSignal < nSignalBins; inSignal++){
         signalTime = inSignal*timeStep;
-        signalStrength = parallelSensorFIMS->GetSignal("centerPad", inSignal);
+        signalStrength = parallelSensorFIMS->GetSignal("CentralPad", inSignal);
         
+        double sumAdjacentSignal = 0.;
+        int numAdjacent = 0;
+
+        for(size_t i = 1; i < sensorList.size(); i++){
+          std::string inSensor = sensorList.at(i);
+          sumAdjacentSignal += parallelSensorFIMS->GetSignal(inSensor, inSignal);
+          numAdjacent++;
+        }
+
+        adjacentSignal = 0.;
+        if(numAdjacent > 0){
+          adjacentSignal = sumAdjacentSignal / numAdjacent;
+        }
+
         //Fill tree
         parallelSignalDataTree->Fill();
       }
@@ -893,6 +918,7 @@ int main(int argc, char * argv[]) {
   metaDataTree->Branch("Number of Field Lines", &simParams->numFieldLine, "numFieldLine/I");
   metaDataTree->Branch("Number of Avalanches", &simParams->numAvalanche, "numAvalanche/I");
   metaDataTree->Branch("Avalanche Limit", &simParams->avalancheLimit, "avalancheLimit/I");
+  metaDataTree->Branch("Initial Z Fraction", &simParams->initialZFraction, "initialZFraction/D");
   
   metaDataTree->Branch("Gas Comp: Ar", &simParams->gasCompAr, "gasCompAr/D");
   metaDataTree->Branch("Gas Comp: CO2", &simParams->gasCompCO2, "gasCompCO2/D");
