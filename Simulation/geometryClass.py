@@ -119,8 +119,8 @@ class geometryClass:
             'padShape'
         ]
         unitCellOptions = ['Square', 'Hexagonal',]
-        holeOptions = ['circle', 'hexagon']
-        padOptions = ['square', 'hexagon']
+        holeOptions = ['circle', 'hexagon', 'octagon']
+        padOptions = ['square', 'hexagon', 'octagon']
         
         for key in geometryKeys:
             if key not in geoConfiguration:
@@ -323,6 +323,10 @@ class gmshClass:
                 centerGridHole = self._createHexagon(
                     holeRadius, -gridThickness/2, gridThickness
                 )
+            case 'octagon':
+                centerGridHole = self._createOctagon(
+                    holeRadius, -gridThickness/2, gridThickness
+                )
         
         # Determine if the unit cell is hexagonal or not.
         if hexCell:
@@ -418,6 +422,27 @@ class gmshClass:
                 )
                 centerPadSurface = centerPadSurface[0]
                 
+            case 'octagon':
+                # Add central pad hole
+                centerPadHole = self._createOctagon(
+                    padLength, -gridStandoff, thicknessSiO2
+                )
+                
+                # Add central readout pad
+                centerPadHex = self._createOctagon(
+                    padLength, -gridStandoff
+                )
+                fullReadoutPlane = self._occ.addBox(
+                    0, 0, -gridStandoff,
+                    pitch*math.sqrt(3)/2, pitch/2, 1.0
+                )
+                centerPadSurface, _ = self._occ.intersect(
+                    [(2, centerPadHex)],
+                    [(3, fullReadoutPlane)],
+                    removeObject=True, removeTool=True
+                )
+                centerPadSurface = centerPadSurface[0]
+        
         padSurfaces.append(centerPadSurface)
         
         # Determine if the unit cell is hexagonal or not.

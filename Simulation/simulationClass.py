@@ -195,8 +195,8 @@ class FIMS_Simulation:
             'padShape'
         ]
         unitCellOptions = ['Square', 'Hexagonal',]
-        holeOptions = ['circle', 'hexagon']
-        padOptions = ['square', 'hexagon']
+        holeOptions = ['circle', 'hexagon', 'octagon']
+        padOptions = ['square', 'hexagon', 'octagon']
         
         for key in geometryKeys:
             if key not in geoConfiguration:
