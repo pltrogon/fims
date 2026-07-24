@@ -49,8 +49,6 @@ class FIMS_Optimizer:
             .
             last param name: [minimum value, maximum value]
         
-        initialValues (list): list of initial values for each parameter.
-        
         initialGeometry (dict): dictionary of geometry values to be used
         as initial values for the optimizer.
         
@@ -82,8 +80,10 @@ class FIMS_Optimizer:
         Args:
             params (list of lists): List of parameters with bounds.
         """
+        self.simFIMS = FIMS_Simulation()
+        
+        # Set geometry configuration and values
         self.params = params
-        self._initialValues = []
         self.initialGeometry = {
             'padLength': 25.,
             'pitch': 55.,
@@ -94,8 +94,7 @@ class FIMS_Optimizer:
             'thicknessSiO2': 5.,
             'pillarRadius': 5.,
         }
-        self.simFIMS = FIMS_Simulation()
-        
+        self.geoConfig = self.simFIMS.geoConfiguration
         self._checkParameters()
 
         # Create log file for optimizer
@@ -174,6 +173,14 @@ class FIMS_Optimizer:
             initialGuess (dict): dictionary of initial values to be used
             in the optimizer.
         """
+        # Verify format
+        if not isinstance(initialGuess, dict):
+            raise ValueError('Error: Initial guess is not a dictionary')
+
+        for param in initialGuess:
+            if not isinstance(initialGuess[param], (int, float)):
+                raise ValueError(f'Error: {param} value is not valid. Must be a number.')
+        
         # Update default values with given values, if any provided
         for geo in initialGuess:
             self.initialGeometry[geo] = initialGuess[geo]
@@ -198,41 +205,77 @@ class FIMS_Optimizer:
             LinearConstraint: Object representing the geometry constraints.
 
         """
-        # Get input parameters and their initial values
-        paramIndex = {p: i for i, p in enumerate(self.params)}
-        initialPitch = self._initialValues[paramIndex['pitch']]
-        initialRadius = self._initialValues[paramIndex['holeRadius']]
-        initialPad = self._initialValues[paramIndex['padLength']]
-        initialStand = self._initialValues[paramIndex['gridStandoff']]
+        # Get initial values of active parameters
+        initVals = {param: self.initialGeometry[param] for param in self.params}
         
-        radiusRatio = initialPitch/initialRadius
-        padRatio = initialPitch/initialPad
-        
-        # Get Fixed parameter values        
-        pillarRadius = self.simFIMS.getParam('pillarRadius')
-        dielectricThickness = self.simFIMS.getParam('thicknessSiO2')
+        # Get other geometry parameter values
+        fixedGeoKeys = set(self.initialGeometry.keys()) - set(self.params.keys())
+        fixVals = {key: self.initialGeometry[key] for key in fixedGeoKeys}
+        if 'pitch' in fixVals:
+            fixVals['pitch'] *= -1
+
+        # Set other constants
         minPillar = 5 # Min pillar height
         buffer = .01 # safety buffer for precision at boundary
         numParam = len(self.params)
 
-
         # Geometry constraints:
         # Format: a*x(1) + b*x(2) >= c*x(3)
         # a,b,c are constants of the matrix. x(n) is the parameter.
-        # 1. Ensure radius is smaller than the pitch (with sufficient space for pillars)
-        # 2. Ensure pads are smaller than the pitch (with sufficient space for pillars)
-        # 3. Ensure that the grid is above the SiO2 layer (with a buffer)
+        # TODO: enable geometry shape variation
+        constraints = []
         
-        constraints = [
-            ({'pitch': initialPitch, 'holeRadius': -2*initialRadius}, pillarRadius+buffer),
-            ({'pitch': initialPitch, 'padLength': -initialPad}, 2*pillarRadius+buffer),
-            ({'gridStandoff': initialStand}, dielectricThickness+minPillar+buffer)
-        ]
+        ## 1. Ensure radius is smaller than the pitch (with sufficient space for pillars)
+        # TODO: this needs to be cleaned up
+        eq1Keys = ['pitch', 'holeRadius', 'pillarRadius']
+        constKeys = set(eq1Keys) - set(initVals.keys())
+        actKeys = set(eq1Keys) - set(fixVals.keys())
+        
+        # Check which side of the equation each parameter is on and adjust accordingly.
+        if 'holeRadius' in actKeys:
+            initVals['holeRadius'] *= -2
+        else:
+            fixVals['holeRadius'] *= 2
+        
+        # Create constraint 1
+        if len(actKeys) > 0:
+            eq1Dict = {key: initVals[key] for key in actKeys}
+            eq1Constant = sum([fixVals[key] for key in constKeys]) + buffer
+            constraints.append((eq1Dict, eq1Constant))
+        
+        ## 2. Ensure pads are smaller than the pitch (with sufficient space for pillars)
+        eq2Keys = ['pitch', 'padLength', 'pillarRadius']
+        constKeys2 = set(eq2Keys) - set(initVals.keys())
+        actKeys2 = set(eq2Keys) - set(fixVals.keys())
+        
+        # Check which side of the equation each parameter is on and adjust accordingly.
+        if 'padLength' in actKeys2:
+            initVals['padLength'] *= -math.sqrt(3)
+        else:
+            fixVals['padLength'] *= math.sqrt(3)
+        
+        # Create constraint 2
+        if len(actKeys2) > 0:
+            eq2Dict = {key: initVals[key] for key in actKeys2}
+            eq2Constant = sum([fixVals[key] for key in constKeys2]) + buffer
+            constraints.append((eq2Dict, eq2Constant))
+        
+        # 3. Ensure that the grid is above the SiO2 layer (with a buffer)
+        eq3Keys = ['gridStandoff', 'pillarRadius', 'thicknessSiO2']
+        constKeys3 = set(eq3Keys) - set(initVals.keys())
+        actKeys3 = set(eq3Keys) - set(fixVals.keys())
+        
+        # Create constraint 3
+        if len(actKeys3) > 0:
+            eq3Dict = {key: initVals[key] for key in actKeys3}
+            eq3Constant = sum([fixVals[key] for key in constKeys3]) + buffer
+            constraints.append((eq3Dict, eq3Constant))
 
         matrix = []
         lowerBound = []
         upperBound = np.inf
-
+        
+        paramIndex = {p: i for i, p in enumerate(self.params)}
         for coeffs, limit in constraints:
             row = np.zeros(numParam)
             for name, value in coeffs.items():
@@ -243,37 +286,28 @@ class FIMS_Optimizer:
         geometryConstraints = LinearConstraint(
             matrix, lowerBound, upperBound
         )
-
+        
         return geometryConstraints
 
 #**********************************************************************#
 
-    def _normalizeValues(self, rawValues):
+    def _normalizeValues(self, initialValues, rawValues):
         """
         Normalizes a given list of values to the matching parameter.
         
         Note: assumes that the list of values is given in the same order
         as the input parameters.
         
-        Args: 
-            rawValues (list): list of values associated with the input
-            parameters.
-        returns:
-            normValues (list): list of values normalized by the initial
-            value of the corresponding input parameter.
-        """
-        initialVals = []
-        for value in self._initialValues:
-            initialVals.append(value)
-        normValues = []
-        paramID = 0
+        args: 
+            initialValues (list): list of initial values
+            rawValues (list): list of current values
         
-        # Normalize each value in the list using the initial value of
-        # the corresponding parameter as the normalization coefficient.
-        for elem in rawValues:
-            normValues.append(elem/initialVals[paramID])
-            paramID += 1
-            
+        returns:
+            normValues (list): list of normalized values.
+        """
+        valueList = list(zip(rawValues, initialValues))
+        normValues = [raw/initial for raw, initial in valueList]
+    
         return normValues
 
 #**********************************************************************#
@@ -287,17 +321,15 @@ class FIMS_Optimizer:
         optimizer value.
         
         args:
-            inputParams (list): list of the names of each input 
-        parameter.
+            inputParams (dict): names and normalized values of each 
+        input parameter.
         
         returns:
-            paramVals (dict): dictionary of parameters names and values
+            paramVals (dict): parameter names and values
         """
         paramVals = {}
-        paramIndex = {p: i for i, p in enumerate(self.params)}
         for param in optimizerDict:
-            val = optimizerDict[param]
-            paramVals[param] = val*self._initialValues[paramIndex[param]]
+            paramVals[param] = optimizerDict[param]*self.initialGeometry[param]
         
         return paramVals
         
@@ -355,7 +387,7 @@ class FIMS_Optimizer:
         for elem in self.params:
             print(f'\t{elem}: {allParams[elem]}')
         print('************************************')
-
+        self.simFIMS.setGeometry(self.geoConfig)
         runNumber = self.simFIMS.runForOptimizer()
         
         # Get the IBN
@@ -429,6 +461,13 @@ class FIMS_Optimizer:
 
 #**********************************************************************#
 
+    def setGeometry(self, geometry):
+        """Sets the shape of the geometry"""
+        self.geoConfig = geometry
+        return
+
+#**********************************************************************#
+
     def optimizeForIBN(self, initialGuess={}):
         """
         Runs an optimization routine to find the FIMS parameters that 
@@ -448,43 +487,29 @@ class FIMS_Optimizer:
                 - IBNValue (float): Final minimum IBN value.
                 - success (bool): Success status of minimization.
         """
-        # Get optimizer parameters and bounds
-        inputList = []
-        minBounds = []
-        maxBounds = []
-        activeParameters = self.params.copy()
+        # Unpack optimizer parameters and bounds
+        activeParameters = self.params.copy()        
+        inputList = [name for name in activeParameters]
+        minBounds = [min(activeParameters[name]) for name in inputList]
+        maxBounds = [max(activeParameters[name]) for name in inputList]
         
-        for paramName in activeParameters:
-            inputList.append(paramName)
-            minBounds.append(min(activeParameters[paramName]))
-            maxBounds.append(max(activeParameters[paramName]))
-        
-        # Verify and set initial guess
-        if not isinstance(initialGuess, dict):
-            print('Error: Initial guess is not a dictionary')
-            return -1
-        for param in initialGuess:
-            if not isinstance(initialGuess[param], (int, float))
-                print(f'Error: {param} value is not valid. Must be a number.')
-                return -1
+        # Verify and set the initial guess
         self._setInitialParameters(initialGuess)
+        initNormGuess = np.array([1 for elem in inputList])
+        self.simFIMS.setParameters(self.initialGeometry)
         
-        # Normalize inputs
-        initialGuess = np.empty(0)
-        for param in inputList:
-            self._initialValues.append(self.initialGeometry[param])
-            initialGuess = np.append(initialGuess, 1) # All inputs initially normalized to 1
-        
-        # Set bounds for variables
-        normMinBounds = self._normalizeValues(minBounds)
-        normMaxBounds = self._normalizeValues(maxBounds)
+        # Set the bounds for each variable
+        initialValues = [self.initialGeometry[param] for param in inputList]
+        normMinBounds = self._normalizeValues(initialValues, minBounds)
+        normMaxBounds = self._normalizeValues(initialValues, maxBounds)
         optimizerBounds = Bounds(normMinBounds, normMaxBounds)
 
         print('Beginning optimization...')
+
         try:
             optimizerResult = minimize(
                 fun=self._IBNObjective,
-                x0=initialGuess,
+                x0=initNormGuess,
                 args=(inputList,),
                 method='COBYQA', #or 'Nelder-Mead'
                 constraints=self._getGeometryConstraints(),
@@ -492,6 +517,8 @@ class FIMS_Optimizer:
                 bounds=optimizerBounds,
                 options = {'initial_tr_radius': .2} # initial step of 20%
             )
+            
+            # Unpack optimizer output
             finalParams = optimizerResult.x
             finalFunction = optimizerResult.fun
             finalStatus = optimizerResult.success
@@ -516,7 +543,7 @@ class FIMS_Optimizer:
         print(self.simFIMS)
         
         return resultVals
-    
+
 #**********************************************************************#
 
     def _optimizerMaster(self, x, inputList):

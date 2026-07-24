@@ -1204,11 +1204,11 @@ class FIMS_Simulation:
         Returns:
             int: The run number of the simulation that was executed.
         """
-
         # Get the run number for this simulation
         runNo = self._param['runNumber']
         print(f'Running simulation - Run number: {runNo}')
-
+        print('Pad hole: ', self.geoConfiguration['holeShape'])
+        
         # Set the initial field conditions
         initField = 75.
         driftField = self._getOptimalDriftField() #TODO
