@@ -1673,7 +1673,7 @@ class runData:
 
 
         polyaStats = f'Polya Fit Statistics\nChi2 = {polyaChi2['chi2']:.4f}\nrChi2 = {polyaChi2['rChi2']:.4f}'
-        '''
+        
         ax.text(
             0.8, 0.75, polyaStats, 
             fontsize=10, 
@@ -1682,7 +1682,7 @@ class runData:
             transform=ax.transAxes,
             bbox=dict(facecolor='none', edgecolor='k', boxstyle='round,pad=1')
         )
-        '''
+        
         plt.xlabel('Numer of Electrons in Avalanche: n')
         plt.ylabel('Probability of Avalanche Size: P(n)')
         plt.legend()
@@ -2659,6 +2659,62 @@ class runData:
         TODO - Possible exclude single-e and overflowed avalanches from this. if so use trimmed gain.
         """
 
+        aveSignalData = self._getAverageSignal()
+
+        relativeTime = aveSignalData['relativeTime']
+        averagePrimary = aveSignalData['averagePrimary']
+        averageSecondary = aveSignalData['averageSecondary']
+        meanGain = aveSignalData['meanGain']
+
+        # Create figure
+        fig = plt.figure(figsize=(10, 5))
+        fig.suptitle(f'Average Induced Signal (Gain={meanGain:.1f})')
+        ax1 = fig.add_subplot(121)
+        ax2 = fig.add_subplot(122)
+        
+        #Plot signals for the central pad
+        ax1.plot(
+            relativeTime, averagePrimary,
+            label='Average Induced Signal'
+        )
+        ax1.plot(
+            relativeTime, averageSecondary,
+            ls='--', label='Average Adjacent Signal'
+        )
+
+        ax2.plot(
+            relativeTime, averagePrimary.cumsum(),
+            label='Average Induced Signal'
+        )
+        ax2.plot(
+            relativeTime, averageSecondary.cumsum(),
+            ls='--', label='Average Adjacent Signal'
+        )
+        averageTotalCharge = averagePrimary.sum()
+        ax2.axhline(
+            averageTotalCharge,
+            label=f'Total Charge: {averageTotalCharge:.3f} fC', c='r', ls='--'
+        )
+
+        ax1.set_title('Average Induced Signal')
+        ax1.set_xlabel('Aligned Time (ns)')
+        ax1.set_ylabel('Current (fC/ns)')
+
+        ax2.set_title('Average Integrated Signal')
+        ax2.set_xlabel('Aligned Time (ns)')
+        ax2.set_ylabel('Charge (fC)')
+
+        ax1.grid()
+        ax2.grid()
+        ax2.legend()
+
+        plt.tight_layout()
+        
+        return fig
+
+#********************************************************************************#
+    def _getAverageSignal(self):
+        """TODO"""
         allSignals = self.getDataFrame('signalData')
         groupedSignals = allSignals.groupby('Avalanche ID')
         avalancheData = self.getDataFrame('avalancheData')
@@ -2712,57 +2768,19 @@ class runData:
         averagePrimarySingle = np.mean(alignPrimary, axis=0)
         averageSecondarySingle = np.mean(alignSecondary, axis=0)
 
-        #Get average signal
+        #Get average signal scale by mean gain
         meanGain = self._calculatedData['Raw Gain'].iloc[0]
         averagePrimary = averagePrimarySingle*meanGain
         averageSecondary = averageSecondarySingle*meanGain
 
-        # Create figure
-        fig = plt.figure(figsize=(10, 5))
-        fig.suptitle(f'Average Induced Signal (Gain={meanGain:.1f})')
-        ax1 = fig.add_subplot(121)
-        ax2 = fig.add_subplot(122)
-        
-        #Plot signals for the central pad
-        ax1.plot(
-            relativeTime, averagePrimary,
-            label='Average Induced Signal'
-        )
-        ax1.plot(
-            relativeTime, averageSecondary,
-            ls='--', label='Average Adjacent Signal'
-        )
+        aveSignal = {
+            'relativeTime': relativeTime,
+            'averagePrimary': averagePrimary,
+            'averageSecondary': averageSecondary,
+            'meanGain': meanGain
+        }
 
-        ax2.plot(
-            relativeTime, averagePrimary.cumsum(),
-            label='Average Induced Signal'
-        )
-        ax2.plot(
-            relativeTime, averageSecondary.cumsum(),
-            ls='--', label='Average Adjacent Signal'
-        )
-        averageTotalCharge = averagePrimary.sum()
-        ax2.axhline(
-            averageTotalCharge,
-            label=f'Total Charge: {averageTotalCharge:.3f} fC', c='r', ls='--'
-        )
-
-        ax1.set_title('Average Induced Signal')
-        ax1.set_xlabel('Aligned Time (ns)')
-        ax1.set_ylabel('Current (fC/ns)')
-
-        ax2.set_title('Average Integrated Signal')
-        ax2.set_xlabel('Aligned Time (ns)')
-        ax2.set_ylabel('Charge (fC)')
-
-        ax1.grid()
-        ax2.grid()
-        ax2.legend()
-
-        plt.tight_layout()   
-        
-        return fig
-
+        return aveSignal
 
 #********************************************************************************#
     def plotSignalvsGain(self):
@@ -2865,5 +2883,29 @@ class runData:
 
         return fig
 
+
+#********************************************************************************#
+    def getPWLFile(self):
+        """TODO"""
+
+        aveSignalData = self._getAverageSignal()
+
+        relativeTime = np.asarray(aveSignalData['relativeTime'])
+        averagePrimary = np.asarray(aveSignalData['averagePrimary'])
+        #averageSecondary = np.asarray(aveSignalData['averageSecondary'])
+
+        #LTSpice require time starting at 0, strictly monotonic, and in s and A
+        numPoints = len(relativeTime)
+        timeStep = (relativeTime[-1] - relativeTime[0]) / (numPoints-1)
+        cleanTime = np.arange(numPoints) * timeStep * 1e-9
+        cleanSignal = averagePrimary * 1e-6
+
+
+        pwlData = np.column_stack((cleanTime, cleanSignal))
+
+        filename = f'../Data/aveSignalRun{self.runNumber}.txt'
+        np.savetxt(filename, pwlData, fmt='%.8e', delimiter=' ')
+
+        return
 
 
