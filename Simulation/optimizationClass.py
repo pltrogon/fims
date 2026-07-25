@@ -186,6 +186,36 @@ class FIMS_Optimizer:
             self.initialGeometry[geo] = initialGuess[geo]
         
         return
+#**********************************************************************#
+
+    def _makeConstraintEquation(self, keys, variables, constants):
+        """
+        Creates a single constraint equation.
+        
+        args:
+            keys (list): names of each parameter present in the equation.
+            variables (dict): parameters on the left side of the equation.
+            constants (dict): parameters on the right side of the equation.
+        
+        returns:
+            constraintEquation (tuple): constraint equation with constants summed
+        on the right and free variables as a dictionary on the left.
+        """
+        # Get the names of the parameters and distinguish which are constant.
+        constKeys = set(keys) - set(variables.keys())
+        actKeys = set(keys) - set(constants.keys())
+        
+        # Create constraint equation
+        buffer = .01 # safety buffer for precision at boundary  
+        
+        if len(actKeys) <= 0:
+            return []
+
+        eqDict = {key: variables[key] for key in actKeys}
+        eqConstant = sum([-1*constants[key] for key in constKeys]) + buffer
+        constraintEquation = (eqDict, eqConstant)
+        
+        return constraintEquation
 
 #**********************************************************************#
 
@@ -205,71 +235,95 @@ class FIMS_Optimizer:
             LinearConstraint: Object representing the geometry constraints.
 
         """
-        # Get initial values of active parameters
-        initVals = {param: self.initialGeometry[param] for param in self.params}
+        # Get all geometry values
+        initGeometry = {geo: self.initialGeometry[geo] for geo in self.initialGeometry}
+        hexCell = 'Hexagonal' in self.geoConfig['unitCell']
         
-        # Get other geometry parameter values
-        fixedGeoKeys = set(self.initialGeometry.keys()) - set(self.params.keys())
-        fixVals = {key: self.initialGeometry[key] for key in fixedGeoKeys}
-        if 'pitch' in fixVals:
-            fixVals['pitch'] *= -1
-
-        # Set other constants
-        minPillar = 5 # Min pillar height
-        buffer = .01 # safety buffer for precision at boundary
+        # Note: assumes initially that all parameters are on the left side of the equation.
+        # Shape constants:
+            # Hex unit cell: circle = 2, square = 4/math.sqrt(3), hexagon = math.sqrt(3), octagon = 1.9601 
+            # square unit cell: circle = 2, square = 1, hexagon = 2, octagon = 2*cos(67.5)
+            # Note: octagon length defined as distance from center to vertex.
+            # Distance: d = 1/(cos(theta)*(1+tan(phi)*tan(theta)) ) ~ 0.980025. 
+            # Angles: Theta = 30 - 45/2 = 7.5 degrees. phi = 180 - 90 - 135/2 = 12.5 degrees.
+        
+        ## Apply shape constants to hole radius
+        match self.geoConfig['holeShape']:
+            case 'circle':
+                initGeometry['holeRadius'] *= -2
+            
+            case 'hexagon':
+                if hexCell:
+                    initGeometry['holeRadius'] *= -math.sqrt(3)
+                else:
+                    initGeometry['holeRadius'] *= -2
+            
+            case 'octagon':
+                if hexCell:
+                    initGeometry['holeRadius'] *= -1.9601
+                else:
+                    initGeometry['holeRadius'] *= -2*math.cos(math.radians(67.5))
+        
+        ## Apply shape constant to readout pad
+        match self.geoConfig['padShape']:
+            case 'square':
+                if hexCell:
+                    initGeometry['padLength'] *= -4/math.sqrt(3)
+                else:
+                    initGeometry['padLength'] *= -1
+            
+            case 'hexagon':
+                if hexCell:
+                    initGeometry['padLength'] *= -math.sqrt(3)
+                else:
+                    initGeometry['padLength'] *= -2
+            
+            case 'octagon':
+                if hexCell:
+                    initGeometry['padLength'] *= -1.9601
+                else:
+                    initGeometry['padLength'] *= -2*math.cos(math.radians(67.5))
+        
+        # Set Other geometry parameters
+        initGeometry['pillarRadius'] *= -1
+        initGeometry['thicknessSiO2'] *= -1
+        
+        # Get initial values of active parameters
+        initVals = {param: initGeometry[param] for param in self.params}
+        
+        # Get initial values of constant parameters
+        fixedGeoKeys = set(initGeometry.keys()) - set(self.params.keys())
+        fixVals = {key: initGeometry[key] for key in fixedGeoKeys}
+        
+        # Set buffer constants
+        fixVals['zBuffer'] = -5 # Min pillar height
         numParam = len(self.params)
 
         # Geometry constraints:
         # Format: a*x(1) + b*x(2) >= c*x(3)
         # a,b,c are constants of the matrix. x(n) is the parameter.
-        # TODO: enable geometry shape variation
         constraints = []
         
         ## 1. Ensure radius is smaller than the pitch (with sufficient space for pillars)
-        # TODO: this needs to be cleaned up
-        eq1Keys = ['pitch', 'holeRadius', 'pillarRadius']
-        constKeys = set(eq1Keys) - set(initVals.keys())
-        actKeys = set(eq1Keys) - set(fixVals.keys())
+        eq1Keys = ['pitch', 'holeRadius', 'pillarRadius']        
+        eq1 = self._makeConstraintEquation(eq1Keys, initVals, fixVals)
         
-        # Check which side of the equation each parameter is on and adjust accordingly.
-        if 'holeRadius' in actKeys:
-            initVals['holeRadius'] *= -2
-        else:
-            fixVals['holeRadius'] *= 2
-        
-        # Create constraint 1
-        if len(actKeys) > 0:
-            eq1Dict = {key: initVals[key] for key in actKeys}
-            eq1Constant = sum([fixVals[key] for key in constKeys]) + buffer
-            constraints.append((eq1Dict, eq1Constant))
+        if len(eq1) >0:
+            constraints.append(eq1)
         
         ## 2. Ensure pads are smaller than the pitch (with sufficient space for pillars)
         eq2Keys = ['pitch', 'padLength', 'pillarRadius']
-        constKeys2 = set(eq2Keys) - set(initVals.keys())
-        actKeys2 = set(eq2Keys) - set(fixVals.keys())
+        eq2 = self._makeConstraintEquation(eq2Keys, initVals, fixVals)
         
-        # Check which side of the equation each parameter is on and adjust accordingly.
-        if 'padLength' in actKeys2:
-            initVals['padLength'] *= -math.sqrt(3)
-        else:
-            fixVals['padLength'] *= math.sqrt(3)
-        
-        # Create constraint 2
-        if len(actKeys2) > 0:
-            eq2Dict = {key: initVals[key] for key in actKeys2}
-            eq2Constant = sum([fixVals[key] for key in constKeys2]) + buffer
-            constraints.append((eq2Dict, eq2Constant))
+        if len(eq2) > 0:
+            constraints.append(eq2)
         
         # 3. Ensure that the grid is above the SiO2 layer (with a buffer)
-        eq3Keys = ['gridStandoff', 'pillarRadius', 'thicknessSiO2']
-        constKeys3 = set(eq3Keys) - set(initVals.keys())
-        actKeys3 = set(eq3Keys) - set(fixVals.keys())
+        eq3Keys = ['gridStandoff', 'pillarRadius', 'thicknessSiO2', 'zBuffer']
+        eq3 = self._makeConstraintEquation(eq3Keys, initVals, fixVals)
         
-        # Create constraint 3
-        if len(actKeys3) > 0:
-            eq3Dict = {key: initVals[key] for key in actKeys3}
-            eq3Constant = sum([fixVals[key] for key in constKeys3]) + buffer
-            constraints.append((eq3Dict, eq3Constant))
+        if len(eq3) > 0:
+            constraints.append(eq3)
 
         matrix = []
         lowerBound = []
@@ -286,7 +340,8 @@ class FIMS_Optimizer:
         geometryConstraints = LinearConstraint(
             matrix, lowerBound, upperBound
         )
-        
+        print(matrix, '\n')
+        print(lowerBound)
         return geometryConstraints
 
 #**********************************************************************#
@@ -388,7 +443,7 @@ class FIMS_Optimizer:
             print(f'\t{elem}: {allParams[elem]}')
         print('************************************')
         self.simFIMS.setGeometry(self.geoConfig)
-        runNumber = self.simFIMS.runForOptimizer()
+        runNumber = self.simFIMS.runForIBNOptimizer()
         
         # Get the IBN
         simData = runData(runNumber)
@@ -425,13 +480,6 @@ class FIMS_Optimizer:
         unNormalizedDict = self._unNormalizeInputs(paramDict)
         self.simFIMS.setParameters(unNormalizedDict)
         
-        # Calculate and set the ideal hole radius
-        #pitch = self.simFIMS.getParam('pitch')
-        #gridArea = pitch**2*math.sqrt(3)/2
-        #optTrans = 0.15 # Ideal optical transparency is 15%
-        #holeRadius = math.sqrt(optTrans*gridArea/math.pi)
-        #self.simFIMS.setParameters({'holeRadius': holeRadius})
-        
         # Run simulation and get the IBN
         resultIBN = self._getIBN()
         
@@ -456,14 +504,102 @@ class FIMS_Optimizer:
         # Print the current IBN value for this iteration
         print(f'\tIteration {len(self._optimizerLog)}: IBN = {resultIBN:.6f}\n')
         
-        
         return resultIBN
 
 #**********************************************************************#
 
+    def _getEff(self):
+        """
+        Runs a FIMS simulation and determines the minimum field ratio
+        needed for 95% efficiency.
+
+        returns:
+            minField (float): The minimum field ratio needed for 95% efficiency.
+        """
+        
+        print(f'********** Iteration {len(self._optimizerLog)+1:<3}************')
+        allParams = self.simFIMS.getAllParam()
+        for elem in self.params:
+            print(f'\t{elem}: {allParams[elem]}')
+        print('************************************')
+        self.simFIMS.setGeometry(self.geoConfig)
+        minField = self.simFIMS.runForEffOptimizer()
+        
+        return minField
+
+#**********************************************************************#
+
+    def _effObjective(self, optimizerParam, inputList):
+        """
+        Objective function to optimize for efficiency.
+
+        Updates the FIMS simulation with the given parameters, 
+        runs the simulation, and returns the minimum field ratio.
+
+        Assumes that field ratio is not one of the input parameters.
+        I.e. The efficiency conditions are being satisfied internally
+        by the simulation.
+
+        Note that optimizerParam and inputList must be in the same order.
+        
+        Args:
+            optimizerParam (np.array): Flat array of parameters.
+            inputList (list): List of parameter names (in order).
+        
+        Returns:
+            resultField (float): The minimum field ratio value.
+        """
+        runStart = time.perf_counter()
+        
+        # Unpack and Upload the optimizer parameters into the simulation
+        paramDict = dict(zip(inputList, optimizerParam))
+        unNormalizedDict = self._unNormalizeInputs(paramDict)
+        self.simFIMS.setParameters(unNormalizedDict)
+        
+        # Run simulation and get the minimum field ratio
+        fieldRatio = self._getEff()
+        
+        # Get time stamps
+        runEnd = time.perf_counter()
+        runTime = runEnd - runStart
+        totalTime = runEnd - self._startTime
+        
+        # Update the optimizer log TODO: does this actually do anything?
+        self._optimizerLog.append({
+            'params': unNormalizedDict,
+            'fieldRatio': fieldRatio
+        })
+        
+        with open('log/logOptimizer.txt', 'a') as file:
+                file.write(f'\nIteration {len(self._optimizerLog)}\n')
+                for param, value in paramDict.items():
+                    file.write(f'\t{param}: {value}\n')
+                file.write(f'\tMinimum Field Ratio: {fieldRatio}\n')
+                file.write(f'Run Time: {runTime}\n')
+                file.write(f'Total Time: {totalTime}')
+                
+        # Print the current field ratio for this iteration
+        print(f'\tIteration {len(self._optimizerLog)}: field ratio = {fieldRatio:.6f}\n')
+        
+        return fieldRatio
+
+
+#**********************************************************************#
+
     def setGeometry(self, geometry):
-        """Sets the shape of the geometry"""
+        """
+        Sets the shape of the geometry.
+         
+        args:
+            geoConfig (dict): parameters defining the geometry to be generated.
+                unitCell (str): shape of the unit cell.
+                padShape (str): shape of the readout pad.
+                holeShape (str): shape of the grid holes.
+                surrounding (bool): whether to include surrounding cells.
+        """
+        
         self.geoConfig = geometry
+
         return
 
 #**********************************************************************#
@@ -540,6 +676,83 @@ class FIMS_Optimizer:
         }
         
         print(f"Optimal IBN value = {resultVals['IBNValue']}")
+        print(self.simFIMS)
+        
+        return resultVals
+
+#**********************************************************************#
+
+    def optimizeForEfficiency(self, initialGuess={}):
+        """
+        Runs an optimization routine to find the FIMS parameters that 
+        minimize the field ratio needed for 95% efficiency.
+
+        Utilizes the COBYQA optimization method (derivative-free).
+        Bounds are set based on the input parameters. 
+        Terminated based on criteria in _checkConvergence.
+        Parameters are constrained to prevent unphysical combinations.
+        
+        Args:
+            initialGuess (dict): dictionary of initial optimizer values
+        
+        Returns:
+            dict: A dictionary containing:
+                - params (dict): Optimal FIMS parameters.
+                - fieldValue (float): Final field ratio value.
+                - success (bool): Success status of minimization.
+        """
+        # Unpack optimizer parameters and bounds
+        activeParameters = self.params.copy()        
+        inputList = [name for name in activeParameters]
+        minBounds = [min(activeParameters[name]) for name in inputList]
+        maxBounds = [max(activeParameters[name]) for name in inputList]
+        
+        # Verify and set the initial guess
+        self._setInitialParameters(initialGuess)
+        initNormGuess = np.array([1 for elem in inputList])
+        self.simFIMS.setParameters(self.initialGeometry)
+        
+        # Set the bounds for each variable
+        initialValues = [self.initialGeometry[param] for param in inputList]
+        normMinBounds = self._normalizeValues(initialValues, minBounds)
+        normMaxBounds = self._normalizeValues(initialValues, maxBounds)
+        optimizerBounds = Bounds(normMinBounds, normMaxBounds)
+
+        print('Beginning optimization...')
+
+        try:
+            optimizerResult = minimize(
+                fun=self._effObjective,
+                x0=initNormGuess,
+                args=(inputList,),
+                method='COBYQA', #or 'Nelder-Mead'
+                constraints=self._getGeometryConstraints(),
+                callback=self._checkConvergence,
+                bounds=optimizerBounds,
+                options = {'initial_tr_radius': .2} # initial step of 20%
+            )
+            
+            # Unpack optimizer output
+            finalParams = optimizerResult.x
+            finalFunction = optimizerResult.fun
+            finalStatus = optimizerResult.success
+
+        except StopIteration:
+            print('Optimization terminated due to convergence.')
+            print(finalParams, finalFunction, finalStatus)
+            
+        print('\n*************** Optimization Complete ***************')
+        # Put results into simulation instance
+        finalParams = dict(zip(inputList, optimizerResult.x))
+        self.simFIMS.setParameters(finalParams)
+        
+        resultVals = {
+            'params': self.simFIMS.getAllParam(), 
+            'fieldValue': optimizerResult.fun, 
+            'success': optimizerResult.success
+        }
+        
+        print(f"Optimal IBN value = {resultVals['fieldValue']}")
         print(self.simFIMS)
         
         return resultVals

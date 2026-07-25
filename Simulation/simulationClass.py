@@ -1191,7 +1191,8 @@ class FIMS_Simulation:
         return runNo
     
 #***********************************************************************************#
-    def runForOptimizer(self):
+ 
+    def runForIBNOptimizer(self):
         """
         Executes a full avalanche simulation of the FIMS geometry 
         for efficient running within an optimizer.
@@ -1207,7 +1208,6 @@ class FIMS_Simulation:
         # Get the run number for this simulation
         runNo = self._param['runNumber']
         print(f'Running simulation - Run number: {runNo}')
-        print('Pad hole: ', self.geoConfiguration['holeShape'])
         
         # Set the initial field conditions
         initField = 75.
@@ -1227,6 +1227,39 @@ class FIMS_Simulation:
         self._runGarfield()
         
         return runNo   
+
+#***********************************************************************************#
+ 
+    def runForEffOptimizer(self):
+        """
+        Executes a partial simulation of the FIMS geometry for efficient running 
+        within an optimizer.
+
+        Determines the electric field ratio required for
+        95% net efficiency
+            Note this generates the geometry and solves the electric field.
+            
+        returns:
+            minField (float): The minimum field needed for 95% efficiency.
+        """
+        # Get the run number for this simulation
+        runNo = self._param['runNumber']
+        print(f'Running simulation - Run number: {runNo}')
+        print('Pad hole: ', self.geoConfiguration['holeShape']) # TODO: remove once verified
+        
+        # Set the initial field conditions
+        initField = 75.
+        driftField = self._getOptimalDriftField() #TODO
+        self.setParameters({'driftField': driftField})
+        self.setParameters({'fieldRatio': initField})
+
+        # Generate Geometry
+        self._generateGeometry()
+
+        # Find the minimum field ratio for this geometry
+        minField = self._findMinimumField()
+        
+        return minField 
 
 #***********************************************************************************#
 #***********************************************************************************#
