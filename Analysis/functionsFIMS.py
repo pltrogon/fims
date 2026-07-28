@@ -938,5 +938,72 @@ def plotEfficiencyContours(allData, xLabel):
     return fig
 
 
+#********************************************************************************#
+def makePWL(runNumber, averageSignal=True, avalancheID=None):
+    """
+    Reads a run's Parquet signal file and exports an LTSpice-compatible PWL file.
 
+    Default is to export the average signal. 
+    If a single signal is desired, averageSignal must be False.
+    If no specific avalanche ID is given, one is chosen at random.
 
+    Args:
+        runNumber (int): The simulation run number.
+        averageSignal (bool): If true, exports the averae signal.
+        avalancheID (int): Specific avalanche ID to export.
+    """
+
+    # Read in data from file
+    filepath = './Data/' # Ensure path to data (output will also be written here)
+    filename = f'allSignalsRun{runNumber}.parquet'
+    dataFile = os.path.join(filepath, filename)
+
+    allData = pd.read_parquet(dataFile)
+
+    # Time is common for all signals
+    relativeTime = allData['Relative Time'].values
+
+    #Get average signal
+    if averageSignal:
+        rawSignal = allData['Average Primary Signal'].values
+        signalLabel = 'AVERAGE'
+
+    # Get individual signal
+    else:
+        individualColumns = [
+            col for col in allData.columns if col.startswith('AvalancheID_')
+        ]
+
+        #Ensure data exists
+        if not individualColumns:
+            raise ValueError('No single signals in file')
+
+        #Get chosen avalancheID or select randomly
+        if avalancheID is not None:
+            targetColumn = f'AvalancheID_{avalancheID}'
+            if targetColumn not in individualColumns:
+                raise ValueError('Invalid avalanche ID')
+            chosenColumn = targetColumn                
+        else:
+            chosenColumn = np.random.choice(individualColumns)
+
+        rawSignal = allData[chosenColumn].values
+        signalLabel = chosenColumn
+
+    # Format time and amplitude
+    numPoints = len(relativeTime)
+    timeStep = (relativeTime[-1] - relativeTime[0]) / (numPoints - 1)
+    
+    cleanTime = np.arange(numPoints) * timeStep * 1e-9  # ns -> s
+    cleanSignal = rawSignal * 1e-6                     # uA -> A
+
+    # Export PWl file
+    pwlData = np.column_stack((cleanTime, cleanSignal))
+    outFilename = f'signalFileRun{runNumber}.txt'
+    outputFilename = os.path.join(filepath, outFilename)
+
+    np.savetxt(outputFilename, pwlData, fmt='%.8e', delimiter=' ')
+    print(f'Exported LTSpice PWL to: {outputFilename}')
+    print(f'\tContains the {signalLabel} signal.')
+
+    return

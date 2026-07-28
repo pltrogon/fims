@@ -2716,67 +2716,81 @@ class runData:
     def _getAverageSignal(self):
         """TODO"""
         allSignals = self.getDataFrame('signalData')
-        groupedSignals = allSignals.groupby('Avalanche ID')
         avalancheData = self.getDataFrame('avalancheData')
-        allGains = avalancheData.set_index('Avalanche ID')['Total Electrons']
-
-        commonTime = groupedSignals.get_group(0).sort_values('Signal Time')['Signal Time'].values
+        
+        # Pivot signals into 2D matrices (Rows = Avalanche ID, Columns = Signal Time)
+        sigMat = allSignals.pivot(index='Avalanche ID', columns='Signal Time', values='Signal Strength').values
+        adjMat = allSignals.pivot(index='Avalanche ID', columns='Signal Time', values='Adjacent Signal Average').values
+        
+        # Extract unique time axis directly from pivot columns
+        commonTime = allSignals['Signal Time'].unique()
+        commonTime.sort()
+        
         numPoints = len(commonTime)
-        alignIndex = int(numPoints*.2)#Guess where electron signal occurs (20% of full scale)
+        alignIndex = int(numPoints * 0.2)  # Place 50% crossing point at 20% full scale
         relativeTime = commonTime - commonTime[alignIndex]
 
-        #Align individual electron signals
-        alignPrimary = []
-        alignSecondary = []
+        # Match gain vector order directly to pivot row order
+        pivotedIds = allSignals['Avalanche ID'].unique()
+        gainSeries = avalancheData.set_index('Avalanche ID')['Total Electrons'].reindex(pivotedIds)
+        gainVec = gainSeries.values[:, None]
 
-        for avID, inSignal in groupedSignals:
-            singleData = inSignal.sort_values('Signal Time').reset_index(drop=True)
-            gain = allGains.loc[avID]
+        # Determine Primary vs Secondary based on total charge sum
+        totalSig = sigMat.sum(axis=1)
+        totalAdj = adjMat.sum(axis=1)
+        isPrimarySig = np.abs(totalSig) > np.abs(totalAdj)
+        isPrimaryMask = isPrimarySig[:, None]
+        
+        rawPrimary = np.where(isPrimaryMask, sigMat, adjMat)
+        rawSecondary = np.where(isPrimaryMask, adjMat, sigMat)
 
-            #Determine primary and secondary signals
-            totalCharge = singleData['Signal Strength'].sum()
-            adjacentCharge = singleData['Adjacent Signal Average'].sum()
+        # Normalize by individual avalanche gain -> Get per-electron signal
+        normPrimary = rawPrimary / gainVec
+        normSecondary = rawSecondary / gainVec
 
-            primary = 'Signal Strength' if abs(totalCharge) > abs(adjacentCharge) else 'Adjacent Signal Average'
-            secondary = 'Adjacent Signal Average' if primary == 'Signal Strength' else 'Signal Strength'
+        # CFD Alignment on Integrated Charge
+        chargeIntegrated = np.abs(np.cumsum(normPrimary, axis=1))
+        totalChargePerAv = chargeIntegrated[:, -1:]
+        
+        # Prevent division by zero if an avalanche has no signal
+        totalChargePerAv[totalChargePerAv == 0] = 1.0 
+        normalizedCharge = chargeIntegrated / totalChargePerAv
 
-            #Normalize by gain (get per-electron signals)
-            normPrimary = (singleData[primary]/gain).values
-            normSecondary = (singleData[secondary]/gain).values
+        # Index where cumulative charge crosses 50% of its total
+        crossings50Pct = np.argmax(normalizedCharge >= 0.5, axis=1)
+        alignOffsets = alignIndex - crossings50Pct
 
-            #find electron signal by max derivitive
-            dy = np.diff(normPrimary)
-            slopeIndex = np.argmin(dy)
-            signalAlign = alignIndex - slopeIndex
+        # Shift and pad aligned signals
+        numAvalanches = len(pivotedIds)
+        alignedPrimary = np.zeros_like(normPrimary)
+        alignedSecondary = np.zeros_like(normSecondary)
 
-            #Shift data to align
-            shiftPrimary = np.roll(normPrimary, signalAlign)
-            shiftSecondary = np.roll(normSecondary, signalAlign)
+        for i in range(numAvalanches):
+            shift = alignOffsets[i]
+            pRow = normPrimary[i]
+            sRow = normSecondary[i]
+            
+            alignedPrimary[i] = np.roll(pRow, shift)
+            alignedSecondary[i] = np.roll(sRow, shift)
+            
+            # Clean edges baseline
+            if shift > 0:
+                alignedPrimary[i, :shift] = 0.0
+                alignedSecondary[i, :shift] = 0.0
+            elif shift < 0:
+                alignedPrimary[i, shift:] = pRow[-1]
+                alignedSecondary[i, shift:] = sRow[-1]
 
-            #Clean edges
-            if signalAlign > 0:
-                shiftPrimary[:signalAlign] = 0.0
-                shiftSecondary[:signalAlign] = 0.0
-            elif signalAlign < 0:
-                shiftPrimary[signalAlign:] = shiftPrimary[signalAlign-1]
-                shiftSecondary[signalAlign:] = shiftSecondary[signalAlign-1]
+        # Compute per-electron averages and scale by mean gain
+        averagePrimarySingle = np.mean(alignedPrimary, axis=0)
+        averageSecondarySingle = np.mean(alignedSecondary, axis=0)
 
-            alignPrimary.append(shiftPrimary)
-            alignSecondary.append(shiftSecondary)
-
-        #Get average per-electron
-        averagePrimarySingle = np.mean(alignPrimary, axis=0)
-        averageSecondarySingle = np.mean(alignSecondary, axis=0)
-
-        #Get average signal scale by mean gain
         meanGain = self._calculatedData['Raw Gain'].iloc[0]
-        averagePrimary = averagePrimarySingle*meanGain
-        averageSecondary = averageSecondarySingle*meanGain
 
         aveSignal = {
             'relativeTime': relativeTime,
-            'averagePrimary': averagePrimary,
-            'averageSecondary': averageSecondary,
+            'averagePrimary': averagePrimarySingle * meanGain,
+            'averageSecondary': averageSecondarySingle * meanGain,
             'meanGain': meanGain
         }
 
@@ -2885,26 +2899,49 @@ class runData:
 
 
 #********************************************************************************#
-    def getPWLFile(self):
+    def _buildAllSignalDataframe(self):
         """TODO"""
+        aveSignal = self._getAverageSignal()
+        relativeTime = aveSignal['relativeTime']
+        averagePrimary = aveSignal['averagePrimary']
 
-        aveSignalData = self._getAverageSignal()
+        # Extract original raw signals
+        allSignals = self.getDataFrame('signalData')
 
-        relativeTime = np.asarray(aveSignalData['relativeTime'])
-        averagePrimary = np.asarray(aveSignalData['averagePrimary'])
-        #averageSecondary = np.asarray(aveSignalData['averageSecondary'])
+        # Pivot both signal channels into 2D matrices (Rows = Avalanche ID, Cols = Signal Time)
+        sigMat = allSignals.pivot(index='Avalanche ID', columns='Signal Time', values='Signal Strength')
+        adjMat = allSignals.pivot(index='Avalanche ID', columns='Signal Time', values='Adjacent Signal Average')
 
-        #LTSpice require time starting at 0, strictly monotonic, and in s and A
-        numPoints = len(relativeTime)
-        timeStep = (relativeTime[-1] - relativeTime[0]) / (numPoints-1)
-        cleanTime = np.arange(numPoints) * timeStep * 1e-9
-        cleanSignal = averagePrimary * 1e-6
+        # Determine Primary vs Secondary per avalanche (sum across time)
+        totalSig = sigMat.sum(axis=1)
+        totalAdj = adjMat.sum(axis=1)
+        isPrimarySig = np.abs(totalSig) > np.abs(totalAdj)
 
+        # Select primary signal for each avalanche row
+        rawPrimaryMat = np.where(isPrimarySig.values[:, None], sigMat.values, adjMat.values)
 
-        pwlData = np.column_stack((cleanTime, cleanSignal))
+        # Build the result dictionary
+        dfDict = {
+            'Relative Time': relativeTime,
+            'Average Primary Signal': averagePrimary
+        }
 
-        filename = f'../Data/aveSignalRun{self.runNumber}.txt'
-        np.savetxt(filename, pwlData, fmt='%.8e', delimiter=' ')
+        # Add each individual avalanche's primary signal as a column
+        avalancheIds = sigMat.index  # Unique Avalanche IDs
+        for i, avId in enumerate(avalancheIds):
+            colName = f'AvalancheID_{avId}'
+            dfDict[colName] = rawPrimaryMat[i]
+
+        newDF = pd.DataFrame(dfDict)
+
+        return newDF
+
+#********************************************************************************#
+    def saveSignalsAsPWL(self):
+        """TODO"""
+        allSignals = self._buildAllSignalDataframe()
+        filename = f'../Data/allSignalsRun{self.runNumber}.parquet'
+        allSignals.to_parquet(filename)
 
         return
 
