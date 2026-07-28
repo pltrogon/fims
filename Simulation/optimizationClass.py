@@ -403,9 +403,9 @@ class FIMS_Optimizer:
         """
 
         # Number of iterations to check for convergence
-        numIteration = 5
+        numIteration = 6
         # Decimal precision for parameter comparison
-        precision = 3
+        precision = 1
         
         # Ensure that at least 5 iterations have occurred
         if len(self._optimizerLog) < numIteration:
