@@ -2748,16 +2748,37 @@ class runData:
         normPrimary = rawPrimary / gainVec
         normSecondary = rawSecondary / gainVec
 
-        # CFD Alignment on Integrated Charge
-        chargeIntegrated = np.abs(np.cumsum(normPrimary, axis=1))
-        totalChargePerAv = chargeIntegrated[:, -1:]
-        
-        # Prevent division by zero if an avalanche has no signal
-        totalChargePerAv[totalChargePerAv == 0] = 1.0 
-        normalizedCharge = chargeIntegrated / totalChargePerAv
+        # Integrate full signals to smooth out any noise
+        chargeIntegrated = np.cumsum(normPrimary, axis=1)
+        absCharge = np.abs(chargeIntegrated)
 
-        # Index where cumulative charge crosses 50% of its total
-        crossings50Pct = np.argmax(normalizedCharge >= 0.5, axis=1)
+        # Derive envelope/current magnitude
+        currentEnvelope = np.abs(np.diff(chargeIntegrated, axis=1, prepend=0))
+
+        # Find knee point (max of electron signal)\
+        peakIndices = np.argmax(currentEnvelope, axis=1)
+
+        # Define falling threshold (Current drops to 10% of peak after the peak)
+        peakAmplitudes = currentEnvelope[np.arange(len(pivotedIds)), peakIndices][:, None]
+        isBelowThresh = currentEnvelope < (0.10 * peakAmplitudes)
+
+        cols = np.arange(numPoints)
+        afterPeakMask = cols >= peakIndices[:, None]
+
+        # Knee index is the first time current drops below 10% after the peak
+        kneeIndices = np.argmax(isBelowThresh & afterPeakMask, axis=1)
+
+        # Handle edge cases where current stays high till end of trace
+        kneeIndices = np.where(kneeIndices == 0, numPoints - 1, kneeIndices)
+
+        # 4. Extract total ELECTRON charge (at knee point) and compute 50% crossing
+        totalElectronCharge = absCharge[np.arange(len(pivotedIds)), kneeIndices][:, None]
+        totalElectronCharge[totalElectronCharge == 0] = 1.0  # Prevent divide-by-zero
+
+        normalizedElectronCharge = absCharge / totalElectronCharge
+        crossings50Pct = np.argmax(normalizedElectronCharge >= 0.5, axis=1)
+
+        # Calculate time-step offsets for alignment
         alignOffsets = alignIndex - crossings50Pct
 
         # Shift and pad aligned signals
