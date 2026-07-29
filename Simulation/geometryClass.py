@@ -347,6 +347,10 @@ class gmshClass:
                 (-xLength/2, yLength/2), #Top-Left
                 (0, yLength) #Top
             ]
+            # Create single cell grid without holes
+            gridBox = self._createHexagon(
+                xLength/3, -gridThickness/2, gridThickness
+            )
             
         else:
             xLength = pitch
@@ -363,25 +367,55 @@ class gmshClass:
                 (-xLength, 0), # Left
                 (-xLength, yLength) # Top-Left
             ]
+            # Create single cell grid without holes
+            gridBox = self._occ.addBox(
+                -xLength/2, -yLength/2, -gridThickness/2,
+                xLength, yLength, gridThickness
+            )
         
-        # TODO: add single unit cell option
-        if self._scale == 'surrounding':
-            xStart = -(3/2)*xLength
-            yStart = -(3/2)*yLength
-            xEnd = 3*xLength
-            yEnd = 3*yLength
-        else:
-            xStart = 0
-            yStart = 0
-            xEnd = xLength/2
-            yEnd = yLength/2
-        
-        # Create grid without holes
-        gridBox = self._occ.addBox(
-            xStart, yStart, -gridThickness/2,
-            xEnd, yEnd, gridThickness
-        )
-    
+        # Adjust grid size to match scale
+        match self._scale:
+            case 'surrounding':
+                adjustedGrid = False
+                # Create surrounding grid
+                for x, y in neighborCenters:
+                    newGrid = self._occ.copy([(3, gridBox)])
+                    self._occ.translate(newGrid, x, y, 0)                
+                    if adjustedGrid:
+                        adjustedGrid, _ = self._occ.fuse(
+                            adjustedGrid,
+                            newGrid,
+                            removeObject=True, removeTool=True
+                        )
+                    else:
+                        adjustedGrid = newGrid
+                
+                # Combine surrounding grid with central grid
+                adjustedGrid, _ = self._occ.fuse(
+                    adjustedGrid,
+                    [(3, gridBox)],
+                    removeObject=True, removeTool=True
+                )
+
+            case 'single':
+                adjustedGrid = [(3, gridBox)]
+            
+            case 'corner':
+                gridCut = self._occ.addBox(
+                    0, 0, -gridThickness/2,
+                    xLength/2, yLength/2, gridThickness
+                )
+                adjustedGrid, _ = self._occ.intersect(
+                    [(3, gridBox)],
+                    [(3, gridCut)],
+                    removeObject=True, removeTool=False
+                )
+                adjustedGrid, _ = self._occ.fuse(
+                    adjustedGrid,
+                    [(3, gridCut)],
+                    removeObject=True, removeTool=True
+                )
+
         # Create the surrounding holes
         gridHoleTools = [(3, centerGridHole)]
         for x, y in neighborCenters:
@@ -390,7 +424,7 @@ class gmshClass:
             gridHoleTools.extend(newHole)
         
         gridVolume, _ = self._occ.cut(
-            [(3, gridBox)],
+            adjustedGrid,
             gridHoleTools
         )
         
@@ -426,6 +460,10 @@ class gmshClass:
                 (-xLength/2, yLength/2), #Top-Left
                 (0, yLength) #Top
             ]
+            # Create a dielectric without holes
+            dielectricBox = self._createHexagon(
+                xLength/3, -gridStandoff, thicknessSiO2
+            )
         
         else:
             xLength = pitch
@@ -442,18 +480,57 @@ class gmshClass:
                 (-xLength, 0), # Left
                 (-xLength, yLength) # Top-Left
             ]
-        
-        if self._scale == 'surrounding':
-            xStart = -(3/2)*xLength
-            yStart = -(3/2)*yLength
-            xEnd = 3*xLength
-            yEnd = 3*yLength
-        else:
-            xStart = 0
-            yStart = 0
-            xEnd = xLength/2
-            yEnd = yLength/2
-        
+            # Create a dielectric without holes
+            dielectricBox = self._occ.addBox(
+                -xLength/2, -yLength/2, -gridStandoff, 
+                xLength, yLength, thicknessSiO2
+            )
+            
+        match self._scale:
+            case 'surrounding':
+                # Create surrounding dielectric
+                adjustedDielectric = False
+                for x, y in neighborCenters:
+                    newDielectric = self._occ.copy([(3, dielectricBox)])
+                    self._occ.translate(newDielectric, x, y, 0)                
+                    if adjustedDielectric:
+                        adjustedDielectric, _ = self._occ.fuse(
+                            adjustedDielectric,
+                            newDielectric,
+                            removeObject=True, removeTool=True
+                        )
+                    else:
+                        adjustedDielectric = newDielectric
+                
+                # Combine surrounding dielectric with central dielectric
+                adjustedDielectric, _ = self._occ.fuse(
+                    adjustedDielectric,
+                    [(3, dielectricBox)],
+                    removeObject=True, removeTool=True
+                )
+
+            case 'single':
+                adjustedDielectric = [(3, dielectricBox)]
+            
+            case 'corner':
+                # Create cutting tool
+                dielectricCut = self._occ.addBox(
+                    0, 0, -gridStandoff,
+                    xLength/2, yLength/2, thicknessSiO2
+                )
+                
+                # Cut Dielectric
+                adjustedDielectric, _ = self._occ.intersect(
+                    [(3, dielectricBox)],
+                    [(3, dielectricCut)],
+                    removeObject=True, removeTool=False
+                )
+                adjustedDielectric, _ = self._occ.fuse(
+                    adjustedDielectric,
+                    [(3, dielectricCut)],
+                    removeObject=True, removeTool=True
+                )
+
         # Determine hole and pad shape
         match self._padShape:
             case 'square':
@@ -482,50 +559,37 @@ class gmshClass:
                 # Add central readout pad object
                 centerPad = self._createOctagon(padLength, -gridStandoff)
         
-        # Create a dielectric without holes
-        dielectricBox = self._occ.addBox(
-            xStart, yStart, -gridStandoff, 
-            xEnd, yEnd, thicknessSiO2
-        )
-
-        # Create pad hole tools for each surrounding pad
         padHoleTools = [(3, centerPadHole)]
         for x, y in neighborCenters:
+            # Create Hole cut tool
             newHole = self._occ.copy([(3, centerPadHole)])
             self._occ.translate(newHole, x, y, 0)
             padHoleTools.extend(newHole)
-                
-        # Cut holes in dielectric
-        dielectricVolume, _ = self._occ.cut(
-            [(3, dielectricBox)],
-            padHoleTools,
-        )
-        
-        # Create full readout surface object
-        fullReadoutBox = self._occ.addBox(
-            xStart, yStart, -gridStandoff,
-            xEnd, yEnd, 1.0
-        )
-        
-        # Create surrounding readout pads
-        for x, y in neighborCenters:
+            
+            # Create surrounding pads
             newPad = self._occ.copy([(2, centerPad)])
             self._occ.translate(newPad, x, y, 0)
             padSurface, _ = self._occ.intersect(
                 newPad,
-                [(3, fullReadoutBox)],
+                adjustedDielectric,
                 removeObject=True, removeTool=False
             )
             if len(padSurface) > 0:
                 padSurfaces.append(padSurface[0])
-
+        
         # Create central readout pad
         centerPadSurface, _ = self._occ.intersect(
             [(2, centerPad)],
-            [(3, fullReadoutBox)],
-            removeObject=True, removeTool=True
+            adjustedDielectric,
+            removeObject=True, removeTool=False
         )
-        padSurfaces.insert(0, centerPadSurface[0])
+        padSurfaces.insert(0, centerPadSurface[0])        
+        
+        # Cut holes in dielectric
+        dielectricVolume, _ = self._occ.cut(
+            adjustedDielectric,
+            padHoleTools,
+        )
         
         return dielectricVolume, padSurfaces
 
@@ -552,44 +616,139 @@ class gmshClass:
         if self._unitCell == 'hexagon':
             xLength = pitch*math.sqrt(3)
             yLength = pitch
+            
+            # Locate the center points for all surrounding holes
+            neighborCenters = [
+                (xLength/2, yLength/2), #Top-Right
+                (xLength/2, -yLength/2), #Bottom-Right
+                (0, -yLength), #Bottom
+                (-xLength/2, -yLength/2), #Bottom-Left
+                (-xLength/2, yLength/2), #Top-Left
+                (0, yLength) #Top
+            ]
+            
+            # Create a volume object for the gas
+            gasBox = self._createHexagon(
+                xLength/3, -gridStandoff, gasHeight
+            )
+            
+            # Create the cathode surface
+            cathodeSurface = self._createHexagon(
+                xLength/3, cathodeHeight
+            )
+            
         else:
             xLength = pitch
             yLength = pitch
-        
-        # TODO: Add single unit cell option
-        if self._scale == 'surrounding':
-            # Bounds
-            xStart = -(3/2)*xLength
-            xEnd = 3*xLength
-            yStart = -(3/2)*yLength
-            yEnd = 3*yLength
             
-        else:
-            # Bounds
-            xStart = 0
-            xEnd = xLength/2
-            yStart = 0
-            yEnd = yLength/2
+            # Locate the centers of all surrounding holes
+            neighborCenters = [
+                (0, yLength), # Top
+                (xLength, yLength), # Top-Right
+                (xLength, 0), # Right
+                (xLength, -yLength), # Bottom-Right
+                (0, -yLength), # Bottom
+                (-xLength, -yLength), #Bottom-Left
+                (-xLength, 0), # Left
+                (-xLength, yLength) # Top-Left
+            ]
+            
+            # Create a volume object for the gas
+            gasBox = self._occ.addBox(
+                -xLength/2, -yLength/2, -gridStandoff,
+                xLength, yLength, gasHeight
+            )
+            
+            # Create the cathode surface
+            cathodeSurface = self._occ.addRectangle(
+                -xLength/2, -yLength/2, cathodeHeight,
+                xLength, yLength
+            )
         
-        # Create a volume object for the gas
-        gasBox = self._occ.addBox(
-            xStart, yStart, -gridStandoff,
-            xEnd, yEnd, gasHeight
-        )
+        match self._scale:
+            case 'surrounding':
+                # Create surrounding gas
+                adjustedGas = False
+                for x, y in neighborCenters:
+                    newGas = self._occ.copy([(3, gasBox)])
+                    self._occ.translate(newGas, x, y, 0)                
+                    newCathode = self._occ.copy([(2, cathodeSurface)])
+                    if adjustedGas:
+                        adjustedGas, _ = self._occ.fuse(
+                            adjustedGas,
+                            newGas,
+                            removeObject=True, removeTool=True
+                        )
+                        adjustedCathode, _ = self._occ.fuse(
+                            adjustedCathode,
+                            newCathode,
+                            removeObject=True, removeTool=True
+                        )
+                        
+                    else:
+                        adjustedGas = newGas
+                        adjustedCathode = newCathode
+                
+                # Combine surrounding volume with central volume
+                adjustedGas, _ = self._occ.fuse(
+                    adjustedGas,
+                    [(3, gasBox)],
+                    removeObject=True, removeTool=True
+                )
+                adjustedCathode, _ = self._occ.fuse(
+                    adjustedCathode,
+                    [(2, cathodeSurface)],
+                    removeObject=True, removeTool=True
+                )
+                
+            
+            case 'single':
+                adjustedGas = [(3, gasBox)]
+                adjustedCathode = [(2, cathodeSurface)]
+
+            case 'corner':
+                # Create cutting tools
+                gasCut = self._occ.addBox(
+                    0, 0, -gridStandoff,
+                    xLength/2, yLength/2, gasHeight
+                )
+                cathodeCut = self._occ.addRectangle(
+                    0, 0, cathodeHeight,
+                    xLength/2, yLength/2
+                )
+                
+                # Cut gas
+                adjustedGas, _ = self._occ.intersect(
+                    [(3, gasBox)],
+                    [(3, gasCut)],
+                    removeObject=True, removeTool=False
+                )
+                adjustedGas, _ = self._occ.fuse(
+                    adjustedGas,
+                    [(3, gasCut)],
+                    removeObject=True, removeTool=True
+                )
+                
+                # Cut cathode
+                adjustedCathode, _ = self._occ.intersect(
+                    [(2, cathodeSurface)],
+                    [(2, cathodeCut)],
+                    removeObject=True, removeTool=False
+                )
+                adjustedCathode, _ = self._occ.fuse(
+                    adjustedCathode,
+                    [(2, cathodeCut)],
+                    removeObject=True, removeTool=True
+                )
+                
         # Remove non-gas volumes from the box
         gasVolume, _ = self._occ.cut(
-            [(3, gasBox)], 
+            adjustedGas, 
             [(3, dielectricVolume[0][1]), (3, gridVolume[0][1])], 
             removeObject=True, removeTool=False
         )
-
-        # Create the cathode surface
-        cathodeSurface = self._occ.addRectangle(
-            xStart, yStart, cathodeHeight,
-            xEnd, yEnd
-        )
     
-        return gasVolume, cathodeSurface
+        return gasVolume, adjustedCathode
 
 #**********************************************************************#
 
@@ -621,7 +780,7 @@ class gmshClass:
             'Dielectric': (3, dielectricVolume[0][1]),
             'Grid': (3, gridVolume[0][1]),
             'CenterPad': padSurfaces[0],
-            'Cathode': (2, cathodeSurface)
+            'Cathode': cathodeSurface[0]
         }
         
         if self._scale == 'surrounding':
@@ -653,8 +812,6 @@ class gmshClass:
                 TopRightPad: The corner pad surface in the unit cell.
                 Cathode: The cathode surface in the unit cell.
         """
-        # TODO: Currently creates surrounding by simply extending the boundary points.
-        # Need to change this to actually make a hexagonal unit cell and then tile it.
         # Dielectric
         dielectricVolume, padSurfaces = self._buildDielectric()
         
@@ -669,17 +826,24 @@ class gmshClass:
             'Dielectric': (3, dielectricVolume[0][1]),
             'Grid': (3, gridVolume[0][1]),
             'CenterPad': padSurfaces[0],
-            'RightTopPad': padSurfaces[1],
-            'Cathode': (2, cathodeSurface)
+            'Cathode': cathodeSurface[0]
         }
         
-        if self._scale == 'surrounding':
-            cellParts['RightBottomPad'] = padSurfaces[2]
-            cellParts['BottomPad'] = padSurfaces[3]
-            cellParts['LeftBottomPad'] = padSurfaces[4]
-            cellParts['LeftTopPad'] = padSurfaces[5]
-            cellParts['TopPad'] = padSurfaces[6]
+        match self._scale:
+            case 'surrounding':
+                cellParts['RightTopPad'] = padSurfaces[1]
+                cellParts['RightBottomPad'] = padSurfaces[2]
+                cellParts['BottomPad'] = padSurfaces[3]
+                cellParts['LeftBottomPad'] = padSurfaces[4]
+                cellParts['LeftTopPad'] = padSurfaces[5]
+                cellParts['TopPad'] = padSurfaces[6]
             
+            case 'single':
+                pass
+            
+            case 'corner':
+                cellParts['RightTopPad'] = padSurfaces[1]
+
         return cellParts
 
 #**********************************************************************#
@@ -789,7 +953,6 @@ class gmshClass:
         Assigns physical groups to the geometry entities based 
         on their type and location.
         """
-
         allHexPads = [
             'CentralPad', 'RightTopPad', 'RightBottomPad', 
             'BottomPad', 'LeftBottomPad', 
@@ -803,7 +966,6 @@ class gmshClass:
             'LeftBottomPad', 'LeftPad', 'LeftTopPad'
         ]
         
-        
         allVolumes = ['Gas', 'Dielectric', 'Grid']
         otherSurfaces = ['Cathode']
 
@@ -812,14 +974,27 @@ class gmshClass:
                 'keys': allVolumes + ['CentralPad'] + otherSurfaces,
                 'pads': ['CentralPad']
             },
+            
+            'squaresingle': {
+                'keys': allVolumes + ['CentralPad'] + otherSurfaces,
+                'pads': ['CentralPad']
+            },
+            
             'squaresurrounding': {
                 'keys': allVolumes + allSquarePads + otherSurfaces,
                 'pads': allSquarePads
             },
+            
             'hexagoncorner': {
                 'keys': allVolumes + altHexPads + otherSurfaces,
                 'pads': altHexPads
             },
+            
+            'hexagonsingle': {
+                'keys': allVolumes + ['centralPad'] + otherSurfaces,
+                'pads': ['centralPad']
+            },
+            
             'hexagonsurrounding': {
                 'keys': allVolumes + allHexPads + otherSurfaces,
                 'pads': allHexPads
@@ -903,6 +1078,13 @@ class gmshClass:
                 (0, pitch/2, driftLength)
             ],
             
+            'squaresingle': [
+                (-pitch/4, -pitch/4, driftLength),
+                (pitch/4, -pitch/4, driftLength), 
+                (pitch/4, pitch/4, driftLength),
+                (-pitch/4, pitch/4, driftLength)
+            ],
+            
             'squaresurrounding': [
                 (-pitch/2, -pitch/2, driftLength),
                 (pitch/2, -pitch/2, driftLength), 
@@ -915,6 +1097,15 @@ class gmshClass:
                 (pitch/sqrt3, 0, driftLength), 
                 (pitch/sqrt3/2, pitch/2, driftLength),
                 (0, pitch/2, driftLength)
+            ],
+            
+            'hexagonsingle': [
+                (pitch/sqrt3/2, 0, driftLength), 
+                (pitch/sqrt3/4, pitch/4, driftLength),
+                (-pitch/sqrt3/4, pitch/4, driftLength),
+                (-pitch/sqrt3/2, 0, driftLength),
+                (-pitch/sqrt3/4, -pitch/4, driftLength),
+                (pitch/sqrt3/4, -pitch/4, driftLength)
             ],
             
             'hexagonsurrounding': [
@@ -988,14 +1179,27 @@ class gmshClass:
                 'x': (0, pitch/2), 
                 'y': (0, pitch/2)
             },
+            
+            'squaresingle': {
+                'x': (-pitch/2, pitch/2), 
+                'y': (-pitch/2, pitch/2)
+            },
+            
             'squaresurrounding': {
                 'x': (-pitch, pitch), 
                 'y': (-pitch, pitch)
             },
+            
             'hexagoncorner': {
                 'x': (0, xLength), 
                 'y': (0, yLength)
             },
+            
+            'hexagonsingle': {
+                'x': (-xLength*2/3, xLength*2/3), 
+                'y': (-yLength, yLength)
+            },
+            
             'hexagonsurrounding': {
                 'x': (-xLength, xLength), 
                 'y': (-yLength, yLength)
@@ -1206,6 +1410,9 @@ class elmerClass:
             case 'squarecorner':
                 pass
             
+            case 'squaresingle':
+                pass
+            
             case 'squaresurrounding':
                 self._electrodeMap.update({
                     4: 'TopPad', 5: 'RightTopPad', 6: 'RightPad',
@@ -1215,6 +1422,9 @@ class elmerClass:
 
             case 'hexagoncorner':
                 self._electrodeMap.update({4: 'RightTopPad'})
+
+            case 'hexagonsingle':
+                pass
 
             case 'hexagonsurrounding':
                 self._electrodeMap.update({
