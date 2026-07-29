@@ -48,10 +48,10 @@ class geometryClass:
         self._runGUI = False
         
         self._geoConfig = {
-            'unitCell': 'Hexagonal',
+            'unitCell': 'hexagon',
             'holeShape': 'circle',
             'padShape': 'hexagon',
-            'surrounding': False 
+            'scale': 'corner' 
         }
         
         return
@@ -109,34 +109,45 @@ class geometryClass:
     def _checkGeometryOptions(self, geoConfiguration):
         """
         Checks that the geometry options are valid.
+        args:
+            geoConfiguration (dict): parameters that define the shape and 
+        scale of the simulation geometry.
+        
+        returns:
+            checkDict (dict): verified dictionary with all values set to
+        lower case strings.
         """
         geometryKeys = [
             'unitCell',
-            'surrounding',
+            'scale',
             'holeShape',
             'padShape'
         ]
-        unitCellOptions = ['Square', 'Hexagonal',]
+        unitCellOptions = ['square', 'hexagon',]
         holeOptions = ['circle', 'hexagon', 'octagon']
         padOptions = ['square', 'hexagon', 'octagon']
+        scaleOptions = ['corner', 'surrounding', 'single']
         
         for key in geometryKeys:
             if key not in geoConfiguration:
                 raise ValueError(f"Error - Missing '{key}'")
         
-        if geoConfiguration['unitCell'] not in unitCellOptions:
+        # Ensure lower case input
+        checkDict = {key: str(value).lower() for key, value in geoConfiguration.items()}
+        
+        if checkDict['unitCell'] not in unitCellOptions:
             raise ValueError(f'Unit cell must be one of {uniCellOptions}.')
         
-        if geoConfiguration['holeShape'] not in holeOptions:
+        if checkDict['holeShape'] not in holeOptions:
             raise ValueError(f'Hole shape must be one of {holeOptions}.')
         
-        if geoConfiguration['padShape'] not in padOptions:
+        if checkDict['padShape'] not in padOptions:
             raise ValueError(f'Pad shape must be one of {padOptions}.')
         
-        if not isinstance(geoConfiguration['surrounding'], bool):
-            raise ValueError('"surrounding" option must be type "bool".')
+        if checkDict['scale'] not in scaleOptions:
+            raise ValueError(f'Scale must be one of {scaleOptions}.')
         
-        return
+        return  checkDict
 
 #**********************************************************************#
 
@@ -156,13 +167,13 @@ class geometryClass:
         
         args: 
             geoConfig (dict): dictionary with the following optional parameters
-                surrounding (bool): whether to include surrounding unit cells.
+                scale (str): amount of the geometry to generate.
                 holeShape (str): shape of the amplification grid holes.
                 padShape (str): shape of the readout pad.
                 unitCell (str): shape of the unit cell.
         """
-        self._checkGeometryOptions(geoConfig)
-        self._geoConfig = geoConfig
+        checkGeo = self._checkGeometryOptions(geoConfig)
+        self._geoConfig = checkGeo
         
         return
 
@@ -190,9 +201,7 @@ class geometryClass:
         """
         Generates the SIF files for Elmer based on the created geometry.
         """
-        runOption = self._geoConfig['unitCell']
-        if self._geoConfig['surrounding']:
-            runOption += 'Surrounding'
+        runOption = self._geoConfig['unitCell'] + self._geoConfig['scale']
         
         self._elmerClass = elmerClass(
             runOption, capacitance=False
@@ -286,8 +295,8 @@ class gmshClass:
         self._occ = gmsh.model.occ
         self._param = inputParams
         
-        self._unitCell = 'Hexagonal'
-        self._surrounding = False
+        self._unitCell = 'hexagon'
+        self._scale = 'corner'
         self._holeShape = 'circle'
         self._padShape = 'hexagon'
 
@@ -325,7 +334,7 @@ class gmshClass:
                 )
         
         # Determine if the unit cell is hexagonal or not.
-        if self._unitCell == 'Hexagonal':
+        if self._unitCell == 'hexagon':
             xLength = pitch*math.sqrt(3)
             yLength = pitch
             
@@ -356,7 +365,7 @@ class gmshClass:
             ]
         
         # TODO: add single unit cell option
-        if self._surrounding:
+        if self._scale == 'surrounding':
             xStart = -(3/2)*xLength
             yStart = -(3/2)*yLength
             xEnd = 3*xLength
@@ -404,7 +413,7 @@ class gmshClass:
         padSurfaces = []
         
         # Determine if the unit cell is hexagonal or not.
-        if self._unitCell == 'Hexagonal':
+        if self._unitCell == 'hexagon':
             xLength = pitch*math.sqrt(3)
             yLength = pitch
             
@@ -434,7 +443,7 @@ class gmshClass:
                 (-xLength, yLength) # Top-Left
             ]
         
-        if self._surrounding:
+        if self._scale == 'surrounding':
             xStart = -(3/2)*xLength
             yStart = -(3/2)*yLength
             xEnd = 3*xLength
@@ -540,7 +549,7 @@ class gmshClass:
         gasHeight = cathodeHeight + gridStandoff
         
         # Check unit cell shape
-        if self._unitCell == 'Hexagonal':
+        if self._unitCell == 'hexagon':
             xLength = pitch*math.sqrt(3)
             yLength = pitch
         else:
@@ -548,7 +557,7 @@ class gmshClass:
             yLength = pitch
         
         # TODO: Add single unit cell option
-        if self._surrounding:
+        if self._scale == 'surrounding':
             # Bounds
             xStart = -(3/2)*xLength
             xEnd = 3*xLength
@@ -615,7 +624,7 @@ class gmshClass:
             'Cathode': (2, cathodeSurface)
         }
         
-        if self._surrounding:
+        if self._scale == 'surrounding':
             cellParts['TopPad'] = padSurfaces[1]
             cellParts['RightTopPad'] = padSurfaces[2]
             cellParts['RightPad'] = padSurfaces[3]
@@ -664,7 +673,7 @@ class gmshClass:
             'Cathode': (2, cathodeSurface)
         }
         
-        if self._surrounding:
+        if self._scale == 'surrounding':
             cellParts['RightBottomPad'] = padSurfaces[2]
             cellParts['BottomPad'] = padSurfaces[3]
             cellParts['LeftBottomPad'] = padSurfaces[4]
@@ -684,10 +693,10 @@ class gmshClass:
         """
         allObjects = []
         match self._unitCell:
-            case 'Square':
+            case 'square':
                 inCell = self._buildSquareCell()
             
-            case 'Hexagonal':
+            case 'hexagon':
                 inCell = self._buildHexagonalCell()
         
         allObjects.extend(inCell.values())
@@ -799,31 +808,29 @@ class gmshClass:
         otherSurfaces = ['Cathode']
 
         configuration = {
-            'Square': {
+            'squarecorner': {
                 'keys': allVolumes + ['CentralPad'] + otherSurfaces,
                 'pads': ['CentralPad']
             },
-            'SquareSurrounding': {
+            'squaresurrounding': {
                 'keys': allVolumes + allSquarePads + otherSurfaces,
                 'pads': allSquarePads
             },
-            'Hexagonal': {
+            'hexagoncorner': {
                 'keys': allVolumes + altHexPads + otherSurfaces,
                 'pads': altHexPads
             },
-            'HexagonalSurrounding': {
+            'hexagonsurrounding': {
                 'keys': allVolumes + allHexPads + otherSurfaces,
                 'pads': allHexPads
             },
         }
 
-        runOption = self._unitCell
-        if self._surrounding:
-            runOption += 'Surrounding'
+        runOption = self._unitCell + self._scale
             
         config = configuration[runOption]
 
-        isHex = 'Hexagonal' in runOption
+        isHex = 'hexagon' in runOption
 
         partKey = config['keys']
         padNames = config['pads']
@@ -889,28 +896,28 @@ class gmshClass:
         
         # List of coordinates for each refinement line point in a specified geometry
         refinementOptions = {
-            'Square': [
+            'squarecorner': [
                 (0, 0, driftLength),
                 (pitch/2, 0, driftLength), 
                 (pitch/2, pitch/2, driftLength),
                 (0, pitch/2, driftLength)
             ],
             
-            'SquareSurrounding': [
+            'squaresurrounding': [
                 (-pitch/2, -pitch/2, driftLength),
                 (pitch/2, -pitch/2, driftLength), 
                 (pitch/2, pitch/2, driftLength),
                 (-pitch/2, pitch/2, driftLength)
             ],
             
-            'Hexagonal': [
+            'hexagoncorner': [
                 (0, 0, driftLength),
                 (pitch/sqrt3, 0, driftLength), 
                 (pitch/sqrt3/2, pitch/2, driftLength),
                 (0, pitch/2, driftLength)
             ],
             
-            'HexagonalSurrounding': [
+            'hexagonsurrounding': [
                 (pitch/sqrt3, 0, driftLength), 
                 (pitch/sqrt3/2, pitch/2, driftLength),
                 (-pitch/sqrt3/2, pitch/2, driftLength),
@@ -977,26 +984,24 @@ class gmshClass:
         
         # Assign the correct boundary limits to the FEM
         meshSettings = {
-            'Square': {
+            'squarecorner': {
                 'x': (0, pitch/2), 
                 'y': (0, pitch/2)
             },
-            'SquareSurrounding': {
+            'squaresurrounding': {
                 'x': (-pitch, pitch), 
                 'y': (-pitch, pitch)
             },
-            'Hexagonal': {
+            'hexagoncorner': {
                 'x': (0, xLength), 
                 'y': (0, yLength)
             },
-            'HexagonalSurrounding': {
+            'hexagonsurrounding': {
                 'x': (-xLength, xLength), 
                 'y': (-yLength, yLength)
             }
         }
-        runOption = self._unitCell
-        if self._surrounding:
-            runOption += 'Surrounding'
+        runOption = self._unitCell + self._scale
         bounds = meshSettings[runOption]
         
         # Create a line from the center of the pad to above the center hole
@@ -1098,15 +1103,12 @@ class gmshClass:
             runGUI (bool): Whether to launch the Gmsh GUI.
         """
         self._unitCell = geoConfig['unitCell']
-        self._surrounding = geoConfig['surrounding']
+        self._scale = geoConfig['scale']
         self._holeShape = geoConfig['holeShape']
         self._padShape = geoConfig['padShape']
         
         filePath = 'Geometry'
-        if self._surrounding:
-            filename = os.path.join(filePath, f'{self._unitCell}Surrounding.msh')
-        else:
-            filename = os.path.join(filePath, f'{self._unitCell}.msh')
+        filename = os.path.join(filePath, f'{self._unitCell}{self._scale}.msh')
 
         gmsh.initialize()
         gmsh.option.setNumber("General.Terminal", 0)
@@ -1201,20 +1203,20 @@ class elmerClass:
         }
 
         match self._runOption:
-            case 'Square':
+            case 'squarecorner':
                 pass
             
-            case 'SquareSurrounding':
+            case 'squaresurrounding':
                 self._electrodeMap.update({
                     4: 'TopPad', 5: 'RightTopPad', 6: 'RightPad',
                     7: 'RightBottomPad', 8: 'BottomPad', 9: 'LeftBottomPad',
                     10: 'LeftPad', 11: 'LeftTopPad'
                 })
 
-            case 'Hexagonal':
+            case 'hexagoncorner':
                 self._electrodeMap.update({4: 'RightTopPad'})
 
-            case 'HexagonalSurrounding':
+            case 'hexagonsurrounding':
                 self._electrodeMap.update({
                     4: 'RightTopPad', 5: 'RightBottomPad',
                     6: 'BottomPad', 7: 'LeftBottomPad',

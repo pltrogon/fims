@@ -340,8 +340,7 @@ class FIMS_Optimizer:
         geometryConstraints = LinearConstraint(
             matrix, lowerBound, upperBound
         )
-        print(matrix, '\n')
-        print(lowerBound)
+
         return geometryConstraints
 
 #**********************************************************************#
@@ -395,17 +394,17 @@ class FIMS_Optimizer:
         Checks for convergence of the optimization by looking 
         for repeated parameter sets.
 
-        Will raise a StopIteration exception if the previous 5
-        iterations have had identical parameters (to 3 decimal places).
+        Will raise a StopIteration exception if the previous 4
+        iterations have had identical parameters (to 2 decimal places).
 
         Args:
             x: Optimizer parameter array (Unused).
         """
 
         # Number of iterations to check for convergence
-        numIteration = 6
+        numIteration = 4
         # Decimal precision for parameter comparison
-        precision = 1
+        precision = 2
         
         # Ensure that at least 5 iterations have occurred
         if len(self._optimizerLog) < numIteration:
@@ -572,7 +571,7 @@ class FIMS_Optimizer:
         
         with open('log/logOptimizer.txt', 'a') as file:
                 file.write(f'\nIteration {len(self._optimizerLog)}\n')
-                for param, value in paramDict.items():
+                for param, value in unNormalizedDict.items():
                     file.write(f'\t{param}: {value}\n')
                 file.write(f'\tMinimum Field Ratio: {fieldRatio}\n')
                 file.write(f'Run Time: {runTime}\n')

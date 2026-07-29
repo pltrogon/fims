@@ -103,12 +103,12 @@ class FIMS_Simulation:
         
         self._geometry = None
         self.geoConfiguration = {
-            'unitCell': 'Hexagonal',
+            'unitCell': 'hexagon',
             'holeShape': 'circle',
             'padShape': 'hexagon',
-            'surrounding': False 
+            'scale': 'corner' 
         }
-        self._runMode = 'Hexagonal'
+        self._runMode = 'hexagoncorner'
 
         self._filenames = None
         
@@ -189,37 +189,48 @@ class FIMS_Simulation:
     def _checkGeometryConfiguration(self, geoConfiguration):
         """
         Checks that the geometry options are valid.
+        
+        args:
+            geoConfiguration (dict): parameters that define the shape and 
+        scale of the simulation geometry.
+        
+        returns:
+            checkDict (dict): verified dictionary with all values set to
+        lower case strings.
         """
-        # TODO: code should be immune to case. Use input.lower()? 
-        # (see myFunctions for example)
         # TODO: investigate dataclass for input instead of dictionary.
         geometryKeys = [
             'unitCell',
-            'surrounding',
+            'scale',
             'holeShape',
             'padShape'
         ]
-        unitCellOptions = ['Square', 'Hexagonal',]
+        unitCellOptions = ['square', 'hexagon',]
         holeOptions = ['circle', 'hexagon', 'octagon']
         padOptions = ['square', 'hexagon', 'octagon']
+        scaleOptions = ['corner', 'surrounding', 'single']
         
+        # Ensure all keys are present
         for key in geometryKeys:
             if key not in geoConfiguration:
                 raise ValueError(f"Error - Missing '{key}'")
         
-        if geoConfiguration['unitCell'] not in unitCellOptions:
+        # Ensure lower case input
+        checkDict = {key: str(value).lower() for key, value in geoConfiguration.items()}
+        
+        if checkDict['unitCell'] not in unitCellOptions:
             raise ValueError(f'Unit cell must be one of {uniCellOptions}.')
         
-        if geoConfiguration['holeShape'] not in holeOptions:
+        if checkDict['holeShape'] not in holeOptions:
             raise ValueError(f'Hole shape must be one of {holeOptions}.')
         
-        if geoConfiguration['padShape'] not in padOptions:
+        if checkDict['padShape'] not in padOptions:
             raise ValueError(f'Pad shape must be one of {padOptions}.')
         
-        if not isinstance(geoConfiguration['surrounding'], bool):
-            raise ValueError('"surrounding" option must be type "bool".')
+        if checkDict['scale'] not in scaleOptions:
+            raise ValueError(f'Scale must be one of {scaleOptions}.')
         
-        return
+        return checkDict
 
     #******************************************************************#    
     
@@ -423,14 +434,11 @@ class FIMS_Simulation:
                 unitCell (str): shape of the unit cell.
                 padShape (str): shape of the readout pad.
                 holeShape (str): shape of the grid holes.
-                surrounding (bool): whether to include surrounding cells.
+                scale (str): amount of the geometry to generate.
         """
-        self._checkGeometryConfiguration(geoConfig)
-        self.geoConfiguration = geoConfig
-        
-        self._runMode = self.geoConfiguration['unitCell']
-        if self.geoConfiguration['surrounding']:
-            self._runMode += 'Surrounding'
+        checkedGeo = self._checkGeometryConfiguration(geoConfig)
+        self.geoConfiguration = checkedGeo
+        self._runMode = self.geoConfiguration['unitCell'] + self.geoConfiguration['scale']
 
         return
 
@@ -689,7 +697,7 @@ class FIMS_Simulation:
         self._checkParam()
     
         #Generate geometry for surrounding cells
-        self.geoConfiguration['surrounding'] = True
+        self.geoConfiguration['scale'] = 'surrounding'
         self._generateGeometry()
 
         #Solve fields and run Garfield
@@ -722,7 +730,7 @@ class FIMS_Simulation:
         self._checkParam()
         
         # Create surrounding-cell geometry
-        self.geoConfiguration['surrounding'] = True
+        self.geoConfiguration['scale'] = 'surrounding'
         self._geoCapacitance = geometryClass(self._param)
         self._geoCapacitance.setGeometryConfiguration(self.geoConfiguration)
         self._geoCapacitance.buildGeometry()

@@ -255,16 +255,16 @@ EfficiencyResults calculateEfficiencyStats(int nSuccess, int nTotal) {
  */
 GeometryMode stringToGeometryMode(std::string str) {
     std::transform(str.begin(), str.end(), str.begin(), ::tolower);
-    if(str == "square") {
+    if(str == "squarecorner") {
         return GeometryMode::Square;
     }
     if(str == "squaresurrounding") {
         return GeometryMode::SquareSurrounding;
     }
-    if(str == "hexagonal") {
+    if(str == "hexagoncorner") {
         return GeometryMode::Hexagonal;
     }
-    if(str == "hexagonalsurrounding") {
+    if(str == "hexagonsurrounding") {
         return GeometryMode::HexagonalSurrounding;
     }
     
