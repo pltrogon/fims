@@ -1003,25 +1003,27 @@ class gmshClass:
         # Volumes
         for name in ['Grid', 'Dielectric', 'Gas']:
             if globalGroup[name]:
-                gmsh.model.addPhysicalGroup(3, globalGroup[name], name=name)
+                print(f'{name}:', gmsh.model.addPhysicalGroup(3, globalGroup[name], name=name))
+        
+        # Individual pads
+        #for tags, name in zip(padTags, padNames):
+            #gmsh.model.addPhysicalGroup(3, tags, name=name) # TODO: un-comment once Elmer setup
 
-        # Surfaces (Dim 2)
+        # Surfaces
         if globalGroup['Cathode']:
-            gmsh.model.addPhysicalGroup(2, globalGroup['Cathode'], name='Cathode')
+            print('Cathode:', gmsh.model.addPhysicalGroup(2, globalGroup['Cathode'], name='Cathode'))
         if allGridSurfaces:
-            gmsh.model.addPhysicalGroup(2, list(set(allGridSurfaces)), name='Grid')
+            print('Grid Surfaces:', gmsh.model.addPhysicalGroup(2, list(set(allGridSurfaces)), name='Grid'))
 
-        # Individual Pads
+        # Individual pads
         for tags, name in zip(padTags, padNames):
-            #gmsh.model.addPhysicalGroup(3, tags, name=name)
-            #allPadSurfaces = []
-            #validVol = [(3, t) for t in tags if gmsh.model.occ.getEntities(3).count((3, t)) > 0]
-            #if validVol:
-            #    boundary = gmsh.model.getBoundary(validVol, oriented=False)
-            #    allPadSurfaces.extend([b[1] for b in boundary])
-            #gmsh.model.addPhysicalGroup(2, list(set(allPadSurfaces)), name=name) #TODO: will this work?
-            gmsh.model.addPhysicalGroup(2, tags, name=name)
-
+            allPadSurfaces = []
+            validVol = [(3, t) for t in tags if gmsh.model.occ.getEntities(3).count((3, t)) > 0]
+            if validVol:
+                boundary = gmsh.model.getBoundary(validVol, oriented=False)
+                allPadSurfaces.extend([b[1] for b in boundary])
+            print(f'{name}:', gmsh.model.addPhysicalGroup(2, list(set(allPadSurfaces)), name=name))
+            
         return
 
 #**********************************************************************#
@@ -1354,7 +1356,7 @@ class elmerClass:
             self._elmerName += 'Capacitance'
         
         #Currently not generating pillars
-        self._numMaterials = 3
+        self._genPillars = False
         
         self._elmerBaseInfo()
         self._elmerSimulationInfo()
@@ -1547,13 +1549,14 @@ class elmerClass:
             {
                 'Name': '"SiO2"', 
                 'Relative Permittivity': '3.9'
-            },
-            {
+            }
+        ]
+        if self._genPillars:
+            allMaterials.append({
                 'Name': '"Pillars"',
                 'Relative Permittivity': '3.0'
-            },
-        ]
-
+            })
+        
         allBodies = [
             {
                 'Target Bodies(1)': 3, 
@@ -1572,21 +1575,25 @@ class elmerClass:
                 'Name': '"SiO2"', 
                 'Equation': 1, 
                 'Material': 3
-            },
-            {
+            }
+        ]
+        
+        if self._genPillars:
+            allBodies.append({
                 'Target Bodies(1)': 4, 
                 'Name': '"Pillars"', 
                 'Equation': 1, 
                 'Material': 4
-            },
-        ]
+            })
+
         # TODO: Need to add bodies for each pad volume?
 
         self._materials = {}
         self._bodies = {}
 
-        for i in range(self._numMaterials):
+        for i in range(len(allMaterials)):
             self._materials[f'Material {i+1}'] = allMaterials[i]
+        for i in range(len(allBodies)):
             self._bodies[f'Body {i+1}'] = allBodies[i]
 
         self._makeDielectricsFile()
@@ -1598,13 +1605,13 @@ class elmerClass:
     def _makeDielectricsFile(self):
         """Writes the dielectric properties to a file."""
 
-        dielectricValues = ['1e10', '3.9', '1.0', '3.0'] # TODO: add reference for each pad volume?
+        dielectricValues = ['1e10', '3.9', '1.0'] # TODO: add reference for each pad volume?
 
         try:
             with open('Geometry/dielectrics.dat', 'w') as f:
-                f.write(self._numMaterials.__str__() + '\n')
+                f.write(len(dielectricValues).__str__() + '\n')
 
-                for i in range(self._numMaterials):
+                for i in range(len(dielectricValues)):
                     f.write(f'{i+1} {dielectricValues[i]}\n')
 
         except Exception as e:
