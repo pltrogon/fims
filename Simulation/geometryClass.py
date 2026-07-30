@@ -449,25 +449,26 @@ class gmshClass:
             dielectricVolume: object for the volume of the dielectric.
         """
         # Get relevant geometry parameters
+        padThickness = 1.0 # TODO: setup actual padThickness variable
         pitch = self._param['pitch']
         padLength = self._param['padLength']
-        gridStandoff = self._param['gridStandoff']
-        thicknessSiO2 = self._param['thicknessSiO2']
+        thicknessSiO2 = self._param['thicknessSiO2'] + padThickness
+        padBase = -self._param['gridStandoff'] - padThickness # TODO: - self._param['gridThickness']/2?
         xLength = self._xLength
         yLength = self._yLength
-        padSurfaces = []
+        padVolumes = []
         
         # Determine if the unit cell is hexagonal or not.
         if self._unitCell == 'hexagon':
             # Create a dielectric without holes
             dielectricBox = self._createHexagon(
-                xLength/3, -gridStandoff, thicknessSiO2
+                xLength/3, padBase, thicknessSiO2
             )
         
         else:
             # Create a dielectric without holes
             dielectricBox = self._occ.addBox(
-                -xLength/2, -yLength/2, -gridStandoff, 
+                -xLength/2, -yLength/2, padBase, 
                 xLength, yLength, thicknessSiO2
             )
             
@@ -479,7 +480,7 @@ class gmshClass:
                 # Remove unit cell box and replace it with just the corner.
                 self._occ.remove([(3, dielectricBox)], recursive=True)
                 cornerDielectric = self._occ.addBox(
-                    0, 0, -gridStandoff,
+                    0, 0, padBase,
                     xLength/2, yLength/2, thicknessSiO2
                 )
                 adjustedDielectric = [(3, cornerDielectric)]
@@ -511,28 +512,28 @@ class gmshClass:
             case 'square':
                 # Add central pad hole
                 centerPadHole = self._occ.addBox(
-                    -padLength/2, -padLength/2, -gridStandoff,
+                    -padLength/2, -padLength/2, padBase,
                     padLength, padLength, thicknessSiO2
                 )
                 # Add central readout pad object
-                centerPad = self._occ.addRectangle(
-                    -padLength/2, -padLength/2, -gridStandoff,
-                    padLength, padLength
+                centerPad = self._occ.addBox(
+                    -padLength/2, -padLength/2, padBase,
+                    padLength, padLength, padThickness
                 )
                 
             case 'hexagon':
                 # Add central pad hole
-                centerPadHole = self._createHexagon(padLength, -gridStandoff, thicknessSiO2)
+                centerPadHole = self._createHexagon(padLength, padBase, thicknessSiO2)
                 
                 # Add central readout pad object
-                centerPad = self._createHexagon(padLength, -gridStandoff)
+                centerPad = self._createHexagon(padLength, padBase, padThickness)
                 
             case 'octagon':
                 # Add central pad hole
-                centerPadHole = self._createOctagon(padLength, -gridStandoff, thicknessSiO2)
+                centerPadHole = self._createOctagon(padLength, padBase, thicknessSiO2)
                 
                 # Add central readout pad object
-                centerPad = self._createOctagon(padLength, -gridStandoff)
+                centerPad = self._createOctagon(padLength, padBase, padThickness)
         
         padHoleTools = [(3, centerPadHole)]
         for x, y in self._neighborCenters:
@@ -542,23 +543,24 @@ class gmshClass:
             padHoleTools.extend(newHole)
             
             # Create surrounding pads
-            newPad = self._occ.copy([(2, centerPad)])
+            newPad = self._occ.copy([(3, centerPad)])
             self._occ.translate(newPad, x, y, 0)
-            padSurface, _ = self._occ.intersect(
+            padVolume, _ = self._occ.intersect(
                 newPad,
                 adjustedDielectric,
                 removeObject=True, removeTool=False
             )
-            if len(padSurface) > 0:
-                padSurfaces.append(padSurface[0])
+            if len(padVolume) > 0:
+                padVolumes.append(padVolume[0])
         
         # Create central readout pad
-        centerPadSurface, _ = self._occ.intersect(
-            [(2, centerPad)],
+        centerPadVolume, _ = self._occ.intersect(
+            [(3, centerPad)],
             adjustedDielectric,
             removeObject=True, removeTool=False
         )
-        padSurfaces.insert(0, centerPadSurface[0])        
+
+        padVolumes.insert(0, centerPadVolume[0])        
         
         # Cut holes in dielectric
         dielectricVolume, _ = self._occ.cut(
@@ -566,7 +568,7 @@ class gmshClass:
             padHoleTools,
         )
         
-        return dielectricVolume, padSurfaces
+        return dielectricVolume, padVolumes
 
 #**********************************************************************#
 
@@ -710,7 +712,7 @@ class gmshClass:
         ]
         
         # Dielectric
-        dielectricVolume, padSurfaces = self._buildDielectric()
+        dielectricVolume, padVolumes = self._buildDielectric()
             
         # Grid
         gridVolume = self._buildGrid()
@@ -722,19 +724,19 @@ class gmshClass:
             'Gas': (3, gasVolume[0][1]),
             'Dielectric': (3, dielectricVolume[0][1]),
             'Grid': (3, gridVolume[0][1]),
-            'CenterPad': padSurfaces[0]
+            'CenterPad': padVolumes[0]
         }
         
         if self._scale == 'surrounding':
             cellParts.update({
-                'TopPad': padSurfaces[1],
-                'RightTopPad': padSurfaces[2],
-                'RightPad': padSurfaces[3],
-                'RightBottomPad': padSurfaces[4],
-                'BottomPad': padSurfaces[5],
-                'LeftBottomPad': padSurfaces[6],
-                'LeftPad': padSurfaces[7],
-                'LeftTopPad': padSurfaces[8]
+                'TopPad': padVolumes[1],
+                'RightTopPad': padVolumes[2],
+                'RightPad': padVolumes[3],
+                'RightBottomPad': padVolumes[4],
+                'BottomPad': padVolumes[5],
+                'LeftBottomPad': padVolumes[6],
+                'LeftPad': padVolumes[7],
+                'LeftTopPad': padVolumes[8]
             })
         
         cellParts['Cathode'] = cathodeSurface[0] # Cathode must be listed last for Elmer FEM unpacking
@@ -771,7 +773,7 @@ class gmshClass:
         ]
         
         # Dielectric
-        dielectricVolume, padSurfaces = self._buildDielectric()
+        dielectricVolume, padVolumes = self._buildDielectric()
         
         # Grid
         gridVolume = self._buildGrid()
@@ -783,25 +785,25 @@ class gmshClass:
             'Gas': (3, gasVolume[0][1]),
             'Dielectric': (3, dielectricVolume[0][1]),
             'Grid': (3, gridVolume[0][1]),
-            'CenterPad': padSurfaces[0]
+            'CenterPad': padVolumes[0]
         }
         
         match self._scale:
             case 'surrounding':
                 cellParts.update({
-                    'RightTopPad': padSurfaces[1],
-                    'RightBottomPad': padSurfaces[2],
-                    'BottomPad': padSurfaces[3],
-                    'LeftBottomPad': padSurfaces[4],
-                    'LeftTopPad': padSurfaces[5],
-                    'TopPad': padSurfaces[6]
+                    'RightTopPad': padVolumes[1],
+                    'RightBottomPad': padVolumes[2],
+                    'BottomPad': padVolumes[3],
+                    'LeftBottomPad': padVolumes[4],
+                    'LeftTopPad': padVolumes[5],
+                    'TopPad': padVolumes[6]
                 })
             
             case 'single':
                 pass
             
             case 'corner':
-                cellParts['RightTopPad'] = padSurfaces[1]
+                cellParts['RightTopPad'] = padVolumes[1]
 
         cellParts['Cathode'] = cathodeSurface[0] # Cathode must be listed last for Elmer FEM unpacking
         
@@ -927,7 +929,7 @@ class gmshClass:
             'LeftBottomPad', 'LeftPad', 'LeftTopPad'
         ]
         
-        allVolumes = ['Gas', 'Dielectric', 'Grid']
+        allVolumes = ['Gas', 'Dielectric', 'Grid'] # TODO: pads are now volumes. Add here?
         otherSurfaces = ['Cathode']
 
         configuration = {
@@ -1007,7 +1009,7 @@ class gmshClass:
         if globalGroup['Cathode']:
             gmsh.model.addPhysicalGroup(2, globalGroup['Cathode'], name='Cathode')
         if allGridSurfaces:
-            gmsh.model.addPhysicalGroup(2, list(set(allGridSurfaces)), name='Grid')
+            gmsh.model.addPhysicalGroup(2, list(set(allGridSurfaces)), name='Grid') # TODO: same treatment for pads?
 
         # Individual Pads
         for tags, name in zip(padTags, padNames):
@@ -1120,9 +1122,9 @@ class gmshClass:
         
         #=========================#
         #=== DEFINE MESH SIZES ===#
-        #=========================# # TODO: revert
-        fineMesh = 2#gridThickness*(3./4.)
-        gridMesh = 2#gridThickness/4.
+        #=========================#
+        fineMesh = gridThickness*(3./4.)
+        gridMesh = .5#gridThickness/4.
         refineMesh = gridThickness*(3./2.)
         backgroundMesh = pitch/4.
         #=========================#
@@ -1532,7 +1534,7 @@ class elmerClass:
             },
             {
                 'Name': '"Aluminum (generic)"', 
-                'Relative Permittivity': '1e10' #TODO - 1e6 instead (easier for solver)?
+                'Relative Permittivity': '1e10'
             },
             {
                 'Name': '"SiO2"', 
