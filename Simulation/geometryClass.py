@@ -41,18 +41,16 @@ class geometryClass:
 #**********************************************************************#
 
     def __init__(self, inputParam=None):
-
+        """
+        """
         self._param = inputParam
-        self._checkParameters()
-
-        self._runGUI = False
-        
         self._geoConfig = {
             'unitCell': 'hexagon',
             'holeShape': 'circle',
             'padShape': 'hexagon',
             'scale': 'corner' 
         }
+        self._runGUI = False
         
         return
 
@@ -63,7 +61,6 @@ class geometryClass:
         Checks that the parameters are valid
         for creating the geometry.
         """
-        # TODO: add other geometry shapes
         neededParameters = [
             'pitch',
             'holeRadius',
@@ -86,19 +83,61 @@ class geometryClass:
             if self._param[key] <= 0:
                 raise ValueError(f"Error - '{key}' must be positive.")
 
-        # Check geometric constraints
-        outRadius = self._param['pitch'] / math.sqrt(3)
+        # Find bounds of the unit cell
         inRadius = self._param['pitch']/2
+        
+        if self._geoConfig['unitCell'] == 'hexagon':
+            hexCell = True
+        else:
+            hexCell = False
+        
+        # Find scaling of the hole size
+        match self._geoConfig['holeShape']:
+            case 'circle':
+                holeScale = 1
+            
+            case 'hexagon': 
+                if hexCell:
+                    holeScale = math.sqrt(3)/2
+                else:
+                    holeScale = 1
 
-        if self._param['holeRadius'] >= inRadius:
+            case 'octagon':
+                if hexCell:
+                    holeScale = 1.00863
+                else:
+                    holeScale = math.cos(math.radians(22.5))
+        
+        match self._geoConfig['padShape']:
+            case 'square':
+                if hexCell:
+                    padScale = 1/(2*math.cos(math.radians(60)))
+                else:
+                    padScale = 1/2
+            
+            case 'hexagon': 
+                if hexCell:
+                    padScale = math.sqrt(3)/2
+                else:
+                    padScale = 1
+
+            case 'octagon':
+                if hexCell:
+                    padScale = 1.00863
+                else:
+                    padScale = math.cos(math.radians(22.5))
+        
+        # Grid hole must be smaller than the pitch
+        if self._param['holeRadius']*holeScale >= inRadius:
             raise ValueError('Error - Hole larger than Cell.')
-        if self._param['padLength'] >= outRadius:
+        
+        if self._param['padLength']*padScale >= inRadius:
             raise ValueError('Error - Pad larger than Cell.')
         
-        ## Pillars are currently not included in the geometry
+        # TODO: Pillars are currently not included in the geometry
         # Check that pillars can fit in the remaining space
-        padInRadius = self._param['padLength']*math.sqrt(3)/2
-        padSpace = inRadius - padInRadius
+        #padInRadius = self._param['padLength']*math.sqrt(3)/2
+        #padSpace = inRadius - padInRadius
         #if self._param['pillarRadius'] >= padSpace:
         #    raise ValueError('Error - Pillar cannot fit.')
 
@@ -183,7 +222,6 @@ class geometryClass:
         """
         Builds the geometry for the FIMS simulation using Gmsh.
         """
-
         print('\tBuilding geometry...')
     
         self._checkParameters()
@@ -217,7 +255,9 @@ class geometryClass:
 #**********************************************************************#
 
     def calculateEFields(self, solveWeighting=True, capacitance=False):
-
+        """
+        """
+        self._checkParameters()
         self._generateElmerFiles(capacitance=capacitance)
 
         if capacitance:
@@ -234,8 +274,7 @@ class geometryClass:
         """
         Sets the voltages on the grid and cathode electrodes.
         """
-
-        gridVoltage, cathodeVoltage = self.findPotentials()
+        gridVoltage, cathodeVoltage = self._findPotentials()
 
         self._elmerClass.resetPotentials()
         self._elmerClass._setPotential('Grid', gridVoltage)
@@ -245,7 +284,7 @@ class geometryClass:
         
 #**********************************************************************#
 
-    def findPotentials(self):
+    def _findPotentials(self):
         """
         Calculates the grid and cathode potentials to achieve the 
         desired electric fields in the drift and amplification regions.
@@ -256,7 +295,6 @@ class geometryClass:
             gridVoltage (float): The voltage to apply to the grid.
             cathodeVoltage (float): The voltage to apply to the cathode.
         """
-
         MICRONTOCM = 1e-4
         driftField = self._param['driftField']
         fieldRatio = self._param['fieldRatio']
@@ -299,6 +337,8 @@ class gmshClass:
         self._scale = 'corner'
         self._holeShape = 'circle'
         self._padShape = 'hexagon'
+        
+        self._neighborCenters = []
 
         return
 
@@ -315,6 +355,8 @@ class gmshClass:
         gridThickness = self._param['gridThickness']
         holeRadius = self._param['holeRadius']
         pitch = self._param['pitch']
+        xLength = self._xLength
+        yLength = self._yLength
         
         # Create hole cut tool based on given hole shape.
         match self._holeShape:
@@ -335,38 +377,12 @@ class gmshClass:
         
         # Determine if the unit cell is hexagonal or not.
         if self._unitCell == 'hexagon':
-            xLength = pitch*math.sqrt(3)
-            yLength = pitch
-            
-            # Locate the center points for all surrounding holes
-            neighborCenters = [
-                (xLength/2, yLength/2), #Top-Right
-                (xLength/2, -yLength/2), #Bottom-Right
-                (0, -yLength), #Bottom
-                (-xLength/2, -yLength/2), #Bottom-Left
-                (-xLength/2, yLength/2), #Top-Left
-                (0, yLength) #Top
-            ]
             # Create single cell grid without holes
             gridBox = self._createHexagon(
                 xLength/3, -gridThickness/2, gridThickness
             )
             
         else:
-            xLength = pitch
-            yLength = pitch
-            
-            # Locate the center points of all surrounding holes
-            neighborCenters = [
-                (0, yLength), # Top
-                (xLength, yLength), # Top-Right
-                (xLength, 0), # Right
-                (xLength, -yLength), # Bottom-Right
-                (0, -yLength), # Bottom
-                (-xLength, -yLength), #Bottom-Left
-                (-xLength, 0), # Left
-                (-xLength, yLength) # Top-Left
-            ]
             # Create single cell grid without holes
             gridBox = self._occ.addBox(
                 -xLength/2, -yLength/2, -gridThickness/2,
@@ -375,10 +391,22 @@ class gmshClass:
         
         # Adjust grid size to match scale
         match self._scale:
+            case 'single':
+                adjustedGrid = [(3, gridBox)]
+            
+            case 'corner':
+                # Remove unit cell box and replace it with just the corner.
+                self._occ.remove([(3, gridBox)], recursive=True)
+                cornerGrid = self._occ.addBox(
+                    0, 0, -gridThickness/2,
+                    xLength/2, yLength/2, gridThickness
+                )
+                adjustedGrid = [(3, cornerGrid)]
+
             case 'surrounding':
                 adjustedGrid = False
                 # Create surrounding grid
-                for x, y in neighborCenters:
+                for x, y in self._neighborCenters:
                     newGrid = self._occ.copy([(3, gridBox)])
                     self._occ.translate(newGrid, x, y, 0)                
                     if adjustedGrid:
@@ -397,28 +425,9 @@ class gmshClass:
                     removeObject=True, removeTool=True
                 )
 
-            case 'single':
-                adjustedGrid = [(3, gridBox)]
-            
-            case 'corner':
-                gridCut = self._occ.addBox(
-                    0, 0, -gridThickness/2,
-                    xLength/2, yLength/2, gridThickness
-                )
-                adjustedGrid, _ = self._occ.intersect(
-                    [(3, gridBox)],
-                    [(3, gridCut)],
-                    removeObject=True, removeTool=False
-                )
-                adjustedGrid, _ = self._occ.fuse(
-                    adjustedGrid,
-                    [(3, gridCut)],
-                    removeObject=True, removeTool=True
-                )
-
         # Create the surrounding holes
         gridHoleTools = [(3, centerGridHole)]
-        for x, y in neighborCenters:
+        for x, y in self._neighborCenters:
             newHole = self._occ.copy([(3, centerGridHole)])
             self._occ.translate(newHole, x, y, 0)
             gridHoleTools.extend(newHole)
@@ -444,42 +453,18 @@ class gmshClass:
         padLength = self._param['padLength']
         gridStandoff = self._param['gridStandoff']
         thicknessSiO2 = self._param['thicknessSiO2']
+        xLength = self._xLength
+        yLength = self._yLength
         padSurfaces = []
         
         # Determine if the unit cell is hexagonal or not.
         if self._unitCell == 'hexagon':
-            xLength = pitch*math.sqrt(3)
-            yLength = pitch
-            
-            # Locate the centers of all surrounding holes
-            neighborCenters = [
-                (xLength/2, yLength/2), #Top-Right
-                (xLength/2, -yLength/2), #Bottom-Right
-                (0, -yLength), #Bottom
-                (-xLength/2, -yLength/2), #Bottom-Left
-                (-xLength/2, yLength/2), #Top-Left
-                (0, yLength) #Top
-            ]
             # Create a dielectric without holes
             dielectricBox = self._createHexagon(
                 xLength/3, -gridStandoff, thicknessSiO2
             )
         
         else:
-            xLength = pitch
-            yLength = pitch
-            
-            # Locate the centers of all surrounding holes
-            neighborCenters = [
-                (0, yLength), # Top
-                (xLength, yLength), # Top-Right
-                (xLength, 0), # Right
-                (xLength, -yLength), # Bottom-Right
-                (0, -yLength), # Bottom
-                (-xLength, -yLength), #Bottom-Left
-                (-xLength, 0), # Left
-                (-xLength, yLength) # Top-Left
-            ]
             # Create a dielectric without holes
             dielectricBox = self._occ.addBox(
                 -xLength/2, -yLength/2, -gridStandoff, 
@@ -487,10 +472,22 @@ class gmshClass:
             )
             
         match self._scale:
+            case 'single':
+                adjustedDielectric = [(3, dielectricBox)]
+            
+            case 'corner':
+                # Remove unit cell box and replace it with just the corner.
+                self._occ.remove([(3, dielectricBox)], recursive=True)
+                cornerDielectric = self._occ.addBox(
+                    0, 0, -gridStandoff,
+                    xLength/2, yLength/2, thicknessSiO2
+                )
+                adjustedDielectric = [(3, cornerDielectric)]
+                
             case 'surrounding':
                 # Create surrounding dielectric
                 adjustedDielectric = False
-                for x, y in neighborCenters:
+                for x, y in self._neighborCenters:
                     newDielectric = self._occ.copy([(3, dielectricBox)])
                     self._occ.translate(newDielectric, x, y, 0)                
                     if adjustedDielectric:
@@ -506,28 +503,6 @@ class gmshClass:
                 adjustedDielectric, _ = self._occ.fuse(
                     adjustedDielectric,
                     [(3, dielectricBox)],
-                    removeObject=True, removeTool=True
-                )
-
-            case 'single':
-                adjustedDielectric = [(3, dielectricBox)]
-            
-            case 'corner':
-                # Create cutting tool
-                dielectricCut = self._occ.addBox(
-                    0, 0, -gridStandoff,
-                    xLength/2, yLength/2, thicknessSiO2
-                )
-                
-                # Cut Dielectric
-                adjustedDielectric, _ = self._occ.intersect(
-                    [(3, dielectricBox)],
-                    [(3, dielectricCut)],
-                    removeObject=True, removeTool=False
-                )
-                adjustedDielectric, _ = self._occ.fuse(
-                    adjustedDielectric,
-                    [(3, dielectricCut)],
                     removeObject=True, removeTool=True
                 )
 
@@ -560,7 +535,7 @@ class gmshClass:
                 centerPad = self._createOctagon(padLength, -gridStandoff)
         
         padHoleTools = [(3, centerPadHole)]
-        for x, y in neighborCenters:
+        for x, y in self._neighborCenters:
             # Create Hole cut tool
             newHole = self._occ.copy([(3, centerPadHole)])
             self._occ.translate(newHole, x, y, 0)
@@ -611,22 +586,11 @@ class gmshClass:
         gridStandoff = self._param['gridStandoff']
         cathodeHeight = self._param['cathodeHeight']
         gasHeight = cathodeHeight + gridStandoff
+        xLength = self._xLength
+        yLength = self._yLength
         
         # Check unit cell shape
         if self._unitCell == 'hexagon':
-            xLength = pitch*math.sqrt(3)
-            yLength = pitch
-            
-            # Locate the center points for all surrounding holes
-            neighborCenters = [
-                (xLength/2, yLength/2), #Top-Right
-                (xLength/2, -yLength/2), #Bottom-Right
-                (0, -yLength), #Bottom
-                (-xLength/2, -yLength/2), #Bottom-Left
-                (-xLength/2, yLength/2), #Top-Left
-                (0, yLength) #Top
-            ]
-            
             # Create a volume object for the gas
             gasBox = self._createHexagon(
                 xLength/3, -gridStandoff, gasHeight
@@ -638,21 +602,6 @@ class gmshClass:
             )
             
         else:
-            xLength = pitch
-            yLength = pitch
-            
-            # Locate the centers of all surrounding holes
-            neighborCenters = [
-                (0, yLength), # Top
-                (xLength, yLength), # Top-Right
-                (xLength, 0), # Right
-                (xLength, -yLength), # Bottom-Right
-                (0, -yLength), # Bottom
-                (-xLength, -yLength), #Bottom-Left
-                (-xLength, 0), # Left
-                (-xLength, yLength) # Top-Left
-            ]
-            
             # Create a volume object for the gas
             gasBox = self._occ.addBox(
                 -xLength/2, -yLength/2, -gridStandoff,
@@ -666,10 +615,31 @@ class gmshClass:
             )
         
         match self._scale:
+            case 'single':
+                adjustedGas = [(3, gasBox)]
+                adjustedCathode = [(2, cathodeSurface)]
+
+            case 'corner':
+                # Create corner gas
+                self._occ.remove([(3, gasBox)], recursive=True)
+                cornerGas = self._occ.addBox(
+                    0, 0, -gridStandoff,
+                    xLength/2, yLength/2, gasHeight
+                )
+                adjustedGas = [(3, cornerGas)]
+                
+                # Create corner cathode
+                self._occ.remove([(2, cathodeSurface)], recursive=True)
+                cornerCathode = self._occ.addRectangle(
+                    0, 0, cathodeHeight,
+                    xLength/2, yLength/2
+                )
+                adjustedCathode = [(2, cornerCathode)]
+
             case 'surrounding':
                 # Create surrounding gas
                 adjustedGas = False
-                for x, y in neighborCenters:
+                for x, y in self._neighborCenters:
                     newGas = self._occ.copy([(3, gasBox)])
                     self._occ.translate(newGas, x, y, 0)                
                     newCathode = self._occ.copy([(2, cathodeSurface)])
@@ -700,48 +670,8 @@ class gmshClass:
                     [(2, cathodeSurface)],
                     removeObject=True, removeTool=True
                 )
-                
-            
-            case 'single':
-                adjustedGas = [(3, gasBox)]
-                adjustedCathode = [(2, cathodeSurface)]
-
-            case 'corner':
-                # Create cutting tools
-                gasCut = self._occ.addBox(
-                    0, 0, -gridStandoff,
-                    xLength/2, yLength/2, gasHeight
-                )
-                cathodeCut = self._occ.addRectangle(
-                    0, 0, cathodeHeight,
-                    xLength/2, yLength/2
-                )
-                
-                # Cut gas
-                adjustedGas, _ = self._occ.intersect(
-                    [(3, gasBox)],
-                    [(3, gasCut)],
-                    removeObject=True, removeTool=False
-                )
-                adjustedGas, _ = self._occ.fuse(
-                    adjustedGas,
-                    [(3, gasCut)],
-                    removeObject=True, removeTool=True
-                )
-                
-                # Cut cathode
-                adjustedCathode, _ = self._occ.intersect(
-                    [(2, cathodeSurface)],
-                    [(2, cathodeCut)],
-                    removeObject=True, removeTool=False
-                )
-                adjustedCathode, _ = self._occ.fuse(
-                    adjustedCathode,
-                    [(2, cathodeCut)],
-                    removeObject=True, removeTool=True
-                )
-                
-        # Remove non-gas volumes from the box
+                                
+        # Remove non-gas volumes from the gas box
         gasVolume, _ = self._occ.cut(
             adjustedGas, 
             [(3, dielectricVolume[0][1]), (3, gridVolume[0][1])], 
@@ -766,6 +696,19 @@ class gmshClass:
                 CenterPad: The center pad surface in the unit cell.
                 Cathode: The cathode surface in the unit cell.
         """
+        self._xLength = self._param['pitch']
+        self._yLength = self._param['pitch']
+        self._neighborCenters = [
+            (0, self._yLength), # Top
+            (self._xLength, self._yLength), # Top-Right
+            (self._xLength, 0), # Right
+            (self._xLength, -self._yLength), # Bottom-Right
+            (0, -self._yLength), # Bottom
+            (-self._xLength, -self._yLength), #Bottom-Left
+            (-self._xLength, 0), # Left
+            (-self._xLength, self._yLength) # Top-Left
+        ]
+        
         # Dielectric
         dielectricVolume, padSurfaces = self._buildDielectric()
             
@@ -779,19 +722,22 @@ class gmshClass:
             'Gas': (3, gasVolume[0][1]),
             'Dielectric': (3, dielectricVolume[0][1]),
             'Grid': (3, gridVolume[0][1]),
-            'CenterPad': padSurfaces[0],
-            'Cathode': cathodeSurface[0]
+            'CenterPad': padSurfaces[0]
         }
         
         if self._scale == 'surrounding':
-            cellParts['TopPad'] = padSurfaces[1]
-            cellParts['RightTopPad'] = padSurfaces[2]
-            cellParts['RightPad'] = padSurfaces[3]
-            cellParts['RightBottomPad'] = padSurfaces[4]
-            cellParts['BottomPad'] = padSurfaces[5]
-            cellParts['LeftBottomPad'] = padSurfaces[6]
-            cellParts['LeftPad'] = padSurfaces[7]
-            cellParts['LeftTopPad'] = padSurfaces[8]
+            cellParts.update({
+                'TopPad': padSurfaces[1],
+                'RightTopPad': padSurfaces[2],
+                'RightPad': padSurfaces[3],
+                'RightBottomPad': padSurfaces[4],
+                'BottomPad': padSurfaces[5],
+                'LeftBottomPad': padSurfaces[6],
+                'LeftPad': padSurfaces[7],
+                'LeftTopPad': padSurfaces[8]
+            })
+        
+        cellParts['Cathode'] = cathodeSurface[0] # Cathode must be listed last for Elmer FEM unpacking
         
         return cellParts
     
@@ -809,9 +755,21 @@ class gmshClass:
                 Dielectric: The dielectric volume in the unit cell.
                 Grid: The grid volume in the unit cell.
                 CenterPad: The center pad surface in the unit cell.
-                TopRightPad: The corner pad surface in the unit cell.
+                RightTopPad: The corner pad surface in the unit cell.
                 Cathode: The cathode surface in the unit cell.
         """
+        # Establish centers of neighboring cells
+        self._xLength = self._param['pitch']*math.sqrt(3)
+        self._yLength = self._param['pitch']
+        self._neighborCenters = [
+            (self._xLength/2, self._yLength/2), #Top-Right
+            (self._xLength/2, -self._yLength/2), #Bottom-Right
+            (0, -self._yLength), #Bottom
+            (-self._xLength/2, -self._yLength/2), #Bottom-Left
+            (-self._xLength/2, self._yLength/2), #Top-Left
+            (0, self._yLength) #Top
+        ]
+        
         # Dielectric
         dielectricVolume, padSurfaces = self._buildDielectric()
         
@@ -825,18 +783,19 @@ class gmshClass:
             'Gas': (3, gasVolume[0][1]),
             'Dielectric': (3, dielectricVolume[0][1]),
             'Grid': (3, gridVolume[0][1]),
-            'CenterPad': padSurfaces[0],
-            'Cathode': cathodeSurface[0]
+            'CenterPad': padSurfaces[0]
         }
         
         match self._scale:
             case 'surrounding':
-                cellParts['RightTopPad'] = padSurfaces[1]
-                cellParts['RightBottomPad'] = padSurfaces[2]
-                cellParts['BottomPad'] = padSurfaces[3]
-                cellParts['LeftBottomPad'] = padSurfaces[4]
-                cellParts['LeftTopPad'] = padSurfaces[5]
-                cellParts['TopPad'] = padSurfaces[6]
+                cellParts.update({
+                    'RightTopPad': padSurfaces[1],
+                    'RightBottomPad': padSurfaces[2],
+                    'BottomPad': padSurfaces[3],
+                    'LeftBottomPad': padSurfaces[4],
+                    'LeftTopPad': padSurfaces[5],
+                    'TopPad': padSurfaces[6]
+                })
             
             case 'single':
                 pass
@@ -844,6 +803,8 @@ class gmshClass:
             case 'corner':
                 cellParts['RightTopPad'] = padSurfaces[1]
 
+        cellParts['Cathode'] = cathodeSurface[0] # Cathode must be listed last for Elmer FEM unpacking
+        
         return cellParts
 
 #**********************************************************************#
@@ -1159,10 +1120,10 @@ class gmshClass:
         
         #=========================#
         #=== DEFINE MESH SIZES ===#
-        #=========================# TODO: revert
+        #=========================# # TODO: revert
         fineMesh = 2#gridThickness*(3./4.)
         gridMesh = 2#gridThickness/4.
-        refineMesh = 2#gridThickness*(3./2.)
+        refineMesh = gridThickness*(3./2.)
         backgroundMesh = pitch/4.
         #=========================#
         

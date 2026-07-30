@@ -114,7 +114,7 @@ int main(int argc, char * argv[]) {
     
     case GeometryMode::Hexagonal: {
       // Add pads to sensor list
-      sensorList.push_back("CornerPad");
+      sensorList.push_back("RightTopPad");
       // Adjust E-Field line generation points
       cellXScale = 1./sqrt(3.);
       cellYScale = 0.5;
