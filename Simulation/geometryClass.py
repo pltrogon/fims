@@ -303,8 +303,8 @@ class geometryClass:
 
         halfGrid = self._param['gridThickness']/2
 
-        driftGap = self._param['cathodeHeight']-halfGrid
-        amplificationGap = self._param['gridStandoff']-halfGrid
+        driftGap = self._param['cathodeHeight']+halfGrid
+        amplificationGap = self._param['gridStandoff']+halfGrid
 
         gridVoltage = -1*amplificationField*amplificationGap*MICRONTOCM
         cathodeVoltage = -1*driftField*driftGap*MICRONTOCM + gridVoltage
@@ -449,11 +449,11 @@ class gmshClass:
             dielectricVolume: object for the volume of the dielectric.
         """
         # Get relevant geometry parameters
-        padThickness = 1.0 # TODO: setup actual padThickness variable
+        padThickness = self._param['padThickness']
         pitch = self._param['pitch']
         padLength = self._param['padLength']
         thicknessSiO2 = self._param['thicknessSiO2'] + padThickness
-        padBase = -self._param['gridStandoff'] - padThickness # TODO: - self._param['gridThickness']/2?
+        padBase = -self._param['gridStandoff'] - padThickness - self._param['gridThickness']/2
         xLength = self._xLength
         yLength = self._yLength
         padVolumes = []
@@ -585,8 +585,8 @@ class gmshClass:
             cathodeSurface: the surface object for the cathode.
         """
         pitch = self._param['pitch']
-        gridStandoff = self._param['gridStandoff']
-        cathodeHeight = self._param['cathodeHeight']
+        gridStandoff = self._param['gridStandoff'] + self._param['gridThickness']/2.
+        cathodeHeight = self._param['cathodeHeight'] + self._param['gridThickness']/2.
         gasHeight = cathodeHeight + gridStandoff
         xLength = self._xLength
         yLength = self._yLength
@@ -929,7 +929,7 @@ class gmshClass:
             'LeftBottomPad', 'LeftPad', 'LeftTopPad'
         ]
         
-        allVolumes = ['Gas', 'Dielectric', 'Grid'] # TODO: pads are now volumes. Add here?
+        allVolumes = ['Gas', 'Dielectric', 'Grid']
         otherSurfaces = ['Cathode']
 
         configuration = {
@@ -1029,7 +1029,7 @@ class gmshClass:
         # Cell dimensions
         pitch = self._param['pitch']
         gridThickness = self._param['gridThickness']
-        driftLength = self._param['cathodeHeight'] - gridThickness/2.
+        driftLength = self._param['cathodeHeight'] + gridThickness/2.
         sqrt3 = math.sqrt(3)
         
         # List of coordinates for each refinement line point in a specified geometry
@@ -1112,19 +1112,20 @@ class gmshClass:
         padLength = self._param['padLength']
         cathodeHeight = self._param['cathodeHeight']
         gridStandoff = self._param['gridStandoff']
-
+        
         # Derived cell lengths
-        driftLength = cathodeHeight - gridThickness/2.
-        SiO2Height = thicknessSiO2 - gridStandoff + gridThickness/2.
+        driftLength = cathodeHeight + gridThickness/2.
+        amplificationGap = gridStandoff + gridThickness/2.
+        SiO2Height = thicknessSiO2 - gridStandoff - gridThickness/2.
         xLength = pitch*sqrt3/2
         yLength = pitch/2
         outRadius = pitch/sqrt3
         
         #=========================#
         #=== DEFINE MESH SIZES ===#
-        #=========================#
-        fineMesh = gridThickness*(3./4.)
-        gridMesh = .5#gridThickness/4.
+        #=========================# # TODO: revert
+        fineMesh = 2#gridThickness*(3./4.)
+        gridMesh = 2#gridThickness/4.
         refineMesh = gridThickness*(3./2.)
         backgroundMesh = pitch/4.
         #=========================#
@@ -1173,7 +1174,7 @@ class gmshClass:
         
         # Create a line from the center of the pad to above the center hole
         pipeBottom = self._occ.addPoint(
-            0, 0, -gridStandoff, 
+            0, 0, -amplificationGap, 
         )
         pipeTop = self._occ.addPoint( 
             0, 0, driftLength/10.

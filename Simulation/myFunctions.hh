@@ -37,6 +37,7 @@ struct SimulationParameters {
     double pitch;
     double gridStandoff;
     double gridThickness;
+    double padThickness;
     double holeRadius;
     double cathodeHeight;
     double thicknessSiO2;

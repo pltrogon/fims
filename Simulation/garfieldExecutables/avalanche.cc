@@ -444,7 +444,7 @@ int main(int argc, char * argv[]) {
 
   // ***** Calculate E fields ***** //
   //Calculate E field at different z planes above and below grid
-  double eFieldPlanes[6] = {zmax*.95, simParams->cathodeHeight/2., 2.*simParams->gridThickness, -2.*simParams->gridThickness, -simParams->gridStandoff/2., -.95*(simParams->gridStandoff-simParams->thicknessSiO2)};
+  double eFieldPlanes[6] = {zmax*.95, simParams->cathodeHeight/2., 2.*simParams->gridThickness, -2.*simParams->gridThickness, -simParams->gridStandoff/2., -.95*(simParams->gridStandoff-simParams->thicknessSiO2-simParams->padThickness/2.)};
 
   for(int inPlane = 0; inPlane < 6; inPlane++){
     for(int inPoint = 0; inPoint < totalFieldLines; inPoint++){
@@ -906,6 +906,7 @@ int main(int argc, char * argv[]) {
   metaDataTree->Branch("Pitch", &simParams->pitch, "pitch/D");
   metaDataTree->Branch("Grid Standoff", &simParams->gridStandoff, "gridStandoff/D");
   metaDataTree->Branch("Grid Thickness", &simParams->gridThickness, "gridThickness/D");
+  metaDataTree->Branch("Pad Thickness", &simParams->padThickness, "padThickness/D");
   metaDataTree->Branch("Hole Radius", &simParams->holeRadius, "holeRadius/D");
   metaDataTree->Branch("Cathode Height", &simParams->cathodeHeight, "cathodeHeight/D");
   metaDataTree->Branch("Thickness SiO2", &simParams->thicknessSiO2, "thicknessSiO2/D");

@@ -181,6 +181,7 @@ std::optional<SimulationParameters> readSimulationParameters() {
         params.pitch = params_json["pitch"].get<double>() * MICRONTOCM;
         params.gridStandoff = params_json["gridStandoff"].get<double>() * MICRONTOCM;
         params.gridThickness = params_json["gridThickness"].get<double>() * MICRONTOCM;
+        params.padThickness = params_json["padThickness"].get<double>() * MICRONTOCM;
         params.holeRadius = params_json["holeRadius"].get<double>() * MICRONTOCM;
         params.cathodeHeight = params_json["cathodeHeight"].get<double>() * MICRONTOCM;
         params.thicknessSiO2 = params_json["thicknessSiO2"].get<double>() * MICRONTOCM;
@@ -204,7 +205,7 @@ std::optional<SimulationParameters> readSimulationParameters() {
         params.gasCompIsobutane = params_json["gasCompIsobutane"].get<double>() * 100.0;
         params.gasPenning = params_json["gasPenning"].get<double>();
         
-        params.numInputs = 18;  // Number of parameters
+        params.numInputs = 19;  // Number of parameters
 
         return params;
     } catch(const std::exception& e) {
