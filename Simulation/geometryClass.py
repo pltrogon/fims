@@ -1009,10 +1009,17 @@ class gmshClass:
         if globalGroup['Cathode']:
             gmsh.model.addPhysicalGroup(2, globalGroup['Cathode'], name='Cathode')
         if allGridSurfaces:
-            gmsh.model.addPhysicalGroup(2, list(set(allGridSurfaces)), name='Grid') # TODO: same treatment for pads?
+            gmsh.model.addPhysicalGroup(2, list(set(allGridSurfaces)), name='Grid')
 
         # Individual Pads
         for tags, name in zip(padTags, padNames):
+            #gmsh.model.addPhysicalGroup(3, tags, name=name)
+            #allPadSurfaces = []
+            #validVol = [(3, t) for t in tags if gmsh.model.occ.getEntities(3).count((3, t)) > 0]
+            #if validVol:
+            #    boundary = gmsh.model.getBoundary(validVol, oriented=False)
+            #    allPadSurfaces.extend([b[1] for b in boundary])
+            #gmsh.model.addPhysicalGroup(2, list(set(allPadSurfaces)), name=name) #TODO: will this work?
             gmsh.model.addPhysicalGroup(2, tags, name=name)
 
         return
@@ -1573,7 +1580,7 @@ class elmerClass:
                 'Material': 4
             },
         ]
-
+        # TODO: Need to add bodies for each pad volume?
 
         self._materials = {}
         self._bodies = {}
@@ -1591,7 +1598,7 @@ class elmerClass:
     def _makeDielectricsFile(self):
         """Writes the dielectric properties to a file."""
 
-        dielectricValues = ['1e10', '3.9', '1.0', '3.0']
+        dielectricValues = ['1e10', '3.9', '1.0', '3.0'] # TODO: add reference for each pad volume?
 
         try:
             with open('Geometry/dielectrics.dat', 'w') as f:
