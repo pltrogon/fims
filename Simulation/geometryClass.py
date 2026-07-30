@@ -1003,17 +1003,17 @@ class gmshClass:
         # Volumes
         for name in ['Grid', 'Dielectric', 'Gas']:
             if globalGroup[name]:
-                print(f'{name}:', gmsh.model.addPhysicalGroup(3, globalGroup[name], name=name))
+                gmsh.model.addPhysicalGroup(3, globalGroup[name], name=name)
         
         # Individual pads
-        #for tags, name in zip(padTags, padNames):
-            #gmsh.model.addPhysicalGroup(3, tags, name=name) # TODO: un-comment once Elmer setup
+        for tags, name in zip(padTags, padNames):
+            gmsh.model.addPhysicalGroup(3, tags, name=name)
 
         # Surfaces
         if globalGroup['Cathode']:
-            print('Cathode:', gmsh.model.addPhysicalGroup(2, globalGroup['Cathode'], name='Cathode'))
+            gmsh.model.addPhysicalGroup(2, globalGroup['Cathode'], name='Cathode')
         if allGridSurfaces:
-            print('Grid Surfaces:', gmsh.model.addPhysicalGroup(2, list(set(allGridSurfaces)), name='Grid'))
+            gmsh.model.addPhysicalGroup(2, list(set(allGridSurfaces)), name='Grid')
 
         # Individual pads
         for tags, name in zip(padTags, padNames):
@@ -1022,7 +1022,7 @@ class gmshClass:
             if validVol:
                 boundary = gmsh.model.getBoundary(validVol, oriented=False)
                 allPadSurfaces.extend([b[1] for b in boundary])
-            print(f'{name}:', gmsh.model.addPhysicalGroup(2, list(set(allPadSurfaces)), name=name))
+            gmsh.model.addPhysicalGroup(2, list(set(allPadSurfaces)), name=name)
             
         return
 
@@ -1408,7 +1408,10 @@ class elmerClass:
 
             case _:
                 raise ValueError('Invalid run option.')
-            
+        
+        # Create list of pad names for volume allotment
+        self._padList = [self._electrodeMap[key] for key in self._electrodeMap if key not in [1, 2]] 
+        
         return
 
 #**********************************************************************#
@@ -1578,16 +1581,24 @@ class elmerClass:
             }
         ]
         
+        volNum = 4
+        for padName in self._padList:
+            allBodies.append({
+                'Target Bodies(1)': volNum,
+                'Name': f'"{padName}"',
+                'Equation': 1,
+                'Material': 2
+            })
+            volNum += 1
+        
         if self._genPillars:
             allBodies.append({
-                'Target Bodies(1)': 4, 
+                'Target Bodies(1)': len(allBodies)+1, 
                 'Name': '"Pillars"', 
                 'Equation': 1, 
                 'Material': 4
             })
-
-        # TODO: Need to add bodies for each pad volume?
-
+        
         self._materials = {}
         self._bodies = {}
 
@@ -1605,8 +1616,17 @@ class elmerClass:
     def _makeDielectricsFile(self):
         """Writes the dielectric properties to a file."""
 
-        dielectricValues = ['1e10', '3.9', '1.0'] # TODO: add reference for each pad volume?
-
+        dielectricValues = ['1e10', '3.9', '1.0']
+        
+        # Include Pad volumes
+        for pad in self._padList:
+            dielectricValues.append('1e10')
+        
+        # Optionally include pillars
+        if self._genPillars:
+            dielectricValues.append('3.0')
+        
+        
         try:
             with open('Geometry/dielectrics.dat', 'w') as f:
                 f.write(len(dielectricValues).__str__() + '\n')
