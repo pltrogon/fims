@@ -185,15 +185,8 @@ int main(int argc, char * argv[]) {
             numInitialElectrons++;
             
             double sampleX, sampleY;
-            //Random xy on plane
-            if (hexCell) {
-              auto [randX, randY] = randomXYInHexagon(cellLength);
-              sampleX = randX, sampleY = randY;
-            }
-            else {
-              auto [randX, randY] = randomXYInSquare(cellLength);
-              sampleX = randX, sampleY = randY;
-            }
+            auto [randX, randY] = randomXYinGeometry(geometryMode, cellLength);
+            sampleX = randX, sampleY = randY;
             
             double curX = sampleX, curY = sampleY, curZ = z0;
             double curTime = t0;
@@ -230,14 +223,8 @@ int main(int argc, char * argv[]) {
                     numFailure++;
                     
                     double newX, newY;
-                    if (hexCell) {
-                      auto [randX, randY] = randomXYInHexagon(cellLength);
-                      newX = randX, newY = randY;
-                    }
-                    else {
-                      auto [randX, randY] = randomXYInSquare(cellLength);
-                      newX = randX, newY = randY;
-                    }
+                    auto [randX, randY] = randomXYinGeometry(geometryMode, cellLength);
+                    newX = randX, newY = randY;
                     
                     curX = newX, curY = newY, curZ = z0;
                     curTime = t0;
