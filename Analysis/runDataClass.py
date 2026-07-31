@@ -2603,6 +2603,7 @@ class runData:
         if math.fabs(totalCharge) <= math.fabs(adjacentCharge):
             primary, secondary = secondary, primary
 
+        timeData = singleData['Signal Time']+1 #Add 1ns to allow log-plot
 
         # Create figure
         fig = plt.figure(figsize=(10, 5))
@@ -2611,20 +2612,20 @@ class runData:
         ax2 = fig.add_subplot(122)
         
         ax1.plot(
-            singleData['Signal Time'], singleData[primary],
+            timeData, singleData[primary],
             label='Primary Induced Signal'
         )
         ax1.plot(
-            singleData['Signal Time'], singleData[secondary],
+            timeData, singleData[secondary],
             ls='--', label='Secondary Induced Average'
         )
 
         ax2.plot(
-            singleData['Signal Time'], singleData[primary].cumsum(),
+            timeData, singleData[primary].cumsum(),
             label='Primary Induced Signal'
         )
         ax2.plot(
-            singleData['Signal Time'], singleData[secondary].cumsum(),
+            timeData, singleData[secondary].cumsum(),
             ls='--', label='Secondary Adjacent Average'
         )
 
@@ -2644,6 +2645,9 @@ class runData:
         ax1.grid()
         ax2.grid()
 
+        ax1.set_xscale('log')
+        ax2.set_xscale('log')
+
         ax1.legend()
         ax2.legend()
 
@@ -2661,7 +2665,7 @@ class runData:
 
         aveSignalData = self._getAverageSignal()
 
-        relativeTime = aveSignalData['relativeTime']
+        relativeTime = aveSignalData['relativeTime']+1#Shift by 1ns for log plotting
         averagePrimary = aveSignalData['averagePrimary']
         averageSecondary = aveSignalData['averageSecondary']
         meanGain = aveSignalData['meanGain']
@@ -2704,6 +2708,9 @@ class runData:
         ax2.set_xlabel('Aligned Time (ns)')
         ax2.set_ylabel('Charge (fC)')
 
+        ax1.set_xscale('log')
+        ax2.set_xscale('log')
+
         ax1.grid()
         ax2.grid()
         ax2.legend()
@@ -2725,10 +2732,7 @@ class runData:
         # Extract unique time axis directly from pivot columns
         commonTime = allSignals['Signal Time'].unique()
         commonTime.sort()
-        
         numPoints = len(commonTime)
-        alignIndex = int(numPoints * 0.2)  # Place 50% crossing point at 20% full scale
-        relativeTime = commonTime - commonTime[alignIndex]
 
         # Match gain vector order directly to pivot row order
         pivotedIds = allSignals['Avalanche ID'].unique()
@@ -2779,6 +2783,7 @@ class runData:
         crossings50Pct = np.argmax(normalizedElectronCharge >= 0.5, axis=1)
 
         # Calculate time-step offsets for alignment
+        alignIndex = int(np.round(np.mean(crossings50Pct)))
         alignOffsets = alignIndex - crossings50Pct
 
         # Shift and pad aligned signals
@@ -2809,7 +2814,7 @@ class runData:
         meanGain = self._calculatedData['Raw Gain'].iloc[0]
 
         aveSignal = {
-            'relativeTime': relativeTime,
+            'relativeTime': commonTime,
             'averagePrimary': averagePrimarySingle * meanGain,
             'averageSecondary': averageSecondarySingle * meanGain,
             'meanGain': meanGain
