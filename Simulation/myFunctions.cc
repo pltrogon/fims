@@ -1,5 +1,17 @@
 #include "myFunctions.hh"
 #include <algorithm>
+#include <random>
+#include <utility>
+#include <cmath>
+
+namespace {
+    // Internal helper for uniform [-1.0, 1.0] random values
+    double symmetricUnit() {
+        thread_local static std::mt19937 engine(std::random_device{}());
+        thread_local static std::uniform_real_distribution<double> dist(-1.0, 1.0);
+        return dist(engine);
+    }
+}
 
 /**
  * Retrieves the current git version/hash.
@@ -44,18 +56,13 @@ std::pair<double, double> randomXYInHexagon(double sideLength) {
     const double inRadius = sqrt3 * sideLength / 2.;
     const double outRadius = sideLength;
 
-    thread_local static std::mt19937 rng(std::random_device{}());
-    std::uniform_real_distribution<double> dist(-1.0, 1.0);
-
     while(true) {
         // Uniform sample in box
-        double sampleX = dist(rng) * outRadius;
-        double sampleY = dist(rng) * inRadius;
+        double sampleX = symmetricUnit() * outRadius;
+        double sampleY = symmetricUnit() * inRadius;
 
         // Check if in hexagon (use symmetry of Q1)
-        double absX = std::fabs(sampleX);
-        double absY = std::fabs(sampleY);
-        if(absX <= sideLength - absY/sqrt3){
+        if(std::fabs(sampleX) <= sideLength - (std::fabs(sampleY)/sqrt3)){
             return {sampleX, sampleY};
         }
     }
@@ -68,15 +75,34 @@ std::pair<double, double> randomXYInHexagon(double sideLength) {
  * @return A pair of doubles representing the (x,y) coordinates of the random point.
  */
 std::pair<double, double> randomXYInSquare(double sideLength) {
-
-    thread_local static std::mt19937 rng(std::random_device{}());
-    std::uniform_real_distribution<double> dist(-1.0, 1.0);
-
+    const double halfSide = sideLength * 0.5;
     // Uniform sample in box
-    double sampleX = dist(rng) * sideLength/2.;
-    double sampleY = dist(rng) * sideLength/2.;
-    
+    double sampleX = symmetricUnit() * outRadius;
+    double sampleY = symmetricUnit() * inRadius;
     return {sampleX, sampleY};
+}
+
+/**
+ * @brief Generates a random (x,y) point uniformly distributed within the unit cell
+ * @param mode The GeometryMode of the unit cell.
+ * @param sideLength The side length of the geometry
+ * 
+ * @return A pair of doubles representing the (x,y) coordinates of the random point.
+ */
+std::pair<double, double> randomXYinGeometry(GeometryMode mode, double sideLength) {
+    switch (mode) {
+        case GeometryMode::Square:
+        case GeometryMode::SquareSurrounding:
+            return randomXYInSquare(sideLength);
+
+        case GeometryMode::Hexagonal:
+        case GeometryMode::HexagonalSurrounding:
+            return randomXYInHexagon(sideLength);
+
+        case GeometryMode::Unknown:
+        default:
+            throw std::invalid_argument("Cannot generate random point for Unknown or invalid GeometryMode");
+    }
 }
 
 /**
