@@ -337,8 +337,6 @@ class gmshClass:
         self._scale = 'corner'
         self._holeShape = 'circle'
         self._padShape = 'hexagon'
-        
-        self._neighborCenters = []
 
         return
 
@@ -355,8 +353,7 @@ class gmshClass:
         gridThickness = self._param['gridThickness']
         holeRadius = self._param['holeRadius']
         pitch = self._param['pitch']
-        xLength = self._xLength
-        yLength = self._yLength
+        yLength = pitch
         
         # Create hole cut tool based on given hole shape.
         match self._holeShape:
@@ -378,11 +375,13 @@ class gmshClass:
         # Determine if the unit cell is hexagonal or not.
         if self._unitCell == 'hexagon':
             # Create single cell grid without holes
+            xLength = pitch*math.sqrt(3)
             gridBox = self._createHexagon(
                 xLength/3, -gridThickness/2, gridThickness
             )
             
         else:
+            xLength = pitch
             # Create single cell grid without holes
             gridBox = self._occ.addBox(
                 -xLength/2, -yLength/2, -gridThickness/2,
@@ -404,33 +403,10 @@ class gmshClass:
                 adjustedGrid = [(3, cornerGrid)]
 
             case 'surrounding':
-                adjustedGrid = False
-                # Create surrounding grid
-                for x, y in self._neighborCenters:
-                    newGrid = self._occ.copy([(3, gridBox)])
-                    self._occ.translate(newGrid, x, y, 0)                
-                    if adjustedGrid:
-                        adjustedGrid, _ = self._occ.fuse(
-                            adjustedGrid,
-                            newGrid,
-                            removeObject=True, removeTool=True
-                        )
-                    else:
-                        adjustedGrid = newGrid
+                adjustedGrid = self._copyToSurrounding((3, gridBox))
                 
-                # Combine surrounding grid with central grid
-                adjustedGrid, _ = self._occ.fuse(
-                    adjustedGrid,
-                    [(3, gridBox)],
-                    removeObject=True, removeTool=True
-                )
-
         # Create the surrounding holes
-        gridHoleTools = [(3, centerGridHole)]
-        for x, y in self._neighborCenters:
-            newHole = self._occ.copy([(3, centerGridHole)])
-            self._occ.translate(newHole, x, y, 0)
-            gridHoleTools.extend(newHole)
+        gridHoleTools = self._copyToSurrounding((3, centerGridHole), fuse=False)
         
         gridVolume, _ = self._occ.cut(
             adjustedGrid,
@@ -454,18 +430,18 @@ class gmshClass:
         padLength = self._param['padLength']
         thicknessSiO2 = self._param['thicknessSiO2'] + padThickness
         padBase = -self._param['gridStandoff'] - padThickness - self._param['gridThickness']/2
-        xLength = self._xLength
-        yLength = self._yLength
-        padVolumes = []
+        yLength = pitch
         
         # Determine if the unit cell is hexagonal or not.
         if self._unitCell == 'hexagon':
+            xLength = pitch*math.sqrt(3)
             # Create a dielectric without holes
             dielectricBox = self._createHexagon(
                 xLength/3, padBase, thicknessSiO2
             )
         
         else:
+            xLength = pitch
             # Create a dielectric without holes
             dielectricBox = self._occ.addBox(
                 -xLength/2, -yLength/2, padBase, 
@@ -487,26 +463,8 @@ class gmshClass:
                 
             case 'surrounding':
                 # Create surrounding dielectric
-                adjustedDielectric = False
-                for x, y in self._neighborCenters:
-                    newDielectric = self._occ.copy([(3, dielectricBox)])
-                    self._occ.translate(newDielectric, x, y, 0)                
-                    if adjustedDielectric:
-                        adjustedDielectric, _ = self._occ.fuse(
-                            adjustedDielectric,
-                            newDielectric,
-                            removeObject=True, removeTool=True
-                        )
-                    else:
-                        adjustedDielectric = newDielectric
+                adjustedDielectric = self._copyToSurrounding((3, dielectricBox))
                 
-                # Combine surrounding dielectric with central dielectric
-                adjustedDielectric, _ = self._occ.fuse(
-                    adjustedDielectric,
-                    [(3, dielectricBox)],
-                    removeObject=True, removeTool=True
-                )
-
         # Determine hole and pad shape
         match self._padShape:
             case 'square':
@@ -535,32 +493,18 @@ class gmshClass:
                 # Add central readout pad object
                 centerPad = self._createOctagon(padLength, padBase, padThickness)
         
-        padHoleTools = [(3, centerPadHole)]
-        for x, y in self._neighborCenters:
-            # Create Hole cut tool
-            newHole = self._occ.copy([(3, centerPadHole)])
-            self._occ.translate(newHole, x, y, 0)
-            padHoleTools.extend(newHole)
-            
-            # Create surrounding pads
-            newPad = self._occ.copy([(3, centerPad)])
-            self._occ.translate(newPad, x, y, 0)
+        # Create pads and tools for dielectric holes
+        padHoleTools = self._copyToSurrounding((3, centerPadHole), fuse=False)
+        padList = self._copyToSurrounding((3, centerPad), fuse=False)
+        padVolumes = []
+        for pad in padList:
             padVolume, _ = self._occ.intersect(
-                newPad,
+                [pad],
                 adjustedDielectric,
                 removeObject=True, removeTool=False
             )
             if len(padVolume) > 0:
                 padVolumes.append(padVolume[0])
-        
-        # Create central readout pad
-        centerPadVolume, _ = self._occ.intersect(
-            [(3, centerPad)],
-            adjustedDielectric,
-            removeObject=True, removeTool=False
-        )
-
-        padVolumes.insert(0, centerPadVolume[0])        
         
         # Cut holes in dielectric
         dielectricVolume, _ = self._occ.cut(
@@ -588,11 +532,11 @@ class gmshClass:
         gridStandoff = self._param['gridStandoff'] + self._param['gridThickness']/2.
         cathodeHeight = self._param['cathodeHeight'] + self._param['gridThickness']/2.
         gasHeight = cathodeHeight + gridStandoff
-        xLength = self._xLength
-        yLength = self._yLength
+        yLength = pitch
         
         # Check unit cell shape
         if self._unitCell == 'hexagon':
+            xLength = pitch*math.sqrt(3)
             # Create a volume object for the gas
             gasBox = self._createHexagon(
                 xLength/3, -gridStandoff, gasHeight
@@ -604,6 +548,7 @@ class gmshClass:
             )
             
         else:
+            xLength = pitch
             # Create a volume object for the gas
             gasBox = self._occ.addBox(
                 -xLength/2, -yLength/2, -gridStandoff,
@@ -640,38 +585,8 @@ class gmshClass:
 
             case 'surrounding':
                 # Create surrounding gas
-                adjustedGas = False
-                for x, y in self._neighborCenters:
-                    newGas = self._occ.copy([(3, gasBox)])
-                    self._occ.translate(newGas, x, y, 0)                
-                    newCathode = self._occ.copy([(2, cathodeSurface)])
-                    if adjustedGas:
-                        adjustedGas, _ = self._occ.fuse(
-                            adjustedGas,
-                            newGas,
-                            removeObject=True, removeTool=True
-                        )
-                        adjustedCathode, _ = self._occ.fuse(
-                            adjustedCathode,
-                            newCathode,
-                            removeObject=True, removeTool=True
-                        )
-                        
-                    else:
-                        adjustedGas = newGas
-                        adjustedCathode = newCathode
-                
-                # Combine surrounding volume with central volume
-                adjustedGas, _ = self._occ.fuse(
-                    adjustedGas,
-                    [(3, gasBox)],
-                    removeObject=True, removeTool=True
-                )
-                adjustedCathode, _ = self._occ.fuse(
-                    adjustedCathode,
-                    [(2, cathodeSurface)],
-                    removeObject=True, removeTool=True
-                )
+                adjustedGas = self._copyToSurrounding((3, gasBox))
+                adjustedCathode = self._copyToSurrounding((2, cathodeSurface))
                                 
         # Remove non-gas volumes from the gas box
         gasVolume, _ = self._occ.cut(
@@ -681,6 +596,80 @@ class gmshClass:
         )
     
         return gasVolume, adjustedCathode
+
+#**********************************************************************#
+    
+    def _copyToSurrounding(self, geometry, fuse=True):
+        """
+        Takes a geometry element and copies it to the surrounding cells.
+        
+        Note: removes original geometry element and replaces it with the
+        fused, full geometry.
+        
+        args:
+            geometry: geometry element to be duplicated.
+            fuse (bool): choose to fuse elements together or not.
+        Note: input format should be (#, name)
+        
+        returns:
+            fullGeometry: the geometry elements post duplication.
+        Note: given as a list of elements if fuse = False.
+        """
+        if self._unitCell == 'hexagon':
+            xLength = self._param['pitch']*math.sqrt(3)
+            yLength = self._param['pitch']
+            neighborCenters = [
+                (xLength/2, yLength/2), #Top-Right
+                (xLength/2, -yLength/2), #Bottom-Right
+                (0, -yLength), #Bottom
+                (-xLength/2, -yLength/2), #Bottom-Left
+                (-xLength/2, yLength/2), #Top-Left
+                (0, yLength) #Top
+            ]
+        else:
+            xLength = self._param['pitch']
+            yLength = self._param['pitch']
+            neighborCenters = [
+                (0, yLength), # Top
+                (xLength, yLength), # Top-Right
+                (xLength, 0), # Right
+                (xLength, -yLength), # Bottom-Right
+                (0, -yLength), # Bottom
+                (-xLength, -yLength), #Bottom-Left
+                (-xLength, 0), # Left
+                (-xLength, yLength) # Top-Left
+            ]
+        
+        # Create and fuse surrounding geometry
+        fullGeometry = []
+        for x, y in neighborCenters:
+            newGeo = self._occ.copy([geometry])
+            self._occ.translate(newGeo, x, y, 0)                
+            if fuse:
+                if fullGeometry:
+                    fullGeometry, _ = self._occ.fuse(
+                        fullGeometry,
+                        newGeo,
+                        removeObject=True, removeTool=True
+                    )
+                else:
+                    fullGeometry = newGeo
+            
+            else:
+                fullGeometry.extend(newGeo)
+        
+        # Deal with original geometry element
+        if fuse:    
+            # Fuse surrounding with the original
+            fullGeometry, _ = self._occ.fuse(
+                fullGeometry,
+                [geometry],
+                removeObject=True, removeTool=True
+            )
+        else:
+            # Append original to list
+            fullGeometry.append(geometry)
+        return fullGeometry
 
 #**********************************************************************#
 
@@ -698,19 +687,6 @@ class gmshClass:
                 CenterPad: The center pad surface in the unit cell.
                 Cathode: The cathode surface in the unit cell.
         """
-        self._xLength = self._param['pitch']
-        self._yLength = self._param['pitch']
-        self._neighborCenters = [
-            (0, self._yLength), # Top
-            (self._xLength, self._yLength), # Top-Right
-            (self._xLength, 0), # Right
-            (self._xLength, -self._yLength), # Bottom-Right
-            (0, -self._yLength), # Bottom
-            (-self._xLength, -self._yLength), #Bottom-Left
-            (-self._xLength, 0), # Left
-            (-self._xLength, self._yLength) # Top-Left
-        ]
-        
         # Dielectric
         dielectricVolume, padVolumes = self._buildDielectric()
             
@@ -760,18 +736,6 @@ class gmshClass:
                 RightTopPad: The corner pad surface in the unit cell.
                 Cathode: The cathode surface in the unit cell.
         """
-        # Establish centers of neighboring cells
-        self._xLength = self._param['pitch']*math.sqrt(3)
-        self._yLength = self._param['pitch']
-        self._neighborCenters = [
-            (self._xLength/2, self._yLength/2), #Top-Right
-            (self._xLength/2, -self._yLength/2), #Bottom-Right
-            (0, -self._yLength), #Bottom
-            (-self._xLength/2, -self._yLength/2), #Bottom-Left
-            (-self._xLength/2, self._yLength/2), #Top-Left
-            (0, self._yLength) #Top
-        ]
-        
         # Dielectric
         dielectricVolume, padVolumes = self._buildDielectric()
         
@@ -1111,8 +1075,6 @@ class gmshClass:
 
     def _setMeshSizes(self):
         """Sets the mesh sizes for the geometry based on the run option."""
-        sqrt3 = math.sqrt(3)
-
         # Cell dimensions
         pitch = self._param['pitch']
         holeRadius = self._param['holeRadius']
@@ -1126,18 +1088,9 @@ class gmshClass:
         driftLength = cathodeHeight + gridThickness/2.
         amplificationGap = gridStandoff + gridThickness/2.
         SiO2Height = thicknessSiO2 - gridStandoff - gridThickness/2.
-        xLength = pitch*sqrt3/2
-        yLength = pitch/2
-        outRadius = pitch/sqrt3
-        
-        #=========================#
-        #=== DEFINE MESH SIZES ===#
-        #=========================# # TODO: revert
-        fineMesh = 2#gridThickness*(3./4.)
-        gridMesh = 2#gridThickness/4.
-        refineMesh = gridThickness*(3./2.)
-        backgroundMesh = pitch/4.
-        #=========================#
+        xLength = pitch*math.sqrt(3)
+        yLength = pitch
+        outRadius = xLength/3
         
         # FEM region scales
         smallRadius = min(holeRadius, padLength)
@@ -1164,18 +1117,18 @@ class gmshClass:
             },
             
             'hexagoncorner': {
-                'x': (0, xLength), 
-                'y': (0, yLength)
+                'x': (0, xLength/2), 
+                'y': (0, yLength/2)
             },
             
             'hexagonsingle': {
-                'x': (-xLength*2/3, xLength*2/3), 
-                'y': (-yLength, yLength)
+                'x': (-outRadius, outRadius), 
+                'y': (-yLength/2, yLength/2)
             },
             
             'hexagonsurrounding': {
-                'x': (-xLength, xLength), 
-                'y': (-yLength, yLength)
+                'x': (-xLength/2, xLength/2), 
+                'y': (-yLength/2, yLength/2)
             }
         }
         runOption = self._unitCell + self._scale
@@ -1194,7 +1147,16 @@ class gmshClass:
         refinementLines = self._makeRefinementLines(runOption)
         
         self._occ.synchronize()
-
+        
+        #=========================#
+        #=== DEFINE MESH SIZES ===#
+        #=========================# # TODO: revert
+        fineMesh = 2#gridThickness*(3./4.)
+        gridMesh = 2#gridThickness/4.
+        refineMesh = 4#gridThickness*(3./2.)
+        backgroundMesh = pitch/4.
+        #=========================#
+        
         # Find distance from center line
         gmsh.model.mesh.field.add('Distance', 1)
         gmsh.model.mesh.field.setNumbers(1, 'EdgesList', [amplificationLine])
@@ -1355,7 +1317,7 @@ class elmerClass:
         if self._capacitance:
             self._elmerName += 'Capacitance'
         
-        #Currently not generating pillars
+        # TODO: Currently not generating pillars
         self._genPillars = False
         
         self._elmerBaseInfo()
