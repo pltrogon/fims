@@ -1,5 +1,10 @@
 #include "myFunctions.hh"
 #include <algorithm>
+#include <cctype>
+#include <iostream>
+#include <string>
+#include <string_view>
+#include <unordered_map>
 #include <random>
 #include <utility>
 #include <cmath>
@@ -277,36 +282,31 @@ EfficiencyResults calculateEfficiencyStats(int nSuccess, int nTotal) {
 
 /**
  * @brief Converts a string to a GeometryMode enum value.
- * @param str The string to convert (case-insensitive).
+ * @param modeName The string to convert (case-insensitive).
  * @return The corresponding GeometryMode enum value.
  */
-GeometryMode stringToGeometryMode(std::string str) {
-    std::transform(str.begin(), str.end(), str.begin(), ::tolower);
-    if(str == "squarecorner") {
-        return GeometryMode::Square;
-    }
-    if(str == "squaresingle") {
-        std::cerr << "Error: 'single' scale not currently supported for Garfield++ use." << std::endl;
+GeometryMode stringToGeometryMode(std::string modeName) {
+    std::transform(modeName.begin(), modeName.end(), modeName.begin(), ::tolower);
+    
+    // Static lookup table
+    static const std::unordered_map<std::string_view, GeometryMode> modeMap = {
+        {"squarecorner",        GeometryMode::Square},
+        {"squarehalf",          GeometryMode::SquareSurrounding},
+        {"squaresurrounding",   GeometryMode::SquareSurrounding},
+        {"hexagoncorner",       GeometryMode::Hexagonal},
+        {"hexagonhalf",         GeometryMode::HexagonalSurrounding},
+        {"hexagonsurrounding",  GeometryMode::HexagonalSurrounding},
+    };
+
+    // Currently unsupported versions
+    if (modeName == "squaresingle" || modeName == "hexagonsingle") {
+        std::cerr << "Error: 'single' scale not currently supported for Garfield++ use.\n";
         return GeometryMode::Unknown;
     }
-    if(str == "squarehalf") {
-        return GeometryMode::SquareSurrounding;
-    }
-    if(str == "squaresurrounding") {
-        return GeometryMode::SquareSurrounding;
-    }
-    if(str == "hexagoncorner") {
-        return GeometryMode::Hexagonal;
-    }
-    if(str == "hexagonsingle") {
-        std::cerr << "Error: 'single' scale not currently supported for Garfield++ use." << std::endl;
-        return GeometryMode::Unknown;
-    }
-    if(str == "hexagonhalf") {
-        return GeometryMode::HexagonalSurrounding;
-    }
-    if(str == "hexagonsurrounding") {
-        return GeometryMode::HexagonalSurrounding;
+
+    // lookup mode
+    if(auto it = modeMap.find(modeName); it != modeMap.end()) {
+        return it->second;
     }
     
     return GeometryMode::Unknown;
@@ -314,21 +314,21 @@ GeometryMode stringToGeometryMode(std::string str) {
 
 /**
  * @brief Converts a string to an EfficiencyMode enum value.
- * @param str The string to convert (case-insensitive).
+ * @param modeName The string to convert (case-insensitive).
  * @return The corresponding EfficiencyMode enum value.
  */
-EfficiencyMode stringToEfficiencyMode(std::string str) {
-    std::transform(str.begin(), str.end(), str.begin(), ::tolower);
+EfficiencyMode stringToEfficiencyMode(std::string modeName) {
+    std::transform(modeName.begin(), modeName.end(), modeName.begin(), ::tolower);
 
-    if(str == "net") {
-        return EfficiencyMode::Net;
+    static const std::unordered_map<std::string_view, EfficiencyMode> modeMap = {
+        {"net",        EfficiencyMode::Net},
+        {"detection",  EfficiencyMode::Detection},
+        {"collection", EfficiencyMode::Collection},
+    };
+
+    if (auto it = modeMap.find(modeName); it != modeMap.end()) {
+        return it->second;
     }
-    if(str == "detection") {
-        return EfficiencyMode::Detection;
-    }
-    if(str == "collection") {
-        return EfficiencyMode::Collection;
-    }
-    
+
     return EfficiencyMode::Unknown;
 }
