@@ -176,7 +176,7 @@ std::optional<SimulationParameters> readSimulationParameters() {
         json params_json = json::parse(jsonInput);
         SimulationParameters params;
         
-        // Geometry parameters (converting from microns to cm)
+        // Geometry parameters (converting from microns to cm) TODO: update variable names
         params.padLength = params_json["padLength"].get<double>() * MICRONTOCM;
         params.pitch = params_json["pitch"].get<double>() * MICRONTOCM;
         params.gridStandoff = params_json["gridStandoff"].get<double>() * MICRONTOCM;
@@ -259,11 +259,25 @@ GeometryMode stringToGeometryMode(std::string str) {
     if(str == "squarecorner") {
         return GeometryMode::Square;
     }
+    if(str == "squaresingle") {
+        std::cerr << "Error: 'single' scale not currently supported for Garfield++ use." << std::endl;
+        return GeometryMode::Unknown
+    }
+    if(str == "squarehalf") {
+        return GeometryMode::SquareSurrounding;
+    }
     if(str == "squaresurrounding") {
         return GeometryMode::SquareSurrounding;
     }
     if(str == "hexagoncorner") {
         return GeometryMode::Hexagonal;
+    }
+    if(str == "hexagonsingle") {
+        std::cerr << "Error: 'single' scale not currently supported for Garfield++ use." << std::endl;
+        return GeometryMode::Unknown
+    }
+    if(str == "hexagonhalf") {
+        return GeometryMode::HexagonalSurrounding;
     }
     if(str == "hexagonsurrounding") {
         return GeometryMode::HexagonalSurrounding;

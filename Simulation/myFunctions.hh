@@ -30,7 +30,7 @@ using json = nlohmann::json;
 const double MICRONTOCM = 1e-4;
 
 // Struct to hold all simulation parameters
-// Compare to simulationClass for consistency
+// Compare to simulationClass for consistency TODO: update variable names
 struct SimulationParameters {
     // Geometry parameters
     double padLength;
