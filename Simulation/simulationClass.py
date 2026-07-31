@@ -557,7 +557,8 @@ class FIMS_Simulation:
             'runAvalanche',
             'runEfficiency',
             'runFullField',
-            'runBreakdown'
+            'runBreakdown',
+            'runGainEfficiency'#Todo - add to docstring
         ]
 
         if executable not in executables:
@@ -571,7 +572,7 @@ class FIMS_Simulation:
                 targetValue = kwargs.get('targetValue', 0.95)
                 threshold = kwargs.get('threshold', 10)
                 args = f'{targetEfficiency} {targetValue} {threshold}'
-                
+
             case _:
                 args=''
 
@@ -833,6 +834,51 @@ class FIMS_Simulation:
             raise RuntimeError(f'Error while parsing the results file: {e}')
         
         return results
+
+#**********************************************************************#
+    def _readEffGainResults(self):
+        """TODO"""
+
+        dataPath = '../Data/'
+        dataFilename = 'effGainResults.dat'
+        
+        resultsFile = os.path.join(dataPath, dataFilename)
+        try:
+            with open(resultsFile, 'r') as inFile:
+                allLines = [inLine.strip() for inLine in inFile.readlines()]
+        except Exception as e:
+            raise RuntimeError(f'Error while reading the results file: {e}')
+        
+        results = {}
+        rawGains = []
+        inGains = False
+        
+        try:
+            for i, line in enumerate(allLines):
+                if line == '[RAWGAINS]':
+                    inGains = True
+                    continue
+
+                if inGains:
+                    rawGains.append(int(line))
+                elif "=" in line:
+                    key, val = line.split("=", 1)
+                    results[key.strip()] = float(val.strip())
+
+            if rawGains:
+                gainCount = np.bincount(rawGains)
+
+                results['maxGain'] = len(gainCount)-1
+                results['gainHist'] = gainCount.tolist()
+            else:
+                results['maxGain'] = 0
+                results['gainHist'] = []
+
+        except Exception as e:
+            raise RuntimeError(f'Error while parsing the results file: {e}')
+        
+        return results
+
     
 #**********************************************************************#
     def _fitForNextField(self, targetEfficiency, efficiencyValues, targetValue, fieldStepLimits=[1, 10]):

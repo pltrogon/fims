@@ -39,8 +39,8 @@ inline std::mt19937& getRNG(){
 }
 
 int main(int argc, char * argv[]) {
-    if(argc != 3){
-        std::cerr << "Format: " << argv[0] << "<GeometryMode> <Detection Threshold>" << std::endl;
+    if(argc != 2){
+        std::cerr << "Format: " << argv[0] << "<GeometryMode>" << std::endl;
         return -1;
     }
 
@@ -51,9 +51,8 @@ int main(int argc, char * argv[]) {
         return -1;
     }
 
-    int electronThreshold = std::stoi(argv[2]);
-
     const double MICRONTOCM = 1e-4;
+    const int minimumThreshold = 10;
 
     //Read in simulation parameters
     auto simParams = readSimulationParameters();
@@ -132,12 +131,15 @@ int main(int argc, char * argv[]) {
     int numFailure = 0;
     int numAttached = 0;
     int numHitLimit = 0;
-    std::vector<double>gains;
+
+    std::vector<uint16_t>gains;
+
     double averageGain = 0.;
-    double averageGainVar = 0.;
+    double averageGainVar = 1.;
     double averageGainStdDev = 0.;
-    double averageGainErr = 0.;
-    double netEffErr = 0.;
+    double averageGainErr = 1.;
+    double netEffErr = 1.;
+    double collEffErr = 1., detectEffErr = 1.;
 
     //Statistics variables
     EfficiencyResults collectionEff;
@@ -172,9 +174,10 @@ int main(int argc, char * argv[]) {
             //Generate single electron avalanche
             int numAvalancheElectrons = 0;
             bool repopulate = true;
+
             while(repopulate){
                 numTotalTrials++;
-                {//Guarding against Garfield error. See notes in checkEfficiency.
+                {//Guarding against Garfield error.
                     SilenceCerr guard;
                 
                     avalancheE.AvalancheElectron(
@@ -212,7 +215,7 @@ int main(int argc, char * argv[]) {
                         //Electron leave drift medium (Hits grid/Pad/Dielectric)
                         case -5: {
                             repopulate = false;
-                            gains.push_back(numAvalancheElectrons);
+                            gains.push_back(static_cast<uint16_t>(numAvalancheElectrons));
                             if(zf < -1.*simParams->gridThickness){
                                 numCollected++;
                             }
@@ -252,15 +255,11 @@ int main(int argc, char * argv[]) {
                                     curDz = dz/vMag;
                                 }
                                 else{
-                                    curDx = 0.;
-                                    curDy = 0.;
-                                    curDz = 0.;
+                                    curDx = 0.; curDy = 0.; curDz = 0.;
                                 }
                             }
                             else{
-                                curDx = 0.;
-                                curDy = 0.;
-                                curDz = 0.;
+                                curDx = 0.; curDy = 0.; curDz = 0.;
                             }
 
                             curTime = tf;
@@ -278,9 +277,9 @@ int main(int argc, char * argv[]) {
                 // More than 1 electron
                 else{
                     repopulate = false;
-                    gains.push_back(numAvalancheElectrons);
+                    gains.push_back(static_cast<uint16_t>(numAvalancheElectrons));
                     numCollected++;
-                    if(numAvalancheElectrons >= electronThreshold){
+                    if(numAvalancheElectrons > minimumThreshold){
                         numAboveThreshold++;
                     }
                     if(numAvalancheElectrons==electronLimit){
@@ -298,8 +297,8 @@ int main(int argc, char * argv[]) {
         averageGain = gainSum/gains.size();
 
         double gain2Sum = 0.;
-        for(double g : gains){
-            double gainDiff = g - averageGain;
+        for(uint16_t g : gains){
+            double gainDiff = static_cast<double>(g) - averageGain;
             gain2Sum += gainDiff*gainDiff;
         }
         averageGainVar = gain2Sum/(gains.size()-1);
@@ -310,7 +309,7 @@ int main(int argc, char * argv[]) {
 
         //Efficiencies
         collectionEff = calculateEfficiencyStats(numCollected, numInitialElectrons);
-        detectionEff = calculateEfficiencyStats(numAboveThreshold, numCollected);
+        detectionEff = calculateEfficiencyStats(numAboveThreshold, numCollected);        
 
         //Net efficiency
         netEfficiency.meanValue = collectionEff.meanValue*detectionEff.meanValue;
@@ -320,10 +319,10 @@ int main(int argc, char * argv[]) {
         netEfficiency.lowError = netEfficiency.meanValue - netEfficiency.minValue;
         netEfficiency.highError = netEfficiency.maxValue - netEfficiency.meanValue;
 
-        double netErrLow = netEfficiency.lowError / netEfficiency.meanValue;
-        double netErrHigh = netEfficiency.highError / netEfficiency.meanValue;
-
-        netEffErr = std::max(netErrLow, netErrHigh);
+        collEffErr = std::max(collectionEff.lowError, collectionEff.highError);
+        detectEffErr = std::max(detectionEff.lowError, detectionEff.highError);
+        netEffErr = std::max(netEfficiency.lowError, netEfficiency.highError);
+        
 
         if(netEffErr <= 0.01 && gainRelErr <= 0.1){
             runAvalanche = false;
@@ -347,29 +346,38 @@ int main(int argc, char * argv[]) {
         return -1;
     }
 
-    //Write general info
-    dataFile << "Finding efficiency for run: " << simParams->runNumber << "\n";
-    dataFile << "Total initial electrons: " << numInitialElectrons << " (of " << simParams->numAvalanche << ")\n";
-    dataFile << "Electron threshold: " << electronThreshold << "\n";
-    dataFile << "Field Ratio: " << simParams->fieldRatio << "\n\n";
+    //Electron results
 
-    //E;ectron results
-    dataFile << "Electron results counts:\n";
-    dataFile << "Initialized:\n" << numInitialElectrons << "\n";
-    dataFile << "Total trials:\n" << numTotalTrials << "\n";
-    dataFile << "Failures:\n" << numFailure << "\n";
-    dataFile << "Attached:\n" << numAttached << "\n";
-    dataFile << "Collected:\n" << numCollected << "\n";
-    dataFile << "Grid:\n" << numHitGrid << "\n";
-    dataFile << "Above threshold:\n" << numAboveThreshold << "\n";
-    dataFile << "Hit limit:\n" << numHitLimit << "\n\n";
+    dataFile << "Simulation information:\n";
 
-    //Gain and efficiencies
-    dataFile << "Gain and Efficiencies:\n";
-    dataFile << "Average gain:\n" << averageGain << "\n";
-    dataFile << "Average gain error:\n" << averageGainErr << "\n";
-    dataFile << "Net efficiency:\n" << netEfficiency.meanValue << "\n";
-    dataFile << "Net efficiency error:\n" << netEffErr << "\n";
+    dataFile << "runNumber = " << simParams->runNumber << "\n";
+    dataFile << "fieldRatio = " << simParams->fieldRatio << "\n";
+    dataFile << "threshold = " << minimumThreshold << "\n";
+    dataFile << "numAvalanche = " << simParams->numAvalanche << "\n";
+
+    dataFile << "numInitial = " << numInitialElectrons << "\n";
+    dataFile << "numTrials = " << numTotalTrials << "\n";
+    dataFile << "numFailure = " << numFailure << "\n";
+    dataFile << "numAttached = " << numAttached << "\n";
+    dataFile << "numCollected = " << numCollected << "\n";
+    dataFile << "numHitGrid = " << numHitGrid << "\n";
+    dataFile << "numAboveThreshold = " << numAboveThreshold << "\n";
+    dataFile << "numHitLimit = " << numHitLimit << "\n";
+    
+    dataFile << "averageGain = " << averageGain << "\n";
+    dataFile << "averageGainErr = " << averageGainErr << "\n";
+    dataFile << "collectionEff = " << collectionEff.meanValue << "\n";
+    dataFile << "collectionEffErr = " << collEffErr << "\n";
+    dataFile << "detectionEff = " << detectionEff.meanValue << "\n";
+    dataFile << "detectionEffErr = " << detectEffErr << "\n";
+    dataFile << "netEff = " << netEfficiency.meanValue << "\n";
+    dataFile << "netEffErr = " << netEffErr << "\n\n";
+
+    //Raw gain values
+    dataFile << "[RAWGAINS]\n";
+    for(uint16_t g : gains){
+        dataFile << g << "\n";
+    }
 
     dataFile.close();
 
