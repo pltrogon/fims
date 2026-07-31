@@ -235,110 +235,90 @@ class FIMS_Optimizer:
             LinearConstraint: Object representing the geometry constraints.
 
         """
+        '''
+        Note: assumes initially that all parameters are on the left side of the equation.
+        Shape constants:
+            Hex unit cell: circle = 2, square = 4/math.sqrt(3), hexagon = math.sqrt(3), octagon = 1.9601 
+            square unit cell: circle = 2, square = 1, hexagon = 2, octagon = 2*cos(67.5)
+            Note: octagon length defined as distance from center to vertex.
+            Distance: d = 1/(cos(theta)*(1+tan(phi)*tan(theta)) ) ~ 0.980025. 
+            Angles: Theta = 30 - 45/2 = 7.5 degrees. phi = 180 - 90 - 135/2 = 12.5 degrees.
+        '''
+        
+        # Shape scaling factors lookup
+        octagonFactor = 2 * math.cos(math.radians(67.5))
+    
+        holeShapeFactors = {
+            'circle':  (-2, -2),
+            'hexagon': (-math.sqrt(3), -2),
+            'octagon': (-1.9601, -octagonFactor),
+        }
+    
+        padShapeFactors = {
+            'square':  (-4 / math.sqrt(3), -1),
+            'hexagon': (-math.sqrt(3), -2),
+            'octagon': (-1.9601, -octagonFactor),
+        }
+    
         # Get all geometry values
-        initGeometry = {geo: self.initialGeometry[geo] for geo in self.initialGeometry}
+        initGeometry = self.initialGeometry.copy()
         hexCell = 'Hexagonal' in self.geoConfig['unitCell']
+        hexID = 0 if hexCell else 1
         
-        # Note: assumes initially that all parameters are on the left side of the equation.
-        # Shape constants:
-            # Hex unit cell: circle = 2, square = 4/math.sqrt(3), hexagon = math.sqrt(3), octagon = 1.9601 
-            # square unit cell: circle = 2, square = 1, hexagon = 2, octagon = 2*cos(67.5)
-            # Note: octagon length defined as distance from center to vertex.
-            # Distance: d = 1/(cos(theta)*(1+tan(phi)*tan(theta)) ) ~ 0.980025. 
-            # Angles: Theta = 30 - 45/2 = 7.5 degrees. phi = 180 - 90 - 135/2 = 12.5 degrees.
-        
-        ## Apply shape constants to hole radius
-        match self.geoConfig['holeShape']:
-            case 'circle':
-                initGeometry['holeRadius'] *= -2
-            
-            case 'hexagon':
-                if hexCell:
-                    initGeometry['holeRadius'] *= -math.sqrt(3)
-                else:
-                    initGeometry['holeRadius'] *= -2
-            
-            case 'octagon':
-                if hexCell:
-                    initGeometry['holeRadius'] *= -1.9601
-                else:
-                    initGeometry['holeRadius'] *= -2*math.cos(math.radians(67.5))
-        
-        ## Apply shape constant to readout pad
-        match self.geoConfig['padShape']:
-            case 'square':
-                if hexCell:
-                    initGeometry['padLength'] *= -4/math.sqrt(3)
-                else:
-                    initGeometry['padLength'] *= -1
-            
-            case 'hexagon':
-                if hexCell:
-                    initGeometry['padLength'] *= -math.sqrt(3)
-                else:
-                    initGeometry['padLength'] *= -2
-            
-            case 'octagon':
-                if hexCell:
-                    initGeometry['padLength'] *= -1.9601
-                else:
-                    initGeometry['padLength'] *= -2*math.cos(math.radians(67.5))
+        # Apply geometry-dependent multipliers
+        holeShape = self.geoConfig['holeShape']
+        if holeShape in holeShapeFactors:
+            initGeometry['holeRadius'] *= holeShapeFactors[holeShape][hexID]
+    
+        padShape = self.geoConfig['padShape']
+        if padShape in padShapeFactors:
+            initGeometry['padLength'] *= padShapeFactors[padShape][hexID]
         
         # Set Other geometry parameters
         initGeometry['pillarRadius'] *= -1
         initGeometry['thicknessSiO2'] *= -1
         
-        # Get initial values of active parameters
-        initVals = {param: initGeometry[param] for param in self.params}
-        
-        # Get initial values of constant parameters
-        fixedGeoKeys = set(initGeometry.keys()) - set(self.params.keys())
-        fixVals = {key: initGeometry[key] for key in fixedGeoKeys}
-        
-        # Set buffer constants
-        fixVals['zBuffer'] = -5 # Min pillar height
-        numParam = len(self.params)
+        # Active vs fixed parameters
+        activeParams = list(self.params.keys())
+        numParams = len(activeParams)
+        paramIndex = {p: i for i, p in enumerate(activeParams)}
+    
+        initVals = {p: initGeometry[p] for p in activeParams}
+        fixVals = {k: initGeometry[k] for k in set(initGeometry) - set(activeParams)}
+        fixVals['zBuffer'] = -5  # Min pillar height
+    
+        # Constraint key definitions
+        constraintKeySets = [
+            ['pitch', 'holeRadius', 'pillarRadius'],                      # Hole clearance
+            ['pitch', 'padLength', 'pillarRadius'],                       # Pad clearance
+            ['gridStandoff', 'pillarRadius', 'thicknessSiO2', 'zBuffer']  # SiO2 standoff
+        ]
 
-        # Geometry constraints:
-        # Format: a*x(1) + b*x(2) >= c*x(3)
-        # a,b,c are constants of the matrix. x(n) is the parameter.
-        constraints = []
+        # Build constraint matrix
+        matrixRows = []
+        lowerBounds = []
+    
+        for keys in constraintKeySets:
+            eq = self._makeConstraintEquation(keys, initVals, fixVals)
+            if not eq:
+                continue
+    
+            coeffs, limit = eq
+            row = np.zeros(numParams)
+            for name, val in coeffs.items():
+                if name in paramIndex:
+                    row[paramIndex[name]] = val
+    
+            matrixRows.append(row)
+            lowerBounds.append(limit)
+    
+        if not matrixRows:
+            return LinearConstraint(np.empty((0, numParams)), [], [])
         
-        ## 1. Ensure radius is smaller than the pitch (with sufficient space for pillars)
-        eq1Keys = ['pitch', 'holeRadius', 'pillarRadius']        
-        eq1 = self._makeConstraintEquation(eq1Keys, initVals, fixVals)
-        
-        if len(eq1) >0:
-            constraints.append(eq1)
-        
-        ## 2. Ensure pads are smaller than the pitch (with sufficient space for pillars)
-        eq2Keys = ['pitch', 'padLength', 'pillarRadius']
-        eq2 = self._makeConstraintEquation(eq2Keys, initVals, fixVals)
-        
-        if len(eq2) > 0:
-            constraints.append(eq2)
-        
-        # 3. Ensure that the grid is above the SiO2 layer (with a buffer)
-        eq3Keys = ['gridStandoff', 'pillarRadius', 'thicknessSiO2', 'zBuffer']
-        eq3 = self._makeConstraintEquation(eq3Keys, initVals, fixVals)
-        
-        if len(eq3) > 0:
-            constraints.append(eq3)
-
-        matrix = []
-        lowerBound = []
-        upperBound = np.inf
-        
-        paramIndex = {p: i for i, p in enumerate(self.params)}
-        for coeffs, limit in constraints:
-            row = np.zeros(numParam)
-            for name, value in coeffs.items():
-                row[paramIndex[name]] = value
-            
-            matrix.append(row)
-            lowerBound.append(limit)
         geometryConstraints = LinearConstraint(
-            matrix, lowerBound, upperBound
+            A=np.array(matrixRows),
+            lb=np.array(lowerBounds),
+            ub=np.full(len(lowerBounds), np.inf)
         )
 
         return geometryConstraints
