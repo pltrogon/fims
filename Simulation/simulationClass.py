@@ -210,7 +210,7 @@ class FIMS_Simulation:
         unitCellOptions = ['square', 'hexagon',]
         holeOptions = ['circle', 'hexagon', 'octagon']
         padOptions = ['square', 'hexagon', 'octagon']
-        scaleOptions = ['corner', 'surrounding', 'single']
+        scaleOptions = ['corner', 'single', 'half', 'surrounding']
         
         # Ensure all keys are present
         for key in geometryKeys:

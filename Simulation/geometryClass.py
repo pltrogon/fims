@@ -167,7 +167,7 @@ class geometryClass:
         unitCellOptions = ['square', 'hexagon',]
         holeOptions = ['circle', 'hexagon', 'octagon']
         padOptions = ['square', 'hexagon', 'octagon']
-        scaleOptions = ['corner', 'surrounding', 'single']
+        scaleOptions = ['corner', 'single', 'half', 'surrounding']
         
         for key in geometryKeys:
             if key not in geoConfiguration:
@@ -309,8 +309,8 @@ class geometryClass:
 
         halfGrid = self._param['gridThickness']/2
 
-        driftGap = self._param['cathodeHeight']+halfGrid
-        amplificationGap = self._param['gridStandoff']+halfGrid
+        driftGap = self._param['cathodeHeight']
+        amplificationGap = self._param['gridStandoff']
 
         gridVoltage = -1*amplificationField*amplificationGap*MICRONTOCM
         cathodeVoltage = -1*driftField*driftGap*MICRONTOCM + gridVoltage
@@ -415,7 +415,15 @@ class gmshClass:
 
             case 'surrounding':
                 adjustedGrid = self._copyToSurrounding((3, gridBox))
-                
+            
+            case 'half':
+                self._occ.remove([(3, gridBox)], recursive=True)
+                halfBox = self._occ.addBox(
+                    -xLength/2, -yLength, -gridThickness/2,
+                    xLength, 2*yLength, gridThickness
+                )
+                adjustedGrid = [(3, halfBox)]
+
         # Create the surrounding holes
         if self._multipleHoles:
             # resize initial hole:
@@ -519,6 +527,14 @@ class gmshClass:
             case 'surrounding':
                 # Create surrounding dielectric
                 adjustedDielectric = self._copyToSurrounding((3, dielectricBox))
+            
+            case 'half':
+                self._occ.remove([(3, dielectricBox)], recursive=True)
+                halfBox = self._occ.addBox(
+                    -xLength/2, -yLength, padBase,
+                    xLength, 2*yLength, thicknessSiO2
+                )
+                adjustedDielectric = [(3, halfBox)]
                 
         # Determine hole and pad shape
         match self._padShape:
@@ -642,6 +658,23 @@ class gmshClass:
                 # Create surrounding gas
                 adjustedGas = self._copyToSurrounding((3, gasBox))
                 adjustedCathode = self._copyToSurrounding((2, cathodeSurface))
+            
+            case 'half':
+                # Create half gas
+                self._occ.remove([(3, gasBox)], recursive=True)
+                halfBox = self._occ.addBox(
+                    -xLength/2, -yLength, -gridStandoff,
+                    xLength, 2*yLength, gasHeight
+                )
+                adjustedGas = [(3, halfBox)]
+                
+                # Create half cathode
+                self._occ.remove([(2, cathodeSurface)], recursive=True)
+                halfCathode = self._occ.addRectangle(
+                    -xLength/2, -yLength, cathodeHeight,
+                    xLength, 2*yLength
+                )
+                adjustedCathode = [(2, halfCathode)]
                                 
         # Remove non-gas volumes from the gas box
         gasVolume, _ = self._occ.cut(
@@ -962,6 +995,11 @@ class gmshClass:
                 'pads': ['CentralPad']
             },
             
+            'squarehalf': {
+                'keys': allVolumes + allSquarePads + otherSurfaces,
+                'pads': allSquarePads
+            },
+            
             'squaresurrounding': {
                 'keys': allVolumes + allSquarePads + otherSurfaces,
                 'pads': allSquarePads
@@ -977,10 +1015,15 @@ class gmshClass:
                 'pads': ['centralPad']
             },
             
-            'hexagonsurrounding': {
+            'hexagonhalf': {
                 'keys': allVolumes + allHexPads + otherSurfaces,
                 'pads': allHexPads
             },
+            
+            'hexagonsurrounding': {
+                'keys': allVolumes + allHexPads + otherSurfaces,
+                'pads': allHexPads
+            }
         }
 
         runOption = self._unitCell + self._scale
@@ -1076,6 +1119,13 @@ class gmshClass:
                 (-pitch/4, pitch/4, driftLength)
             ],
             
+            'squarehalf': [
+                (-pitch/2, -pitch/2, driftLength),
+                (pitch/2, -pitch/2, driftLength), 
+                (pitch/2, pitch/2, driftLength),
+                (-pitch/2, pitch/2, driftLength)
+            ],
+            
             'squaresurrounding': [
                 (-pitch/2, -pitch/2, driftLength),
                 (pitch/2, -pitch/2, driftLength), 
@@ -1097,6 +1147,15 @@ class gmshClass:
                 (-pitch/sqrt3/2, 0, driftLength),
                 (-pitch/sqrt3/4, -pitch/4, driftLength),
                 (pitch/sqrt3/4, -pitch/4, driftLength)
+            ],
+            
+            'hexagonhalf': [
+                (pitch/sqrt3, 0, driftLength), 
+                (pitch/sqrt3/2, pitch/2, driftLength),
+                (-pitch/sqrt3/2, pitch/2, driftLength),
+                (-pitch/sqrt3, 0, driftLength),
+                (-pitch/sqrt3/2, -pitch/2, driftLength),
+                (pitch/sqrt3/2, -pitch/2, driftLength)
             ],
             
             'hexagonsurrounding': [
@@ -1166,6 +1225,11 @@ class gmshClass:
                 'y': (-pitch/2, pitch/2)
             },
             
+            'squarehalf': {
+                'x': (-pitch, pitch), 
+                'y': (-pitch, pitch)
+            },
+            
             'squaresurrounding': {
                 'x': (-pitch, pitch), 
                 'y': (-pitch, pitch)
@@ -1178,6 +1242,11 @@ class gmshClass:
             
             'hexagonsingle': {
                 'x': (-outRadius, outRadius), 
+                'y': (-yLength/2, yLength/2)
+            },
+            
+            'hexagonhalf': {
+                'x': (-xLength/2, xLength/2), 
                 'y': (-yLength/2, yLength/2)
             },
             
@@ -1403,7 +1472,13 @@ class elmerClass:
             
             case 'squaresingle':
                 pass
-            
+            case 'squarehalf':
+                self._electrodeMap.update({
+                    4: 'TopPad', 5: 'RightTopPad', 6: 'RightPad',
+                    7: 'RightBottomPad', 8: 'BottomPad', 9: 'LeftBottomPad',
+                    10: 'LeftPad', 11: 'LeftTopPad'
+                })
+                
             case 'squaresurrounding':
                 self._electrodeMap.update({
                     4: 'TopPad', 5: 'RightTopPad', 6: 'RightPad',
@@ -1416,6 +1491,13 @@ class elmerClass:
 
             case 'hexagonsingle':
                 pass
+            
+            case 'hexagonhalf':
+                self._electrodeMap.update({
+                    4: 'RightTopPad', 5: 'RightBottomPad',
+                    6: 'BottomPad', 7: 'LeftBottomPad',
+                    8: 'LeftTopPad', 9: 'TopPad'
+                })
 
             case 'hexagonsurrounding':
                 self._electrodeMap.update({
