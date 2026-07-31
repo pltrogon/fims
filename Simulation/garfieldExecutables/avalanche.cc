@@ -88,6 +88,7 @@ int main(int argc, char * argv[]) {
   sensorList.push_back("CentralPad");
   double cellXScale = 1;
   double cellYScale = 1;
+  double cellLength = 0.;
   bool hexCell = false;
   switch(geometryMode){
     case GeometryMode::Square: {
@@ -363,7 +364,7 @@ int main(int argc, char * argv[]) {
       fieldLineDataTree->Fill();
     }
 
-    //Calculate lines from grid - only do those outside of hole
+    //Calculate lines from grid - only do those outside of hole TODO - Things may get weird with non-circular hole?
     double lineRadius2 = std::pow(xStart[inFieldLine], 2.) + std::pow(yStart[inFieldLine], 2.);
     double holeRadius2 = std::pow(simParams->holeRadius, 2.);
 
@@ -700,9 +701,11 @@ int main(int argc, char * argv[]) {
       totalElectrons = 0;
       attachedElectrons = 0;
       totalIons = 0;
-      
-      double cellLength = simParams->pitch/sqrt(3.);
-      auto [x0, y0] = distOnPlane ? randomXYInHexagon(cellLength) : std::pair<double, double>{0.0, 0.0};
+
+      double cellLength = simParams->pitch*2.*cellXScale;//TODO - James please double-check if i am using cellX correctly here!
+      auto [x0, y0] = distOnPlane 
+        ? randomXYinGeometry(geometryMode, cellLength)
+        : std::pair{0.0, 0.0};
 
       //Begin single-electron avalanche
       avalancheE->AvalancheElectron(x0, y0, z0, 0., e0, dx0, dy0, dz0);
