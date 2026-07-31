@@ -48,7 +48,8 @@ class geometryClass:
             'unitCell': 'hexagon',
             'holeShape': 'circle',
             'padShape': 'hexagon',
-            'scale': 'corner' 
+            'scale': 'corner',
+            'multipleHoles': False
         }
         self._runGUI = False
         
@@ -160,7 +161,8 @@ class geometryClass:
             'unitCell',
             'scale',
             'holeShape',
-            'padShape'
+            'padShape',
+            'multipleHoles'
         ]
         unitCellOptions = ['square', 'hexagon',]
         holeOptions = ['circle', 'hexagon', 'octagon']
@@ -171,8 +173,9 @@ class geometryClass:
             if key not in geoConfiguration:
                 raise ValueError(f"Error - Missing '{key}'")
         
-        # Ensure lower case input
-        checkDict = {key: str(value).lower() for key, value in geoConfiguration.items()}
+        # Ensure lower case input for strings
+        checkDict = {key: str(value).lower() for key, value in geoConfiguration.items() if key != 'multipleHoles'}
+        checkDict['multipleHoles'] = geoConfiguration['multipleHoles']
         
         if checkDict['unitCell'] not in unitCellOptions:
             raise ValueError(f'Unit cell must be one of {uniCellOptions}.')
@@ -185,6 +188,9 @@ class geometryClass:
         
         if checkDict['scale'] not in scaleOptions:
             raise ValueError(f'Scale must be one of {scaleOptions}.')
+        
+        if not isinstance(checkDict['multipleHoles'], bool):
+            raise ValueError('"multipleHoles" option must be a boolean.')
         
         return  checkDict
 
@@ -337,6 +343,7 @@ class gmshClass:
         self._scale = 'corner'
         self._holeShape = 'circle'
         self._padShape = 'hexagon'
+        self._multipleHoles = True
 
         return
 
@@ -363,10 +370,12 @@ class gmshClass:
                     0, 0, gridThickness,
                     holeRadius
                 )
+                
             case 'hexagon':
                 centerGridHole = self._createHexagon(
                     holeRadius, -gridThickness/2, gridThickness
                 )
+                
             case 'octagon':
                 centerGridHole = self._createOctagon(
                     holeRadius, -gridThickness/2, gridThickness
@@ -379,6 +388,7 @@ class gmshClass:
             gridBox = self._createHexagon(
                 xLength/3, -gridThickness/2, gridThickness
             )
+            multiScale = 1/5
             
         else:
             xLength = pitch
@@ -387,6 +397,7 @@ class gmshClass:
                 -xLength/2, -yLength/2, -gridThickness/2,
                 xLength, yLength, gridThickness
             )
+            multiScale = 1/4
         
         # Adjust grid size to match scale
         match self._scale:
@@ -406,7 +417,51 @@ class gmshClass:
                 adjustedGrid = self._copyToSurrounding((3, gridBox))
                 
         # Create the surrounding holes
-        gridHoleTools = self._copyToSurrounding((3, centerGridHole), fuse=False)
+        if self._multipleHoles:
+            # resize initial hole:
+            self._occ.dilate(
+                [(3, centerGridHole)],
+                0, 0, 0,
+                multiScale, multiScale, multiScale
+            )
+            
+            # Create duplicate holes
+            xCenter = pitch/math.sqrt(3)/4
+            yCenter = pitch/4
+            altHole1 = self._occ.copy([(3, centerGridHole)])
+            altHole2 = self._occ.copy([(3, centerGridHole)])
+            altHole3 = self._occ.copy([(3, centerGridHole)])
+            altHole4 = self._occ.copy([(3, centerGridHole)])
+            altHole5 = self._occ.copy([(3, centerGridHole)])
+            
+            # Translate holes off center
+            self._occ.translate(altHole1, -xCenter*2, 0, 0)
+            self._occ.translate(altHole2, xCenter*2, 0, 0)
+            self._occ.translate(altHole3, -xCenter, -yCenter, 0)
+            self._occ.translate(altHole4, -xCenter, yCenter, 0)
+            self._occ.translate(altHole5, xCenter, -yCenter, 0)
+            self._occ.translate([(3, centerGridHole)], xCenter, yCenter, 0)
+            
+            # Duplicate holes to adjacent unit cells
+            firstGridHoles = self._copyToSurrounding(altHole1[0], fuse=False)
+            secondGridHoles = self._copyToSurrounding(altHole2[0], fuse=False)
+            thirdGridHoles = self._copyToSurrounding(altHole3[0], fuse=False)
+            fourthGridHoles = self._copyToSurrounding(altHole4[0], fuse=False)
+            fifthGridHoles = self._copyToSurrounding(altHole5[0], fuse=False)
+            sixthGridHoles = self._copyToSurrounding((3, centerGridHole), fuse=False)
+            
+            # Append all holes to a single list
+            gridHoleTools = (
+                firstGridHoles 
+                + secondGridHoles 
+                + thirdGridHoles
+                + fourthGridHoles 
+                + fifthGridHoles 
+                + sixthGridHoles
+            )
+        
+        else:
+            gridHoleTools = self._copyToSurrounding((3, centerGridHole), fuse=False)
         
         gridVolume, _ = self._occ.cut(
             adjustedGrid,
@@ -1245,6 +1300,7 @@ class gmshClass:
         self._scale = geoConfig['scale']
         self._holeShape = geoConfig['holeShape']
         self._padShape = geoConfig['padShape']
+        self._multipleHoles = geoConfig['multipleHoles']
         
         filePath = 'Geometry'
         filename = os.path.join(filePath, f'{self._unitCell}{self._scale}.msh')
