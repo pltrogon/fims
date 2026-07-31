@@ -208,7 +208,7 @@ class FIMS_Simulation:
             'multipleHoles'
         ]
         unitCellOptions = ['square', 'hexagon',]
-        holeOptions = ['circle', 'hexagon', 'octagon']
+        holeOptions = ['circle', 'hexagon', 'octagon', 'triangle']
         padOptions = ['square', 'hexagon', 'octagon']
         scaleOptions = ['corner', 'single', 'half', 'surrounding']
         

@@ -108,6 +108,8 @@ class geometryClass:
                     holeScale = 1.00863
                 else:
                     holeScale = math.cos(math.radians(22.5))
+            case 'triangle':
+                holeScale = 1
         
         match self._geoConfig['padShape']:
             case 'square':
@@ -165,7 +167,7 @@ class geometryClass:
             'multipleHoles'
         ]
         unitCellOptions = ['square', 'hexagon',]
-        holeOptions = ['circle', 'hexagon', 'octagon']
+        holeOptions = ['circle', 'hexagon', 'octagon', 'triangle']
         padOptions = ['square', 'hexagon', 'octagon']
         scaleOptions = ['corner', 'single', 'half', 'surrounding']
         
@@ -379,6 +381,10 @@ class gmshClass:
             case 'octagon':
                 centerGridHole = self._createOctagon(
                     holeRadius, -gridThickness/2, gridThickness
+                )
+            case 'triangle':
+                centerGridHole = self._createTriangle(
+                    holeRadius, -gridThickness/2, gridThickness,
                 )
         
         # Determine if the unit cell is hexagonal or not.
@@ -885,6 +891,7 @@ class gmshClass:
         return entityMap
         
 #**********************************************************************#
+
     def _createHexagon(self, outRadius, z, zDist=None):
         """
         Makes a hexagon in the xy-plane with the center at the origin.
@@ -909,6 +916,47 @@ class gmshClass:
         lines = []
         for i in range(6):
             inLine = self._occ.addLine(points[i], points[(i+1)%6])
+            lines.append(inLine)
+
+        loop = self._occ.addCurveLoop(lines)
+        surface = self._occ.addPlaneSurface([loop])
+        if zDist is not None:
+            hexagon = self._occ.extrude(
+                [(2, surface)],
+                0, 0, zDist
+            )
+            return hexagon[1][1]
+        else:
+            return surface
+#**********************************************************************#
+
+    def _createTriangle(self, outRadius, z, zDist=None, angle=30):
+        """
+        Makes an equilateral triangle in the xy-plane with the center at the origin.
+        Extrudes it in the z-direction if zDist is provided.
+
+        Args:
+            sideLength (float): The side length of the triangle.
+            z (float): The z-coordinate of the triangle.
+            zDist (float): The distance to extrude the triangle in the z-direction. 
+        If None, the triangle will remain a 2D surface.
+            angle (float): Rotation angle of the triangle. Defaults to point in the positive z-direction.
+        
+        returns:
+            surface: geometry object
+        """
+        points = []
+        for i in range(3):
+            netAngle = math.radians(i*120 - angle)
+            x = outRadius*math.cos(netAngle)
+            y = outRadius*math.sin(netAngle)
+            
+            inPoint = self._occ.addPoint(x, y, z)
+            points.append(inPoint)
+
+        lines = []
+        for i in range(3):
+            inLine = self._occ.addLine(points[i], points[(i+1)%3])
             lines.append(inLine)
 
         loop = self._occ.addCurveLoop(lines)
@@ -1274,10 +1322,10 @@ class gmshClass:
         
         #=========================#
         #=== DEFINE MESH SIZES ===#
-        #=========================# # TODO: revert
-        fineMesh = 2#gridThickness*(3./4.)
-        gridMesh = 2#gridThickness/4.
-        refineMesh = 4#gridThickness*(3./2.)
+        #=========================#
+        fineMesh = gridThickness*(3./4.)
+        gridMesh = gridThickness/4.
+        refineMesh = gridThickness*(3./2.)
         backgroundMesh = pitch/4.
         #=========================#
         
