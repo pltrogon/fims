@@ -96,6 +96,15 @@ std::pair<double, double> randomXYInHexagon(double sideLength);
 std::pair<double, double> randomXYInSquare(double sideLength);
 
 /**
+ * @brief Generates a random (x,y) point uniformly distributed within the unit cell
+ * @param mode The GeometryMode of the unit cell.
+ * @param sideLength The side length of the geometry
+ * 
+ * @return A pair of doubles representing the (x,y) coordinates of the random point.
+ */
+std::pair<double, double> randomXYinGeometry(GeometryMode mode, double sideLength);
+
+/**
  * @brief Utility to temporarily silence std::cerr.
  */
 class SilenceCerr {
