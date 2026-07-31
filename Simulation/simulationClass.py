@@ -204,11 +204,10 @@ class FIMS_Simulation:
             'unitCell',
             'scale',
             'holeShape',
-            'padShape',
-            'multipleHoles'
+            'padShape'
         ]
         unitCellOptions = ['square', 'hexagon',]
-        holeOptions = ['circle', 'hexagon', 'octagon', 'triangle']
+        holeOptions = ['circle', 'hexagon', 'octagon', 'triangle', 'nesteggs', 'trivialpursuit']
         padOptions = ['square', 'hexagon', 'octagon']
         scaleOptions = ['corner', 'single', 'half', 'surrounding']
         
@@ -218,8 +217,7 @@ class FIMS_Simulation:
                 raise ValueError(f"Error - Missing '{key}'")
         
         # Ensure lower case input for strings
-        checkDict = {key: str(value).lower() for key, value in geoConfiguration.items() if key != 'multipleHoles'}
-        checkDict['multipleHoles'] = geoConfiguration['multipleHoles']
+        checkDict = {key: str(value).lower() for key, value in geoConfiguration.items()}
         
         if checkDict['unitCell'] not in unitCellOptions:
             raise ValueError(f'Unit cell must be one of {uniCellOptions}.')
@@ -232,9 +230,6 @@ class FIMS_Simulation:
         
         if checkDict['scale'] not in scaleOptions:
             raise ValueError(f'Scale must be one of {scaleOptions}.')
-        
-        if not isinstance(checkDict['multipleHoles'], bool):
-            raise ValueError('"multipleHoles" option must be a boolean.')
         
         return checkDict
 

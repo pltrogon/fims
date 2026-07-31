@@ -49,7 +49,6 @@ class geometryClass:
             'holeShape': 'circle',
             'padShape': 'hexagon',
             'scale': 'corner',
-            'multipleHoles': False
         }
         self._runGUI = False
         
@@ -94,9 +93,6 @@ class geometryClass:
         
         # Find scaling of the hole size
         match self._geoConfig['holeShape']:
-            case 'circle':
-                holeScale = 1
-            
             case 'hexagon': 
                 if hexCell:
                     holeScale = math.sqrt(3)/2
@@ -108,7 +104,14 @@ class geometryClass:
                     holeScale = 1.00863
                 else:
                     holeScale = math.cos(math.radians(22.5))
-            case 'triangle':
+            
+            case 'trivialpursuit':
+                holeScale = 2.2
+            
+            case 'nesteggs':
+                holeScale = 3.55
+            
+            case _:
                 holeScale = 1
         
         match self._geoConfig['padShape']:
@@ -132,10 +135,10 @@ class geometryClass:
         
         # Grid hole must be smaller than the pitch
         if self._param['holeRadius']*holeScale >= inRadius:
-            raise ValueError('Error - Hole larger than Cell.')
+            raise ValueError('Error - Hole size too large relative to cell.')
         
         if self._param['padLength']*padScale >= inRadius:
-            raise ValueError('Error - Pad larger than Cell.')
+            raise ValueError('Error - Pad larger than cell.')
         
         # TODO: Pillars are currently not included in the geometry
         # Check that pillars can fit in the remaining space
@@ -164,10 +167,9 @@ class geometryClass:
             'scale',
             'holeShape',
             'padShape',
-            'multipleHoles'
         ]
         unitCellOptions = ['square', 'hexagon',]
-        holeOptions = ['circle', 'hexagon', 'octagon', 'triangle']
+        holeOptions = ['circle', 'hexagon', 'octagon', 'triangle', 'nesteggs', 'trivialpursuit']
         padOptions = ['square', 'hexagon', 'octagon']
         scaleOptions = ['corner', 'single', 'half', 'surrounding']
         
@@ -176,9 +178,7 @@ class geometryClass:
                 raise ValueError(f"Error - Missing '{key}'")
         
         # Ensure lower case input for strings
-        checkDict = {key: str(value).lower() for key, value in geoConfiguration.items() if key != 'multipleHoles'}
-        checkDict['multipleHoles'] = geoConfiguration['multipleHoles']
-        
+        checkDict = {key: str(value).lower() for key, value in geoConfiguration.items()}
         if checkDict['unitCell'] not in unitCellOptions:
             raise ValueError(f'Unit cell must be one of {uniCellOptions}.')
         
@@ -190,9 +190,6 @@ class geometryClass:
         
         if checkDict['scale'] not in scaleOptions:
             raise ValueError(f'Scale must be one of {scaleOptions}.')
-        
-        if not isinstance(checkDict['multipleHoles'], bool):
-            raise ValueError('"multipleHoles" option must be a boolean.')
         
         return  checkDict
 
@@ -345,7 +342,6 @@ class gmshClass:
         self._scale = 'corner'
         self._holeShape = 'circle'
         self._padShape = 'hexagon'
-        self._multipleHoles = True
 
         return
 
@@ -364,29 +360,6 @@ class gmshClass:
         pitch = self._param['pitch']
         yLength = pitch
         
-        # Create hole cut tool based on given hole shape.
-        match self._holeShape:
-            case 'circle':
-                centerGridHole = self._occ.addCylinder(
-                    0, 0, -gridThickness/2,
-                    0, 0, gridThickness,
-                    holeRadius
-                )
-                
-            case 'hexagon':
-                centerGridHole = self._createHexagon(
-                    holeRadius, -gridThickness/2, gridThickness
-                )
-                
-            case 'octagon':
-                centerGridHole = self._createOctagon(
-                    holeRadius, -gridThickness/2, gridThickness
-                )
-            case 'triangle':
-                centerGridHole = self._createTriangle(
-                    holeRadius, -gridThickness/2, gridThickness,
-                )
-        
         # Determine if the unit cell is hexagonal or not.
         if self._unitCell == 'hexagon':
             # Create single cell grid without holes
@@ -394,7 +367,6 @@ class gmshClass:
             gridBox = self._createHexagon(
                 xLength/3, -gridThickness/2, gridThickness
             )
-            multiScale = 1/5
             
         else:
             xLength = pitch
@@ -403,7 +375,112 @@ class gmshClass:
                 -xLength/2, -yLength/2, -gridThickness/2,
                 xLength, yLength, gridThickness
             )
-            multiScale = 1/4
+        
+        # Create hole cut tool based on given hole shape.
+        match self._holeShape:
+            case 'circle':
+                centerGridHole = self._occ.addCylinder(
+                    0, 0, -gridThickness/2,
+                    0, 0, gridThickness,
+                    holeRadius
+                )
+                gridHoleTools = [(3, centerGridHole)]
+                
+            case 'hexagon':
+                centerGridHole = self._createHexagon(
+                    holeRadius, -gridThickness/2, gridThickness
+                )
+                gridHoleTools = [(3, centerGridHole)]
+                
+            case 'octagon':
+                centerGridHole = self._createOctagon(
+                    holeRadius, -gridThickness/2, gridThickness
+                )
+                gridHoleTools = [(3, centerGridHole)]
+                
+            case 'triangle':
+                centerGridHole = self._createTriangle(
+                    holeRadius, -gridThickness/2, gridThickness,
+                )
+                gridHoleTools = [(3, centerGridHole)]
+                
+            case 'nesteggs':
+                # Create all holes
+                hole1 = self._occ.addCylinder(
+                    0, 0, -gridThickness/2,
+                    0, 0, gridThickness,
+                    holeRadius
+                )
+                hole2 = self._occ.copy([(3, hole1)])
+                hole3 = self._occ.copy([(3, hole1)])
+                hole4 = self._occ.copy([(3, hole1)])
+                hole5 = self._occ.copy([(3, hole1)])
+                hole6 = self._occ.copy([(3, hole1)])
+                
+                # Translate holes off center
+                xCenter = pitch/math.sqrt(3)/4
+                yCenter = pitch/4
+                self._occ.translate([(3, hole1)], -xCenter*2, 0, 0)
+                self._occ.translate(hole2, xCenter*2, 0, 0)
+                self._occ.translate(hole3, -xCenter, -yCenter, 0)
+                self._occ.translate(hole4, -xCenter, yCenter, 0)
+                self._occ.translate(hole5, xCenter, -yCenter, 0)
+                self._occ.translate(hole6, xCenter, yCenter, 0)
+                
+                # Append to list for duplication to surrounding cells
+                gridHoleTools = [(3, hole1), hole2[0], hole3[0], hole4[0], hole5[0], hole6[0]]
+            
+            case 'trivialpursuit':
+                # Create all holes
+                hole1 = self._createTriangle(
+                    holeRadius,
+                    -gridThickness/2,
+                    gridThickness,
+                    angle=30
+                )
+                hole2 = self._createTriangle(
+                    holeRadius,
+                    -gridThickness/2,
+                    gridThickness,
+                    angle=210
+                )
+                hole3 = self._createTriangle(
+                    holeRadius,
+                    -gridThickness/2,
+                    gridThickness,
+                    angle=30
+                )
+                hole4 = self._createTriangle(
+                    holeRadius,
+                    -gridThickness/2,
+                    gridThickness,
+                    angle=210
+                )
+                hole5 = self._createTriangle(
+                    holeRadius,
+                    -gridThickness/2,
+                    gridThickness,
+                    angle=30
+                )
+                hole6 = self._createTriangle(
+                    holeRadius,
+                    -gridThickness/2,
+                    gridThickness,
+                    angle=210
+                )
+                
+                # Translate holes off center
+                xCenter = pitch*math.sqrt(3)/8
+                yCenter = pitch/4
+                self._occ.translate([(3, hole1)], xCenter, yCenter/2, 0)
+                self._occ.translate([(3, hole2)], 0, yCenter, 0)
+                self._occ.translate([(3, hole3)], -xCenter, yCenter/2, 0)
+                self._occ.translate([(3, hole4)], -xCenter, -yCenter/2, 0)
+                self._occ.translate([(3, hole5)], 0, -yCenter, 0)
+                self._occ.translate([(3, hole6)], xCenter, -yCenter/2, 0)
+                
+                # Append to list for duplication to surrounding cells
+                gridHoleTools = [(3, hole1), (3, hole2), (3, hole3), (3, hole4), (3, hole5), (3, hole6)]
         
         # Adjust grid size to match scale
         match self._scale:
@@ -421,6 +498,10 @@ class gmshClass:
 
             case 'surrounding':
                 adjustedGrid = self._copyToSurrounding((3, gridBox))
+                surroundingHoleList = []
+                for hole in gridHoleTools:
+                    surroundingHoleList.append(self._copyToSurrounding(hole, fuse=False))
+                gridHoleTools += surroundingHoleList
             
             case 'half':
                 self._occ.remove([(3, gridBox)], recursive=True)
@@ -429,54 +510,12 @@ class gmshClass:
                     xLength, 2*yLength, gridThickness
                 )
                 adjustedGrid = [(3, halfBox)]
-
-        # Create the surrounding holes
-        if self._multipleHoles:
-            # resize initial hole:
-            self._occ.dilate(
-                [(3, centerGridHole)],
-                0, 0, 0,
-                multiScale, multiScale, multiScale
-            )
-            
-            # Create duplicate holes
-            xCenter = pitch/math.sqrt(3)/4
-            yCenter = pitch/4
-            altHole1 = self._occ.copy([(3, centerGridHole)])
-            altHole2 = self._occ.copy([(3, centerGridHole)])
-            altHole3 = self._occ.copy([(3, centerGridHole)])
-            altHole4 = self._occ.copy([(3, centerGridHole)])
-            altHole5 = self._occ.copy([(3, centerGridHole)])
-            
-            # Translate holes off center
-            self._occ.translate(altHole1, -xCenter*2, 0, 0)
-            self._occ.translate(altHole2, xCenter*2, 0, 0)
-            self._occ.translate(altHole3, -xCenter, -yCenter, 0)
-            self._occ.translate(altHole4, -xCenter, yCenter, 0)
-            self._occ.translate(altHole5, xCenter, -yCenter, 0)
-            self._occ.translate([(3, centerGridHole)], xCenter, yCenter, 0)
-            
-            # Duplicate holes to adjacent unit cells
-            firstGridHoles = self._copyToSurrounding(altHole1[0], fuse=False)
-            secondGridHoles = self._copyToSurrounding(altHole2[0], fuse=False)
-            thirdGridHoles = self._copyToSurrounding(altHole3[0], fuse=False)
-            fourthGridHoles = self._copyToSurrounding(altHole4[0], fuse=False)
-            fifthGridHoles = self._copyToSurrounding(altHole5[0], fuse=False)
-            sixthGridHoles = self._copyToSurrounding((3, centerGridHole), fuse=False)
-            
-            # Append all holes to a single list
-            gridHoleTools = (
-                firstGridHoles 
-                + secondGridHoles 
-                + thirdGridHoles
-                + fourthGridHoles 
-                + fifthGridHoles 
-                + sixthGridHoles
-            )
+                surroundingHoleList = []
+                for hole in gridHoleTools:
+                    surroundingHoleList.append(self._copyToSurrounding(hole, fuse=False))
+                gridHoleTools += surroundingHoleList
         
-        else:
-            gridHoleTools = self._copyToSurrounding((3, centerGridHole), fuse=False)
-        
+        # Duplicate into surrounding cells
         gridVolume, _ = self._occ.cut(
             adjustedGrid,
             gridHoleTools
@@ -1323,9 +1362,9 @@ class gmshClass:
         #=========================#
         #=== DEFINE MESH SIZES ===#
         #=========================#
-        fineMesh = gridThickness*(3./4.)
-        gridMesh = gridThickness/4.
-        refineMesh = gridThickness*(3./2.)
+        fineMesh = 2#gridThickness*(3./4.)
+        gridMesh = 2#gridThickness/4.
+        refineMesh = 3#gridThickness*(3./2.)
         backgroundMesh = pitch/4.
         #=========================#
         
@@ -1417,7 +1456,6 @@ class gmshClass:
         self._scale = geoConfig['scale']
         self._holeShape = geoConfig['holeShape']
         self._padShape = geoConfig['padShape']
-        self._multipleHoles = geoConfig['multipleHoles']
         
         filePath = 'Geometry'
         filename = os.path.join(filePath, f'{self._unitCell}{self._scale}.msh')

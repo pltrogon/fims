@@ -261,7 +261,7 @@ GeometryMode stringToGeometryMode(std::string str) {
     }
     if(str == "squaresingle") {
         std::cerr << "Error: 'single' scale not currently supported for Garfield++ use." << std::endl;
-        return GeometryMode::Unknown
+        return GeometryMode::Unknown;
     }
     if(str == "squarehalf") {
         return GeometryMode::SquareSurrounding;
@@ -274,7 +274,7 @@ GeometryMode stringToGeometryMode(std::string str) {
     }
     if(str == "hexagonsingle") {
         std::cerr << "Error: 'single' scale not currently supported for Garfield++ use." << std::endl;
-        return GeometryMode::Unknown
+        return GeometryMode::Unknown;
     }
     if(str == "hexagonhalf") {
         return GeometryMode::HexagonalSurrounding;
