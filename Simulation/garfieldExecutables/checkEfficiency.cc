@@ -91,30 +91,19 @@ int main(int argc, char * argv[]) {
     fieldFIMS.GetBoundingBox(xmin, ymin, zmin, xmax, ymax, zmax);
 
     //Define boundary region for simulation
-    double cellLength = simParams->pitch;
-    bool hexCell = false;
-    
+    double cellLength = simParams->pitch;    
     switch(geometryMode){
-      case GeometryMode::Square: {
-        cellLength = simParams->pitch;
-        break;
-      }
-      case GeometryMode::SquareSurrounding: {
-        cellLength = simParams->pitch;
-        break;
-      }
-      case GeometryMode::Hexagonal: {
-        cellLength = simParams->pitch/std::sqrt(3.);
-        hexCell = true;
-        break;
-      }
-      case GeometryMode::HexagonalSurrounding: {
-        cellLength = simParams->pitch/std::sqrt(3.);
-        hexCell = true;
-        break;
-      }
-      default:
-        return -1;
+        case GeometryMode::Square:
+        case GeometryMode::SquareSurrounding:{
+            break;
+        }
+        case GeometryMode::Hexagonal:
+        case GeometryMode::HexagonalSurrounding:{
+            cellLength = simParams->pitch/std::sqrt(3.);
+            break;
+        }
+        default:
+            return -1;
     }
 
     double xBoundary[2], yBoundary[2], zBoundary[2];
