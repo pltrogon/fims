@@ -165,7 +165,7 @@ class geometryClass:
         """
         Generates the SIF files for Elmer based on the created geometry.
         """
-        self._elmerClass = elmerClass(sel._runOption, capacitance=False)
+        self._elmerClass = elmerClass(self._runOption, capacitance=False)
 
         if capacitance:
             self._elmerClassCapacitance = elmerClass(
@@ -254,7 +254,6 @@ class gmshClass:
         """
     
         self._occ = gmsh.model.occ
-        self._model = gmsh.model
         self._param = inputParams
         self._geoConfig = geoConfig
 
@@ -282,7 +281,7 @@ class gmshClass:
         # Create single cell grid without holes
         match self._geoConfig.unitCell:
             case UnitCell.HEXAGON:
-                xLength = pitch*math.sqrt(3)
+                xLength = pitch*math.sqrt(3)/2
                 gridBox = self._createHexagon(
                     xLength/3, -gridThickness/2, gridThickness
                 )
@@ -433,19 +432,19 @@ class gmshClass:
                 surroundingHoleList = []
                 for hole in gridHoleTools:
                     surroundingHoleList.append(self._copyToSurrounding(hole, fuse=False))
-                gridHoleTools += surroundingHoleList
+                gridHoleTools += surroundingHoleList[0]
             
             case 'half':
                 self._occ.remove([(3, gridBox)], recursive=True)
                 halfBox = self._occ.addBox(
-                    -xLength/2, -yLength, -gridThickness/2,
-                    xLength, 2*yLength, gridThickness
+                    -xLength, -yLength, -gridThickness/2,
+                    2*xLength, 2*yLength, gridThickness
                 )
                 adjustedGrid = [(3, halfBox)]
                 surroundingHoleList = []
                 for hole in gridHoleTools:
                     surroundingHoleList.append(self._copyToSurrounding(hole, fuse=False))
-                gridHoleTools += surroundingHoleList
+                gridHoleTools += surroundingHoleList[0]
         
         # Duplicate into surrounding cells
         gridVolume, _ = self._occ.cut(
@@ -474,7 +473,7 @@ class gmshClass:
         
         # Determine if the unit cell is hexagonal or not.
         if self._geoConfig.unitCell == UnitCell.HEXAGON:
-            xLength = pitch*math.sqrt(3)
+            xLength = pitch*math.sqrt(3)/2
             # Create a dielectric without holes
             dielectricBox = self._createHexagon(
                 xLength/3, padBase, thicknessSiO2
@@ -508,8 +507,8 @@ class gmshClass:
             case 'half':
                 self._occ.remove([(3, dielectricBox)], recursive=True)
                 halfBox = self._occ.addBox(
-                    -xLength/2, -yLength, padBase,
-                    xLength, 2*yLength, thicknessSiO2
+                    -xLength, -yLength, padBase,
+                    2*xLength, 2*yLength, thicknessSiO2
                 )
                 adjustedDielectric = [(3, halfBox)]
                 
@@ -584,7 +583,7 @@ class gmshClass:
         
         # Check unit cell shape
         if self._geoConfig.unitCell == UnitCell.HEXAGON:
-            xLength = pitch*math.sqrt(3)
+            xLength = pitch*math.sqrt(3)/2
             # Create a volume object for the gas
             gasBox = self._createHexagon(
                 xLength/3, -gridStandoff, gasHeight
@@ -640,16 +639,16 @@ class gmshClass:
                 # Create half gas
                 self._occ.remove([(3, gasBox)], recursive=True)
                 halfBox = self._occ.addBox(
-                    -xLength/2, -yLength, -gridStandoff,
-                    xLength, 2*yLength, gasHeight
+                    -xLength, -yLength, -gridStandoff,
+                    2*xLength, 2*yLength, gasHeight
                 )
                 adjustedGas = [(3, halfBox)]
                 
                 # Create half cathode
                 self._occ.remove([(2, cathodeSurface)], recursive=True)
                 halfCathode = self._occ.addRectangle(
-                    -xLength/2, -yLength, cathodeHeight,
-                    xLength, 2*yLength
+                    -xLength, -yLength, cathodeHeight,
+                    2*xLength, 2*yLength
                 )
                 adjustedCathode = [(2, halfCathode)]
                                 
@@ -684,12 +683,12 @@ class gmshClass:
             xLength = self._param['pitch']*math.sqrt(3)
             yLength = self._param['pitch']
             neighborCenters = [
+                (0, yLength), #Top
                 (xLength/2, yLength/2), #Top-Right
                 (xLength/2, -yLength/2), #Bottom-Right
                 (0, -yLength), #Bottom
                 (-xLength/2, -yLength/2), #Bottom-Left
-                (-xLength/2, yLength/2), #Top-Left
-                (0, yLength) #Top
+                (-xLength/2, yLength/2) #Top-Left
             ]
         else:
             xLength = self._param['pitch']
@@ -710,22 +709,11 @@ class gmshClass:
         for x, y in neighborCenters:
             newGeo = self._occ.copy([geometry])
             self._occ.translate(newGeo, x, y, 0)                
-            if fuse:
-                if fullGeometry:
-                    fullGeometry, _ = self._occ.fuse(
-                        fullGeometry,
-                        newGeo,
-                        removeObject=True, removeTool=True
-                    )
-                else:
-                    fullGeometry = newGeo
-            
-            else:
-                fullGeometry.extend(newGeo)
+            fullGeometry.extend(newGeo)
         
         # Deal with original geometry element
         if fuse:    
-            # Fuse surrounding with the original
+            # Fuse surrounding with the original and to each other
             fullGeometry, _ = self._occ.fuse(
                 fullGeometry,
                 [geometry],
@@ -734,14 +722,14 @@ class gmshClass:
         else:
             # Append original to list
             fullGeometry.append(geometry)
+        
         return fullGeometry
 
 #**********************************************************************#
     def _buildCellParts(self):
         """
-        TODO - Does this make _buildSquareCell and _buildHexagonalCell redundant?
+        TODO: add description
         """
-
         # Common volumes
         dielectricVolume, padVolumes = self._buildDielectric()
         gridVolume = self._buildGrid()
@@ -761,7 +749,7 @@ class gmshClass:
         scale = self._geoConfig.scale
 
         # Dynamic pad assignment based on unit cell geometry and scale
-        if scale == ScaleOption.SURROUNDING:
+        if scale == ScaleOption.SURROUNDING or scale == ScaleOption.HALF:
             if unitCell == UnitCell.SQUARE:
                 surroundingNames = [
                     'TopPad', 'RightTopPad', 'RightPad', 'RightBottomPad',
@@ -769,8 +757,8 @@ class gmshClass:
                 ]
             elif unitCell == UnitCell.HEXAGON:
                 surroundingNames = [
-                    'RightTopPad', 'RightBottomPad', 'BottomPad',
-                    'LeftBottomPad', 'LeftTopPad', 'TopPad'
+                    'TopPad', 'RightTopPad', 'RightBottomPad', 
+                    'BottomPad', 'LeftBottomPad', 'LeftTopPad'
                 ]
             else:
                 raise ValueError(f"Unsupported unit cell: '{unitCell}'")
@@ -786,108 +774,6 @@ class gmshClass:
         # Cathode must be listed last for Elmer FEM unpacking order
         cellParts['Cathode'] = cathodeSurface[0]
 
-        return cellParts
-
-#**********************************************************************#
-
-    def _buildSquareCell(self):
-        """
-        Builds the geometry for a single, square unit cell.
-
-        Note: Pillars are currently not included in the geometry.
-
-        Returns:
-            A dictionary containing the following parts of the unit cell:
-                Gas: The gas volume in the unit cell.
-                Dielectric: The dielectric volume in the unit cell.
-                Grid: The grid volume in the unit cell.
-                CenterPad: The center pad surface in the unit cell.
-                Cathode: The cathode surface in the unit cell.
-        """
-        # Dielectric
-        dielectricVolume, padVolumes = self._buildDielectric()
-            
-        # Grid
-        gridVolume = self._buildGrid()
-        
-        # Gas
-        gasVolume, cathodeSurface = self._buildGas(gridVolume, dielectricVolume)
-        
-        cellParts = {
-            'Gas': (3, gasVolume[0][1]),
-            'Dielectric': (3, dielectricVolume[0][1]),
-            'Grid': (3, gridVolume[0][1]),
-            'CenterPad': padVolumes[0]
-        }
-        
-        if self._geoConfig.scale == 'surrounding':
-            cellParts.update({
-                'TopPad': padVolumes[1],
-                'RightTopPad': padVolumes[2],
-                'RightPad': padVolumes[3],
-                'RightBottomPad': padVolumes[4],
-                'BottomPad': padVolumes[5],
-                'LeftBottomPad': padVolumes[6],
-                'LeftPad': padVolumes[7],
-                'LeftTopPad': padVolumes[8]
-            })
-        
-        cellParts['Cathode'] = cathodeSurface[0] # Cathode must be listed last for Elmer FEM unpacking
-        
-        return cellParts
-    
-#**********************************************************************#
-
-    def _buildHexagonalCell(self):
-        """
-        Builds the geometry for a single, hexagonal unit cell.
-
-        Note: Pillars are currently not included in the geometry.
-
-        Returns:
-            A dictionary containing the following parts of the unit cell:
-                Gas: The gas volume in the unit cell.
-                Dielectric: The dielectric volume in the unit cell.
-                Grid: The grid volume in the unit cell.
-                CenterPad: The center pad surface in the unit cell.
-                RightTopPad: The corner pad surface in the unit cell.
-                Cathode: The cathode surface in the unit cell.
-        """
-        # Dielectric
-        dielectricVolume, padVolumes = self._buildDielectric()
-        
-        # Grid
-        gridVolume = self._buildGrid()
-        
-        # Gas
-        gasVolume, cathodeSurface = self._buildGas(gridVolume, dielectricVolume)
-      
-        cellParts = {
-            'Gas': (3, gasVolume[0][1]),
-            'Dielectric': (3, dielectricVolume[0][1]),
-            'Grid': (3, gridVolume[0][1]),
-            'CenterPad': padVolumes[0]
-        }
-        
-        match self._geoConfig.scale:
-            case 'surrounding':
-                cellParts.update({
-                    'RightTopPad': padVolumes[1],
-                    'RightBottomPad': padVolumes[2],
-                    'BottomPad': padVolumes[3],
-                    'LeftBottomPad': padVolumes[4],
-                    'LeftTopPad': padVolumes[5],
-                    'TopPad': padVolumes[6]
-                })
-            
-            case 'single':
-                pass
-            
-            case 'corner':
-                cellParts['RightTopPad'] = padVolumes[1]
-
-        cellParts['Cathode'] = cathodeSurface[0] # Cathode must be listed last for Elmer FEM unpacking
-        
         return cellParts
 
 #**********************************************************************#
@@ -1090,9 +976,9 @@ class gmshClass:
             'BottomPad', 'LeftBottomPad', 'LeftPad', 'LeftTopPad'
         ]
         allHexPads = [
-            'CentralPad',
-            'RightTopPad','RightBottomPad', 'BottomPad',
-            'LeftBottomPad','LeftTopPad','TopPad'
+            'CentralPad', 
+            'TopPad', 'RightTopPad','RightBottomPad', 
+            'BottomPad', 'LeftBottomPad','LeftTopPad'
         ]
 
         # Determine active pads based on unit cell and scale
@@ -1151,18 +1037,17 @@ class gmshClass:
                         if self._occ.getEntities(3).count((3, t)) > 0
                     ]
                     if validVol:
-                        boundary = self._model.getBoundary(
+                        boundary = gmsh.model.getBoundary(
                             validVol, oriented=False
                         )
                         allGridSurfaces.extend([b[1] for b in boundary])
 
                 # Special boundary handling for the Grid
                 if partType == 'Grid':
-                    validVol = [(3, t) for t in tags if gmsh.model.occ.getEntities(3).count((3, t)) > 0]
+                    validVol = [(3, t) for t in tags if self._occ.getEntities(3).count((3, t)) > 0]
                     if validVol:
                         boundary = gmsh.model.getBoundary(validVol, oriented=False)
                         allGridSurfaces.extend([b[1] for b in boundary])
-
 
         # --- Physical Group Assignments ---
         
@@ -1186,11 +1071,11 @@ class gmshClass:
         for tags, name in zip(padTags, padNames):
             validVol = [(3, t) for t in tags if self._occ.getEntities(3).count((3, t)) > 0]
             if validVol:
-                boundary = self._model.getBoundary(validVol, oriented=False)
+                boundary = gmsh.model.getBoundary(validVol, oriented=False)
                 padSurfaces = list({b[1] for b in boundary})
                 
                 if padSurfaces:
-                    self._model.addPhysicalGroup(2, padSurfaces, name=f'{name}_Surface')
+                    gmsh.model.addPhysicalGroup(2, padSurfaces, name=f'{name}_Surface')
             
         return
 
@@ -1580,16 +1465,15 @@ class elmerClass:
             
             case 'hexagonhalf':
                 self._electrodeMap.update({
-                    4: 'RightTopPad', 5: 'RightBottomPad',
-                    6: 'BottomPad', 7: 'LeftBottomPad',
-                    8: 'LeftTopPad', 9: 'TopPad'
+                    4: 'TopPad', 5:'RightTopPad', 6: 'RightBottomPad',
+                    7: 'BottomPad', 8: 'LeftBottomPad', 9: 'LeftTopPad'
                 })
 
             case 'hexagonsurrounding':
                 self._electrodeMap.update({
-                    4: 'RightTopPad', 5: 'RightBottomPad',
-                    6: 'BottomPad', 7: 'LeftBottomPad',
-                    8: 'LeftTopPad', 9: 'TopPad'
+                    4: 'TopPad', 5: 'RightTopPad', 
+                    6: 'RightBottomPad', 7: 'BottomPad',
+                    8: 'LeftBottomPad', 9: 'LeftTopPad' 
                 })
 
             case _:
@@ -2054,10 +1938,11 @@ class elmerClass:
 
         if electrode not in [
             'Cathode', 'Grid', 
-            'CentralPad', 'RightTopPad', 
-            'TopPad', 'BottomPad',
-            'RightBottomPad', 'LeftTopPad',
-            'LeftBottomPad'
+            'CentralPad', 'TopPad', 
+            'RightTopPad', 'RightPad',
+            'RightBottomPad', 'BottomPad',
+            'LeftBottomPad', 'LeftPad',
+            'LeftTopPad'
         ]:
             raise ValueError('Invalid electrode name.')
 

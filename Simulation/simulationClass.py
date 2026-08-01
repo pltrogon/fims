@@ -664,18 +664,21 @@ class FIMS_Simulation:
     def runCapacitance(self):
         """
         Solves the capacitance matrix for the geometry using Elmer.
-        Solves for a hexagonal unit celll and all neightboring cells.
+        Solves for a hexagonal unit cell and all neighboring cells.
 
-        Elements are ordered as: #TODO - this may be different order if square
+        Elements are ordered with Cathode, Grid, the central pad, and 
+        then the outer pads in clockwise order, starting with the top: 
             1. Cathode
             2. Grid
-            3. CenterPad
+            3. CentralPad
             4. TopPad
-            5. BottomPad
-            6. TopRightPad
-            7. BottomRightPad
-            8. TopLeftPad
-            9. BottomLeftPad
+            5. RightTopPad
+            6. RightPad     (square unit cell only)
+            7. RightBottomPad
+            8. BottomPad
+            9. LeftBottomPad
+            10. LeftPad     (square unit cell only)
+            11. LeftTopPad
 
         Returns:
             capacitanceMatrix (np.array): The capacitance matrix in fF.
@@ -1049,17 +1052,13 @@ class FIMS_Simulation:
 #**********************************************************************#
     def _printFieldSolution(self, resultsAtField):
         """
-        TODO - Consider if this is better than just printing the raw values (easier
-        to copy + paste)
-        Unused?
-
         Prints the results of the field search in a box format.
-
+        
         Args:
             resultsAtField (dict): Dictionary containing lists of:
                 - field ratios, values, and errors for each iteration. 
         """
-
+        #TODO - Consider if this is better than just printing the raw values (easier to copy + paste)
         dataLabel = list(resultsAtField.keys())[1]
 
         header = '| #     Efield     Efficiency     Low Error     High Error |'
