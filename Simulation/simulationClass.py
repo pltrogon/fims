@@ -109,8 +109,6 @@ class FIMS_Simulation:
             'scale': 'corner' 
         }
         self._runMode = 'hexagoncorner'
-
-        self._filenames = None
         
         self._iterationNumberLimit = 100
         self._fieldLimit = 250
