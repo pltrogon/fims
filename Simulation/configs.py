@@ -12,6 +12,7 @@ class HoleShape(str, Enum):
   HEXAGON = 'hexagon'
   OCTAGON = 'octagon'
   TRIANGLE = 'triangle'
+  KIKI = 'kiki'
   NESTEGGS = 'nesteggs'
   TRIVIALPURSUIT = 'trivialpursuit'
 

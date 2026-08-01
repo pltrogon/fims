@@ -89,37 +89,11 @@ std::pair<double, double> randomXYInHexagon(double sideLength);
 
 /**
  * @brief Generates a random (x,y) point uniformly distributed within a square centered at the origin with the specified side length.
- * @param halfLength Half the length of each side of the square.
+ * @param sideLength Half the length of each side of the square.
  * 
  * @return A pair of doubles representing the (x,y) coordinates of the random point.
  */
-std::pair<double, double> randomXYInSquare(double halfLength);
-
-/**
- * @brief Generates a random (x,y) point uniformly distributed within the unit cell
- * @param mode The GeometryMode of the unit cell.
- * @param sideLength The side length of the geometry
- * 
- * @return A pair of doubles representing the (x,y) coordinates of the random point.
- */
-std::pair<double, double> randomXYinGeometry(GeometryMode mode, double length);
-
-/**
- * @brief Utility to temporarily silence std::cerr.
- */
-class SilenceCerr {
-public:
-    SilenceCerr();
-    ~SilenceCerr();
-
-    // Disable copying to prevent multiple objects fighting over the same buffer
-    SilenceCerr(const SilenceCerr&) = delete;
-    SilenceCerr& operator=(const SilenceCerr&) = delete;
-
-private:
-    std::streambuf* m_oldBuffer;
-    std::ofstream m_nullStream;
-};
+std::pair<double, double> randomXYInSquare(double sideLength);
 
 /**
  * Initializes a Garfield++ gas mixture with the provided parameters.
@@ -177,5 +151,31 @@ enum class EfficiencyMode {
  * @return The corresponding EfficiencyMode enum value.
  */
 EfficiencyMode stringToEfficiencyMode(std::string str);
+
+/**
+ * @brief Generates a random (x,y) point uniformly distributed within the unit cell
+ * @param mode The GeometryMode of the unit cell.
+ * @param sideLength The side length of the geometry
+ * 
+ * @return A pair of doubles representing the (x,y) coordinates of the random point.
+ */
+std::pair<double, double> randomXYinGeometry(GeometryMode mode, double sideLength);
+
+/**
+ * @brief Utility to temporarily silence std::cerr.
+ */
+class SilenceCerr {
+public:
+    SilenceCerr();
+    ~SilenceCerr();
+
+    // Disable copying to prevent multiple objects fighting over the same buffer
+    SilenceCerr(const SilenceCerr&) = delete;
+    SilenceCerr& operator=(const SilenceCerr&) = delete;
+
+private:
+    std::streambuf* m_oldBuffer;
+    std::ofstream m_nullStream;
+};
 
 #endif // MY_FUNCTIONS_H

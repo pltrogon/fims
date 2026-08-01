@@ -75,14 +75,14 @@ std::pair<double, double> randomXYInHexagon(double sideLength) {
 
 /**
  * @brief Generates a random (x,y) point uniformly distributed within a square centered at the origin with the specified side length.
- * @param halfSide half the length of each side of the square.
+ * @param sideLength half the length of each side of the square.
  * 
  * @return A pair of doubles representing the (x,y) coordinates of the random point.
  */
-std::pair<double, double> randomXYInSquare(double halfSide) {
+std::pair<double, double> randomXYInSquare(double sideLength) {
     // Uniform sample in box
-    double sampleX = symmetricUnit() * halfSide;
-    double sampleY = symmetricUnit() * halfSide;
+    double sampleX = symmetricUnit() * sideLength;
+    double sampleY = symmetricUnit() * sideLength;
     return {sampleX, sampleY};
 }
 
@@ -93,15 +93,15 @@ std::pair<double, double> randomXYInSquare(double halfSide) {
  * 
  * @return A pair of doubles representing the (x,y) coordinates of the random point.
  */
-std::pair<double, double> randomXYinGeometry(GeometryMode mode, double length) {
+std::pair<double, double> randomXYinGeometry(GeometryMode mode, double sideLength) {
     switch (mode) {
         case GeometryMode::Square:
         case GeometryMode::SquareSurrounding:
-            return randomXYInSquare(length);
+            return randomXYInSquare(sideLength);
 
         case GeometryMode::Hexagonal:
         case GeometryMode::HexagonalSurrounding:
-            return randomXYInHexagon(length);
+            return randomXYInHexagon(sideLength);
 
         case GeometryMode::Unknown:
         default:

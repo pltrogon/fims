@@ -84,10 +84,10 @@ class geometryClass:
         # Find bounds of the unit cell
         inRadius = self._param['pitch'] / 2
 
-        hexCell = self._geoConfiguration.unitCell == UnitCell.HEXAGON
+        hexCell = self._geoConfig.unitCell == UnitCell.HEXAGON
 
         # Find scaling of the hole size
-        match self._geoConfiguration.holeShape:
+        match self._geoConfig.holeShape:
             case HoleShape.HEXAGON:
                 holeScale = math.sqrt(3) / 2 if hexCell else 1.0
 
@@ -95,7 +95,9 @@ class geometryClass:
                 holeScale = (
                     1.00863 if hexCell else math.cos(math.radians(22.5))
                 )
-
+            case HoleShape.KIKI:
+                holeScale = (2/math.sqrt(3) if hexCell else 1) 
+            
             case HoleShape.TRIVIALPURSUIT:
                 holeScale = 2.2
 
@@ -106,7 +108,7 @@ class geometryClass:
                 holeScale = 1.0
 
         # Find scaling of the pad size
-        match self._geoConfiguration.padShape:
+        match self._geoConfig.padShape:
             case PadShape.SQUARE:
                 padScale = (
                     1 / (2 * math.cos(math.radians(60))) if hexCell else 0.5
@@ -166,8 +168,8 @@ class geometryClass:
         Generates the SIF files for Elmer based on the created geometry.
         """
         runOption = (
-            self._geoConfig.unitCell.value 
-            + self._geoConfig.scale.value
+            self._geoConfig.UnitCell.value 
+            + self._geoConfig.ScaleOption.value
         )
         
         self._elmerClass = elmerClass(
@@ -325,7 +327,13 @@ class gmshClass:
                 
             case 'triangle':
                 centerGridHole = self._createTriangle(
-                    holeRadius, -gridThickness/2, gridThickness,
+                    holeRadius, -gridThickness/2, gridThickness
+                )
+                gridHoleTools = [(3, centerGridHole)]
+            
+            case 'kiki':
+                centerGridHole = self._createStar(
+                    holeRadius, holeRadius/3, -gridThickness/2, gridThickness
                 )
                 gridHoleTools = [(3, centerGridHole)]
                 
@@ -900,7 +908,7 @@ class gmshClass:
         Extrudes it in the z-direction if zDist is provided.
 
         Args:
-            sideLength (float): The side length of the triangle.
+            outRadius (float): The side length of the triangle.
             z (float): The z-coordinate of the triangle.
             zDist (float): The distance to extrude the triangle in the z-direction. 
         If None, the triangle will remain a 2D surface.
@@ -921,6 +929,54 @@ class gmshClass:
         lines = []
         for i in range(3):
             inLine = self._occ.addLine(points[i], points[(i+1)%3])
+            lines.append(inLine)
+
+        loop = self._occ.addCurveLoop(lines)
+        surface = self._occ.addPlaneSurface([loop])
+        if zDist is not None:
+            hexagon = self._occ.extrude(
+                [(2, surface)],
+                0, 0, zDist
+            )
+            return hexagon[1][1]
+        else:
+            return surface
+        
+#**********************************************************************#
+    def _createStar(self, outRadius, inRadius, z, zDist=None, numPoints=6):
+        """
+        Makes an equilateral triangle in the xy-plane with the center at the origin.
+        Extrudes it in the z-direction if zDist is provided.
+
+        Args:
+            outRadius (float): The length of the far points measured from the center of the star.
+            inRadius (float): The length of the inner points measured from the center of the star.
+            z (float): The z-coordinate of the star.
+            zDist (float): The distance to extrude the triangle in the z-direction. 
+        If None, the triangle will remain a 2D surface.
+            numPoints (int): Number of far points the star has.
+        
+        returns:
+            surface: geometry object
+        """
+        points = []
+        numPoints *= 2
+        angleBetween = 360/numPoints
+        for i in range(numPoints):
+            netAngle = math.radians(i*angleBetween)
+            if i % 2 == 0:
+                x = outRadius*math.cos(netAngle)
+                y = outRadius*math.sin(netAngle)
+            else:
+                x = inRadius*math.cos(netAngle)
+                y = inRadius*math.sin(netAngle)
+
+            inPoint = self._occ.addPoint(x, y, z)
+            points.append(inPoint)
+
+        lines = []
+        for i in range(numPoints):
+            inLine = self._occ.addLine(points[i], points[(i+1)%numPoints])
             lines.append(inLine)
 
         loop = self._occ.addCurveLoop(lines)
@@ -1377,10 +1433,10 @@ class gmshClass:
             geoConfig (dict): The run options for the geometry.
             runGUI (bool): Whether to launch the Gmsh GUI.
         """
-        self._unitCell = geoConfig['unitCell']
-        self._scale = geoConfig['scale']
-        self._holeShape = geoConfig['holeShape']
-        self._padShape = geoConfig['padShape']
+        self._unitCell = geoConfig.unitCell
+        self._scale = geoConfig.scale
+        self._holeShape = geoConfig.holeShape
+        self._padShape = geoConfig.padShape
         
         filePath = 'Geometry'
         filename = os.path.join(filePath, f'{self._unitCell}{self._scale}.msh')
