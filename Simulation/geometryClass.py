@@ -415,10 +415,10 @@ class gmshClass:
         
         # Adjust grid size to match scale
         match self._geoConfig.scale:
-            case 'single':
+            case ScaleOption.SINGLE:
                 adjustedGrid = [(3, gridBox)]
             
-            case 'corner':
+            case ScaleOption.CORNER:
                 # Remove unit cell box and replace it with just the corner.
                 self._occ.remove([(3, gridBox)], recursive=True)
                 cornerGrid = self._occ.addBox(
@@ -427,14 +427,14 @@ class gmshClass:
                 )
                 adjustedGrid = [(3, cornerGrid)]
 
-            case 'surrounding':
+            case ScaleOption.SURROUNDING:
                 adjustedGrid = self._copyToSurrounding((3, gridBox))
                 surroundingHoleList = []
                 for hole in gridHoleTools:
                     surroundingHoleList.append(self._copyToSurrounding(hole, fuse=False))
                 gridHoleTools += surroundingHoleList[0]
             
-            case 'half':
+            case ScaleOption.HALF:
                 self._occ.remove([(3, gridBox)], recursive=True)
                 halfBox = self._occ.addBox(
                     -xLength, -yLength, -gridThickness/2,
@@ -444,7 +444,11 @@ class gmshClass:
                 surroundingHoleList = []
                 for hole in gridHoleTools:
                     surroundingHoleList.append(self._copyToSurrounding(hole, fuse=False))
+
                 gridHoleTools += surroundingHoleList[0]
+
+            case _:
+                pass
         
         # Duplicate into surrounding cells
         gridVolume, _ = self._occ.cut(
@@ -470,28 +474,30 @@ class gmshClass:
         thicknessSiO2 = self._param['thicknessSiO2'] + padThickness
         padBase = -self._param['gridStandoff'] - padThickness - self._param['gridThickness']/2
         yLength = pitch
-        
-        # Determine if the unit cell is hexagonal or not.
-        if self._geoConfig.unitCell == UnitCell.HEXAGON:
-            xLength = pitch*math.sqrt(3)/2
-            # Create a dielectric without holes
-            dielectricBox = self._createHexagon(
-                xLength/3, padBase, thicknessSiO2
-            )
-        
-        else:
-            xLength = pitch
-            # Create a dielectric without holes
-            dielectricBox = self._occ.addBox(
-                -xLength/2, -yLength/2, padBase, 
-                xLength, yLength, thicknessSiO2
-            )
+
+        # Create a dielectric without holes
+        match self._geoConfig.unitCell:
+            case UnitCell.HEXAGON:
+                xLength = pitch*math.sqrt(3)/2
+                dielectricBox = self._createHexagon(
+                    xLength/3, padBase, thicknessSiO2
+                )
+
+            case UnitCell.SQUARE:
+                xLength = pitch
+                dielectricBox = self._occ.addBox(
+                    -xLength/2, -yLength/2, padBase, 
+                    xLength, yLength, thicknessSiO2
+                )
+
+            case _:
+                pass
             
         match self._geoConfig.scale:
-            case 'single':
+            case ScaleOption.SINGLE:
                 adjustedDielectric = [(3, dielectricBox)]
             
-            case 'corner':
+            case ScaleOption.CORNER:
                 # Remove unit cell box and replace it with just the corner.
                 self._occ.remove([(3, dielectricBox)], recursive=True)
                 cornerDielectric = self._occ.addBox(
@@ -500,11 +506,11 @@ class gmshClass:
                 )
                 adjustedDielectric = [(3, cornerDielectric)]
                 
-            case 'surrounding':
+            case ScaleOption.SURROUNDING:
                 # Create surrounding dielectric
                 adjustedDielectric = self._copyToSurrounding((3, dielectricBox))
             
-            case 'half':
+            case ScaleOption.HALF:
                 self._occ.remove([(3, dielectricBox)], recursive=True)
                 halfBox = self._occ.addBox(
                     -xLength, -yLength, padBase,
@@ -514,8 +520,7 @@ class gmshClass:
                 
         # Determine hole and pad shape
         match self._geoConfig.padShape:
-            case 'square':
-                # Add central pad hole
+            case PadShape.SQUARE:
                 centerPadHole = self._occ.addBox(
                     -padLength/2, -padLength/2, padBase,
                     padLength, padLength, thicknessSiO2
@@ -526,19 +531,22 @@ class gmshClass:
                     padLength, padLength, padThickness
                 )
                 
-            case 'hexagon':
+            case PadShape.HEXAGON:
                 # Add central pad hole
                 centerPadHole = self._createHexagon(padLength, padBase, thicknessSiO2)
                 
                 # Add central readout pad object
                 centerPad = self._createHexagon(padLength, padBase, padThickness)
                 
-            case 'octagon':
+            case PadShape.OCTAGON:
                 # Add central pad hole
                 centerPadHole = self._createOctagon(padLength, padBase, thicknessSiO2)
                 
                 # Add central readout pad object
                 centerPad = self._createOctagon(padLength, padBase, padThickness)
+
+            case _:
+                pass
         
         # Create pads and tools for dielectric holes
         padHoleTools = self._copyToSurrounding((3, centerPadHole), fuse=False)
@@ -581,39 +589,41 @@ class gmshClass:
         gasHeight = cathodeHeight + gridStandoff
         yLength = pitch
         
-        # Check unit cell shape
-        if self._geoConfig.unitCell == UnitCell.HEXAGON:
-            xLength = pitch*math.sqrt(3)/2
-            # Create a volume object for the gas
-            gasBox = self._createHexagon(
-                xLength/3, -gridStandoff, gasHeight
-            )
-            
-            # Create the cathode surface
-            cathodeSurface = self._createHexagon(
-                xLength/3, cathodeHeight
-            )
-            
-        else:
-            xLength = pitch
-            # Create a volume object for the gas
-            gasBox = self._occ.addBox(
-                -xLength/2, -yLength/2, -gridStandoff,
-                xLength, yLength, gasHeight
-            )
-            
-            # Create the cathode surface
-            cathodeSurface = self._occ.addRectangle(
-                -xLength/2, -yLength/2, cathodeHeight,
-                xLength, yLength
-            )
+        # Create a volume object for the gas
+        # Then create the cathode surface
+        match self._geoConfig.unitCell:
+            case UnitCell.HEXAGON:
+                xLength = pitch*math.sqrt(3)/2
+                # Create a volume object for the gas
+                gasBox = self._createHexagon(
+                    xLength/3, -gridStandoff, gasHeight
+                )
+                
+                # Create the cathode surface
+                cathodeSurface = self._createHexagon(
+                    xLength/3, cathodeHeight
+                )
+                
+            case UnitCell.SQUARE: 
+                xLength = pitch
+                gasBox = self._occ.addBox(
+                    -xLength/2, -yLength/2, -gridStandoff,
+                    xLength, yLength, gasHeight
+                )
+                
+                cathodeSurface = self._occ.addRectangle(
+                    -xLength/2, -yLength/2, cathodeHeight,
+                    xLength, yLength
+                )
+            case _:
+                pass
         
         match self._geoConfig.scale:
-            case 'single':
+            case ScaleOption.SINGLE:
                 adjustedGas = [(3, gasBox)]
                 adjustedCathode = [(2, cathodeSurface)]
 
-            case 'corner':
+            case ScaleOption.CORNER:
                 # Create corner gas
                 self._occ.remove([(3, gasBox)], recursive=True)
                 cornerGas = self._occ.addBox(
@@ -630,12 +640,12 @@ class gmshClass:
                 )
                 adjustedCathode = [(2, cornerCathode)]
 
-            case 'surrounding':
+            case ScaleOption.SURROUNDING:
                 # Create surrounding gas
                 adjustedGas = self._copyToSurrounding((3, gasBox))
                 adjustedCathode = self._copyToSurrounding((2, cathodeSurface))
             
-            case 'half':
+            case ScaleOption.HALF:
                 # Create half gas
                 self._occ.remove([(3, gasBox)], recursive=True)
                 halfBox = self._occ.addBox(
@@ -651,6 +661,9 @@ class gmshClass:
                     2*xLength, 2*yLength
                 )
                 adjustedCathode = [(2, halfCathode)]
+
+            case _:
+                pass
                                 
         # Remove non-gas volumes from the gas box
         gasVolume, _ = self._occ.cut(
@@ -679,30 +692,35 @@ class gmshClass:
             fullGeometry: the geometry elements post duplication.
         Note: given as a list of elements if fuse = False.
         """
-        if self._geoConfig.unitCell == UnitCell.HEXAGON:
-            xLength = self._param['pitch']*math.sqrt(3)
-            yLength = self._param['pitch']
-            neighborCenters = [
-                (0, yLength), #Top
-                (xLength/2, yLength/2), #Top-Right
-                (xLength/2, -yLength/2), #Bottom-Right
-                (0, -yLength), #Bottom
-                (-xLength/2, -yLength/2), #Bottom-Left
-                (-xLength/2, yLength/2) #Top-Left
-            ]
-        else:
-            xLength = self._param['pitch']
-            yLength = self._param['pitch']
-            neighborCenters = [
-                (0, yLength), # Top
-                (xLength, yLength), # Top-Right
-                (xLength, 0), # Right
-                (xLength, -yLength), # Bottom-Right
-                (0, -yLength), # Bottom
-                (-xLength, -yLength), #Bottom-Left
-                (-xLength, 0), # Left
-                (-xLength, yLength) # Top-Left
-            ]
+        match self._geoConfig.unitCell:
+            case UnitCell.HEXAGON:
+                xLength = self._param['pitch']*math.sqrt(3)
+                yLength = self._param['pitch']
+                neighborCenters = [
+                    (xLength/2, yLength/2), #Top-Right
+                    (xLength/2, -yLength/2), #Bottom-Right
+                    (0, -yLength), #Bottom
+                    (-xLength/2, -yLength/2), #Bottom-Left
+                    (-xLength/2, yLength/2), #Top-Left
+                    (0, yLength) #Top
+                ]
+
+            case UnitCell.SQUARE:
+                xLength = self._param['pitch']
+                yLength = self._param['pitch']
+                neighborCenters = [
+                    (xLength, yLength), # Top-Right
+                    (xLength, 0), # Right
+                    (xLength, -yLength), # Bottom-Right
+                    (0, -yLength), # Bottom
+                    (-xLength, -yLength), #Bottom-Left
+                    (-xLength, 0), # Left
+                    (-xLength, yLength), # Top-Left
+                    (0, yLength) # Top
+                ]
+        
+            case _:
+                pass            
         
         # Create and fuse surrounding geometry
         fullGeometry = []
@@ -752,13 +770,13 @@ class gmshClass:
         if scale == ScaleOption.SURROUNDING or scale == ScaleOption.HALF:
             if unitCell == UnitCell.SQUARE:
                 surroundingNames = [
-                    'TopPad', 'RightTopPad', 'RightPad', 'RightBottomPad',
-                    'BottomPad', 'LeftBottomPad', 'LeftPad', 'LeftTopPad'
+                    'RightTopPad', 'RightPad', 'RightBottomPad', 'BottomPad',
+                    'LeftBottomPad', 'LeftPad', 'LeftTopPad', 'TopPad'
                 ]
             elif unitCell == UnitCell.HEXAGON:
                 surroundingNames = [
-                    'TopPad', 'RightTopPad', 'RightBottomPad', 
-                    'BottomPad', 'LeftBottomPad', 'LeftTopPad'
+                    'RightTopPad', 'RightBottomPad', 'BottomPad',
+                    'LeftBottomPad', 'LeftTopPad', 'TopPad'
                 ]
             else:
                 raise ValueError(f"Unsupported unit cell: '{unitCell}'")
@@ -972,13 +990,13 @@ class gmshClass:
         
         allSquarePads = [
             'CentralPad',
-            'TopPad', 'RightTopPad', 'RightPad', 'RightBottomPad', 
-            'BottomPad', 'LeftBottomPad', 'LeftPad', 'LeftTopPad'
+            'RightTopPad', 'RightPad', 'RightBottomPad', 'BottomPad',
+            'LeftBottomPad', 'LeftPad', 'LeftTopPad', 'TopPad'
         ]
         allHexPads = [
             'CentralPad', 
-            'TopPad', 'RightTopPad','RightBottomPad', 
-            'BottomPad', 'LeftBottomPad','LeftTopPad'
+            'RightTopPad','RightBottomPad', 'BottomPad',
+            'LeftBottomPad','LeftTopPad', 'TopPad'
         ]
 
         # Determine active pads based on unit cell and scale
@@ -1393,16 +1411,18 @@ class elmerClass:
     Can optionally calculate the capacitance matrix for the geometry.
     """
 
-    def __init__(self, runOption, capacitance=False):
+    def __init__(self, geoConfig, capacitance=False):
         """
         Initializes the elmerClass instance.
         
         Args:
-            runOption (str): The run option for the simulation.
+            geoConfig (str): The run option for the simulation.
             capacitance (bool): Whether to calculate the capacitance matrix.
         """
 
-        self._runOption = runOption
+        self._runOption = (
+            self._geoConfig.unitCell.value + self._geoConfig.scale.value
+        )
         self._setElectrodeMap()
             
         self._capacitance = capacitance
@@ -1437,47 +1457,40 @@ class elmerClass:
             1: 'Cathode', 2: 'Grid', 3: 'CentralPad'
         }
 
-        match self._runOption:
-            case 'squarecorner':
-                pass
-            
-            case 'squaresingle':
-                pass
-            case 'squarehalf':
-                self._electrodeMap.update({
-                    4: 'TopPad', 5: 'RightTopPad', 6: 'RightPad',
-                    7: 'RightBottomPad', 8: 'BottomPad', 9: 'LeftBottomPad',
-                    10: 'LeftPad', 11: 'LeftTopPad'
-                })
+        unitCell = self._geoConfig.unitCell
+        scale = self._geoConfig.scale
+
+        if unitCell == UnitCell.SQUARE:
+            match scale:
+                case ScaleOption.CORNER | ScaleOption.SINGLE:
+                    pass
+                    
+                case ScaleOption.HALF | ScaleOption.SURROUNDING:
+                    self._electrodeMap.update({
+                        4: 'RightTopPad', 5: 'RightPad', 6: 'RightBottomPad',
+                        7: 'BottomPad', 8: 'LeftBottomPad', 9: 'LeftPad', 
+                        10: 'LeftTopPad', 11: 'TopPad'
+                    })
+                case _:
+                    pass
+
+        elif unitCell == UnitCell.HEXAGON:
+            match scale:
+                case ScaleOption.CORNER:
+                    self._electrodeMap.update({4: 'RightTopPad'})
+                case ScaleOption.SINGLE:
+                    pass
+                case ScaleOption.HALF | ScaleOption.SURROUNDING:
+                    self._electrodeMap.update({
+                        4: 'RightTopPad', 5: 'RightBottomPad',
+                        6: 'BottomPad', 7: 'LeftBottomPad',
+                        8: 'LeftTopPad', 9: 'TopPad'
+                    })
+                case _:
+                    pass
+        else:
+            raise ValueError('Invalid run option.')
                 
-            case 'squaresurrounding':
-                self._electrodeMap.update({
-                    4: 'TopPad', 5: 'RightTopPad', 6: 'RightPad',
-                    7: 'RightBottomPad', 8: 'BottomPad', 9: 'LeftBottomPad',
-                    10: 'LeftPad', 11: 'LeftTopPad'
-                })
-
-            case 'hexagoncorner':
-                self._electrodeMap.update({4: 'RightTopPad'})
-
-            case 'hexagonsingle':
-                pass
-            
-            case 'hexagonhalf':
-                self._electrodeMap.update({
-                    4: 'TopPad', 5:'RightTopPad', 6: 'RightBottomPad',
-                    7: 'BottomPad', 8: 'LeftBottomPad', 9: 'LeftTopPad'
-                })
-
-            case 'hexagonsurrounding':
-                self._electrodeMap.update({
-                    4: 'TopPad', 5: 'RightTopPad', 
-                    6: 'RightBottomPad', 7: 'BottomPad',
-                    8: 'LeftBottomPad', 9: 'LeftTopPad' 
-                })
-
-            case _:
-                raise ValueError('Invalid run option.')
         
         # Create list of pad names for volume allotment
         self._padList = [self._electrodeMap[key] for key in self._electrodeMap if key not in [1, 2]] 
@@ -1938,11 +1951,11 @@ class elmerClass:
 
         if electrode not in [
             'Cathode', 'Grid', 
-            'CentralPad', 'TopPad', 
-            'RightTopPad', 'RightPad',
-            'RightBottomPad', 'BottomPad',
-            'LeftBottomPad', 'LeftPad',
-            'LeftTopPad'
+            'CentralPad', 'RightTopPad',
+            'RightPad', 'RightBottomPad',
+            'BottomPad', 'LeftBottomPad',
+            'LeftPad', 'LeftTopPad',
+            'TopPad'
         ]:
             raise ValueError('Invalid electrode name.')
 
