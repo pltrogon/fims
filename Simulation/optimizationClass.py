@@ -238,20 +238,23 @@ class FIMS_Optimizer:
         '''
         Note: assumes initially that all parameters are on the left side of the equation.
         Shape constants:
-            Hex unit cell: circle = 2, square = 4/math.sqrt(3), hexagon = math.sqrt(3), octagon = 1.9601 
+            Hex unit cell: circle = 2, square = 4/math.sqrt(3), hexagon = math.sqrt(3), octagon = 2.0173
             square unit cell: circle = 2, square = 1, hexagon = 2, octagon = 2*cos(67.5)
-            Note: octagon length defined as distance from center to vertex.
-            Distance: d = 1/(cos(theta)*(1+tan(phi)*tan(theta)) ) ~ 0.980025. 
-            Angles: Theta = 30 - 45/2 = 7.5 degrees. phi = 180 - 90 - 135/2 = 12.5 degrees.
+            Note: octagon length defined as distance from center to vertex. 
         '''
         
         # Shape scaling factors lookup
         octagonFactor = 2 * math.cos(math.radians(67.5))
-    
+        kikiFactor = math.sqrt(3)
+
         holeShapeFactors = {
             'circle':  (-2, -2),
             'hexagon': (-math.sqrt(3), -2),
-            'octagon': (-1.9601, -octagonFactor),
+            'octagon': (-2.0173, -octagonFactor),
+            'triangle': (-2, -2),
+            'kiki': (-math.sqrt(3), -2),
+            'nesteggs': (-7.1, -7.1),
+            'trivialpursuit': (-4.4, -4.4)
         }
     
         padShapeFactors = {

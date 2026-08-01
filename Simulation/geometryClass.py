@@ -96,7 +96,7 @@ class geometryClass:
                     1.00863 if hexCell else math.cos(math.radians(22.5))
                 )
             case HoleShape.KIKI:
-                holeScale = (2/math.sqrt(3) if hexCell else 1) 
+                holeScale = math.sqrt(3) / 2 if hexCell else 1.0
             
             case HoleShape.TRIVIALPURSUIT:
                 holeScale = 2.2
