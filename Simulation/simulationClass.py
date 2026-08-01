@@ -670,7 +670,7 @@ class FIMS_Simulation:
         Solves the capacitance matrix for the geometry using Elmer.
         Solves for a hexagonal unit celll and all neightboring cells.
 
-        Elements are ordered as:
+        Elements are ordered as: #TODO - this may be different order if square
             1. Cathode
             2. Grid
             3. CenterPad
@@ -689,12 +689,10 @@ class FIMS_Simulation:
         
         # Create surrounding-cell geometry
         self._geoConfiguration.scale = ScaleOption.SURROUNDING
-        self._geoCapacitance = geometryClass(self._param)
-        self._geoCapacitance.setGeometryConfiguration(self._geoConfiguration)
-        self._geoCapacitance.buildGeometry()
+        self._generateGeometry()
 
         # Solve the capacitance matrix
-        self._geoCapacitance.calculateEFields(capacitance=True)
+        self._geometry.calculateEFields(capacitance=True)
 
         # Read the capacitance matrix from the Elmer output file
         capacitanceMatrix = self._readCapacitanceMatrix()
