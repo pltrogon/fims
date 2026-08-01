@@ -49,6 +49,8 @@ class geometryClass:
         self._param = inputParam
         self._geoConfig = geoConfig
         self._runGUI = False
+
+        self._runOption = self._geoConfig.unitCell.value + self._geoConfig.scale.value
         
         return
 
@@ -82,12 +84,11 @@ class geometryClass:
                 raise ValueError(f"Error - '{key}' must be positive.")
 
         # Find bounds of the unit cell
-        inRadius = self._param['pitch'] / 2
-
-        hexCell = self._geoConfiguration.unitCell == UnitCell.HEXAGON
+        inRadius = self._param['pitch'] / 2.0
+        hexCell = self._geoConfig.unitCell == UnitCell.HEXAGON
 
         # Find scaling of the hole size
-        match self._geoConfiguration.holeShape:
+        match self._geoConfig.holeShape:
             case HoleShape.HEXAGON:
                 holeScale = math.sqrt(3) / 2 if hexCell else 1.0
 
@@ -106,7 +107,7 @@ class geometryClass:
                 holeScale = 1.0
 
         # Find scaling of the pad size
-        match self._geoConfiguration.padShape:
+        match self._geoConfig.padShape:
             case PadShape.SQUARE:
                 padScale = (
                     1 / (2 * math.cos(math.radians(60))) if hexCell else 0.5
@@ -151,11 +152,8 @@ class geometryClass:
         print('\tBuilding geometry...')
     
         self._checkParameters()
-        self._gmshClass = gmshClass(self._param)
-        self._gmshClass.generateMesh(
-            geoConfig=self._geoConfig,
-            runGUI=self._runGUI,
-        )
+        self._gmshClass = gmshClass(self._param, self._geoConfig)
+        self._gmshClass.generateMesh(runGUI=self._runGUI)
 
         return
 
@@ -165,18 +163,12 @@ class geometryClass:
         """
         Generates the SIF files for Elmer based on the created geometry.
         """
-        runOption = (
-            self._geoConfig.unitCell.value 
-            + self._geoConfig.scale.value
-        )
         
-        self._elmerClass = elmerClass(
-            runOption, capacitance=False
-        )
+        self._elmerClass = elmerClass(sel._runOption, capacitance=False)
 
         if capacitance:
             self._elmerClassCapacitance = elmerClass(
-                runOption, capacitance=True
+                self._runOption, capacitance=True
             )
 
         return
@@ -251,7 +243,7 @@ class gmshClass:
     """
 
 #**********************************************************************#
-    def __init__(self, inputParams=None):
+    def __init__(self, inputParams=None, geoConfig=None):
         """
         Initializes the gmshClass instance with the given parameters.
 
@@ -262,11 +254,11 @@ class gmshClass:
     
         self._occ = gmsh.model.occ
         self._param = inputParams
-        
-        self._unitCell = 'hexagon'
-        self._scale = 'corner'
-        self._holeShape = 'circle'
-        self._padShape = 'hexagon'
+        self._geoConfig = geoConfig
+
+        self._runOption = (
+            self._geoConfig.unitCell.value + self._geoConfig.scale.value
+        )
 
         return
 
@@ -1197,6 +1189,39 @@ class gmshClass:
 
         return refinementLines
 
+# **********************************************************************#
+    def _getMeshBounds(self):
+        """Calculates X/Y boundary limits for Gmsh box fields."""
+        pitch = self._param['pitch']
+        unitCell = self._geoConfig.unitCell
+        scale = self._geoConfig.scale
+        halfPitch = pitch/2
+
+        # Square Unit Cell
+        if unitCell == UnitCell.SQUARE:
+            match scale:
+                case ScaleOption.CORNER:
+                    return {'x': (0.0, halfPitch), 'y': (0.0, halfPitch)}
+                case ScaleOption.SINGLE:
+                    return {'x': (-halfPitch, halfPitch), 'y': (-halfPitch, halfPitch)}
+                case ScaleOption.HALF | ScaleOption.SURROUNDING:
+                    return {'x': (-pitch, pitch), 'y': (-pitch, pitch)}
+
+        # Hexagonal Unit Cell
+        elif unitCell == UnitCell.HEXAGON:
+            xMax = pitch * math.sqrt(3)/2
+            yMax = halfPitch
+            outRadius = (pitch*math.sqrt(3))/3
+            match scale:
+                case ScaleOption.CORNER:
+                    return {'x': (0.0, xMax), 'y': (0.0, yMax)}
+                case ScaleOption.SINGLE:
+                    return {'x': (-outRadius, outRadius), 'y': (-yMax, yMax)}
+                case ScaleOption.HALF | ScaleOption.SURROUNDING:
+                    return {'x': (-xMax, xMax), 'y': (-yMax, yMax)}
+
+        raise ValueError(f"Unsupported geometry combination.")
+
 #**********************************************************************#
 
     def _setMeshSizes(self):
@@ -1214,9 +1239,6 @@ class gmshClass:
         driftLength = cathodeHeight + gridThickness/2.
         amplificationGap = gridStandoff + gridThickness/2.
         SiO2Height = thicknessSiO2 - gridStandoff - gridThickness/2.
-        xLength = pitch*math.sqrt(3)
-        yLength = pitch
-        outRadius = xLength/3
         
         # FEM region scales
         smallRadius = min(holeRadius, padLength)
@@ -1225,50 +1247,9 @@ class gmshClass:
         vtransitionWidth = driftLength/10.
         refineRadius = (pitch-holeRadius)/2.
         
+        
         # Assign the correct boundary limits to the FEM
-        meshSettings = {
-            'squarecorner': {
-                'x': (0, pitch/2), 
-                'y': (0, pitch/2)
-            },
-            
-            'squaresingle': {
-                'x': (-pitch/2, pitch/2), 
-                'y': (-pitch/2, pitch/2)
-            },
-            
-            'squarehalf': {
-                'x': (-pitch, pitch), 
-                'y': (-pitch, pitch)
-            },
-            
-            'squaresurrounding': {
-                'x': (-pitch, pitch), 
-                'y': (-pitch, pitch)
-            },
-            
-            'hexagoncorner': {
-                'x': (0, xLength/2), 
-                'y': (0, yLength/2)
-            },
-            
-            'hexagonsingle': {
-                'x': (-outRadius, outRadius), 
-                'y': (-yLength/2, yLength/2)
-            },
-            
-            'hexagonhalf': {
-                'x': (-xLength/2, xLength/2), 
-                'y': (-yLength/2, yLength/2)
-            },
-            
-            'hexagonsurrounding': {
-                'x': (-xLength/2, xLength/2), 
-                'y': (-yLength/2, yLength/2)
-            }
-        }
-        runOption = self._unitCell + self._scale
-        bounds = meshSettings[runOption]
+        meshBounds = self._getMeshBounds()
         
         # Create a line from the center of the pad to above the center hole
         pipeBottom = self._occ.addPoint(
@@ -1321,10 +1302,10 @@ class gmshClass:
         gmsh.model.mesh.field.add('Box', 5)
         gmsh.model.mesh.field.setNumber(5, 'VIn', gridMesh)
         gmsh.model.mesh.field.setNumber(5, 'VOut', backgroundMesh)
-        gmsh.model.mesh.field.setNumber(5, 'XMin', bounds['x'][0])
-        gmsh.model.mesh.field.setNumber(5, 'XMax', bounds['x'][1])
-        gmsh.model.mesh.field.setNumber(5, 'YMin', bounds['y'][0])
-        gmsh.model.mesh.field.setNumber(5, 'YMax', bounds['y'][1])
+        gmsh.model.mesh.field.setNumber(5, 'XMin', meshBounds['x'][0])
+        gmsh.model.mesh.field.setNumber(5, 'XMax', meshBounds['x'][1])
+        gmsh.model.mesh.field.setNumber(5, 'YMin', meshBounds['y'][0])
+        gmsh.model.mesh.field.setNumber(5, 'YMax', meshBounds['y'][1])
         gmsh.model.mesh.field.setNumber(5, 'ZMin', -gridThickness/2.)
         gmsh.model.mesh.field.setNumber(5, 'ZMax', gridThickness/2.)
         gmsh.model.mesh.field.setNumber(5, 'Thickness', vtransitionWidth/4.)
@@ -1369,21 +1350,16 @@ class gmshClass:
     
 #**********************************************************************#
 
-    def generateMesh(self, geoConfig, runGUI=False):
+    def generateMesh(self, runGUI=False):
         """
         Generates the mesh for the given run option using Gmsh.
 
         Args:
-            geoConfig (dict): The run options for the geometry.
             runGUI (bool): Whether to launch the Gmsh GUI.
         """
-        self._unitCell = geoConfig['unitCell']
-        self._scale = geoConfig['scale']
-        self._holeShape = geoConfig['holeShape']
-        self._padShape = geoConfig['padShape']
-        
         filePath = 'Geometry'
-        filename = os.path.join(filePath, f'{self._unitCell}{self._scale}.msh')
+        meshFilename = f'{self._runOption}.msh'
+        filename = os.path.join(filePath, meshFilename)
 
         gmsh.initialize()
         gmsh.option.setNumber("General.Terminal", 0)
