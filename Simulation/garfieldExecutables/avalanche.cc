@@ -86,15 +86,15 @@ int main(int argc, char * argv[]) {
 
   std::vector<std::string> sensorList;
   sensorList.push_back("CentralPad");
-  double cellXScale = 1;
-  double cellYScale = 1;
-  double cellLength = 0.;
-  bool hexCell = false;
+  double cellXScale = 1. / sqrt(3.);
+  double cellYScale = 0.5;
+  bool hexCell = true;
+  
   switch(geometryMode){
     case GeometryMode::Square: {
       // Adjust E-Field line generation points
       cellXScale = 0.5;
-      cellYScale = 0.5;
+      hexCell = false;
       break;
     }
     case GeometryMode::SquareSurrounding: {
@@ -109,17 +109,13 @@ int main(int argc, char * argv[]) {
       sensorList.push_back("LeftTopPad");
       // Adjust E-Field line generation points
       cellXScale = 0.5;
-      cellYScale = 0.5;
+      hexCell = false;
       break;
     }
     
     case GeometryMode::Hexagonal: {
       // Add pads to sensor list
       sensorList.push_back("RightTopPad");
-      // Adjust E-Field line generation points
-      cellXScale = 1./sqrt(3.);
-      cellYScale = 0.5;
-      hexCell = true;
       break;
     }
 
@@ -131,10 +127,6 @@ int main(int argc, char * argv[]) {
       sensorList.push_back("RightBottomPad");
       sensorList.push_back("LeftTopPad");
       sensorList.push_back("LeftBottomPad");
-      // Adjust E-Field line generation points
-      cellXScale = 1./sqrt(3.);
-      cellYScale = 0.5;
-      hexCell = true;
       break;
     }
 
@@ -702,7 +694,7 @@ int main(int argc, char * argv[]) {
       attachedElectrons = 0;
       totalIons = 0;
 
-      double cellLength = simParams->pitch*2.*cellXScale;//TODO - James please double-check if i am using cellX correctly here!
+      double cellLength = simParams->pitch*cellXScale;
       auto [x0, y0] = distOnPlane 
         ? randomXYinGeometry(geometryMode, cellLength)
         : std::pair{0.0, 0.0};
