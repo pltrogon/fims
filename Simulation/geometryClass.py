@@ -1508,16 +1508,18 @@ class elmerClass:
     Can optionally calculate the capacitance matrix for the geometry.
     """
 
-    def __init__(self, runOption, capacitance=False):
+    def __init__(self, geoConfig, capacitance=False):
         """
         Initializes the elmerClass instance.
         
         Args:
-            runOption (str): The run option for the simulation.
+            geoConfig (str): The run option for the simulation.
             capacitance (bool): Whether to calculate the capacitance matrix.
         """
 
-        self._runOption = runOption
+        self._runOption = (
+            self._geoConfig.unitCell.value + self._geoConfig.scale.value
+        )
         self._setElectrodeMap()
             
         self._capacitance = capacitance
@@ -1552,48 +1554,40 @@ class elmerClass:
             1: 'Cathode', 2: 'Grid', 3: 'CentralPad'
         }
 
-        match self._runOption:
-            case 'squarecorner':
-                pass
-            
-            case 'squaresingle':
-                pass
-            case 'squarehalf':
-                self._electrodeMap.update({
-                    4: 'TopPad', 5: 'RightTopPad', 6: 'RightPad',
-                    7: 'RightBottomPad', 8: 'BottomPad', 9: 'LeftBottomPad',
-                    10: 'LeftPad', 11: 'LeftTopPad'
-                })
+        unitCell = self._geoConfig.unitCell
+        scale = self._geoConfig.scale
+
+        if unitCell == UnitCell.SQUARE:
+            match scale:
+                case ScaleOption.CORNER | ScaleOption.SINGLE:
+                    pass
+                    
+                case ScaleOption.HALF | ScaleOption.SURROUNDING:
+                    self._electrodeMap.update({
+                        4: 'TopPad', 5: 'RightTopPad', 6: 'RightPad',
+                        7: 'RightBottomPad', 8: 'BottomPad', 9: 'LeftBottomPad',
+                        10: 'LeftPad', 11: 'LeftTopPad'
+                    })
+                case _:
+                    pass
+
+        elif unitCell == UnitCell.HEXAGON:
+            match scale:
+                case ScaleOption.CORNER:
+                    self._electrodeMap.update({4: 'RightTopPad'})
+                case ScaleOption.SINGLE:
+                    pass
+                case ScaleOption.HALF | ScaleOption.SURROUNDING:
+                    self._electrodeMap.update({
+                        4: 'RightTopPad', 5: 'RightBottomPad',
+                        6: 'BottomPad', 7: 'LeftBottomPad',
+                        8: 'LeftTopPad', 9: 'TopPad'
+                    })
+                case _:
+                    pass
+        else:
+            raise ValueError('Invalid run option.')
                 
-            case 'squaresurrounding':
-                self._electrodeMap.update({
-                    4: 'TopPad', 5: 'RightTopPad', 6: 'RightPad',
-                    7: 'RightBottomPad', 8: 'BottomPad', 9: 'LeftBottomPad',
-                    10: 'LeftPad', 11: 'LeftTopPad'
-                })
-
-            case 'hexagoncorner':
-                self._electrodeMap.update({4: 'RightTopPad'})
-
-            case 'hexagonsingle':
-                pass
-            
-            case 'hexagonhalf':
-                self._electrodeMap.update({
-                    4: 'RightTopPad', 5: 'RightBottomPad',
-                    6: 'BottomPad', 7: 'LeftBottomPad',
-                    8: 'LeftTopPad', 9: 'TopPad'
-                })
-
-            case 'hexagonsurrounding':
-                self._electrodeMap.update({
-                    4: 'RightTopPad', 5: 'RightBottomPad',
-                    6: 'BottomPad', 7: 'LeftBottomPad',
-                    8: 'LeftTopPad', 9: 'TopPad'
-                })
-
-            case _:
-                raise ValueError('Invalid run option.')
         
         # Create list of pad names for volume allotment
         self._padList = [self._electrodeMap[key] for key in self._electrodeMap if key not in [1, 2]] 
