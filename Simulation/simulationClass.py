@@ -21,6 +21,8 @@ import copy
 from scipy.optimize import curve_fit
 from scipy.special import expit, logit
 
+from configs import GeometryConfiguration, UnitCell, HoleShape, PadShape, ScaleOption
+
 #Include the analysis object        
 sys.path.insert(1, '../Analysis')
 from runDataClass import runData
@@ -102,12 +104,12 @@ class FIMS_Simulation:
             raise RuntimeError('Error initializing parameters.')
         
         self._geometry = None
-        self.geoConfiguration = {
-            'unitCell': 'hexagon',
-            'holeShape': 'circle',
-            'padShape': 'hexagon',
-            'scale': 'corner' 
-        }
+        self._geoConfiguration = GeometryConfiguration(
+            unitCell=UnitCell.HEXAGON,
+            holeShape=HoleShape.CIRCLE,
+            padShape=PadShape.HEXAGON,
+            scale=ScaleOption.CORNER,
+        )
         self._runMode = 'hexagoncorner'
         
         self._iterationNumberLimit = 100
@@ -183,53 +185,6 @@ class FIMS_Simulation:
         self._checkRunNumber()
                 
         return
-    #**********************************************************************#
-
-    def _checkGeometryConfiguration(self, geoConfiguration):
-        """
-        Checks that the geometry options are valid.
-        
-        args:
-            geoConfiguration (dict): parameters that define the shape and 
-        scale of the simulation geometry.
-        
-        returns:
-            checkDict (dict): verified dictionary with all values set to
-        lower case strings.
-        """
-        # TODO: investigate dataclass for input instead of dictionary.
-        geometryKeys = [
-            'unitCell',
-            'scale',
-            'holeShape',
-            'padShape'
-        ]
-        unitCellOptions = ['square', 'hexagon',]
-        holeOptions = ['circle', 'hexagon', 'octagon', 'triangle', 'nesteggs', 'trivialpursuit']
-        padOptions = ['square', 'hexagon', 'octagon']
-        scaleOptions = ['corner', 'single', 'half', 'surrounding']
-        
-        # Ensure all keys are present
-        for key in geometryKeys:
-            if key not in geoConfiguration:
-                raise ValueError(f"Error - Missing '{key}'")
-        
-        # Ensure lower case input for strings
-        checkDict = {key: str(value).lower() for key, value in geoConfiguration.items()}
-        
-        if checkDict['unitCell'] not in unitCellOptions:
-            raise ValueError(f'Unit cell must be one of {uniCellOptions}.')
-        
-        if checkDict['holeShape'] not in holeOptions:
-            raise ValueError(f'Hole shape must be one of {holeOptions}.')
-        
-        if checkDict['padShape'] not in padOptions:
-            raise ValueError(f'Pad shape must be one of {padOptions}.')
-        
-        if checkDict['scale'] not in scaleOptions:
-            raise ValueError(f'Scale must be one of {scaleOptions}.')
-        
-        return checkDict
 
     #******************************************************************#    
     
@@ -429,15 +384,17 @@ class FIMS_Simulation:
         Sets the geometry for the simulation.
 
         Args:
-            geoConfig (dict): parameters defining the geometry to be generated.
-                unitCell (str): shape of the unit cell.
-                padShape (str): shape of the readout pad.
-                holeShape (str): shape of the grid holes.
-                scale (str): amount of the geometry to generate.
+            geoConfig (GeometryConfiguration): parameters defining the geometry 
+                to be generated.
         """
-        checkedGeo = self._checkGeometryConfiguration(geoConfig)
-        self.geoConfiguration = checkedGeo
-        self._runMode = self.geoConfiguration['unitCell'] + self.geoConfiguration['scale']
+        if not isinstance(geoConfig, GeometryConfiguration):
+            raise TypeError(
+                f"Expected GeometryConfiguration object, got {type(geoConfig).__name__}"
+            )
+        self._geoConfiguration = geoConfig
+        self._runMode = (
+            self._geoConfiguration.unitCell.value + self._geoConfiguration.scale.value
+        )
 
         return
 
@@ -522,8 +479,7 @@ class FIMS_Simulation:
         """
         Generates the geometry for the simulation using the geometryClass.
         """
-        self._geometry = geometryClass(self._param)
-        self._geometry.setGeometryConfiguration(self.geoConfiguration)
+        self._geometry = geometryClass(self._param, self._geoConfiguration)
         self._geometry.buildGeometry()
 
         return        
@@ -533,9 +489,8 @@ class FIMS_Simulation:
         """Generates a geometry and visualizes it using the Gmsh GUI."""
 
         print('Visualizing geometry...')
-        self._geometry = geometryClass(self._param)
+        self._geometry = geometryClass(self._param, self._geoConfiguration)
         self._geometry.setGUI(runGUI=True)
-        self._geometry.setGeometryConfiguration(self.geoConfiguration)
         self._geometry.buildGeometry()
 
         return
@@ -696,7 +651,7 @@ class FIMS_Simulation:
         self._checkParam()
     
         #Generate geometry for surrounding cells
-        self.geoConfiguration['scale'] = 'surrounding'
+        self._geoConfiguration.scale = ScaleOption.SURROUNDING
         self._generateGeometry()
 
         #Solve fields and run Garfield
@@ -711,7 +666,7 @@ class FIMS_Simulation:
         Solves the capacitance matrix for the geometry using Elmer.
         Solves for a hexagonal unit celll and all neightboring cells.
 
-        Elements are ordered as:
+        Elements are ordered as: #TODO - this may be different order if square
             1. Cathode
             2. Grid
             3. CenterPad
@@ -729,13 +684,11 @@ class FIMS_Simulation:
         self._checkParam()
         
         # Create surrounding-cell geometry
-        self.geoConfiguration['scale'] = 'surrounding'
-        self._geoCapacitance = geometryClass(self._param)
-        self._geoCapacitance.setGeometryConfiguration(self.geoConfiguration)
-        self._geoCapacitance.buildGeometry()
+        self._geoConfiguration.scale = ScaleOption.SURROUNDING
+        self._generateGeometry()
 
         # Solve the capacitance matrix
-        self._geoCapacitance.calculateEFields(capacitance=True)
+        self._geometry.calculateEFields(capacitance=True)
 
         # Read the capacitance matrix from the Elmer output file
         capacitanceMatrix = self._readCapacitanceMatrix()
@@ -1252,7 +1205,6 @@ class FIMS_Simulation:
         # Get the run number for this simulation
         runNo = self._param['runNumber']
         print(f'Running simulation - Run number: {runNo}')
-        print('Pad hole: ', self.geoConfiguration['holeShape']) # TODO: remove once verified
         
         # Set the initial field conditions
         initField = 75.

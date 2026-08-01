@@ -11,6 +11,8 @@ import os
 import math
 import gmsh
 
+from configs import GeometryConfiguration, UnitCell, HoleShape, PadShape, ScaleOption
+
 class geometryClass:
     """
     Class to handle the geometry for the FIMS simulation.
@@ -40,16 +42,12 @@ class geometryClass:
 
 #**********************************************************************#
 
-    def __init__(self, inputParam=None):
+    def __init__(self, inputParam=None, geoConfig=None):
         """
+        Initializes a geometryClass instance with parameters and geometry options.
         """
         self._param = inputParam
-        self._geoConfig = {
-            'unitCell': 'hexagon',
-            'holeShape': 'circle',
-            'padShape': 'hexagon',
-            'scale': 'corner',
-        }
+        self._geoConfig = geoConfig
         self._runGUI = False
         
         return
@@ -71,7 +69,7 @@ class geometryClass:
             'thicknessSiO2',
             'pillarRadius',
             'driftField',
-            'fieldRatio'
+            'fieldRatio',
         ]
 
         if self._param is None:
@@ -84,114 +82,55 @@ class geometryClass:
                 raise ValueError(f"Error - '{key}' must be positive.")
 
         # Find bounds of the unit cell
-        inRadius = self._param['pitch']/2
-        
-        if self._geoConfig['unitCell'] == 'hexagon':
-            hexCell = True
-        else:
-            hexCell = False
-        
+        inRadius = self._param['pitch'] / 2
+
+        hexCell = self._geoConfiguration.unitCell == UnitCell.HEXAGON
+
         # Find scaling of the hole size
-        match self._geoConfig['holeShape']:
-            case 'hexagon': 
-                if hexCell:
-                    holeScale = math.sqrt(3)/2
-                else:
-                    holeScale = 1
+        match self._geoConfiguration.holeShape:
+            case HoleShape.HEXAGON:
+                holeScale = math.sqrt(3) / 2 if hexCell else 1.0
 
-            case 'octagon':
-                if hexCell:
-                    holeScale = 1.00863
-                else:
-                    holeScale = math.cos(math.radians(22.5))
-            
-            case 'trivialpursuit':
+            case HoleShape.OCTAGON:
+                holeScale = (
+                    1.00863 if hexCell else math.cos(math.radians(22.5))
+                )
+
+            case HoleShape.TRIVIALPURSUIT:
                 holeScale = 2.2
-            
-            case 'nesteggs':
-                holeScale = 3.55
-            
-            case _:
-                holeScale = 1
-        
-        match self._geoConfig['padShape']:
-            case 'square':
-                if hexCell:
-                    padScale = 1/(2*math.cos(math.radians(60)))
-                else:
-                    padScale = 1/2
-            
-            case 'hexagon': 
-                if hexCell:
-                    padScale = math.sqrt(3)/2
-                else:
-                    padScale = 1
 
-            case 'octagon':
-                if hexCell:
-                    padScale = 1.00863
-                else:
-                    padScale = math.cos(math.radians(22.5))
-        
+            case HoleShape.NESTEGGS:
+                holeScale = 3.55
+
+            case _:
+                holeScale = 1.0
+
+        # Find scaling of the pad size
+        match self._geoConfiguration.padShape:
+            case PadShape.SQUARE:
+                padScale = (
+                    1 / (2 * math.cos(math.radians(60))) if hexCell else 0.5
+                )
+
+            case PadShape.HEXAGON:
+                padScale = math.sqrt(3) / 2 if hexCell else 1.0
+
+            case PadShape.OCTAGON:
+                padScale = (
+                    1.00863 if hexCell else math.cos(math.radians(22.5))
+                )
+
+            case _:
+                padScale = 1.0
+
         # Grid hole must be smaller than the pitch
-        if self._param['holeRadius']*holeScale >= inRadius:
+        if self._param['holeRadius'] * holeScale >= inRadius:
             raise ValueError('Error - Hole size too large relative to cell.')
-        
-        if self._param['padLength']*padScale >= inRadius:
+
+        if self._param['padLength'] * padScale >= inRadius:
             raise ValueError('Error - Pad larger than cell.')
-        
-        # TODO: Pillars are currently not included in the geometry
-        # Check that pillars can fit in the remaining space
-        #padInRadius = self._param['padLength']*math.sqrt(3)/2
-        #padSpace = inRadius - padInRadius
-        #if self._param['pillarRadius'] >= padSpace:
-        #    raise ValueError('Error - Pillar cannot fit.')
 
         return
-
-#**********************************************************************#
-
-    def _checkGeometryOptions(self, geoConfiguration):
-        """
-        Checks that the geometry options are valid.
-        args:
-            geoConfiguration (dict): parameters that define the shape and 
-        scale of the simulation geometry.
-        
-        returns:
-            checkDict (dict): verified dictionary with all values set to
-        lower case strings.
-        """
-        geometryKeys = [
-            'unitCell',
-            'scale',
-            'holeShape',
-            'padShape',
-        ]
-        unitCellOptions = ['square', 'hexagon',]
-        holeOptions = ['circle', 'hexagon', 'octagon', 'triangle', 'nesteggs', 'trivialpursuit']
-        padOptions = ['square', 'hexagon', 'octagon']
-        scaleOptions = ['corner', 'single', 'half', 'surrounding']
-        
-        for key in geometryKeys:
-            if key not in geoConfiguration:
-                raise ValueError(f"Error - Missing '{key}'")
-        
-        # Ensure lower case input for strings
-        checkDict = {key: str(value).lower() for key, value in geoConfiguration.items()}
-        if checkDict['unitCell'] not in unitCellOptions:
-            raise ValueError(f'Unit cell must be one of {uniCellOptions}.')
-        
-        if checkDict['holeShape'] not in holeOptions:
-            raise ValueError(f'Hole shape must be one of {holeOptions}.')
-        
-        if checkDict['padShape'] not in padOptions:
-            raise ValueError(f'Pad shape must be one of {padOptions}.')
-        
-        if checkDict['scale'] not in scaleOptions:
-            raise ValueError(f'Scale must be one of {scaleOptions}.')
-        
-        return  checkDict
 
 #**********************************************************************#
 
@@ -201,24 +140,6 @@ class geometryClass:
         """
         self._runGUI = runGUI
 
-        return
-    
-#**********************************************************************#
-
-    def setGeometryConfiguration(self, geoConfig):
-        """
-        Sets the configuration of the geometry.
-        
-        args: 
-            geoConfig (dict): dictionary with the following optional parameters
-                scale (str): amount of the geometry to generate.
-                holeShape (str): shape of the amplification grid holes.
-                padShape (str): shape of the readout pad.
-                unitCell (str): shape of the unit cell.
-        """
-        checkGeo = self._checkGeometryOptions(geoConfig)
-        self._geoConfig = checkGeo
-        
         return
 
 #**********************************************************************#
@@ -244,7 +165,10 @@ class geometryClass:
         """
         Generates the SIF files for Elmer based on the created geometry.
         """
-        runOption = self._geoConfig['unitCell'] + self._geoConfig['scale']
+        runOption = (
+            self._geoConfig.unitCell.value 
+            + self._geoConfig.scale.value
+        )
         
         self._elmerClass = elmerClass(
             runOption, capacitance=False
@@ -261,6 +185,7 @@ class geometryClass:
 
     def calculateEFields(self, solveWeighting=True, capacitance=False):
         """
+        Executes field solvers based on target simulation mode.
         """
         self._checkParameters()
         self._generateElmerFiles(capacitance=capacitance)
@@ -308,8 +233,8 @@ class geometryClass:
 
         halfGrid = self._param['gridThickness']/2
 
-        driftGap = self._param['cathodeHeight']
-        amplificationGap = self._param['gridStandoff']
+        driftGap = self._param['cathodeHeight'] - halfGrid
+        amplificationGap = self._param['gridStandoff'] - halfGrid
 
         gridVoltage = -1*amplificationField*amplificationGap*MICRONTOCM
         cathodeVoltage = -1*driftField*driftGap*MICRONTOCM + gridVoltage
