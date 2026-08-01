@@ -70,7 +70,36 @@ struct EfficiencyResults {
     double highError;
     double minValue;
     double maxValue;
+};// Geometry mode enumeration and conversion
+enum class GeometryMode {
+    Square,
+    SquareSurrounding,
+    Hexagonal,
+    HexagonalSurrounding,
+    Unknown
 };
+
+/**
+ * @brief Converts a string to a GeometryMode enum value.
+ * @param str The string to convert (case-insensitive).
+ * @return The corresponding GeometryMode enum value.
+ */
+GeometryMode stringToGeometryMode(std::string str);
+
+// Efficiency mode enumeration and conversion
+enum class EfficiencyMode {
+    Net,
+    Detection,
+    Collection,
+    Unknown
+};
+
+/**
+ * @brief Converts a string to an EfficiencyMode enum value.
+ * @param str The string to convert (case-insensitive).
+ * @return The corresponding EfficiencyMode enum value.
+ */
+EfficiencyMode stringToEfficiencyMode(std::string str);
 
 /**
  * Retrieves the current git version/hash.
@@ -146,36 +175,5 @@ std::optional<SimulationParameters> readSimulationParameters();
  * @return Efficiency results {meanValue, lowError, highError, minValue, maxValue}
  */
 EfficiencyResults calculateEfficiencyStats(int nSuccess, int nTotal);
-
-// Geometry mode enumeration and conversion
-enum class GeometryMode {
-    Square,
-    SquareSurrounding,
-    Hexagonal,
-    HexagonalSurrounding,
-    Unknown
-};
-
-/**
- * @brief Converts a string to a GeometryMode enum value.
- * @param str The string to convert (case-insensitive).
- * @return The corresponding GeometryMode enum value.
- */
-GeometryMode stringToGeometryMode(std::string str);
-
-// Efficiency mode enumeration and conversion
-enum class EfficiencyMode {
-    Net,
-    Detection,
-    Collection,
-    Unknown
-};
-
-/**
- * @brief Converts a string to an EfficiencyMode enum value.
- * @param str The string to convert (case-insensitive).
- * @return The corresponding EfficiencyMode enum value.
- */
-EfficiencyMode stringToEfficiencyMode(std::string str);
 
 #endif // MY_FUNCTIONS_H
