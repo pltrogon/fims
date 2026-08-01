@@ -722,7 +722,7 @@ class gmshClass:
             case _:
                 pass            
         
-        # Create and fuse surrounding geometry
+        # Create the surrounding geometry
         fullGeometry = []
         for x, y in neighborCenters:
             newGeo = self._occ.copy([geometry])

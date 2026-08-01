@@ -666,19 +666,18 @@ class FIMS_Simulation:
         Solves the capacitance matrix for the geometry using Elmer.
         Solves for a hexagonal unit cell and all neighboring cells.
 
-        Elements are ordered with Cathode, Grid, the central pad, and 
-        then the outer pads in clockwise order, starting with the top: 
+        Elements are ordered as:
             1. Cathode
             2. Grid
             3. CentralPad
-            4. TopPad
-            5. RightTopPad
-            6. RightPad     (square unit cell only)
-            7. RightBottomPad
-            8. BottomPad
-            9. LeftBottomPad
-            10. LeftPad     (square unit cell only)
-            11. LeftTopPad
+            4. RightTopPad
+            5. RightPad     (square unit cell only)
+            6. RightBottomPad
+            7. BottomPad
+            8. LeftBottomPad
+            9. LeftPad     (square unit cell only)
+            10. LeftTopPad
+            11. TopPad
 
         Returns:
             capacitanceMatrix (np.array): The capacitance matrix in fF.
