@@ -270,32 +270,36 @@ class gmshClass:
         
         returns:
             gridVolume: object representing the volume of the amplification grid.
-        """
+        """        
         # Get relevant geometry parameters
         gridThickness = self._param['gridThickness']
         holeRadius = self._param['holeRadius']
         pitch = self._param['pitch']
         yLength = pitch
-        
-        # Determine if the unit cell is hexagonal or not.
-        if self._unitCell == 'hexagon':
-            # Create single cell grid without holes
-            xLength = pitch*math.sqrt(3)
-            gridBox = self._createHexagon(
-                xLength/3, -gridThickness/2, gridThickness
-            )
+
+        # Create single cell grid without holes
+        match self._geoConfig.unitCell:
+            case UnitCell.HEXAGON:
+                xLength = pitch*math.sqrt(3)
+                gridBox = self._createHexagon(
+                    xLength/3, -gridThickness/2, gridThickness
+                )
+                
+            case UnitCell.SQUARE:
+                xLength = pitch
+                gridBox = self._occ.addBox(
+                    -xLength/2, -yLength/2, -gridThickness/2,
+                    xLength, yLength, gridThickness
+                )
+
+            case _:
+                pass
             
-        else:
-            xLength = pitch
-            # Create single cell grid without holes
-            gridBox = self._occ.addBox(
-                -xLength/2, -yLength/2, -gridThickness/2,
-                xLength, yLength, gridThickness
-            )
-        
+            
         # Create hole cut tool based on given hole shape.
-        match self._holeShape:
-            case 'circle':
+        #TODO - Instead I would love to see a _getCutter()-type method. This can then be used here AND when  cutting the dielectric.
+        match self._geoConfig.holeShape:
+            case HoleShape.CIRCLE:
                 centerGridHole = self._occ.addCylinder(
                     0, 0, -gridThickness/2,
                     0, 0, gridThickness,
@@ -303,25 +307,25 @@ class gmshClass:
                 )
                 gridHoleTools = [(3, centerGridHole)]
                 
-            case 'hexagon':
+            case HoleShape.HEXAGON:
                 centerGridHole = self._createHexagon(
                     holeRadius, -gridThickness/2, gridThickness
                 )
                 gridHoleTools = [(3, centerGridHole)]
                 
-            case 'octagon':
+            case HoleShape.OCTAGON:
                 centerGridHole = self._createOctagon(
                     holeRadius, -gridThickness/2, gridThickness
                 )
                 gridHoleTools = [(3, centerGridHole)]
                 
-            case 'triangle':
+            case HoleShape.TRIANGLE:
                 centerGridHole = self._createTriangle(
                     holeRadius, -gridThickness/2, gridThickness,
                 )
                 gridHoleTools = [(3, centerGridHole)]
                 
-            case 'nesteggs':
+            case HoleShape.NESTEGGS:
                 # Create all holes
                 hole1 = self._occ.addCylinder(
                     0, 0, -gridThickness/2,
@@ -347,7 +351,7 @@ class gmshClass:
                 # Append to list for duplication to surrounding cells
                 gridHoleTools = [(3, hole1), hole2[0], hole3[0], hole4[0], hole5[0], hole6[0]]
             
-            case 'trivialpursuit':
+            case HoleShape.TRIVIALPURSUIT:
                 # Create all holes
                 hole1 = self._createTriangle(
                     holeRadius,
@@ -398,6 +402,9 @@ class gmshClass:
                 
                 # Append to list for duplication to surrounding cells
                 gridHoleTools = [(3, hole1), (3, hole2), (3, hole3), (3, hole4), (3, hole5), (3, hole6)]
+            
+            case _:
+                raise ValueError(f"Unsupported hole shape: '{self._geoConfig.holeShape}'")
         
         # Adjust grid size to match scale
         match self._scale:
@@ -458,7 +465,7 @@ class gmshClass:
         yLength = pitch
         
         # Determine if the unit cell is hexagonal or not.
-        if self._unitCell == 'hexagon':
+        if self._geoConfig.unitCell == UnitCell.HEXAGON:
             xLength = pitch*math.sqrt(3)
             # Create a dielectric without holes
             dielectricBox = self._createHexagon(
@@ -568,7 +575,7 @@ class gmshClass:
         yLength = pitch
         
         # Check unit cell shape
-        if self._unitCell == 'hexagon':
+        if self._geoConfig.unitCell == UnitCell.HEXAGON:
             xLength = pitch*math.sqrt(3)
             # Create a volume object for the gas
             gasBox = self._createHexagon(
@@ -665,7 +672,7 @@ class gmshClass:
             fullGeometry: the geometry elements post duplication.
         Note: given as a list of elements if fuse = False.
         """
-        if self._unitCell == 'hexagon':
+        if self._geoConfig.unitCell == UnitCell.HEXAGON:
             xLength = self._param['pitch']*math.sqrt(3)
             yLength = self._param['pitch']
             neighborCenters = [
@@ -720,6 +727,58 @@ class gmshClass:
             # Append original to list
             fullGeometry.append(geometry)
         return fullGeometry
+
+#**********************************************************************#
+    def _buildCellParts(self):
+        """
+        TODO - Does this make _buildSquareCell and _buildHexagonalCell redundant?
+        """
+
+        # Common volumes
+        dielectricVolume, padVolumes = self._buildDielectric()
+        gridVolume = self._buildGrid()
+        gasVolume, cathodeSurface = self._buildGas(
+            gridVolume, dielectricVolume
+        )
+
+        # Base parts map
+        cellParts = {
+            'Gas': (3, gasVolume[0][1]),
+            'Dielectric': (3, dielectricVolume[0][1]),
+            'Grid': (3, gridVolume[0][1]),
+            'CentralPad': padVolumes[0],
+        }
+
+        unitCell = self._geoConfig.unitCell
+        scale = self._geoConfig.scale
+
+        # Dynamic pad assignment based on unit cell geometry and scale
+        if scale == ScaleOption.SURROUNDING:
+            if unitCell == UnitCell.SQUARE:
+                surroundingNames = [
+                    'TopPad', 'RightTopPad', 'RightPad', 'RightBottomPad',
+                    'BottomPad', 'LeftBottomPad', 'LeftPad', 'LeftTopPad'
+                ]
+            elif unitCell == UnitCell.HEXAGON:
+                surroundingNames = [
+                    'RightTopPad', 'RightBottomPad', 'BottomPad',
+                    'LeftBottomPad', 'LeftTopPad', 'TopPad'
+                ]
+            else:
+                raise ValueError(f"Unsupported unit cell: '{unitCell}'")
+
+            for padName, padVolume in zip(
+                surroundingNames, padVolumes[1:], strict=False
+            ):
+                cellParts[padName] = padVolume
+
+        elif unitCell == UnitCell.HEXAGON and scale == ScaleOption.CORNER:
+            cellParts['RightTopPad'] = padVolumes[1]
+
+        # Cathode must be listed last for Elmer FEM unpacking order
+        cellParts['Cathode'] = cathodeSurface[0]
+
+        return cellParts
 
 #**********************************************************************#
 
@@ -832,15 +891,9 @@ class gmshClass:
         returns:
             entityMap: map of geometry objects and their values
         """
-        allObjects = []
-        match self._unitCell:
-            case 'square':
-                inCell = self._buildSquareCell()
-            
-            case 'hexagon':
-                inCell = self._buildHexagonalCell()
-        
-        allObjects.extend(inCell.values())
+        inCell = self._buildCellParts()
+                
+        allObjects = list(inCell.values())
         _, entityMap = self._occ.fragment(allObjects, [])
         self._occ.synchronize()
 
@@ -972,89 +1025,80 @@ class gmshClass:
         Assigns physical groups to the geometry entities based 
         on their type and location.
         """
-        allHexPads = [
-            'CentralPad', 'RightTopPad', 'RightBottomPad', 
-            'BottomPad', 'LeftBottomPad', 
-            'LeftTopPad', 'TopPad'
-        ]
-        altHexPads = ['CentralPad', 'RightTopPad']
-
-        allSquarePads = [
-            'CentralPad', 'TopPad', 'RightTopPad',
-            'RightPad', 'RightBottomPad', 'BottomPad', 
-            'LeftBottomPad', 'LeftPad', 'LeftTopPad'
-        ]
+        unitCell = self._geoConfig.unitCell
+        scale = self._geoConfig.scale
         
+        allSquarePads = [
+            'CentralPad',
+            'TopPad', 'RightTopPad', 'RightPad', 'RightBottomPad', 
+            'BottomPad', 'LeftBottomPad', 'LeftPad', 'LeftTopPad'
+        ]
+        allHexPads = [
+            'CentralPad',
+            'RightTopPad','RightBottomPad', 'BottomPad',
+            'LeftBottomPad','LeftTopPad','TopPad'
+        ]
+
+        # Determine active pads based on unit cell and scale
+        if unitCell == UnitCell.SQUARE:
+            match scale:
+                case ScaleOption.CORNER | ScaleOption.SINGLE:
+                    padNames = ['CentralPad']
+                case ScaleOption.HALF | ScaleOption.SURROUNDING:
+                    padNames = allSquarePads
+                    
+        elif unitCell == UnitCell.HEXAGON:
+            match scale:
+                case ScaleOption.CORNER:
+                    padNames = ['CentralPad', 'RightTopPad']
+                case ScaleOption.SINGLE:
+                    padNames = ['CentralPad']
+                case ScaleOption.HALF | ScaleOption.SURROUNDING:
+                    padNames = allHexPads
+        else:
+            raise ValueError(f"Unsupported unit cell: '{unitCell}'")
+
+        # Key sequence of expected parts in entityMap
         allVolumes = ['Gas', 'Dielectric', 'Grid']
         otherSurfaces = ['Cathode']
 
-        configuration = {
-            'squarecorner': {
-                'keys': allVolumes + ['CentralPad'] + otherSurfaces,
-                'pads': ['CentralPad']
-            },
-            
-            'squaresingle': {
-                'keys': allVolumes + ['CentralPad'] + otherSurfaces,
-                'pads': ['CentralPad']
-            },
-            
-            'squarehalf': {
-                'keys': allVolumes + allSquarePads + otherSurfaces,
-                'pads': allSquarePads
-            },
-            
-            'squaresurrounding': {
-                'keys': allVolumes + allSquarePads + otherSurfaces,
-                'pads': allSquarePads
-            },
-            
-            'hexagoncorner': {
-                'keys': allVolumes + altHexPads + otherSurfaces,
-                'pads': altHexPads
-            },
-            
-            'hexagonsingle': {
-                'keys': allVolumes + ['centralPad'] + otherSurfaces,
-                'pads': ['centralPad']
-            },
-            
-            'hexagonhalf': {
-                'keys': allVolumes + allHexPads + otherSurfaces,
-                'pads': allHexPads
-            },
-            
-            'hexagonsurrounding': {
-                'keys': allVolumes + allHexPads + otherSurfaces,
-                'pads': allHexPads
-            }
+        partKey = allVolumes + padNames + otherSurfaces
+
+        globalGroup = {
+            name: [] for name in ['Gas', 'Dielectric', 'Grid', 'Cathode']
         }
-
-        runOption = self._unitCell + self._scale
-            
-        config = configuration[runOption]
-
-        isHex = 'hexagon' in runOption
-
-        partKey = config['keys']
-        padNames = config['pads']
-
-        globalGroup = {name: [] for name in ['Gas', 'Dielectric', 'Grid', 'Cathode']}
         padTags = []
         allGridSurfaces = []
+        
+        isHex = unitCell == UnitCell.HEXAGON
 
         for i, fragments in enumerate(entityMap):
             idx = i % len(partKey) if isHex else i
-            if idx >= len(partKey): continue
-            
+            if idx >= len(partKey):
+                continue
+
             partType = partKey[idx]
             tags = [f[1] for f in fragments if f[1] > 0]
-            if not tags: continue
+            if not tags:
+                continue
 
             if 'Pad' in partType:
                 padTags.append(tags)
             else:
                 globalGroup[partType].extend(tags)
+
+                # Special boundary surface extraction for Grid
+                if partType == 'Grid':
+                    validVol = [
+                        (3, t)
+                        for t in tags
+                        if self._occ.getEntities(3).count((3, t)) > 0
+                    ]
+                    if validVol:
+                        boundary = self._model.getBoundary(
+                            validVol, oriented=False
+                        )
+                        allGridSurfaces.extend([b[1] for b in boundary])
 
                 # Special boundary handling for the Grid
                 if partType == 'Grid':
@@ -1082,19 +1126,21 @@ class gmshClass:
             gmsh.model.addPhysicalGroup(2, list(set(allGridSurfaces)), name='Grid')
 
         # Individual pads
+                
         for tags, name in zip(padTags, padNames):
-            allPadSurfaces = []
-            validVol = [(3, t) for t in tags if gmsh.model.occ.getEntities(3).count((3, t)) > 0]
+            validVol = [(3, t) for t in tags if self._occ.getEntities(3).count((3, t)) > 0]
             if validVol:
-                boundary = gmsh.model.getBoundary(validVol, oriented=False)
-                allPadSurfaces.extend([b[1] for b in boundary])
-            gmsh.model.addPhysicalGroup(2, list(set(allPadSurfaces)), name=name)
+                boundary = self._model.getBoundary(validVol, oriented=False)
+                padSurfaces = list({b[1] for b in boundary})
+                
+                if padSurfaces:
+                    self._model.addPhysicalGroup(2, padSurfaces, name=f'{name}_Surface')
             
         return
 
 #**********************************************************************#
 
-    def _makeRefinementLines(self, runOption):
+    def _makeRefinementLines(self):
         """
         Makes lines with finer FEM values within the geometry.
         
@@ -1105,88 +1151,85 @@ class gmshClass:
         pitch = self._param['pitch']
         gridThickness = self._param['gridThickness']
         driftLength = self._param['cathodeHeight'] + gridThickness/2.
-        sqrt3 = math.sqrt(3)
-        
-        # List of coordinates for each refinement line point in a specified geometry
-        refinementOptions = {
-            'squarecorner': [
-                (0, 0, driftLength),
-                (pitch/2, 0, driftLength), 
-                (pitch/2, pitch/2, driftLength),
-                (0, pitch/2, driftLength)
-            ],
-            
-            'squaresingle': [
-                (-pitch/4, -pitch/4, driftLength),
-                (pitch/4, -pitch/4, driftLength), 
-                (pitch/4, pitch/4, driftLength),
-                (-pitch/4, pitch/4, driftLength)
-            ],
-            
-            'squarehalf': [
-                (-pitch/2, -pitch/2, driftLength),
-                (pitch/2, -pitch/2, driftLength), 
-                (pitch/2, pitch/2, driftLength),
-                (-pitch/2, pitch/2, driftLength)
-            ],
-            
-            'squaresurrounding': [
-                (-pitch/2, -pitch/2, driftLength),
-                (pitch/2, -pitch/2, driftLength), 
-                (pitch/2, pitch/2, driftLength),
-                (-pitch/2, pitch/2, driftLength)
-            ],
-            
-            'hexagoncorner': [
-                (0, 0, driftLength),
-                (pitch/sqrt3, 0, driftLength), 
-                (pitch/sqrt3/2, pitch/2, driftLength),
-                (0, pitch/2, driftLength)
-            ],
-            
-            'hexagonsingle': [
-                (pitch/sqrt3/2, 0, driftLength), 
-                (pitch/sqrt3/4, pitch/4, driftLength),
-                (-pitch/sqrt3/4, pitch/4, driftLength),
-                (-pitch/sqrt3/2, 0, driftLength),
-                (-pitch/sqrt3/4, -pitch/4, driftLength),
-                (pitch/sqrt3/4, -pitch/4, driftLength)
-            ],
-            
-            'hexagonhalf': [
-                (pitch/sqrt3, 0, driftLength), 
-                (pitch/sqrt3/2, pitch/2, driftLength),
-                (-pitch/sqrt3/2, pitch/2, driftLength),
-                (-pitch/sqrt3, 0, driftLength),
-                (-pitch/sqrt3/2, -pitch/2, driftLength),
-                (pitch/sqrt3/2, -pitch/2, driftLength)
-            ],
-            
-            'hexagonsurrounding': [
-                (pitch/sqrt3, 0, driftLength), 
-                (pitch/sqrt3/2, pitch/2, driftLength),
-                (-pitch/sqrt3/2, pitch/2, driftLength),
-                (-pitch/sqrt3, 0, driftLength),
-                (-pitch/sqrt3/2, -pitch/2, driftLength),
-                (pitch/sqrt3/2, -pitch/2, driftLength)
-            ]
-        }
-        
-        refinement = refinementOptions[runOption]
-        refinementLines = []
-        
-        firstPoint = self._occ.addPoint(*refinement[0])
-        curPoint = firstPoint
-        for x, y, z in refinement[1:]:
-            newPoint = self._occ.addPoint(x, y, z)
-            newLine = self._occ.addLine(curPoint, newPoint)
-            refinementLines.append(newLine)
-            
-            curPoint = newPoint
-            
-        finalLine = self._occ.addLine(curPoint, firstPoint)
-        refinementLines.append(finalLine)
 
+        unitCell = self._geoConfig.unitCell
+        scale = self._geoConfig.scale
+
+        # Square geometries
+        if unitCell == UnitCell.SQUARE:
+            match scale:
+                case ScaleOption.CORNER:
+                    half = pitch / 2
+                    coords = [
+                        (0, 0, driftLength),
+                        (half, 0, driftLength),
+                        (half, half, driftLength),
+                        (0, half, driftLength),
+                    ]
+                case ScaleOption.SINGLE:
+                    q = pitch / 4
+                    coords = [
+                        (-q, -q, driftLength),
+                        (q, -q, driftLength),
+                        (q, q, driftLength),
+                        (-q, q, driftLength),
+                    ]
+                case ScaleOption.HALF | ScaleOption.SURROUNDING:
+                    half = pitch / 2
+                    coords = [
+                        (-half, -half, driftLength),
+                        (half, -half, driftLength),
+                        (half, half, driftLength),
+                        (-half, half, driftLength),
+                    ]
+
+        # Hexagonal geometries
+        elif unitCell == UnitCell.HEXAGON:
+            outRadius = pitch / math.sqrt(3)
+            half = pitch / 2
+
+            match scale:
+                case ScaleOption.CORNER:
+                    coords = [
+                        (0, 0, driftLength),
+                        (outRadius, 0, driftLength),
+                        (outRadius / 2, half, driftLength),
+                        (0, half, driftLength),
+                    ]
+                case ScaleOption.SINGLE:
+                    r4 = outRadius / 4
+                    q = pitch / 4
+                    coords = [
+                        (outRadius / 2, 0, driftLength),
+                        (r4, q, driftLength),
+                        (-r4, q, driftLength),
+                        (-outRadius / 2, 0, driftLength),
+                        (-r4, -q, driftLength),
+                        (r4, -q, driftLength),
+                    ]
+                case ScaleOption.HALF | ScaleOption.SURROUNDING:
+                    r2 = outRadius / 2
+                    coords = [
+                        (outRadius, 0, driftLength),
+                        (r2, half, driftLength),
+                        (-r2, half, driftLength),
+                        (-outRadius, 0, driftLength),
+                        (-r2, -half, driftLength),
+                        (r2, -half, driftLength),
+                    ]
+
+        else:
+            raise ValueError(f"Unsupported unit cell type: '{unitCell}'")
+        
+        # Create Gmsh points and closed boundary lines
+        pointTags = [self._occ.addPoint(x, y, z) for x, y, z in coords]
+        numPoints = len(pointTags)
+
+        refinementLines = [
+            self._occ.addLine(pointTags[i], pointTags[(i + 1) % numPoints])
+            for i in range(numPoints)
+        ]
+        
         return refinementLines
 
 # **********************************************************************#
@@ -1261,7 +1304,7 @@ class gmshClass:
         amplificationLine = self._occ.addLine(pipeBottom, pipeTop)
         
         # Create lines for refinement around the top edge of the unit cell
-        refinementLines = self._makeRefinementLines(runOption)
+        refinementLines = self._makeRefinementLines()
         
         self._occ.synchronize()
         
