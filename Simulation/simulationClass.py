@@ -481,8 +481,7 @@ class FIMS_Simulation:
         """
         Generates the geometry for the simulation using the geometryClass.
         """
-        self._geometry = geometryClass(self._param)
-        self._geometry.setGeometryConfiguration(self._geoConfiguration)
+        self._geometry = geometryClass(self._param, self._geoConfiguration)
         self._geometry.buildGeometry()
 
         return        
@@ -492,9 +491,8 @@ class FIMS_Simulation:
         """Generates a geometry and visualizes it using the Gmsh GUI."""
 
         print('Visualizing geometry...')
-        self._geometry = geometryClass(self._param)
+        self._geometry = geometryClass(self._param, self._geoConfiguration)
         self._geometry.setGUI(runGUI=True)
-        self._geometry.setGeometryConfiguration(self._geoConfiguration)
         self._geometry.buildGeometry()
 
         return
