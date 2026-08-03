@@ -281,13 +281,15 @@ class gmshClass:
         # Create single cell grid without holes
         match self._geoConfig.unitCell:
             case UnitCell.HEXAGON:
-                xLength = pitch*math.sqrt(3)/2
+                xLength = pitch*math.sqrt(3)
+                xHalf = pitch*math.sqrt(3)/2
                 gridBox = self._createHexagon(
                     xLength/3, -gridThickness/2, gridThickness
                 )
                 
             case UnitCell.SQUARE:
                 xLength = pitch
+                xHalf = pitch
                 gridBox = self._occ.addBox(
                     -xLength/2, -yLength/2, -gridThickness/2,
                     xLength, yLength, gridThickness
@@ -295,7 +297,6 @@ class gmshClass:
 
             case _:
                 pass
-            
             
         # Create hole cut tool based on given hole shape.
         #TODO - Instead I would love to see a _getCutter()-type method. This can then be used here AND when  cutting the dielectric.
@@ -426,6 +427,10 @@ class gmshClass:
                     xLength/2, yLength/2, gridThickness
                 )
                 adjustedGrid = [(3, cornerGrid)]
+                surroundingHoleList = []
+                for hole in gridHoleTools:
+                    surroundingHoleList.append(self._copyToSurrounding(hole, fuse=False))
+                gridHoleTools += surroundingHoleList[0]
 
             case ScaleOption.SURROUNDING:
                 adjustedGrid = self._copyToSurrounding((3, gridBox))
@@ -437,8 +442,8 @@ class gmshClass:
             case ScaleOption.HALF:
                 self._occ.remove([(3, gridBox)], recursive=True)
                 halfBox = self._occ.addBox(
-                    -xLength, -yLength, -gridThickness/2,
-                    2*xLength, 2*yLength, gridThickness
+                    -xHalf, -yLength, -gridThickness/2,
+                    2*xHalf, 2*yLength, gridThickness
                 )
                 adjustedGrid = [(3, halfBox)]
                 surroundingHoleList = []
@@ -478,13 +483,15 @@ class gmshClass:
         # Create a dielectric without holes
         match self._geoConfig.unitCell:
             case UnitCell.HEXAGON:
-                xLength = pitch*math.sqrt(3)/2
+                xLength = pitch*math.sqrt(3)
+                xHalf = pitch*math.sqrt(3)/2
                 dielectricBox = self._createHexagon(
                     xLength/3, padBase, thicknessSiO2
                 )
 
             case UnitCell.SQUARE:
                 xLength = pitch
+                xHalf = pitch
                 dielectricBox = self._occ.addBox(
                     -xLength/2, -yLength/2, padBase, 
                     xLength, yLength, thicknessSiO2
@@ -513,8 +520,8 @@ class gmshClass:
             case ScaleOption.HALF:
                 self._occ.remove([(3, dielectricBox)], recursive=True)
                 halfBox = self._occ.addBox(
-                    -xLength, -yLength, padBase,
-                    2*xLength, 2*yLength, thicknessSiO2
+                    -xHalf, -yLength, padBase,
+                    2*xHalf, 2*yLength, thicknessSiO2
                 )
                 adjustedDielectric = [(3, halfBox)]
                 
@@ -593,7 +600,8 @@ class gmshClass:
         # Then create the cathode surface
         match self._geoConfig.unitCell:
             case UnitCell.HEXAGON:
-                xLength = pitch*math.sqrt(3)/2
+                xLength = pitch*math.sqrt(3)
+                xHalf = pitch*math.sqrt(3)/2
                 # Create a volume object for the gas
                 gasBox = self._createHexagon(
                     xLength/3, -gridStandoff, gasHeight
@@ -606,6 +614,7 @@ class gmshClass:
                 
             case UnitCell.SQUARE: 
                 xLength = pitch
+                xHalf = pitch
                 gasBox = self._occ.addBox(
                     -xLength/2, -yLength/2, -gridStandoff,
                     xLength, yLength, gasHeight
@@ -649,16 +658,16 @@ class gmshClass:
                 # Create half gas
                 self._occ.remove([(3, gasBox)], recursive=True)
                 halfBox = self._occ.addBox(
-                    -xLength, -yLength, -gridStandoff,
-                    2*xLength, 2*yLength, gasHeight
+                    -xHalf, -yLength, -gridStandoff,
+                    2*xHalf, 2*yLength, gasHeight
                 )
                 adjustedGas = [(3, halfBox)]
                 
                 # Create half cathode
                 self._occ.remove([(2, cathodeSurface)], recursive=True)
                 halfCathode = self._occ.addRectangle(
-                    -xLength, -yLength, cathodeHeight,
-                    2*xLength, 2*yLength
+                    -xHalf, -yLength, cathodeHeight,
+                    2*xHalf, 2*yLength
                 )
                 adjustedCathode = [(2, halfCathode)]
 
