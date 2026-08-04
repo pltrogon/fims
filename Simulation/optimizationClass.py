@@ -87,10 +87,10 @@ class FIMS_Optimizer:
         self.initialGeometry = {
             'padLength': 25.,
             'pitch': 55.,
-            'gridStandoff': 30.,
+            'amplificationGap': 30.,
             'gridThickness': 1.,
             'holeRadius': 16.,
-            'cathodeHeight': 200.,
+            'driftLength': 200.,
             'thicknessSiO2': 5.,
             'pillarRadius': 5.,
         }
@@ -140,7 +140,7 @@ class FIMS_Optimizer:
         
         allowedParams = [
             'holeRadius', 
-            'gridStandoff', 
+            'amplificationGap', 
             'padLength', 
             'pitch',
             'fieldRatio'
@@ -294,7 +294,7 @@ class FIMS_Optimizer:
         constraintKeySets = [
             ['pitch', 'holeRadius', 'pillarRadius'],                      # Hole clearance
             ['pitch', 'padLength', 'pillarRadius'],                       # Pad clearance
-            ['gridStandoff', 'pillarRadius', 'thicknessSiO2', 'zBuffer']  # SiO2 standoff
+            ['amplificationGap', 'pillarRadius', 'thicknessSiO2', 'zBuffer']  # SiO2 standoff
         ]
 
         # Build constraint matrix
