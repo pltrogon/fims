@@ -1194,9 +1194,9 @@ class gmshClass:
         #=========================#
         #=== DEFINE MESH SIZES ===#
         #=========================#
-        fineMesh = 2#gridThickness*(3./4.)
-        gridMesh = 2#gridThickness/4.
-        refineMesh = 3#gridThickness*(3./2.)
+        fineMesh = gridThickness*(3./4.)
+        gridMesh = gridThickness/4.
+        refineMesh = gridThickness*(3./2.)
         backgroundMesh = pitch/4.
         #=========================#
         
