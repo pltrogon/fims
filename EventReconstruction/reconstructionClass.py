@@ -193,45 +193,8 @@ class Reconstruction:
             upCrossPoints (list): list of threshold crossing times
             ToTList (list): list of ToT times
         """
-        ''' OLD- Keep until verify new
-        threshold = self.reconInfo['Signal Threshold']
-        decayRate = self.reconInfo['Signal Decay Rate']
-        
-        # Generate a signal range that guarantees that the full signal is included
-        rangeList = np.linspace(
-            min(pixel['z']),
-            max(pixel['z']) - math.log(threshold/sum(pixel['q']))*decayRate,
-            1000
-        )
 
-        
-        # Calculate the net signal of all charges
-        netSignal = np.array([sum(pixel['q']*math.e**(-(height-pixel['z'])/decayRate)) for height in rangeList])
-
-        # Identify which points are above and below threshold
-        isAbove = netSignal >= threshold
-        aboveRange = rangeList[isAbove]
-        belowRange = rangeList[~isAbove]
-        aboveID = np.flatnonzero(aboveRange)
-        belowID = np.flatnonzero(belowRange)
-
-        # Find the upwards crossing points
-        upCrossMask = aboveID[1:]-aboveID[:-1] > 1
-        upCrossMask = np.append(True, upCrossMask)
-        upCrossPoints = aboveRange[upCrossMask]
-
-        # Find all the downwards crossing points, using the last point if none are found
-        if len(belowID > 0):
-            downCrossMask = belowID[1:]-belowID[:-1] > 1
-            downCrossMask = np.append(True, downCrossMask)
-            downCrossPoints = belowRange[downCrossMask]
-        else:
-            downCrossPoints = [rangeList[-1]]
-
-        ToTList = [end-start for start,end in list(zip(upCrossPoints, downCrossPoints))]
-        '''
-
-        ## New - TODO verify
+        ## TODO verify
         threshold = self.reconInfo['Signal Threshold']
         decayRate = self.reconInfo['Signal Decay Rate']
 
@@ -376,34 +339,7 @@ class Reconstruction:
             readoutData (dataframe): x,y,z coordinates of the charge bundles as well as the time over threshold.
         """
 
-
-        '''OLD - Keep until verify
-        threshold = self.reconInfo['Signal Threshold']
-
-        # Group data by pixel
-        groupedData = self._groupData(inputData)
-
-        # Filter pixels with total charge less than the threshold
-        mask = groupedData['q'].apply(lambda q: sum(q) > threshold and sum(q) > len(q))
-        filteredData = groupedData[mask].reset_index(drop=True)
-        
-        print('Calculating ToT...')
-        # Convert charge to voltage signal
-        signalData = filteredData.apply(self._convertToSignal, axis=1)
-        crossing, ToT = list(zip(*signalData))
-        filteredData['ToT'] = ToT
-        filteredData['crossing'] = crossing
-
-        # Remove depreciated columns
-        filteredData.drop(['z', 'q'], axis=1, inplace=True)
-
-        # Expand data for easier use
-        readoutData = filteredData.explode('ToT', ignore_index=True)
-        readoutData = readoutData.explode('crossing', ignore_index=True)
-        '''
-
-
-        ## NEW -- TODO: Verify
+        ## TODO: Verify
         threshold = self.reconInfo['Signal Threshold']
 
         # Group data by pixel
