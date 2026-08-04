@@ -63,10 +63,10 @@ class FIMS_Simulation:
             All dimensions are in microns. Electric field is in V/cm.
             - padLength: Length of the side of the hexagonal pad.
             - pitch: Distance between neighboring pads.
-            - gridStandoff: Distance from the top to the SiO2 layer to the bottom of the grid.
+            - amplificationGap: Distance from the top to the SiO2 layer to the bottom of the grid.
             - gridThickness: Thickness of the grid.
             - holeRadius: Radius of the hole in the grid.
-            - cathodeHeight: Distance from the top to the grid to the cathode plane.
+            - driftLength: Distance from the top to the grid to the cathode plane.
             - thicknessSiO2: Thickness of the SiO2 layer.
             - pillarRadius: The radius of the insulating support pillars.
             - driftField: The strength of the electric field in the drift region.
@@ -141,10 +141,10 @@ class FIMS_Simulation:
             'runNumber': -1,
             'padLength': 20.,
             'pitch': 55.,
-            'gridStandoff': 50.,
+            'amplificationGap': 50.,
             'gridThickness': 1.,
             'holeRadius': 17.5,
-            'cathodeHeight': 200.,
+            'driftLength': 200.,
             'thicknessSiO2': 5.,
             'padThickness': 1.,
             'pillarRadius': 5.,

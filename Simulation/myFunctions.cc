@@ -206,14 +206,14 @@ std::optional<SimulationParameters> readSimulationParameters() {
         json params_json = json::parse(jsonInput);
         SimulationParameters params;
         
-        // Geometry parameters (converting from microns to cm) TODO: update variable names
+        // Geometry parameters (converting from microns to cm)
         params.padLength = params_json["padLength"].get<double>() * MICRONTOCM;
         params.pitch = params_json["pitch"].get<double>() * MICRONTOCM;
-        params.gridStandoff = params_json["gridStandoff"].get<double>() * MICRONTOCM;
+        params.amplificationGap = params_json["amplificationGap"].get<double>() * MICRONTOCM;
         params.gridThickness = params_json["gridThickness"].get<double>() * MICRONTOCM;
         params.padThickness = params_json["padThickness"].get<double>() * MICRONTOCM;
         params.holeRadius = params_json["holeRadius"].get<double>() * MICRONTOCM;
-        params.cathodeHeight = params_json["cathodeHeight"].get<double>() * MICRONTOCM;
+        params.driftLength = params_json["driftLength"].get<double>() * MICRONTOCM;
         params.thicknessSiO2 = params_json["thicknessSiO2"].get<double>() * MICRONTOCM;
         params.pillarRadius = params_json["pillarRadius"].get<double>() * MICRONTOCM;
 

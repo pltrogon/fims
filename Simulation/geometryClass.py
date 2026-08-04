@@ -27,8 +27,8 @@ class geometryClass:
         pitch: The distance between the centers of adjacent holes.
         holeRadius: The radius of the holes in the grid.
         padLength: The length of an outside edge of the pad.
-        gridStandoff: The distance from the grid to the cathode.
-        cathodeHeight: The distance from the grid to the cathode.
+        amplificationGap: The distance from the grid to the cathode.
+        driftLength: The distance from the grid to the cathode.
         gridThickness: The thickness of the grid.
         thicknessSiO2: The thickness of the SiO2 layer on the grid.
         pillarRadius: The radius of the pillars supporting the grid.
@@ -65,8 +65,8 @@ class geometryClass:
             'pitch',
             'holeRadius',
             'padLength',
-            'gridStandoff',
-            'cathodeHeight',
+            'amplificationGap',
+            'driftLength',
             'gridThickness',
             'thicknessSiO2',
             'pillarRadius',
@@ -224,13 +224,11 @@ class geometryClass:
 
         amplificationField = driftField*fieldRatio
 
-        halfGrid = self._param['gridThickness']/2
-
-        driftGap = self._param['cathodeHeight'] - halfGrid
-        amplificationGap = self._param['gridStandoff'] - halfGrid
+        driftLength = self._param['driftLength']
+        amplificationGap = self._param['amplificationGap']
 
         gridVoltage = -1*amplificationField*amplificationGap*MICRONTOCM
-        cathodeVoltage = -1*driftField*driftGap*MICRONTOCM + gridVoltage
+        cathodeVoltage = -1*driftField*driftLength*MICRONTOCM + gridVoltage
 
         return gridVoltage, cathodeVoltage
 
@@ -532,7 +530,7 @@ class gmshClass:
         pitch = self._param['pitch']
         padLength = self._param['padLength']
         thicknessSiO2 = self._param['thicknessSiO2'] + padThickness
-        padBase = -self._param['gridStandoff'] - padThickness - self._param['gridThickness']/2
+        padBase = -self._param['amplificationGap'] - padThickness - self._param['gridThickness']/2
 
         # Create dielectric without holes
         adjustedDielectric = self._makeBlock(pitch, padBase, thicknessSiO2)
@@ -587,14 +585,14 @@ class gmshClass:
             cathodeSurface: the surface object for the cathode.
         """
         pitch = self._param['pitch']
-        gridStandoff = self._param['gridStandoff'] + self._param['gridThickness']/2.
-        cathodeHeight = self._param['cathodeHeight'] + self._param['gridThickness']/2.
-        gasHeight = cathodeHeight + gridStandoff
+        gridHeight = -(self._param['amplificationGap'] + self._param['gridThickness']/2.)
+        cathodeHeight = self._param['driftLength'] + self._param['gridThickness']/2.
+        gasThickness = cathodeHeight - gridHeight
         yLength = pitch
         
         # Create a volume object for the gas
         # Then create the cathode surface
-        adjustedGas = self._makeBlock(pitch, -gridStandoff, gasHeight)
+        adjustedGas = self._makeBlock(pitch, gridHeight, gasThickness)
         adjustedCathode = self._makeBlock(pitch, cathodeHeight, None)
         
         # Remove non-gas volumes from the gas box
@@ -1041,7 +1039,7 @@ class gmshClass:
         # Cell dimensions
         pitch = self._param['pitch']
         gridThickness = self._param['gridThickness']
-        driftLength = self._param['cathodeHeight'] + gridThickness/2.
+        cathodeHeight = self._param['driftLength'] + gridThickness/2.
 
         unitCell = self._geoConfig.unitCell
         scale = self._geoConfig.scale
@@ -1052,26 +1050,26 @@ class gmshClass:
                 case ScaleOption.CORNER:
                     half = pitch / 2
                     coords = [
-                        (0, 0, driftLength),
-                        (half, 0, driftLength),
-                        (half, half, driftLength),
-                        (0, half, driftLength),
+                        (0, 0, cathodeHeight),
+                        (half, 0, cathodeHeight),
+                        (half, half, cathodeHeight),
+                        (0, half, cathodeHeight),
                     ]
                 case ScaleOption.SINGLE:
                     q = pitch / 4
                     coords = [
-                        (-q, -q, driftLength),
-                        (q, -q, driftLength),
-                        (q, q, driftLength),
-                        (-q, q, driftLength),
+                        (-q, -q, cathodeHeight),
+                        (q, -q, cathodeHeight),
+                        (q, q, cathodeHeight),
+                        (-q, q, cathodeHeight),
                     ]
                 case ScaleOption.HALF | ScaleOption.SURROUNDING:
                     half = pitch / 2
                     coords = [
-                        (-half, -half, driftLength),
-                        (half, -half, driftLength),
-                        (half, half, driftLength),
-                        (-half, half, driftLength),
+                        (-half, -half, cathodeHeight),
+                        (half, -half, cathodeHeight),
+                        (half, half, cathodeHeight),
+                        (-half, half, cathodeHeight),
                     ]
 
         # Hexagonal geometries
@@ -1082,31 +1080,31 @@ class gmshClass:
             match scale:
                 case ScaleOption.CORNER:
                     coords = [
-                        (0, 0, driftLength),
-                        (outRadius, 0, driftLength),
-                        (outRadius / 2, half, driftLength),
-                        (0, half, driftLength),
+                        (0, 0, cathodeHeight),
+                        (outRadius, 0, cathodeHeight),
+                        (outRadius / 2, half, cathodeHeight),
+                        (0, half, cathodeHeight),
                     ]
                 case ScaleOption.SINGLE:
                     r4 = outRadius / 4
                     q = pitch / 4
                     coords = [
-                        (outRadius / 2, 0, driftLength),
-                        (r4, q, driftLength),
-                        (-r4, q, driftLength),
-                        (-outRadius / 2, 0, driftLength),
-                        (-r4, -q, driftLength),
-                        (r4, -q, driftLength),
+                        (outRadius / 2, 0, cathodeHeight),
+                        (r4, q, cathodeHeight),
+                        (-r4, q, cathodeHeight),
+                        (-outRadius / 2, 0, cathodeHeight),
+                        (-r4, -q, cathodeHeight),
+                        (r4, -q, cathodeHeight),
                     ]
                 case ScaleOption.HALF | ScaleOption.SURROUNDING:
                     r2 = outRadius / 2
                     coords = [
-                        (outRadius, 0, driftLength),
-                        (r2, half, driftLength),
-                        (-r2, half, driftLength),
-                        (-outRadius, 0, driftLength),
-                        (-r2, -half, driftLength),
-                        (r2, -half, driftLength),
+                        (outRadius, 0, cathodeHeight),
+                        (r2, half, cathodeHeight),
+                        (-r2, half, cathodeHeight),
+                        (-outRadius, 0, cathodeHeight),
+                        (-r2, -half, cathodeHeight),
+                        (r2, -half, cathodeHeight),
                     ]
 
         else:
@@ -1166,13 +1164,13 @@ class gmshClass:
         gridThickness = self._param['gridThickness']
         thicknessSiO2 = self._param['thicknessSiO2']
         padLength = self._param['padLength']
-        cathodeHeight = self._param['cathodeHeight']
-        gridStandoff = self._param['gridStandoff']
+        driftLength = self._param['driftLength']
+        amplificationGap = self._param['amplificationGap']
         
         # Derived cell lengths
-        driftLength = cathodeHeight + gridThickness/2.
-        amplificationGap = gridStandoff + gridThickness/2.
-        SiO2Height = thicknessSiO2 - gridStandoff - gridThickness/2.
+        cathodeHeight = driftLength + gridThickness/2.
+        gridHeight = -(amplificationGap + gridThickness/2.)
+        SiO2Height = thicknessSiO2 + gridHeight
         
         # FEM region scales
         smallRadius = min(holeRadius, padLength)
@@ -1187,10 +1185,10 @@ class gmshClass:
         
         # Create a line from the center of the pad to above the center hole
         pipeBottom = self._occ.addPoint(
-            0, 0, -amplificationGap, 
+            0, 0, gridHeight, 
         )
         pipeTop = self._occ.addPoint( 
-            0, 0, driftLength/10.
+            0, 0, cathodeHeight/10.
         ) 
         amplificationLine = self._occ.addLine(pipeBottom, pipeTop)
         
