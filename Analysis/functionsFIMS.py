@@ -954,7 +954,7 @@ def makePWL(runNumber, averageSignal=True, avalancheID=None):
     """
 
     # Read in data from file
-    filepath = './Data/' # Ensure path to data (output will also be written here)
+    filepath = '../Data/' # Ensure path to data (output will also be written here)
     filename = f'allSignalsRun{runNumber}.parquet'
     dataFile = os.path.join(filepath, filename)
 
