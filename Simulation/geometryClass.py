@@ -266,11 +266,11 @@ class gmshClass:
 
         singleShape = {
             'circle': lambda: self._occ.addCylinder(0, 0, height, 0, 0, thickness, length),
-            'square': lambda: self._occ.addBox(-length / 2, -length / 2, height, length, length, thickness),
+            'square': lambda: self._occ.addBox(-length/2, -length/2, height, length, length, thickness),
             'hexagon': lambda: self._createHexagon(length, height, thickness),
             'octagon': lambda: self._createOctagon(length, height, thickness),
             'triangle': lambda: self._createTriangle(length, height, thickness),
-            'kiki': lambda: self._createStar(length, length / 3, height, thickness),
+            'kiki': lambda: self._createStar(length, length/3, height, thickness),
         }
 
         shapeList = []
@@ -279,8 +279,8 @@ class gmshClass:
             
         match inShape:
             case 'nesteggs':
-                xCenter = pitch / math.sqrt(3) / 4
-                yCenter = pitch / 4
+                xCenter = pitch/math.sqrt(3)/4
+                yCenter = pitch/4
                 offsets = [
                     (-2, 0), (2, 0), 
                     (-1, -1), (-1, 1), 
@@ -326,9 +326,16 @@ class gmshClass:
                 raise ValueError(f"Unsupported shape: '{inShape}'")
         
         return shapeList
+#**********************************************************************#
+    def _createBaseShape(self, xLength, yLength, height, thickness):
+        """TODO"""
+        if self._geoConfig.unitCell == UnitCell.HEXAGON:
+            return self._createHexagon(xLength/3, height, thickness)
+        if thickness:
+            return self._occ.addBox(-xLength/2, -yLength/2, height, xLength, yLength, thickness)
+        return self._occ.addRectangle(-xLength/2, -yLength/2, height, xLength, yLength)
 
 #**********************************************************************#
-
     def _makeBlock(self, length, height, thickness):
         """
         Creates a block of the scaled unit cell.
@@ -342,74 +349,49 @@ class gmshClass:
             cutGeometry: the geometry element after being scaled to the
         correct size.
         """
+        dimNum = 3 if thickness else 2
         yLength = length
-        if not thickness:
-            dimNum = 2
-        else:
-            dimNum = 3
-        
-        # Create a dielectric without holes
+        yHalf = yLength/2
+
+        # Determine cell dimensions:
         match self._geoConfig.unitCell:
             case UnitCell.HEXAGON:
                 xLength = length*math.sqrt(3)
-                xHalf = length*math.sqrt(3)/2
-                geometry = self._createHexagon(
-                    xLength/3, height, thickness
-                )
-
+                xHalf = xLength/2
             case UnitCell.SQUARE:
                 xLength = length
-                xHalf = length
-                if thickness:
-                    geometry = self._occ.addBox(
-                        -xLength/2, -yLength/2, height, 
-                        xLength, yLength, thickness
-                    )
-                else:
-                    geometry = self._occ.addRectangle(
-                        -xLength/2, -yLength/2, height, 
-                        xLength, yLength
-                    )
-
+                xHalf = length/2
             case _:
-                pass
-        
+                raise ValueError(f"Unsupported unit cell: {self._geoConfig.unitCell}")
+
+        # Build geometry based on scale option
         match self._geoConfig.scale:
             case ScaleOption.SINGLE:
-                cutGeometry = [(dimNum, geometry)]
-            
-            case ScaleOption.CORNER:
-                # Remove unit cell box and replace it with just the corner.
-                self._occ.remove([(dimNum, geometry)], recursive=True)
-                if thickness:
-                    cornerGeometry = self._occ.addBox(
-                        0, 0, height,
-                        xLength/2, yLength/2, thickness
-                    )
-                else:
-                    cornerGeometry = self._occ.addRectangle(
-                        0, 0, height,
-                        xLength/2, yLength/2
-                    )
-                cutGeometry = [(dimNum, cornerGeometry)]
-                
+                baseShape = self._createBaseShape(xLength, yLength, height, thickness)
+                cutGeometry = [(dimNum, baseShape)]
+    
             case ScaleOption.SURROUNDING:
-                # Create surrounding dielectric
-                cutGeometry = self._copyToSurrounding((dimNum, geometry))
-            
+                baseShape = self._createBaseShape(xLength, yLength, height, thickness)
+                cutGeometry = self._copyToSurrounding((dimNum, baseShape))
+    
+            case ScaleOption.CORNER:
+                shape = (
+                    self._occ.addBox(0, 0, height, xLength/2, yLength/2, thickness)
+                    if thickness
+                    else self._occ.addRectangle(0, 0, height, xLength/2, yLength/2)
+                )
+                cutGeometry = [(dimNum, shape)]
+    
             case ScaleOption.HALF:
-                self._occ.remove([(dimNum, geometry)], recursive=True)
-                if thickness:
-                    halfBox = self._occ.addBox(
-                        -xHalf, -yLength, height,
-                        2*xHalf, 2*yLength, thickness
-                    )
-                else:
-                    halfBox = self._occ.addRectangle(
-                        -xHalf, yLength, height,
-                        2*xHalf, 2*yHalf
-                    )
-                cutGeometry = [(dimNum, halfBox)]
+                shape = (
+                    self._occ.addBox(-xHalf, -yLength, height, 2*xHalf, 2*yLength, thickness)
+                    if thickness
+                    else self._occ.addRectangle(-xHalf, -yLength, height, 2*xHalf, 2*yHalf)
+                )
+                cutGeometry = [(dimNum, shape)]
+    
+            case _:
+                raise ValueError(f"Unsupported scale option: {self._geoConfig.scale}")
     
         return cutGeometry
 
