@@ -49,8 +49,6 @@ class geometryClass:
         self._param = inputParam
         self._geoConfig = geoConfig
         self._runGUI = False
-
-        self._runOption = self._geoConfig.unitCell.value + self._geoConfig.scale.value
         
         return
 
@@ -165,11 +163,11 @@ class geometryClass:
         """
         Generates the SIF files for Elmer based on the created geometry.
         """
-        self._elmerClass = elmerClass(self._runOption, capacitance=False)
+        self._elmerClass = elmerClass(self._geoConfig, capacitance=False)
 
         if capacitance:
             self._elmerClassCapacitance = elmerClass(
-                self._runOption, capacitance=True
+                self._geoConfig, capacitance=True
             )
 
         return
@@ -254,10 +252,6 @@ class gmshClass:
         self._occ = gmsh.model.occ
         self._param = inputParams
         self._geoConfig = geoConfig
-
-        self._runOption = (
-            self._geoConfig.unitCell.value + self._geoConfig.scale.value
-        )
 
         return
 #**********************************************************************#
@@ -1289,8 +1283,11 @@ class gmshClass:
         Args:
             runGUI (bool): Whether to launch the Gmsh GUI.
         """
+        runOption = (
+            self._geoConfig.unitCell.value + self._geoConfig.scale.value
+        )
         filePath = 'Geometry'
-        meshFilename = f'{self._runOption}.msh'
+        meshFilename = f'{runOption}.msh'
         filename = os.path.join(filePath, meshFilename)
 
         gmsh.initialize()
@@ -1349,7 +1346,7 @@ class elmerClass:
             geoConfig (str): The run option for the simulation.
             capacitance (bool): Whether to calculate the capacitance matrix.
         """
-
+        self._geoConfig = geoConfig
         self._runOption = (
             self._geoConfig.unitCell.value + self._geoConfig.scale.value
         )
@@ -1357,9 +1354,9 @@ class elmerClass:
             
         self._capacitance = capacitance
 
-        self._meshFilename = f'{runOption}.msh'
+        self._meshFilename = f'{self._runOption}.msh'
 
-        self._elmerName = runOption
+        self._elmerName = self._runOption
         if self._capacitance:
             self._elmerName += 'Capacitance'
         

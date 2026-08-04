@@ -94,7 +94,7 @@ class FIMS_Optimizer:
             'thicknessSiO2': 5.,
             'pillarRadius': 5.,
         }
-        self.geoConfig = self.simFIMS.geoConfiguration
+        self.geoConfig = self.simFIMS._geoConfiguration
         self._checkParameters()
 
         # Create log file for optimizer
@@ -265,15 +265,15 @@ class FIMS_Optimizer:
     
         # Get all geometry values
         initGeometry = self.initialGeometry.copy()
-        hexCell = 'Hexagonal' in self.geoConfig['unitCell']
+        hexCell = 'Hexagonal' in self.geoConfig.unitCell
         hexID = 0 if hexCell else 1
         
         # Apply geometry-dependent multipliers
-        holeShape = self.geoConfig['holeShape']
+        holeShape = self.geoConfig.holeShape
         if holeShape in holeShapeFactors:
             initGeometry['holeRadius'] *= holeShapeFactors[holeShape][hexID]
     
-        padShape = self.geoConfig['padShape']
+        padShape = self.geoConfig.padShape
         if padShape in padShapeFactors:
             initGeometry['padLength'] *= padShapeFactors[padShape][hexID]
         
@@ -573,11 +573,11 @@ class FIMS_Optimizer:
         Sets the shape of the geometry.
          
         args:
-            geoConfig (dict): parameters defining the geometry to be generated.
-                unitCell (str): shape of the unit cell.
-                padShape (str): shape of the readout pad.
-                holeShape (str): shape of the grid holes.
-                surrounding (bool): whether to include surrounding cells.
+            geoConfig (dataClass: parameters defining the geometry to be generated.
+                unitCell: shape of the unit cell.
+                padShape: shape of the readout pad.
+                holeShape: shape of the grid holes.
+                scaleOption: scale of the geometry generated.
         """
         
         self.geoConfig = geometry
