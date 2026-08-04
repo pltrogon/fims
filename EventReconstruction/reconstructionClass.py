@@ -47,6 +47,7 @@ class Reconstruction:
             approximateReadout
 
         ## Wrapper functions ##
+        TODO: add z-distribution wrapper to quantify typical spacing between hits
         plotRaw
         reconstructFIMS
         reconstructBEAST
@@ -67,7 +68,7 @@ class Reconstruction:
         self.rawData = self._getCoordinates(dataFrame)
         
         # Set constant values
-        self.timeRez = 25 # microns
+        self.timeRez = 25 # microns TODO: convert to time
         self.initialDriftDistance = 10 # cm
         
         # Values from Tanner sim
@@ -159,7 +160,7 @@ class Reconstruction:
             zip(trialData['x']*10000, trialData['y']*10000, trialData['z']),
             columns=['x','y','z']
         )
-        
+        # TODO: convert z-data to time
         return rawData
     
     #********************************************************************************#
@@ -391,7 +392,7 @@ class Reconstruction:
             plotData['x'], plotData['y'],
             s=.3, c=color, label=f'{title} Readout Data', cmap='viridis'
         )
-        
+        # TODO: 2D plot should always be density
         # Add color bar
         if charge:
             colorBar = plt.colorbar(sub2DRef, pad=.2)
@@ -455,8 +456,8 @@ class Reconstruction:
         # Apply Gaussian smear to approximate diffusion
         smearData = self.diffuseData(self.rawData, firstDifWidths)
 
-        # Discretize data to approximate falling into grid holes
-        bins = {'x': holePitch, 'y': holePitch, 'z': 0}
+        # Discretize data to approximate falling into grid holes and being read by the readout.
+        bins = {'x': holePitch, 'y': holePitch, 'z': timeRez}
         discreteData = self.discretizeData(smearData, bins)
         
         # Approximate avalanches

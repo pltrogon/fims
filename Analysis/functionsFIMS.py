@@ -407,10 +407,10 @@ def plotDataSets(dataSets, xVal, yVal, savePlot=False):
     dimensionalParam = [
         'Pad Length',
         'Pitch',
-        'Grid Standoff',
+        'Amplification Gap',
         'Grid Thickness',
         'Hole Radius',
-        'Cathode Height',
+        'Drift Length',
         'Thickness SiO2',
         'Field Bundle Radius'
     ]

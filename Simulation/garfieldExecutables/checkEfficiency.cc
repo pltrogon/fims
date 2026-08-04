@@ -57,7 +57,7 @@ int main(int argc, char * argv[]) {
     double targetEfficiency = std::atof(argv[3]);
     int electronThreshold = std::atoi(argv[4]);
 
-    //Randon seed
+    //Random seed
     std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
     const double MICRONTOCM = 1e-4;
@@ -91,7 +91,20 @@ int main(int argc, char * argv[]) {
     fieldFIMS.GetBoundingBox(xmin, ymin, zmin, xmax, ymax, zmax);
 
     //Define boundary region for simulation
-    double cellLength = simParams->pitch/std::sqrt(3.);
+    double cellLength = simParams->pitch;    
+    switch(geometryMode){
+        case GeometryMode::Square:
+        case GeometryMode::SquareSurrounding:{
+            break;
+        }
+        case GeometryMode::Hexagonal:
+        case GeometryMode::HexagonalSurrounding:{
+            cellLength = simParams->pitch/std::sqrt(3.);
+            break;
+        }
+        default:
+            return -1;
+    }
 
     double xBoundary[2], yBoundary[2], zBoundary[2];
     zBoundary[0] = zmin;
@@ -132,7 +145,7 @@ int main(int argc, char * argv[]) {
     avalancheE->EnablePlotting(viewEffDrift, 10);//For velocity vector
 
     //Deafult initial electron parameters
-    double x0 = 0., y0 = 0., z0 = simParams->initialZFraction*simParams->cathodeHeight;
+    double x0 = 0., y0 = 0., z0 = simParams->initialZFraction*simParams->driftLength;
     double t0 = 0.;//ns
     double e0 = 0.1;//eV (Garfield is weird when this is 0.)
     double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
@@ -159,9 +172,11 @@ int main(int argc, char * argv[]) {
     while(runAvalanche && numInitialElectrons < simParams->numAvalanche){
         for(int inAvalanche=0; inAvalanche < numInBunch; inAvalanche++){
             numInitialElectrons++;
-
-            //Random xy on plane
-            auto [sampleX, sampleY] = randomXYInHexagon(cellLength);
+            
+            double sampleX, sampleY;
+            auto [randX, randY] = randomXYinGeometry(geometryMode, cellLength);
+            sampleX = randX, sampleY = randY;
+            
             double curX = sampleX, curY = sampleY, curZ = z0;
             double curTime = t0;
             double curEnergy = e0;
@@ -195,8 +210,11 @@ int main(int argc, char * argv[]) {
                     //std::cerr << "Error: No electrons in avalanche - Restarting." << std::endl;
                     //std::cerr << "\tError at (" << curX << ", " << curY << ", " << curZ << ")" << std::endl;
                     numFailure++;
-
-                    auto [newX, newY] = randomXYInHexagon(cellLength);
+                    
+                    double newX, newY;
+                    auto [randX, randY] = randomXYinGeometry(geometryMode, cellLength);
+                    newX = randX, newY = randY;
+                    
                     curX = newX, curY = newY, curZ = z0;
                     curTime = t0;
                     curEnergy = e0;

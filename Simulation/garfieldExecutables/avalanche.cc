@@ -86,15 +86,41 @@ int main(int argc, char * argv[]) {
 
   std::vector<std::string> sensorList;
   sensorList.push_back("CentralPad");
-
+  double cellXScale = 1. / sqrt(3.);
+  double cellYScale = 0.5;
+  bool hexCell = true;
+  
   switch(geometryMode){
-
-    case GeometryMode::FIMS: {
-      sensorList.push_back("CornerPad");
+    case GeometryMode::Square: {
+      // Adjust E-Field line generation points
+      cellXScale = 0.5;
+      hexCell = false;
+      break;
+    }
+    case GeometryMode::SquareSurrounding: {
+      // Add pads to sensor list
+      sensorList.push_back("TopPad");
+      sensorList.push_back("RightTopPad");
+      sensorList.push_back("RightPad");
+      sensorList.push_back("RightBottomPad");
+      sensorList.push_back("BottomPad");
+      sensorList.push_back("LeftBottomPad");
+      sensorList.push_back("LeftPad");
+      sensorList.push_back("LeftTopPad");
+      // Adjust E-Field line generation points
+      cellXScale = 0.5;
+      hexCell = false;
+      break;
+    }
+    
+    case GeometryMode::Hexagonal: {
+      // Add pads to sensor list
+      sensorList.push_back("RightTopPad");
       break;
     }
 
-    case GeometryMode::FIMSSurrounding: {
+    case GeometryMode::HexagonalSurrounding: {
+      // Add pads to sensor list
       sensorList.push_back("TopPad");
       sensorList.push_back("BottomPad");
       sensorList.push_back("RightTopPad");
@@ -107,7 +133,7 @@ int main(int argc, char * argv[]) {
     default:
       return -1;
   }
-    
+  
   //Random seed
   std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
@@ -258,11 +284,9 @@ int main(int argc, char * argv[]) {
   std::vector<double> yEdgeStart;
   double rangeScale = 0.99;
   double fieldLineScale = 1.*(simParams->numFieldLine-1);
-
-  // The x-direction is the long axis of the geometry. 
-  const double xLineLimit = simParams->pitch/sqrt(3.)*rangeScale;
-  const double yLineLimit = simParams->pitch/2.*rangeScale;
-  
+  const double xLineLimit = simParams->pitch*cellXScale*rangeScale;
+  const double yLineLimit = simParams->pitch*cellYScale*rangeScale;
+      
   //Note that the total number of field lines is x2 the given number of field lines (x and y)
   // Field Lines along x:
   for(int i = 0; i < simParams->numFieldLine; i++){
@@ -285,13 +309,26 @@ int main(int argc, char * argv[]) {
   // Lines generated along the perimeter of the unit cell
   //Upper edge from left to right
   for(int i = 0; i < simParams->numFieldLine; i++){
-    xEdgeStart.push_back(xLineLimit*(i/fieldLineScale - 0.5));
-    yEdgeStart.push_back(yLineLimit);
+    if (hexCell) {
+      xEdgeStart.push_back(xLineLimit*(i/fieldLineScale - 0.5));
+      yEdgeStart.push_back(yLineLimit);
+    }
+    else {
+      xEdgeStart.push_back(xLineLimit*i/fieldLineScale);
+      yEdgeStart.push_back(yLineLimit);
+    }
   }
-  //Slanted edge - From right corner to top-right corner
+  
+  //Right edge - From bottom right corner to top-right corner
   for(int i = 0; i < simParams->numFieldLine; i++){
-    xEdgeStart.push_back(xLineLimit*(1. - i/fieldLineScale/2.));
-    yEdgeStart.push_back(yLineLimit*i/fieldLineScale);
+    if (hexCell) {
+      xEdgeStart.push_back(xLineLimit*(1. - i/fieldLineScale/2.));
+      yEdgeStart.push_back(yLineLimit*i/fieldLineScale);
+    }
+    else {
+      xEdgeStart.push_back(xLineLimit);
+      yEdgeStart.push_back(yLineLimit*i/fieldLineScale);
+    }
   }
 
   // ***** Calculate field Lines ***** //
@@ -319,7 +356,7 @@ int main(int argc, char * argv[]) {
       fieldLineDataTree->Fill();
     }
 
-    //Calculate lines from grid - only do those outside of hole
+    //Calculate lines from grid - only do those outside of hole TODO - Things may get weird with non-circular hole?
     double lineRadius2 = std::pow(xStart[inFieldLine], 2.) + std::pow(yStart[inFieldLine], 2.);
     double holeRadius2 = std::pow(simParams->holeRadius, 2.);
 
@@ -400,7 +437,7 @@ int main(int argc, char * argv[]) {
 
   // ***** Calculate E fields ***** //
   //Calculate E field at different z planes above and below grid
-  double eFieldPlanes[6] = {zmax*.95, simParams->cathodeHeight/2., 2.*simParams->gridThickness, -2.*simParams->gridThickness, -simParams->gridStandoff/2., -.95*(simParams->gridStandoff-simParams->thicknessSiO2)};
+  double eFieldPlanes[6] = {zmax*.95, simParams->driftLength/2., 2.*simParams->gridThickness, -2.*simParams->gridThickness, -simParams->amplificationGap/2., -.95*(simParams->amplificationGap-simParams->thicknessSiO2-simParams->padThickness/2.)};
 
   for(int inPlane = 0; inPlane < 6; inPlane++){
     for(int inPoint = 0; inPoint < totalFieldLines; inPoint++){
@@ -459,7 +496,7 @@ int main(int argc, char * argv[]) {
   
   // ***** Prepare Avalanche Electron ***** //
   //Set the Initial electron parameters
-  double z0 = simParams->initialZFraction * simParams->cathodeHeight;
+  double z0 = simParams->initialZFraction * simParams->driftLength;
 
   double t0 = 0.;//ns
   double e0 = 0.1;//eV (Garfield is weird when this is 0.)
@@ -656,9 +693,11 @@ int main(int argc, char * argv[]) {
       totalElectrons = 0;
       attachedElectrons = 0;
       totalIons = 0;
-      
-      double cellLength = simParams->pitch/sqrt(3.);
-      auto [x0, y0] = distOnPlane ? randomXYInHexagon(cellLength) : std::pair<double, double>{0.0, 0.0};
+
+      double cellLength = simParams->pitch*cellXScale;
+      auto [x0, y0] = distOnPlane 
+        ? randomXYinGeometry(geometryMode, cellLength)
+        : std::pair{0.0, 0.0};
 
       //Begin single-electron avalanche
       avalancheE->AvalancheElectron(x0, y0, z0, 0., e0, dx0, dy0, dz0);
@@ -860,10 +899,11 @@ int main(int argc, char * argv[]) {
 
   metaDataTree->Branch("Pad Length", &simParams->padLength, "padLength/D");
   metaDataTree->Branch("Pitch", &simParams->pitch, "pitch/D");
-  metaDataTree->Branch("Grid Standoff", &simParams->gridStandoff, "gridStandoff/D");
+  metaDataTree->Branch("Grid Standoff", &simParams->amplificationGap, "amplificationGap/D");
   metaDataTree->Branch("Grid Thickness", &simParams->gridThickness, "gridThickness/D");
+  metaDataTree->Branch("Pad Thickness", &simParams->padThickness, "padThickness/D");
   metaDataTree->Branch("Hole Radius", &simParams->holeRadius, "holeRadius/D");
-  metaDataTree->Branch("Cathode Height", &simParams->cathodeHeight, "cathodeHeight/D");
+  metaDataTree->Branch("Cathode Height", &simParams->driftLength, "driftLength/D");
   metaDataTree->Branch("Thickness SiO2", &simParams->thicknessSiO2, "thicknessSiO2/D");
   metaDataTree->Branch("Pillar Radius", &simParams->pillarRadius, "pillarRadius/D");
 

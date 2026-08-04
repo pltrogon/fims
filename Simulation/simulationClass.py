@@ -21,6 +21,8 @@ import copy
 from scipy.optimize import curve_fit
 from scipy.special import expit, logit
 
+from configs import GeometryConfiguration, UnitCell, HoleShape, PadShape, ScaleOption
+
 #Include the analysis object        
 sys.path.insert(1, '../Analysis')
 from runDataClass import runData
@@ -61,10 +63,10 @@ class FIMS_Simulation:
             All dimensions are in microns. Electric field is in V/cm.
             - padLength: Length of the side of the hexagonal pad.
             - pitch: Distance between neighboring pads.
-            - gridStandoff: Distance from the top to the SiO2 layer to the bottom of the grid.
+            - amplificationGap: Distance from the top to the SiO2 layer to the bottom of the grid.
             - gridThickness: Thickness of the grid.
             - holeRadius: Radius of the hole in the grid.
-            - cathodeHeight: Distance from the top to the grid to the cathode plane.
+            - driftLength: Distance from the top to the grid to the cathode plane.
             - thicknessSiO2: Thickness of the SiO2 layer.
             - pillarRadius: The radius of the insulating support pillars.
             - driftField: The strength of the electric field in the drift region.
@@ -102,11 +104,13 @@ class FIMS_Simulation:
             raise RuntimeError('Error initializing parameters.')
         
         self._geometry = None
-        self._unitCell = 'FIMS'
-        self._surroundingCells = False
-        self._runMode = 'FIMS'
-
-        self._filenames = None
+        self._geoConfiguration = GeometryConfiguration(
+            unitCell=UnitCell.HEXAGON,
+            holeShape=HoleShape.CIRCLE,
+            padShape=PadShape.HEXAGON,
+            scale=ScaleOption.CORNER,
+        )
+        self._runMode = 'hexagoncorner'
         
         self._iterationNumberLimit = 100
         self._fieldLimit = 250
@@ -137,11 +141,12 @@ class FIMS_Simulation:
             'runNumber': -1,
             'padLength': 20.,
             'pitch': 55.,
-            'gridStandoff': 50.,
+            'amplificationGap': 50.,
             'gridThickness': 1.,
             'holeRadius': 17.5,
-            'cathodeHeight': 200.,
+            'driftLength': 200.,
             'thicknessSiO2': 5.,
+            'padThickness': 1.,
             'pillarRadius': 5.,
             'driftField': 280.,
             'fieldRatio': 150.,
@@ -180,8 +185,9 @@ class FIMS_Simulation:
         self._checkRunNumber()
                 
         return
-    
+
     #******************************************************************#    
+    
     def setParameters(self, paramDict):
         """
         Updates the parameter dictionary with the provided values.
@@ -373,22 +379,22 @@ class FIMS_Simulation:
         return garfieldEnv
 
 #**********************************************************************#
-    def setGeometry(self, unitCell='FIMS', surrounding=False):
+    def setGeometry(self, geoConfig):
         """
         Sets the geometry for the simulation.
 
         Args:
-            unitCell (str): The unit cell to use for the geometry.
-            surrounding (bool): Option to include surrounding cells in the geometry.
+            geoConfig (GeometryConfiguration): parameters defining the geometry 
+                to be generated.
         """
-
-        if unitCell not in ['FIMS', 'GridPix']:
-            raise ValueError('Error - Invalid unit cell. Options are "FIMS" and "GridPix".')
-        
-        self._unitCell = unitCell
-        self._surroundingCells = surrounding
-        if self._surroundingCells:
-            self._runMode = unitCell + 'Surrounding'
+        if not isinstance(geoConfig, GeometryConfiguration):
+            raise TypeError(
+                f"Expected GeometryConfiguration object, got {type(geoConfig).__name__}"
+            )
+        self._geoConfiguration = geoConfig
+        self._runMode = (
+            self._geoConfiguration.unitCell.value + self._geoConfiguration.scale.value
+        )
 
         return
 
@@ -473,32 +479,18 @@ class FIMS_Simulation:
         """
         Generates the geometry for the simulation using the geometryClass.
         """
-        self._geometry = geometryClass(self._param)
-        self._geometry.setUnitCell(self._unitCell)
-        self._geometry.setSurroundingCells(self._surroundingCells)
+        self._geometry = geometryClass(self._param, self._geoConfiguration)
         self._geometry.buildGeometry()
 
         return        
     
 #**********************************************************************#
     def visualizeGeometry(self):
-        """
-        Generates the geometry for the FIMS simulation 
-        and visualizes it using the Gmsh GUI.
-
-        Args:
-            unitCell (str): The type of unit cell to use.
-            surroundingCells (bool): Whether to include surrounding cells.
-        """
+        """Generates a geometry and visualizes it using the Gmsh GUI."""
 
         print('Visualizing geometry...')
-        self._geometry = geometryClass(self._param)
-
+        self._geometry = geometryClass(self._param, self._geoConfiguration)
         self._geometry.setGUI(runGUI=True)
-        
-        self._geometry.setUnitCell(self._unitCell)
-        self._geometry.setSurroundingCells(self._surroundingCells)
-
         self._geometry.buildGeometry()
 
         return
@@ -659,7 +651,7 @@ class FIMS_Simulation:
         self._checkParam()
     
         #Generate geometry for surrounding cells
-        self.setGeometry(surrounding=True)
+        self._geoConfiguration.scale = ScaleOption.SURROUNDING
         self._generateGeometry()
 
         #Solve fields and run Garfield
@@ -669,61 +661,36 @@ class FIMS_Simulation:
         return runNo
     
 #**********************************************************************#
-    def runGridPix(self):
-        """
-        Executes a simulation with the GridPix geometry.
-
-        Returns:
-            int: The run number for this simulation.
-        """
-
-        # Get the run number for this simulation
-        runNo = self._param['runNumber']
-        print('Running GridPix simulation...')
-        print(f'Running simulation - Run number: {runNo}')
-    
-        self._checkParam()
-    
-        self.setGeometry(unitCell='GridPix')
-        self._generateGeometry()
-            
-        #Solve fields and run Garfield
-        self._solveEFields(solveWeighting=True)
-        self._runGarfield()
-        
-        return runNo
-
-#**********************************************************************#
     def runCapacitance(self):
         """
         Solves the capacitance matrix for the geometry using Elmer.
-        Solves for a hexagonal unit celll and all neightboring cells.
+        Solves for a hexagonal unit cell and all neighboring cells.
 
         Elements are ordered as:
             1. Cathode
             2. Grid
-            3. CenterPad
-            4. TopPad
-            5. BottomPad
-            6. TopRightPad
-            7. BottomRightPad
-            8. TopLeftPad
-            9. BottomLeftPad
+            3. CentralPad
+            4. RightTopPad
+            5. RightPad     (square unit cell only)
+            6. RightBottomPad
+            7. BottomPad
+            8. LeftBottomPad
+            9. LeftPad     (square unit cell only)
+            10. LeftTopPad
+            11. TopPad
 
         Returns:
             capacitanceMatrix (np.array): The capacitance matrix in fF.
         """
 
         self._checkParam()
-
+        
         # Create surrounding-cell geometry
-        self._geometryCapacitance = geometryClass(self._param)
-        self._geometryCapacitance.setUnitCell('FIMSHexagonal')
-        self._geometryCapacitance.setSurroundingCells(True)
-        self._geometryCapacitance.buildGeometry()
+        self._geoConfiguration.scale = ScaleOption.SURROUNDING
+        self._generateGeometry()
 
         # Solve the capacitance matrix
-        self._geometryCapacitance.calculateEFields(capacitance=True)
+        self._geometry.calculateEFields(capacitance=True)
 
         # Read the capacitance matrix from the Elmer output file
         capacitanceMatrix = self._readCapacitanceMatrix()
@@ -1084,17 +1051,13 @@ class FIMS_Simulation:
 #**********************************************************************#
     def _printFieldSolution(self, resultsAtField):
         """
-        TODO - Consider if this is better than just printing the raw values (easier
-        to copy + paste)
-        Unused?
-
         Prints the results of the field search in a box format.
-
+        
         Args:
             resultsAtField (dict): Dictionary containing lists of:
                 - field ratios, values, and errors for each iteration. 
         """
-
+        #TODO - Consider if this is better than just printing the raw values (easier to copy + paste)
         dataLabel = list(resultsAtField.keys())[1]
 
         header = '| #     Efield     Efficiency     Low Error     High Error |'
@@ -1186,7 +1149,8 @@ class FIMS_Simulation:
         return runNo
     
 #***********************************************************************************#
-    def runForOptimizer(self):
+ 
+    def runForIBNOptimizer(self):
         """
         Executes a full avalanche simulation of the FIMS geometry 
         for efficient running within an optimizer.
@@ -1199,11 +1163,10 @@ class FIMS_Simulation:
         Returns:
             int: The run number of the simulation that was executed.
         """
-
         # Get the run number for this simulation
         runNo = self._param['runNumber']
         print(f'Running simulation - Run number: {runNo}')
-
+        
         # Set the initial field conditions
         initField = 75.
         driftField = self._getOptimalDriftField() #TODO
@@ -1222,6 +1185,38 @@ class FIMS_Simulation:
         self._runGarfield()
         
         return runNo   
+
+#***********************************************************************************#
+ 
+    def runForEffOptimizer(self):
+        """
+        Executes a partial simulation of the FIMS geometry for efficient running 
+        within an optimizer.
+
+        Determines the electric field ratio required for
+        95% net efficiency
+            Note this generates the geometry and solves the electric field.
+            
+        returns:
+            minField (float): The minimum field needed for 95% efficiency.
+        """
+        # Get the run number for this simulation
+        runNo = self._param['runNumber']
+        print(f'Running simulation - Run number: {runNo}')
+        
+        # Set the initial field conditions
+        initField = 75.
+        driftField = self._getOptimalDriftField() #TODO
+        self.setParameters({'driftField': driftField})
+        self.setParameters({'fieldRatio': initField})
+
+        # Generate Geometry
+        self._generateGeometry()
+
+        # Find the minimum field ratio for this geometry
+        minField = self._findMinimumField()
+        
+        return minField 
 
 #***********************************************************************************#
 #***********************************************************************************#
