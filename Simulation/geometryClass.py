@@ -261,125 +261,65 @@ class gmshClass:
         TODO:
         """
         pitch = self._param['pitch']
+
+        singleShape = {
+            'circle': lambda: self._occ.addCylinder(0, 0, height, 0, 0, thickness, length),
+            'square': lambda: self._occ.addBox(-length / 2, -length / 2, height, length, length, thickness),
+            'hexagon': lambda: self._createHexagon(length, height, thickness),
+            'octagon': lambda: self._createOctagon(length, height, thickness),
+            'triangle': lambda: self._createTriangle(length, height, thickness),
+            'kiki': lambda: self._createStar(length, length / 3, height, thickness),
+        }
+
         shapeList = []
+        if shape in singleShape:
+            return [(3, singleShape[shape]())]
+            
         match shape:
-            case 'circle':
-                centerShape = self._occ.addCylinder(
-                    0, 0, height,
-                    0, 0, thickness,
-                    length
-                )
-                shapeList.append((3, centerShape))
-            
-            case 'square':
-                centerShape = self._occ.addBox(
-                    -length/2, -length/2, height,
-                    length, length, thickness
-                )
-                shapeList.append((3, centerShape))
-                
-            case 'hexagon':
-                centerShape = self._createHexagon(
-                    length, height, thickness
-                )
-                shapeList.append((3, centerShape))
-                
-            case 'octagon':
-                centerShape = self._createOctagon(
-                    length, height, thickness
-                )
-                shapeList.append((3, centerShape))
-                
-            case 'triangle':
-                centerShape = self._createTriangle(
-                    length, height, thickness
-                )
-                shapeList.append((3, centerShape))
-            
-            case 'kiki':
-                centerShape = self._createStar(
-                    length, length/3, height, thickness
-                )
-                shapeList.append((3, centerShape))
-                
             case 'nesteggs':
+                xCenter = pitch / math.sqrt(3) / 4
+                yCenter = pitch / 4
+                offsets = [
+                    (-2, 0), (2, 0), 
+                    (-1, -1), (-1, 1), 
+                    (1, -1), (1, 1)
+                ]
                 # Create all holes
-                hole1 = self._occ.addCylinder(
+                baseHole = self._occ.addCylinder(
                     0, 0, height,
                     0, 0, thickness,
                     length
                 )
-                hole2 = self._occ.copy([(3, hole1)])
-                hole3 = self._occ.copy([(3, hole1)])
-                hole4 = self._occ.copy([(3, hole1)])
-                hole5 = self._occ.copy([(3, hole1)])
-                hole6 = self._occ.copy([(3, hole1)])
-                
-                # Translate holes off center
-                xCenter = pitch/math.sqrt(3)/4
-                yCenter = pitch/4
-                self._occ.translate([(3, hole1)], -xCenter*2, 0, 0)
-                self._occ.translate(hole2, xCenter*2, 0, 0)
-                self._occ.translate(hole3, -xCenter, -yCenter, 0)
-                self._occ.translate(hole4, -xCenter, yCenter, 0)
-                self._occ.translate(hole5, xCenter, -yCenter, 0)
-                self._occ.translate(hole6, xCenter, yCenter, 0)
-                
-                # Append to list for duplication to surrounding cells
-                shapeList += [(3, hole1), hole2[0], hole3[0], hole4[0], hole5[0], hole6[0]]
-            
+                baseShape = (3, baseHole)
+
+                for i, (mx, my) in enumerate(offsets):
+                    curShape = baseShape if i == 0 else self._occ.copy([baseShape])[0]
+                    self._occ.translate([curShape], mx*xCenter, my*yCenter, 0)
+                    shapeList.append(curShape)
+        
             case 'trivialpursuit':
-                # Create all holes
-                hole1 = self._createTriangle(
-                    length,
-                    height,
-                    thickness,
-                    angle=30
-                )
-                hole2 = self._createTriangle(
-                    length,
-                    height,
-                    thickness,
-                    angle=210
-                )
-                hole3 = self._createTriangle(
-                    length,
-                    height,
-                    thickness,
-                    angle=30
-                )
-                hole4 = self._createTriangle(
-                    length,
-                    height,
-                    thickness,
-                    angle=210
-                )
-                hole5 = self._createTriangle(
-                    length,
-                    height,
-                    thickness,
-                    angle=30
-                )
-                hole6 = self._createTriangle(
-                    length,
-                    height,
-                    thickness,
-                    angle=210
-                )
-                
-                # Translate holes off center
                 xCenter = pitch*math.sqrt(3)/8
                 yCenter = pitch/4
-                self._occ.translate([(3, hole1)], xCenter, yCenter/2, 0)
-                self._occ.translate([(3, hole2)], 0, yCenter, 0)
-                self._occ.translate([(3, hole3)], -xCenter, yCenter/2, 0)
-                self._occ.translate([(3, hole4)], -xCenter, -yCenter/2, 0)
-                self._occ.translate([(3, hole5)], 0, -yCenter, 0)
-                self._occ.translate([(3, hole6)], xCenter, -yCenter/2, 0)
+                angles = [30, 210, 30, 210, 30, 210]
+                offsets = [
+                    (xCenter, yCenter/2),
+                    (0, yCenter),
+                    (-xCenter, yCenter/2),
+                    (-xCenter, -yCenter/2),
+                    (0, -yCenter),
+                    (xCenter, -yCenter/2)
+                ]
                 
-                # Append to list for duplication to surrounding cells
-                shapeList += [(3, hole1), (3, hole2), (3, hole3), (3, hole4), (3, hole5), (3, hole6)]
-            
+                # Create all holes:
+                for angle, (dx, dy) in zip(angles, offsets):
+                    inHole = self._createTriangle(
+                        length, height, thickness,
+                        angle=angle
+                    )
+                    shape = (3, inHole)
+                    self._occ.translate([shape], dx, dy, 0)
+                    shapeList.append(shape)
+                
             case _:
                 raise ValueError(f"Unsupported shape: '{shape}'")
         
