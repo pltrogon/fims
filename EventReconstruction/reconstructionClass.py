@@ -183,7 +183,7 @@ class Reconstruction:
 
     #********************************************************************************#
         
-    def _convertToSignal(self, pixel):
+    def _convertToSignal(self, zLocs, charges):
         """
         Takes data of a single pixel and calculates ToT and threshold crossing time.
         
@@ -194,41 +194,49 @@ class Reconstruction:
             upCrossPoints (list): list of threshold crossing times
             ToTList (list): list of ToT times
         """
+
+        ## TODO verify
         threshold = self.reconInfo['Signal Threshold']
         decayRate = self.reconInfo['Signal Decay Rate']
-        
-        # Generate a signal range that guarantees that the full signal is included
-        rangeList = np.linspace(
-            min(pixel['z']),
-            max(pixel['z']) - math.log(threshold/sum(pixel['q']))*decayRate,
-            1000
-        )
 
-        # Calculate the net signal of all charges
-        netSignal = np.array([sum(pixel['q']*math.e**(-(height-pixel['z'])/decayRate)) for height in rangeList])
+        z = np.asarray(zLocs)
+        charge = np.asarray(charges)
 
-        # Identify which points are above and below threshold
+        chargeSum = charge.sum()
+        zMin= z.min()
+        zMax = z.max() - np.log(threshold/chargeSum)*decayRate
+
+        if zMin >= zMax:
+            return [], []
+
+        rangeList = np.linspace(zMin, zMax, 1000)
+
+        #Matrix multiplication for signals
+        dz = rangeList[:, np.newaxis] - z[np.newaxis, :]
+        decay = np.where(dz >= 0, np.exp(-dz/decayRate), 0.0)
+        netSignal = decay @ charge
+
+        #Find crossing times
         isAbove = netSignal >= threshold
-        aboveRange = rangeList[isAbove]
-        belowRange = rangeList[~isAbove]
-        aboveID = np.flatnonzero(aboveRange)
-        belowID = np.flatnonzero(belowRange)
+        diff = np.diff(isAbove.astype(np.int8))
 
-        # Find the upwards crossing points
-        upCrossMask = aboveID[1:]-aboveID[:-1] > 1
-        upCrossMask = np.append(True, upCrossMask)
-        upCrossPoints = aboveRange[upCrossMask]
+        riseID = np.flatnonzero(diff == 1) + 1
+        fallID = np.flatnonzero(diff == -1) + 1
 
-        # Find all the downwards crossing points, using the last point if none are found
-        if len(belowID > 0):
-            downCrossMask = belowID[1:]-belowID[:-1] > 1
-            downCrossMask = np.append(True, downCrossMask)
-            downCrossPoints = belowRange[downCrossMask]
-        else:
-            downCrossPoints = [rangeList[-1]]
+        if isAbove[0]: #If signal is above threshold at t=0
+            riseID = np.insert(riseID, 0, 0)
 
-        ToTList = [end-start for start,end in list(zip(upCrossPoints, downCrossPoints))]
-        
+        if len(riseID) > len(fallID): #If signal is above threshold at tmax
+            fallID = np.append(fallID, len(rangeList)-1)
+
+        if len(riseID) == 0:
+            return [], []
+
+        # Calculate ToT
+        upCrossPoints = rangeList[riseID].tolist()
+        downCrossPoints = rangeList[fallID].tolist()
+        ToTList = (np.array(downCrossPoints) - np.array(upCrossPoints)).tolist()
+            
         return upCrossPoints, ToTList
     
     #********************************************************************************#
@@ -331,28 +339,35 @@ class Reconstruction:
         returns:
             readoutData (dataframe): x,y,z coordinates of the charge bundles as well as the time over threshold.
         """
+
+        ## TODO: Verify
         threshold = self.reconInfo['Signal Threshold']
 
         # Group data by pixel
         groupedData = self._groupData(inputData)
 
-        # Filter pixels with total charge less than the threshold
-        mask = groupedData['q'].apply(lambda q: sum(q) > threshold and sum(q) > len(q))
-        filteredData = groupedData[mask].reset_index(drop=True)
-        
+        chargeSum = [sum(q) for q in groupdedData['q']]
+        chargeLen = [len(q) for q in groupdedData['q']]
+        chargeMask = [(s > threshold) and (s > l) for s, l in zip(chargeSum, chargeLen)]
+
+        filteredData = groupedData[chargeMask].copy()
+        if filteredData.empty:
+            raise ValueError('Empty Dataframe.')
+
+        # Calculate ToT by converting charge to voltage
         print('Calculating ToT...')
-        # Convert charge to voltage signal
-        signalData = filteredData.apply(self._convertToSignal, axis=1)
-        crossing, ToT = list(zip(*signalData))
-        filteredData['ToT'] = ToT
-        filteredData['crossing'] = crossing
+        signals = [
+            self._convertToSignal(z, q)
+            for z, q in zip(filteredData['z'], filteredData['q'])
+        ]
 
-        # Remove depreciated columns
-        filteredData.drop(['z', 'q'], axis=1, inplace=True)
+        # Unpack results and remove depreciated columns
+        crossings, tots = zip(*signals)
+        filteredData['crossing'] = crossings
+        filteredData['ToT'] = tots
+        filteredData.drop(columns=['z', 'q'], inplace=True)
 
-        # Expand data for easier use
-        readoutData = filteredData.explode('ToT', ignore_index=True)
-        readoutData = readoutData.explode('crossing', ignore_index=True)
+        readoutData = filteredData.explode(['crossing', 'ToT'], ignore_index=True)
  
         return readoutData
     
