@@ -261,6 +261,8 @@ class gmshClass:
         TODO:
         """
         pitch = self._param['pitch']
+        #convert shape enum to string
+        inShape = (shape.value if isinstance(shape, Enum) else str(shape)).lower()
 
         singleShape = {
             'circle': lambda: self._occ.addCylinder(0, 0, height, 0, 0, thickness, length),
@@ -272,10 +274,10 @@ class gmshClass:
         }
 
         shapeList = []
-        if shape in singleShape:
-            return [(3, singleShape[shape]())]
+        if inShape in singleShape:
+            return [(3, singleShape[inShape]())]
             
-        match shape:
+        match inShape:
             case 'nesteggs':
                 xCenter = pitch / math.sqrt(3) / 4
                 yCenter = pitch / 4
@@ -316,12 +318,12 @@ class gmshClass:
                         length, height, thickness,
                         angle=angle
                     )
-                    shape = (3, inHole)
-                    self._occ.translate([shape], dx, dy, 0)
-                    shapeList.append(shape)
+                    curShape = (3, inHole)
+                    self._occ.translate([curShape], dx, dy, 0)
+                    shapeList.append(curShape)
                 
             case _:
-                raise ValueError(f"Unsupported shape: '{shape}'")
+                raise ValueError(f"Unsupported shape: '{inShape}'")
         
         return shapeList
 
