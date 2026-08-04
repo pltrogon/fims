@@ -262,83 +262,60 @@ class gmshClass:
         )
 
         return
-
 #**********************************************************************#
-    
-    def _buildGrid(self):
+
+    def _getShape(self, shape, length, height, thickness):
         """
-        Constructs the volume for the amplification grid with surrounding Cells.
-        
-        returns:
-            gridVolume: object representing the volume of the amplification grid.
-        """        
-        # Get relevant geometry parameters
-        gridThickness = self._param['gridThickness']
-        holeRadius = self._param['holeRadius']
+        TODO:
+        """
         pitch = self._param['pitch']
-        yLength = pitch
-
-        # Create single cell grid without holes
-        match self._geoConfig.unitCell:
-            case UnitCell.HEXAGON:
-                xLength = pitch*math.sqrt(3)
-                xHalf = pitch*math.sqrt(3)/2
-                gridBox = self._createHexagon(
-                    xLength/3, -gridThickness/2, gridThickness
+        shapeList = []
+        match shape:
+            case 'circle':
+                centerShape = self._occ.addCylinder(
+                    0, 0, height,
+                    0, 0, thickness,
+                    length
                 )
-                
-            case UnitCell.SQUARE:
-                xLength = pitch
-                xHalf = pitch
-                gridBox = self._occ.addBox(
-                    -xLength/2, -yLength/2, -gridThickness/2,
-                    xLength, yLength, gridThickness
-                )
-
-            case _:
-                pass
+                shapeList.append((3, centerShape))
             
-        # Create hole cut tool based on given hole shape.
-        #TODO - Instead I would love to see a _getCutter()-type method. This can then be used here AND when  cutting the dielectric.
-        match self._geoConfig.holeShape:
-            case HoleShape.CIRCLE:
-                centerGridHole = self._occ.addCylinder(
-                    0, 0, -gridThickness/2,
-                    0, 0, gridThickness,
-                    holeRadius
+            case 'square':
+                centerShape = self._occ.addBox(
+                    -length/2, -length/2, height,
+                    length, length, thickness
                 )
-                gridHoleTools = [(3, centerGridHole)]
+                shapeList.append((3, centerShape))
                 
-            case HoleShape.HEXAGON:
-                centerGridHole = self._createHexagon(
-                    holeRadius, -gridThickness/2, gridThickness
+            case 'hexagon':
+                centerShape = self._createHexagon(
+                    length, height, thickness
                 )
-                gridHoleTools = [(3, centerGridHole)]
+                shapeList.append((3, centerShape))
                 
-            case HoleShape.OCTAGON:
-                centerGridHole = self._createOctagon(
-                    holeRadius, -gridThickness/2, gridThickness
+            case 'octagon':
+                centerShape = self._createOctagon(
+                    length, height, thickness
                 )
-                gridHoleTools = [(3, centerGridHole)]
+                shapeList.append((3, centerShape))
                 
-            case HoleShape.TRIANGLE:
-                centerGridHole = self._createTriangle(
-                    holeRadius, -gridThickness/2, gridThickness
+            case 'triangle':
+                centerShape = self._createTriangle(
+                    length, height, thickness
                 )
-                gridHoleTools = [(3, centerGridHole)]
+                shapeList.append((3, centerShape))
             
-            case HoleShape.KIKI:
-                centerGridHole = self._createStar(
-                    holeRadius, holeRadius/3, -gridThickness/2, gridThickness
+            case 'kiki':
+                centerShape = self._createStar(
+                    length, length/3, height, thickness
                 )
-                gridHoleTools = [(3, centerGridHole)]
+                shapeList.append((3, centerShape))
                 
-            case HoleShape.NESTEGGS:
+            case 'nesteggs':
                 # Create all holes
                 hole1 = self._occ.addCylinder(
-                    0, 0, -gridThickness/2,
-                    0, 0, gridThickness,
-                    holeRadius
+                    0, 0, height,
+                    0, 0, thickness,
+                    length
                 )
                 hole2 = self._occ.copy([(3, hole1)])
                 hole3 = self._occ.copy([(3, hole1)])
@@ -357,44 +334,44 @@ class gmshClass:
                 self._occ.translate(hole6, xCenter, yCenter, 0)
                 
                 # Append to list for duplication to surrounding cells
-                gridHoleTools = [(3, hole1), hole2[0], hole3[0], hole4[0], hole5[0], hole6[0]]
+                shapeList += [(3, hole1), hole2[0], hole3[0], hole4[0], hole5[0], hole6[0]]
             
-            case HoleShape.TRIVIALPURSUIT:
+            case 'trivialpursuit':
                 # Create all holes
                 hole1 = self._createTriangle(
-                    holeRadius,
-                    -gridThickness/2,
-                    gridThickness,
+                    length,
+                    height,
+                    thickness,
                     angle=30
                 )
                 hole2 = self._createTriangle(
-                    holeRadius,
-                    -gridThickness/2,
-                    gridThickness,
+                    length,
+                    height,
+                    thickness,
                     angle=210
                 )
                 hole3 = self._createTriangle(
-                    holeRadius,
-                    -gridThickness/2,
-                    gridThickness,
+                    length,
+                    height,
+                    thickness,
                     angle=30
                 )
                 hole4 = self._createTriangle(
-                    holeRadius,
-                    -gridThickness/2,
-                    gridThickness,
+                    length,
+                    height,
+                    thickness,
                     angle=210
                 )
                 hole5 = self._createTriangle(
-                    holeRadius,
-                    -gridThickness/2,
-                    gridThickness,
+                    length,
+                    height,
+                    thickness,
                     angle=30
                 )
                 hole6 = self._createTriangle(
-                    holeRadius,
-                    -gridThickness/2,
-                    gridThickness,
+                    length,
+                    height,
+                    thickness,
                     angle=210
                 )
                 
@@ -409,53 +386,131 @@ class gmshClass:
                 self._occ.translate([(3, hole6)], xCenter, -yCenter/2, 0)
                 
                 # Append to list for duplication to surrounding cells
-                gridHoleTools = [(3, hole1), (3, hole2), (3, hole3), (3, hole4), (3, hole5), (3, hole6)]
+                shapeList += [(3, hole1), (3, hole2), (3, hole3), (3, hole4), (3, hole5), (3, hole6)]
             
             case _:
-                raise ValueError(f"Unsupported hole shape: '{self._geoConfig.holeShape}'")
+                raise ValueError(f"Unsupported shape: '{shape}'")
         
-        # Adjust grid size to match scale
-        match self._geoConfig.scale:
-            case ScaleOption.SINGLE:
-                adjustedGrid = [(3, gridBox)]
-            
-            case ScaleOption.CORNER:
-                # Remove unit cell box and replace it with just the corner.
-                self._occ.remove([(3, gridBox)], recursive=True)
-                cornerGrid = self._occ.addBox(
-                    0, 0, -gridThickness/2,
-                    xLength/2, yLength/2, gridThickness
-                )
-                adjustedGrid = [(3, cornerGrid)]
-                surroundingHoleList = []
-                for hole in gridHoleTools:
-                    surroundingHoleList.append(self._copyToSurrounding(hole, fuse=False))
-                gridHoleTools += surroundingHoleList[0]
+        return shapeList
 
-            case ScaleOption.SURROUNDING:
-                adjustedGrid = self._copyToSurrounding((3, gridBox))
-                surroundingHoleList = []
-                for hole in gridHoleTools:
-                    surroundingHoleList.append(self._copyToSurrounding(hole, fuse=False))
-                gridHoleTools += surroundingHoleList[0]
-            
-            case ScaleOption.HALF:
-                self._occ.remove([(3, gridBox)], recursive=True)
-                halfBox = self._occ.addBox(
-                    -xHalf, -yLength, -gridThickness/2,
-                    2*xHalf, 2*yLength, gridThickness
-                )
-                adjustedGrid = [(3, halfBox)]
-                surroundingHoleList = []
-                for hole in gridHoleTools:
-                    surroundingHoleList.append(self._copyToSurrounding(hole, fuse=False))
+#**********************************************************************#
 
-                gridHoleTools += surroundingHoleList[0]
+    def _makeBlock(self, length, height, thickness):
+        """
+        Creates a block of the scaled unit cell.
+        
+        args: 
+            length (float): the length scale of the cell (pitch).
+            height (float): the z-height of the base of the block.
+            thickness (float): the thickness of the block.
+        
+        returns:
+            cutGeometry: the geometry element after being scaled to the
+        correct size.
+        """
+        yLength = length
+        if not thickness:
+            dimNum = 2
+        else:
+            dimNum = 3
+        
+        # Create a dielectric without holes
+        match self._geoConfig.unitCell:
+            case UnitCell.HEXAGON:
+                xLength = length*math.sqrt(3)
+                xHalf = length*math.sqrt(3)/2
+                geometry = self._createHexagon(
+                    xLength/3, height, thickness
+                )
+
+            case UnitCell.SQUARE:
+                xLength = length
+                xHalf = length
+                if thickness:
+                    geometry = self._occ.addBox(
+                        -xLength/2, -yLength/2, height, 
+                        xLength, yLength, thickness
+                    )
+                else:
+                    geometry = self._occ.addRectangle(
+                        -xLength/2, -yLength/2, height, 
+                        xLength, yLength
+                    )
 
             case _:
                 pass
         
-        # Duplicate into surrounding cells
+        match self._geoConfig.scale:
+            case ScaleOption.SINGLE:
+                cutGeometry = [(dimNum, geometry)]
+            
+            case ScaleOption.CORNER:
+                # Remove unit cell box and replace it with just the corner.
+                self._occ.remove([(dimNum, geometry)], recursive=True)
+                if thickness:
+                    cornerGeometry = self._occ.addBox(
+                        0, 0, height,
+                        xLength/2, yLength/2, thickness
+                    )
+                else:
+                    cornerGeometry = self._occ.addRectangle(
+                        0, 0, height,
+                        xLength/2, yLength/2
+                    )
+                cutGeometry = [(dimNum, cornerGeometry)]
+                
+            case ScaleOption.SURROUNDING:
+                # Create surrounding dielectric
+                cutGeometry = self._copyToSurrounding((dimNum, geometry))
+            
+            case ScaleOption.HALF:
+                self._occ.remove([(dimNum, geometry)], recursive=True)
+                if thickness:
+                    halfBox = self._occ.addBox(
+                        -xHalf, -yLength, height,
+                        2*xHalf, 2*yLength, thickness
+                    )
+                else:
+                    halfBox = self._occ.addRectangle(
+                        -xHalf, yLength, height,
+                        2*xHalf, 2*yHalf
+                    )
+                cutGeometry = [(dimNum, halfBox)]
+    
+        return cutGeometry
+
+#**********************************************************************#
+    
+    def _buildGrid(self):
+        """
+        Constructs the volume for the amplification grid with surrounding Cells.
+        
+        returns:
+            gridVolume: object representing the volume of the amplification grid.
+        """        
+        # Get relevant geometry parameters
+        gridThickness = self._param['gridThickness']
+        holeRadius = self._param['holeRadius']
+        pitch = self._param['pitch']
+        yLength = pitch
+
+        # Create single cell grid without holes
+        adjustedGrid = self._makeBlock(pitch, -gridThickness/2, gridThickness)
+            
+        # Create hole cut tool based on given hole shape.
+        gridHoleTools = self._getShape(
+            self._geoConfig.holeShape,
+            holeRadius,
+            -gridThickness/2,
+            gridThickness
+        )
+        surroundingHoleList = []
+        for hole in gridHoleTools:
+            surroundingHoleList.append(self._copyToSurrounding(hole, fuse=False))
+        for holes in surroundingHoleList:
+            gridHoleTools += holes
+        
+        # Cut holes into grid
         gridVolume, _ = self._occ.cut(
             adjustedGrid,
             gridHoleTools
@@ -478,86 +533,27 @@ class gmshClass:
         padLength = self._param['padLength']
         thicknessSiO2 = self._param['thicknessSiO2'] + padThickness
         padBase = -self._param['gridStandoff'] - padThickness - self._param['gridThickness']/2
-        yLength = pitch
 
-        # Create a dielectric without holes
-        match self._geoConfig.unitCell:
-            case UnitCell.HEXAGON:
-                xLength = pitch*math.sqrt(3)
-                xHalf = pitch*math.sqrt(3)/2
-                dielectricBox = self._createHexagon(
-                    xLength/3, padBase, thicknessSiO2
-                )
-
-            case UnitCell.SQUARE:
-                xLength = pitch
-                xHalf = pitch
-                dielectricBox = self._occ.addBox(
-                    -xLength/2, -yLength/2, padBase, 
-                    xLength, yLength, thicknessSiO2
-                )
-
-            case _:
-                pass
-            
-        match self._geoConfig.scale:
-            case ScaleOption.SINGLE:
-                adjustedDielectric = [(3, dielectricBox)]
-            
-            case ScaleOption.CORNER:
-                # Remove unit cell box and replace it with just the corner.
-                self._occ.remove([(3, dielectricBox)], recursive=True)
-                cornerDielectric = self._occ.addBox(
-                    0, 0, padBase,
-                    xLength/2, yLength/2, thicknessSiO2
-                )
-                adjustedDielectric = [(3, cornerDielectric)]
-                
-            case ScaleOption.SURROUNDING:
-                # Create surrounding dielectric
-                adjustedDielectric = self._copyToSurrounding((3, dielectricBox))
-            
-            case ScaleOption.HALF:
-                self._occ.remove([(3, dielectricBox)], recursive=True)
-                halfBox = self._occ.addBox(
-                    -xHalf, -yLength, padBase,
-                    2*xHalf, 2*yLength, thicknessSiO2
-                )
-                adjustedDielectric = [(3, halfBox)]
+        # Create dielectric without holes
+        adjustedDielectric = self._makeBlock(pitch, padBase, thicknessSiO2)
                 
         # Determine hole and pad shape
-        match self._geoConfig.padShape:
-            case PadShape.SQUARE:
-                centerPadHole = self._occ.addBox(
-                    -padLength/2, -padLength/2, padBase,
-                    padLength, padLength, thicknessSiO2
-                )
-                # Add central readout pad object
-                centerPad = self._occ.addBox(
-                    -padLength/2, -padLength/2, padBase,
-                    padLength, padLength, padThickness
-                )
-                
-            case PadShape.HEXAGON:
-                # Add central pad hole
-                centerPadHole = self._createHexagon(padLength, padBase, thicknessSiO2)
-                
-                # Add central readout pad object
-                centerPad = self._createHexagon(padLength, padBase, padThickness)
-                
-            case PadShape.OCTAGON:
-                # Add central pad hole
-                centerPadHole = self._createOctagon(padLength, padBase, thicknessSiO2)
-                
-                # Add central readout pad object
-                centerPad = self._createOctagon(padLength, padBase, padThickness)
-
-            case _:
-                pass
+        centerPadHole = self._getShape(
+            self._geoConfig.padShape,
+            padLength,
+            padBase,
+            thicknessSiO2
+        )
+        centerPad = self._getShape(
+            self._geoConfig.padShape,
+            padLength,
+            padBase,
+            padThickness
+        )
         
         # Create pads and tools for dielectric holes
-        padHoleTools = self._copyToSurrounding((3, centerPadHole), fuse=False)
-        padList = self._copyToSurrounding((3, centerPad), fuse=False)
+        padHoleTools = self._copyToSurrounding(centerPadHole[0], fuse=False)
+        padList = self._copyToSurrounding(centerPad[0], fuse=False)
         padVolumes = []
         for pad in padList:
             padVolume, _ = self._occ.intersect(
@@ -598,82 +594,9 @@ class gmshClass:
         
         # Create a volume object for the gas
         # Then create the cathode surface
-        match self._geoConfig.unitCell:
-            case UnitCell.HEXAGON:
-                xLength = pitch*math.sqrt(3)
-                xHalf = pitch*math.sqrt(3)/2
-                # Create a volume object for the gas
-                gasBox = self._createHexagon(
-                    xLength/3, -gridStandoff, gasHeight
-                )
-                
-                # Create the cathode surface
-                cathodeSurface = self._createHexagon(
-                    xLength/3, cathodeHeight
-                )
-                
-            case UnitCell.SQUARE: 
-                xLength = pitch
-                xHalf = pitch
-                gasBox = self._occ.addBox(
-                    -xLength/2, -yLength/2, -gridStandoff,
-                    xLength, yLength, gasHeight
-                )
-                
-                cathodeSurface = self._occ.addRectangle(
-                    -xLength/2, -yLength/2, cathodeHeight,
-                    xLength, yLength
-                )
-            case _:
-                pass
+        adjustedGas = self._makeBlock(pitch, -gridStandoff, gasHeight)
+        adjustedCathode = self._makeBlock(pitch, cathodeHeight, None)
         
-        match self._geoConfig.scale:
-            case ScaleOption.SINGLE:
-                adjustedGas = [(3, gasBox)]
-                adjustedCathode = [(2, cathodeSurface)]
-
-            case ScaleOption.CORNER:
-                # Create corner gas
-                self._occ.remove([(3, gasBox)], recursive=True)
-                cornerGas = self._occ.addBox(
-                    0, 0, -gridStandoff,
-                    xLength/2, yLength/2, gasHeight
-                )
-                adjustedGas = [(3, cornerGas)]
-                
-                # Create corner cathode
-                self._occ.remove([(2, cathodeSurface)], recursive=True)
-                cornerCathode = self._occ.addRectangle(
-                    0, 0, cathodeHeight,
-                    xLength/2, yLength/2
-                )
-                adjustedCathode = [(2, cornerCathode)]
-
-            case ScaleOption.SURROUNDING:
-                # Create surrounding gas
-                adjustedGas = self._copyToSurrounding((3, gasBox))
-                adjustedCathode = self._copyToSurrounding((2, cathodeSurface))
-            
-            case ScaleOption.HALF:
-                # Create half gas
-                self._occ.remove([(3, gasBox)], recursive=True)
-                halfBox = self._occ.addBox(
-                    -xHalf, -yLength, -gridStandoff,
-                    2*xHalf, 2*yLength, gasHeight
-                )
-                adjustedGas = [(3, halfBox)]
-                
-                # Create half cathode
-                self._occ.remove([(2, cathodeSurface)], recursive=True)
-                halfCathode = self._occ.addRectangle(
-                    -xHalf, -yLength, cathodeHeight,
-                    2*xHalf, 2*yLength
-                )
-                adjustedCathode = [(2, halfCathode)]
-
-            case _:
-                pass
-                                
         # Remove non-gas volumes from the gas box
         gasVolume, _ = self._occ.cut(
             adjustedGas, 
