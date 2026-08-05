@@ -2,6 +2,7 @@
 # CLASS DEFINITION FOR GEOMETRY #
 #################################
 from __future__ import annotations
+from enum import Enum
 import time
 import subprocess
 from venv import create
@@ -295,9 +296,11 @@ class gmshClass:
                 baseShape = (3, baseHole)
 
                 for i, (mx, my) in enumerate(offsets):
-                    curShape = baseShape if i == 0 else self._occ.copy([baseShape])[0]
+                    curShape = self._occ.copy([baseShape])[0]
                     self._occ.translate([curShape], mx*xCenter, my*yCenter, 0)
+                    print('Hole Centers: ', i, mx*xCenter, my*yCenter)
                     shapeList.append(curShape)
+                self._occ.remove([baseShape], recursive=True)
         
             case 'trivialpursuit':
                 xCenter = pitch*math.sqrt(3)/8
@@ -386,7 +389,7 @@ class gmshClass:
                 shape = (
                     self._occ.addBox(-xHalf, -yLength, height, 2*xHalf, 2*yLength, thickness)
                     if thickness
-                    else self._occ.addRectangle(-xHalf, -yLength, height, 2*xHalf, 2*yHalf)
+                    else self._occ.addRectangle(-xHalf, -yLength, height, 2*xHalf, 2*yLength)
                 )
                 cutGeometry = [(dimNum, shape)]
     
