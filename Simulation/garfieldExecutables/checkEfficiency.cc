@@ -130,6 +130,13 @@ int main(int argc, char * argv[]) {
         xBoundary[1], yBoundary[1], zBoundary[1]
     );    
 
+    //Object for viewing drift
+    viewElectronDrift = new ViewDrift();
+    viewElectronDrift->SetArea(
+        xBoundary[0], yBoundary[0], zBoundary[0], 
+        xBoundary[1], yBoundary[1], zBoundary[1]
+    );
+
     //Define avalanche characteristics
     int electronLimit = electronThreshold+5;
     AvalancheMicroscopic avalancheE;
@@ -137,7 +144,7 @@ int main(int argc, char * argv[]) {
     avalancheE.EnableAvalancheSizeLimit(electronLimit);
     {
         SilenceCerr guard;
-        avalancheE.EnablePlotting(nullptr, 10);//For velocity vector
+        avalancheE.EnablePlotting(viewElectronDrift, 10);//For velocity vector
     }
 
     //Deafult initial electron parameters
@@ -326,6 +333,7 @@ int main(int argc, char * argv[]) {
                     }//End of electron endpoint switch
                 }
 
+                viewElectronDrift->Clear();
             }//End of single avalanche trial
 
         }//end of avalanche bunch loop
