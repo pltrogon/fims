@@ -437,7 +437,13 @@ int main(int argc, char * argv[]) {
 
   // ***** Calculate E fields ***** //
   //Calculate E field at different z planes above and below grid
-  double eFieldPlanes[6] = {zmax*.95, simParams->driftLength/2., 2.*simParams->gridThickness, -2.*simParams->gridThickness, -simParams->amplificationGap/2., -.95*(simParams->amplificationGap-simParams->thicknessSiO2-simParams->padThickness/2.)};
+  double eFieldPlanes[6] = {
+    zmax*.95, simParams->driftLength/2., 
+    2.*simParams->gridThickness, 
+    -2.*simParams->gridThickness, 
+    -simParams->amplificationGap/2., 
+    -.95*(simParams->amplificationGap - simParams->thicknessSiO2 - simParams->padThickness/2.)
+  };
 
   for(int inPlane = 0; inPlane < 6; inPlane++){
     for(int inPoint = 0; inPoint < totalFieldLines; inPoint++){
