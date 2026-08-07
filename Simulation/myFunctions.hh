@@ -35,10 +35,11 @@ struct SimulationParameters {
     // Geometry parameters
     double padLength;
     double pitch;
-    double gridStandoff;
+    double amplificationGap;
     double gridThickness;
+    double padThickness;
     double holeRadius;
-    double cathodeHeight;
+    double driftLength;
     double thicknessSiO2;
     double pillarRadius;
     
@@ -69,7 +70,36 @@ struct EfficiencyResults {
     double highError;
     double minValue;
     double maxValue;
+};// Geometry mode enumeration and conversion
+enum class GeometryMode {
+    Square,
+    SquareSurrounding,
+    Hexagonal,
+    HexagonalSurrounding,
+    Unknown
 };
+
+/**
+ * @brief Converts a string to a GeometryMode enum value.
+ * @param str The string to convert (case-insensitive).
+ * @return The corresponding GeometryMode enum value.
+ */
+GeometryMode stringToGeometryMode(std::string str);
+
+// Efficiency mode enumeration and conversion
+enum class EfficiencyMode {
+    Net,
+    Detection,
+    Collection,
+    Unknown
+};
+
+/**
+ * @brief Converts a string to an EfficiencyMode enum value.
+ * @param str The string to convert (case-insensitive).
+ * @return The corresponding EfficiencyMode enum value.
+ */
+EfficiencyMode stringToEfficiencyMode(std::string str);
 
 /**
  * Retrieves the current git version/hash.
@@ -87,21 +117,12 @@ std::string getGitVersion();
 std::pair<double, double> randomXYInHexagon(double sideLength);
 
 /**
- * @brief Utility to temporarily silence std::cerr.
+ * @brief Generates a random (x,y) point uniformly distributed within a square centered at the origin with the specified side length.
+ * @param sideLength Half the length of each side of the square.
+ * 
+ * @return A pair of doubles representing the (x,y) coordinates of the random point.
  */
-class SilenceCerr {
-public:
-    SilenceCerr();
-    ~SilenceCerr();
-
-    // Disable copying to prevent multiple objects fighting over the same buffer
-    SilenceCerr(const SilenceCerr&) = delete;
-    SilenceCerr& operator=(const SilenceCerr&) = delete;
-
-private:
-    std::streambuf* m_oldBuffer;
-    std::ofstream m_nullStream;
-};
+std::pair<double, double> randomXYInSquare(double sideLength);
 
 /**
  * Initializes a Garfield++ gas mixture with the provided parameters.
@@ -129,33 +150,30 @@ std::optional<SimulationParameters> readSimulationParameters();
  */
 EfficiencyResults calculateEfficiencyStats(int nSuccess, int nTotal);
 
-// Geometry mode enumeration and conversion
-enum class GeometryMode {
-    FIMS,
-    FIMSSurrounding,
-    Unknown
-};
+/**
+ * @brief Generates a random (x,y) point uniformly distributed within the unit cell
+ * @param mode The GeometryMode of the unit cell.
+ * @param sideLength The side length of the geometry
+ * 
+ * @return A pair of doubles representing the (x,y) coordinates of the random point.
+ */
+std::pair<double, double> randomXYinGeometry(GeometryMode mode, double sideLength);
 
 /**
- * @brief Converts a string to a GeometryMode enum value.
- * @param str The string to convert (case-insensitive).
- * @return The corresponding GeometryMode enum value.
+ * @brief Utility to temporarily silence std::cerr.
  */
-GeometryMode stringToGeometryMode(std::string str);
+class SilenceCerr {
+public:
+    SilenceCerr();
+    ~SilenceCerr();
 
-// Efficiency mode enumeration and conversion
-enum class EfficiencyMode {
-    Net,
-    Detection,
-    Collection,
-    Unknown
+    // Disable copying to prevent multiple objects fighting over the same buffer
+    SilenceCerr(const SilenceCerr&) = delete;
+    SilenceCerr& operator=(const SilenceCerr&) = delete;
+
+private:
+    std::streambuf* m_oldBuffer;
+    std::ofstream m_nullStream;
 };
-
-/**
- * @brief Converts a string to an EfficiencyMode enum value.
- * @param str The string to convert (case-insensitive).
- * @return The corresponding EfficiencyMode enum value.
- */
-EfficiencyMode stringToEfficiencyMode(std::string str);
 
 #endif // MY_FUNCTIONS_H

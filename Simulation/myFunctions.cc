@@ -1,5 +1,22 @@
 #include "myFunctions.hh"
 #include <algorithm>
+#include <cctype>
+#include <iostream>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <random>
+#include <utility>
+#include <cmath>
+
+namespace {
+    // Internal helper for uniform [-1.0, 1.0] random values
+    double symmetricUnit() {
+        thread_local static std::mt19937 engine(std::random_device{}());
+        thread_local static std::uniform_real_distribution<double> dist(-1.0, 1.0);
+        return dist(engine);
+    }
+}
 
 /**
  * Retrieves the current git version/hash.
@@ -44,20 +61,51 @@ std::pair<double, double> randomXYInHexagon(double sideLength) {
     const double inRadius = sqrt3 * sideLength / 2.;
     const double outRadius = sideLength;
 
-    thread_local static std::mt19937 rng(std::random_device{}());
-    std::uniform_real_distribution<double> dist(-1.0, 1.0);
-
     while(true) {
         // Uniform sample in box
-        double sampleX = dist(rng) * outRadius;
-        double sampleY = dist(rng) * inRadius;
+        double sampleX = symmetricUnit() * outRadius;
+        double sampleY = symmetricUnit() * inRadius;
 
         // Check if in hexagon (use symmetry of Q1)
-        double absX = std::fabs(sampleX);
-        double absY = std::fabs(sampleY);
-        if(absX <= sideLength - absY/sqrt3){
+        if(std::fabs(sampleX) <= sideLength - (std::fabs(sampleY)/sqrt3)){
             return {sampleX, sampleY};
         }
+    }
+}
+
+/**
+ * @brief Generates a random (x,y) point uniformly distributed within a square centered at the origin with the specified side length.
+ * @param sideLength half the length of each side of the square.
+ * 
+ * @return A pair of doubles representing the (x,y) coordinates of the random point.
+ */
+std::pair<double, double> randomXYInSquare(double sideLength) {
+    // Uniform sample in box
+    double sampleX = symmetricUnit() * sideLength;
+    double sampleY = symmetricUnit() * sideLength;
+    return {sampleX, sampleY};
+}
+
+/**
+ * @brief Generates a random (x,y) point uniformly distributed within the unit cell
+ * @param mode The GeometryMode of the unit cell.
+ * @param sideLength The side length of the geometry
+ * 
+ * @return A pair of doubles representing the (x,y) coordinates of the random point.
+ */
+std::pair<double, double> randomXYinGeometry(GeometryMode mode, double sideLength) {
+    switch (mode) {
+        case GeometryMode::Square:
+        case GeometryMode::SquareSurrounding:
+            return randomXYInSquare(sideLength);
+
+        case GeometryMode::Hexagonal:
+        case GeometryMode::HexagonalSurrounding:
+            return randomXYInHexagon(sideLength);
+
+        case GeometryMode::Unknown:
+        default:
+            throw std::invalid_argument("Cannot generate random point for Unknown or invalid GeometryMode");
     }
 }
 
@@ -161,10 +209,11 @@ std::optional<SimulationParameters> readSimulationParameters() {
         // Geometry parameters (converting from microns to cm)
         params.padLength = params_json["padLength"].get<double>() * MICRONTOCM;
         params.pitch = params_json["pitch"].get<double>() * MICRONTOCM;
-        params.gridStandoff = params_json["gridStandoff"].get<double>() * MICRONTOCM;
+        params.amplificationGap = params_json["amplificationGap"].get<double>() * MICRONTOCM;
         params.gridThickness = params_json["gridThickness"].get<double>() * MICRONTOCM;
+        params.padThickness = params_json["padThickness"].get<double>() * MICRONTOCM;
         params.holeRadius = params_json["holeRadius"].get<double>() * MICRONTOCM;
-        params.cathodeHeight = params_json["cathodeHeight"].get<double>() * MICRONTOCM;
+        params.driftLength = params_json["driftLength"].get<double>() * MICRONTOCM;
         params.thicknessSiO2 = params_json["thicknessSiO2"].get<double>() * MICRONTOCM;
         params.pillarRadius = params_json["pillarRadius"].get<double>() * MICRONTOCM;
 
@@ -186,7 +235,7 @@ std::optional<SimulationParameters> readSimulationParameters() {
         params.gasCompIsobutane = params_json["gasCompIsobutane"].get<double>() * 100.0;
         params.gasPenning = params_json["gasPenning"].get<double>();
         
-        params.numInputs = 18;  // Number of parameters
+        params.numInputs = 19;  // Number of parameters
 
         return params;
     } catch(const std::exception& e) {
@@ -232,17 +281,31 @@ EfficiencyResults calculateEfficiencyStats(int nSuccess, int nTotal) {
 
 /**
  * @brief Converts a string to a GeometryMode enum value.
- * @param str The string to convert (case-insensitive).
+ * @param modeName The string to convert (case-insensitive).
  * @return The corresponding GeometryMode enum value.
  */
-GeometryMode stringToGeometryMode(std::string str) {
-    std::transform(str.begin(), str.end(), str.begin(), ::tolower);
+GeometryMode stringToGeometryMode(std::string modeName) {
+    std::transform(modeName.begin(), modeName.end(), modeName.begin(), ::tolower);
+    
+    // Static lookup table
+    static const std::unordered_map<std::string_view, GeometryMode> modeMap = {
+        {"squarecorner",        GeometryMode::Square},
+        {"squarehalf",          GeometryMode::SquareSurrounding},
+        {"squaresurrounding",   GeometryMode::SquareSurrounding},
+        {"hexagoncorner",       GeometryMode::Hexagonal},
+        {"hexagonhalf",         GeometryMode::HexagonalSurrounding},
+        {"hexagonsurrounding",  GeometryMode::HexagonalSurrounding},
+    };
 
-    if(str == "fims") {
-        return GeometryMode::FIMS;
+    // Currently unsupported versions
+    if (modeName == "squaresingle" || modeName == "hexagonsingle") {
+        std::cerr << "Error: 'single' scale not currently supported for Garfield++ use.\n";
+        return GeometryMode::Unknown;
     }
-    if(str == "fimssurrounding") {
-        return GeometryMode::FIMSSurrounding;
+
+    // lookup mode
+    if(auto it = modeMap.find(modeName); it != modeMap.end()) {
+        return it->second;
     }
     
     return GeometryMode::Unknown;
@@ -250,21 +313,21 @@ GeometryMode stringToGeometryMode(std::string str) {
 
 /**
  * @brief Converts a string to an EfficiencyMode enum value.
- * @param str The string to convert (case-insensitive).
+ * @param modeName The string to convert (case-insensitive).
  * @return The corresponding EfficiencyMode enum value.
  */
-EfficiencyMode stringToEfficiencyMode(std::string str) {
-    std::transform(str.begin(), str.end(), str.begin(), ::tolower);
+EfficiencyMode stringToEfficiencyMode(std::string modeName) {
+    std::transform(modeName.begin(), modeName.end(), modeName.begin(), ::tolower);
 
-    if(str == "net") {
-        return EfficiencyMode::Net;
+    static const std::unordered_map<std::string_view, EfficiencyMode> modeMap = {
+        {"net",        EfficiencyMode::Net},
+        {"detection",  EfficiencyMode::Detection},
+        {"collection", EfficiencyMode::Collection},
+    };
+
+    if (auto it = modeMap.find(modeName); it != modeMap.end()) {
+        return it->second;
     }
-    if(str == "detection") {
-        return EfficiencyMode::Detection;
-    }
-    if(str == "collection") {
-        return EfficiencyMode::Collection;
-    }
-    
+
     return EfficiencyMode::Unknown;
 }

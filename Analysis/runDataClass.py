@@ -371,10 +371,10 @@ class runData:
         dimensionalParams = [
             'Pad Length',
             'Pitch',
-            'Grid Standoff',
+            'Amplification Gap',
             'Grid Thickness',
             'Hole Radius',
-            'Cathode Height',
+            'Drift Length',
             'Thickness SiO2',
             'Pillar Radius'
         ]
@@ -462,8 +462,8 @@ class runData:
 
             #Field bundle radius - Nominal height defiend here.
             ## TODO: Can get average ionization location for better definition?
-            standoff = self.getRunParameter('Grid Standoff')
-            nominalBundleZ = -0.9*standoff
+            ampGap = self.getRunParameter('Amplification Gap')
+            nominalBundleZ = -0.9*ampGap
             self._calculatedData['Bundle z'] = nominalBundleZ
             self._calculatedData['Field Bundle Radius'] = self.calcBundleRadius(nominalBundleZ)
 
@@ -687,16 +687,16 @@ class runData:
         pitch = self.getRunParameter('Pitch')
         padLength = self.getRunParameter('Pad Length')
         gridThickness = self.getRunParameter('Grid Thickness')
-        gridStandoff = self.getRunParameter('Grid Standoff')
-        cathodeDist = self.getRunParameter('Cathode Height')
+        amplificationGap = self.getRunParameter('Amplification Gap')
+        driftLength = self.getRunParameter('Drift Length')
         holeRadius = self.getRunParameter('Hole Radius')
 
         #calculated values
         inRadius = pitch/2.
         outRadius = 2*inRadius/math.sqrt(3)
         halfGrid = gridThickness/2.
-        padHeight = - halfGrid - gridStandoff
-        cathodeHeight = cathodeDist + halfGrid
+        padHeight = - halfGrid - amplificationGap
+        cathodeHeight = driftLength + halfGrid
 
         #Define the vertices of a hexagon
         hexCornerX = np.array([1., .5, -.5, -1., -.5, .5, 1.])
@@ -1261,7 +1261,7 @@ class runData:
         """
         
         #Get avalanche information
-        zLimit = self.getRunParameter('Grid Standoff')
+        zLimit = self.getRunParameter('Amplification Gap')
         allData = self.getDataFrame('ionTrackData')
         gain = self._getAvalancheGain(avalancheID)
         singleData = allData[allData['Avalanche ID']==avalancheID]
@@ -1337,7 +1337,7 @@ class runData:
         
         #Get run data
         padLength = self.getRunParameter('Pad Length')
-        standoff = self.getRunParameter('Grid Standoff')
+        ampGap = self.getRunParameter('Amplification Gap')
         holeRadius = self.getRunParameter('Hole Radius')
         avalancheNum = self.getRunParameter('Number of Avalanches')
 
@@ -1386,7 +1386,7 @@ class runData:
             c='r', ls=':', label='Initial Electron'
         )
         subZ.axvline(
-            standoff, 
+            ampGap, 
             c='g', ls='--', label='Grid Height'
         )
         
@@ -1706,8 +1706,9 @@ class runData:
             float: The radius of the outermost field line in 
                 the bundle at the specified z coordinate.
         """
-        zMax = self.getRunParameter('Cathode Height')
-        zMin = -1.*self.getRunParameter('Grid Standoff')       
+        halfGrid = self.getRunParameter('Grid Thickness')
+        zMax = self.getRunParameter('Drift Length') + halfGrid
+        zMin = -1.*self.getRunParameter('Amplification Gap') - halfGrid
         if not (zMin <= zTarget <= zMax):
             raise ValueError('Invalid target z.')
 
@@ -1763,7 +1764,7 @@ class runData:
         capturedList = []
         escapedList = []
         
-        stand = -1*self.getRunParameter('Grid Standoff')
+        stand = -1*self.getRunParameter('Amplification Gap')
         
         # Get the radius of the initial position of each ion, excluding the 
         # ion from the primary charge
@@ -1896,10 +1897,10 @@ class runData:
         pitch = self.getRunParameter('Pitch')
 
         gridThickness = self.getRunParameter('Grid Thickness')
-        gridStandoff = self.getRunParameter('Grid Standoff')
+        amplificationGap = self.getRunParameter('Amplification Gap')
         thicknessSiO2 = self.getRunParameter('Thickness SiO2')
 
-        zSiO2Top = - gridThickness/2 - gridStandoff + thicknessSiO2
+        zSiO2Top = - gridThickness/2 - amplificationGap + thicknessSiO2
 
         #Get electron tracks
         allElectronTracks = self.getDataFrame('electronTrackData')

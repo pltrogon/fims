@@ -11,8 +11,6 @@ from scipy.special import gammaincc
 from scipy.stats import beta
 from scipy.interpolate import griddata
 
-
-
 """
 Functions:
     getAnalysisNumbers
@@ -388,7 +386,6 @@ def getSetData(runList, xVal, yVal):#TODO account for calcData vs runData here
 
     return xData, yData
 
-
 #********************************************************************************#
 def plotDataSets(dataSets, xVal, yVal, savePlot=False):
     """
@@ -412,10 +409,10 @@ def plotDataSets(dataSets, xVal, yVal, savePlot=False):
     dimensionalParam = [
         'Pad Length',
         'Pitch',
-        'Grid Standoff',
+        'Amplification Gap',
         'Grid Thickness',
         'Hole Radius',
-        'Cathode Height',
+        'Drift Length',
         'Thickness SiO2',
         'Field Bundle Radius'
     ]
@@ -447,7 +444,6 @@ def plotDataSets(dataSets, xVal, yVal, savePlot=False):
         
     plt.show()
     return
-
 
 #********************************************************************************#
 def plot2DGasScan(allData, plotParams):
@@ -545,7 +541,6 @@ def getGasData(runNoList):
     return allRunData
  
 #********************************************************************************#
-
 def getFullFieldData(runNumber):
     """
     Gets the field data points for each drift line created by runFullField.
@@ -571,7 +566,6 @@ def getFullFieldData(runNumber):
     return fieldData
 
 #********************************************************************************#
-
 def plotFullField(runNum, zTarget=0):
     """
     Plots a 2D slide of the full electric field.
@@ -621,7 +615,47 @@ def plotFullField(runNum, zTarget=0):
     return fieldFig
 
 #********************************************************************************#
+def plotFullFieldMapping(runNum):
+    """
+    Plots a map of the initial radius of a field line vs its final radius.
+    
+    args:
+        runNumber (int): Run number of the dataset
+    
+    returns:
+        figure
+    """
+    # Get all field line data
+    fieldData = getFullFieldData(runNum)
+    xData = np.asarray(fieldData['xComp'])
+    yData = np.asarray(fieldData['yComp'])
+    zData = np.asarray(fieldData['zComp'])
 
+    #Calaculate all radii
+    radii = np.hypot(xData, yData)
+
+    #Identify jumps between lines
+    lineID = np.where(np.diff(zData) <= 0)[0]
+    
+    #Initial indices - Beginning and each point after a jump
+    initialID = np.insert(lineID+1, 0, 0)
+
+    #Final indices - First jump point and last
+    finalID = np.append(lineID, len(zData)-1)
+
+    #Make plot
+    mapFig = plt.figure()
+    plt.scatter(
+        radii[initialID], radii[finalID], 
+        c='b', s=.4, label='Data'
+    )
+    plt.xlabel(r'Initial Radius ($\mu$m)')
+    plt.ylabel(r'Final Radius ($\mu$m)')
+    plt.title('Field Line Mapping')
+    #plt.legend()
+    plt.grid()
+    
+    return mapFig
 
 #********************************************************************************#
 def getAsymErrs(eff, effErr):
