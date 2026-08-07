@@ -34,6 +34,12 @@
 
 using namespace Garfield;
 
+//Randon seed
+inline std::mt19937& getRNG(){
+    thread_local std::mt19937 gen(std::random_device{}());
+    return gen;
+}
+
 int main(int argc, char * argv[]) {
     if(argc != 5){
         std::cerr << "Format: " << argv[0] << " <GeometryMode> <EfficiencyMode> <Target Value> <Detection Threshold>" << std::endl;
@@ -54,11 +60,8 @@ int main(int argc, char * argv[]) {
         return -1;
     }
 
-    double targetEfficiency = std::atof(argv[3]);
-    int electronThreshold = std::atoi(argv[4]);
-
-    //Random seed
-    std::srand(static_cast<unsigned int>(std::time(nullptr)));
+    double targetEfficiency = std::stod(argv[3]);
+    int electronThreshold = std::stoi(argv[4]);
 
     const double MICRONTOCM = 1e-4;
 
@@ -120,29 +123,22 @@ int main(int argc, char * argv[]) {
     fieldFIMS.SetGas(gasFIMS);
 
     //Create a sensor
-    Sensor* sensorFIMS = new Sensor();
-    sensorFIMS->AddComponent(&fieldFIMS);
-    sensorFIMS->SetArea(
+    Sensor sensorFIMS;
+    sensorFIMS.AddComponent(&fieldFIMS);
+    sensorFIMS.SetArea(
         xBoundary[0], yBoundary[0], zBoundary[0], 
         xBoundary[1], yBoundary[1], zBoundary[1]
     );    
 
     //Define avalanche characteristics
     int electronLimit = electronThreshold+5;
-    AvalancheMicroscopic* avalancheE = new AvalancheMicroscopic;
-    avalancheE->SetSensor(sensorFIMS);
-    avalancheE->EnableAvalancheSizeLimit(electronLimit);
-    
-    // Define drift view boundaries
-    ViewDrift* viewEffDrift = nullptr;
-    viewEffDrift = new ViewDrift();
-    viewEffDrift->SetArea(
-        xBoundary[0], yBoundary[0], zBoundary[0], 
-        xBoundary[1], yBoundary[1], zBoundary[1]
-    );
-    
-
-    avalancheE->EnablePlotting(viewEffDrift, 10);//For velocity vector
+    AvalancheMicroscopic avalancheE;
+    avalancheE.SetSensor(&sensorFIMS);
+    avalancheE.EnableAvalancheSizeLimit(electronLimit);
+    {
+        SilenceCerr guard;
+        avalancheE.EnablePlotting(nullptr, 10);//For velocity vector
+    }
 
     //Deafult initial electron parameters
     double x0 = 0., y0 = 0., z0 = simParams->initialZFraction*simParams->driftLength;
@@ -157,6 +153,7 @@ int main(int argc, char * argv[]) {
     int numCollected = 0;
     int numHitGrid = 0;
     int numFailure = 0;
+    int numAttached = 0;
 
     //Statistics variables
     EfficiencyResults collectionEff;
@@ -193,18 +190,19 @@ int main(int argc, char * argv[]) {
                 numTotalTrials++;
                 {
                     SilenceCerr guard;
-                    avalancheE->AvalancheElectron(
+                
+                    avalancheE.AvalancheElectron(
                         curX, curY, curZ, 
                         curTime, curEnergy, 
                         curDx, curDy, curDz
                     );
                 }
 
-                int numAvalancheElectrons = avalancheE->GetNumberOfElectronEndpoints();
+                int numAvalancheElectrons = avalancheE.GetNumberOfElectronEndpoints();
 
                 //Ensure electron didn't disappear. Reinitialize if so. 
                 if(numAvalancheElectrons >= 1){
-                    avalancheE->GetElectronEndpoint(0, xi, yi, zi, ti, Ei, xf, yf, zf, tf, Ef, exitStatus);
+                    avalancheE.GetElectronEndpoint(0, xi, yi, zi, ti, Ei, xf, yf, zf, tf, Ef, exitStatus);
                 }
                 else{
                     //std::cerr << "Error: No electrons in avalanche - Restarting." << std::endl;
@@ -236,10 +234,17 @@ int main(int argc, char * argv[]) {
                      */
                 }
 
-                //Check if above threshold for detection efficiency. Assume it is collected.
-                if(numAvalancheElectrons >= electronThreshold){
-                    numAboveThreshold++;
+                //Assume that if there is more than 1 electron, it is collected.
+                if(numAvalancheElectrons > 1){
                     numCollected++;
+
+                    //Check if it is above threshold for detection
+                    if(numAvalancheElectrons >= electronThreshold){
+                        numAboveThreshold++;
+                    }
+
+                    //Done with this avalanche
+                    repopulate = false;
                     break;
                 }
 
@@ -250,6 +255,7 @@ int main(int argc, char * argv[]) {
                         // Electron attached to gas molecule - Restart with initial electron
                         //WARNING - This may cause an infinite loop. Consider max attempts if becomes an issue
                         case -7: {
+                            numAttached++;
                             curX = sampleX, curY = sampleY, curZ = z0;
                             curTime = t0;
                             curEnergy = e0;
@@ -273,24 +279,41 @@ int main(int argc, char * argv[]) {
                         //Determine which boundary was hit and shift by pitch to opposite side
                         case -1: {
                             //Shift x or y
-                            curX = std::abs(xf) >= cellLength ? -1.*std::copysign(cellLength, xf) : xf;
-                            curY = std::abs(yf) >= simParams->pitch ? -1.*std::copysign(simParams->pitch, yf) : yf;
+                            constexpr double eps = 1e-7; // 1 nm nudge to keep inside boundary
+                            curX = std::abs(xf) >= cellLength ? -1.*std::copysign(cellLength-eps, xf) : xf;
+                            curY = std::abs(yf) >= simParams->pitch ? -1.*std::copysign(simParams->pitch-eps, yf) : yf;
                             curZ = zf;
 
                             //Get direction vector from 2nd-last and last points along drift
                             double xPrev, yPrev, zPrev, tPrev, xFinal, yFinal, zFinal, tFinal;
-                            int nPoints = avalancheE->GetNumberOfElectronDriftLinePoints(0);
-                            avalancheE->GetElectronDriftLinePoint(xFinal, yFinal, zFinal, tFinal, nPoints-1, 0);
-                            avalancheE->GetElectronDriftLinePoint(xPrev, yPrev, zPrev, tPrev, nPoints-2, 0);
+                            int nPoints = avalancheE.GetNumberOfElectronDriftLinePoints(0);
+                            if(nPoints >= 2){
+                                avalancheE.GetElectronDriftLinePoint(xFinal, yFinal, zFinal, tFinal, nPoints-1, 0);
+                                avalancheE.GetElectronDriftLinePoint(xPrev, yPrev, zPrev, tPrev, nPoints-2, 0);
+                                
+                                //Get normalized direction vector
+                                double dx = xFinal - xPrev;
+                                double dy = yFinal - yPrev;
+                                double dz = zFinal - zPrev;
+                                double vMag = std::sqrt(dx*dx + dy*dy + dz*dz);
 
-                            //Get normalized direction vector
-                            double dx = xFinal - xPrev;
-                            double dy = yFinal - yPrev;
-                            double dz = zFinal - zPrev;
-                            double vMag = std::sqrt(dx*dx + dy*dy + dz*dz);
-                            curDx = dx/vMag;
-                            curDy = dy/vMag;
-                            curDz = dz/vMag;
+                                if(vMag > 0.){
+                                    curDx = dx/vMag;
+                                    curDy = dy/vMag;
+                                    curDz = dz/vMag;
+                                }
+                                else{
+                                    curDx = 0.;
+                                    curDy = 0.;
+                                    curDz = 0.;
+                                }
+                            }
+                            else{
+                                curDx = 0.;
+                                curDy = 0.;
+                                curDz = 0.;
+                            }
+
                             curTime = tf;
                             curEnergy = Ef;
                             break;
@@ -345,6 +368,7 @@ int main(int argc, char * argv[]) {
     }//End of all avalanches
 
     std::cerr << "Number of surpressed Garfield errors: " << numFailure << std::endl;
+    std::cerr << "\tReinitialized/Attached electrons: " << numAttached << std::endl;
 
     //***** Output efficiency value *****//	
     //create output file
@@ -356,6 +380,7 @@ int main(int argc, char * argv[]) {
     dataFile.open(dataPath);
     if(!dataFile.is_open()){
         std::cerr << "Error: Could not open file: " << dataPath << std::endl;
+        return -1;
     }
 
     //Write some general info

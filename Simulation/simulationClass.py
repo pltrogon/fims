@@ -230,7 +230,10 @@ class FIMS_Simulation:
         """
         Ensures that the run number is valid.
         """
-        runNumber = self.getParam('runNumber')
+        runNumber = self._getRunNumber()
+
+        if runNumber != self.getParam('runNumber'):
+            raise RuntimeError('Error - Run number mismatch.')
         if runNumber < 1:
             raise ValueError(f'Error - Invalid run number: {runNumber}.')
         
@@ -295,18 +298,12 @@ class FIMS_Simulation:
 #**********************************************************************#
     def _setupSimulation(self):
         """
-        Initializes Garfield++ and creates an avalanche executable.
-        
-        Reads the Garfiled++ source path, and ensures a log and build directory.
-        Compiles the executable using cmake and make.
-        Initializes a simulation run counter if it does not already exist.
-    
-        Note: If a segmentation fault occurs, it is most likely that the
-              Garfield++ library is not sourced correctly.
-    
+        Initializes Garfield++ and creates project executables. Automatically 
+        handles cross-platform dynamic linking environments safely.
         """
+        import shutil
 
-        #Check for necessary pathways and create if not present
+        # Check for necessary pathways and create if not present
         paths = [
             'log', 
             'build',
@@ -316,16 +313,23 @@ class FIMS_Simulation:
         for inPath in paths:
             os.makedirs(inPath, exist_ok=True)
 
-        # Get garfield path into environment
+        # Get garfield path variables directly into active environment
         newEnv = self._getGarfieldEnvironment()
         os.environ.update(newEnv)
-        
-        #Make executables
-        makeBuild = ('cmake .. && make')
 
-        # Change to the build directory and run cmake and make
+        # Clean up local project build directory to force fresh discovery
         originalCWD = os.getcwd()
         os.chdir('build')
+
+        for item in ['CMakeCache.txt', 'CMakeFiles']:
+            if os.path.exists(item):
+                if os.path.isdir(item):
+                    shutil.rmtree(item)
+                else:
+                    os.remove(item)
+        
+        # Use CMake to configure and build the executables
+        makeBuild = 'cmake .. && make'
         
         try:
             subprocess.run(
@@ -336,12 +340,24 @@ class FIMS_Simulation:
                 capture_output=True,
                 text=True
             )
+
+            # Extract the exact ROOT path found by CMake for the runtime linker
+            if os.path.exists('ROOT_LIB_PATH.txt'):
+                with open('ROOT_LIB_PATH.txt', 'r') as f:
+                    discovered_root_lib = f.read().strip()
+                
+                for var in ["DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"]:
+                    current_path = os.environ.get(var, "")
+                    if discovered_root_lib not in current_path:
+                        os.environ[var] = f"{discovered_root_lib}:{current_path}".strip(":")
+
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f'ERROR - Failed to build project: {e.stderr}')
+            # If our CMake FATAL_ERROR trips, it will bubble up here 
+            raise RuntimeError(f'ERROR - Failed to build project:\n{e.stderr}')
         finally:
             os.chdir(originalCWD)
 
-        #Check for run number file and create if not present
+        # Check for run number file and create if not present
         if not os.path.exists('runNo'):
             self.setRunNumber()
                 
@@ -443,8 +459,12 @@ class FIMS_Simulation:
         """
         try:
             currentRun = self._param['runNumber']
+            nextRun = currentRun+1
             with open('runNo', 'w') as file:
-                file.write(str(currentRun + 1))
+                file.write(str(nextRun))
+            
+            self._param['runNumber'] = self._getRunNumber()
+            
         except Exception as e:
             print(f'Warning: Could not increment run number: {e}')
         return
@@ -523,12 +543,16 @@ class FIMS_Simulation:
                     - targetEfficiency (str): Name of efficiency to consider (net, detection, collection).
                     - targetValue (float): The target efficiency to achieve (default: 0.95).
                     - threshold (int): The number of electrons to consider an avalanche successful (default: 10).
+                - 'runBreakdown': Computes the Paschen breakdown fields for a given gas.
         """
 
         executables = [
             'runAvalanche',
             'runEfficiency',
-            'runFullField'
+            'runFullField',
+            'runBreakdown',
+            'runGainEfficiency',#Todo - add to docstring
+            'runAnimation'
         ]
 
         if executable not in executables:
@@ -542,7 +566,7 @@ class FIMS_Simulation:
                 targetValue = kwargs.get('targetValue', 0.95)
                 threshold = kwargs.get('threshold', 10)
                 args = f'{targetEfficiency} {targetValue} {threshold}'
-                
+
             case _:
                 args=''
 
@@ -779,6 +803,51 @@ class FIMS_Simulation:
             raise RuntimeError(f'Error while parsing the results file: {e}')
         
         return results
+
+#**********************************************************************#
+    def _readEffGainResults(self):
+        """TODO"""
+
+        dataPath = '../Data/'
+        dataFilename = 'effGainResults.dat'
+        
+        resultsFile = os.path.join(dataPath, dataFilename)
+        try:
+            with open(resultsFile, 'r') as inFile:
+                allLines = [inLine.strip() for inLine in inFile.readlines()]
+        except Exception as e:
+            raise RuntimeError(f'Error while reading the results file: {e}')
+        
+        results = {}
+        rawGains = []
+        inGains = False
+        
+        try:
+            for i, line in enumerate(allLines):
+                if line == '[RAWGAINS]':
+                    inGains = True
+                    continue
+
+                if inGains:
+                    rawGains.append(int(line))
+                elif "=" in line:
+                    key, val = line.split("=", 1)
+                    results[key.strip()] = float(val.strip())
+
+            if rawGains:
+                gainCount = np.bincount(rawGains)
+
+                results['maxGain'] = len(gainCount)-1
+                results['gainHist'] = gainCount.tolist()
+            else:
+                results['maxGain'] = 0
+                results['gainHist'] = []
+
+        except Exception as e:
+            raise RuntimeError(f'Error while parsing the results file: {e}')
+        
+        return results
+
     
 #**********************************************************************#
     def _fitForNextField(self, targetEfficiency, efficiencyValues, targetValue, fieldStepLimits=[1, 10]):
@@ -1625,3 +1694,30 @@ class FIMS_Simulation:
 
         return minFieldSolution
 
+#**********************************************************************#
+    def getBreakdown(self):
+        '''TODO'''
+
+        self._checkGasComp()
+        self._runGarfield('runBreakdown')
+
+        return
+
+#**********************************************************************#
+    def runAnimation(self):
+        """
+        TODO
+        """
+
+    
+        self._checkParam()
+    
+        #Generate geometry for surrounding cells
+        self.setGeometry(surrounding=True)
+        self._generateGeometry()
+
+        #Solve fields and run Garfield
+        self._solveEFields(solveWeighting=True)
+        self._runGarfield('runAnimation')
+        
+        return 
