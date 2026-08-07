@@ -38,6 +38,7 @@ set(EXECUTABLES
     runFullField		        plotFullField.cc
     runBreakdown                gasBreakdown.cc
     runGainEfficiency           checkGainAndEfficiency.cc
+    runAnimation                animation.cc
 )
 
 # --- Loop to create and link everything ---

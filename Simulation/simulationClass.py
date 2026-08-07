@@ -558,7 +558,8 @@ class FIMS_Simulation:
             'runEfficiency',
             'runFullField',
             'runBreakdown',
-            'runGainEfficiency'#Todo - add to docstring
+            'runGainEfficiency',#Todo - add to docstring
+            'runAnimation'
         ]
 
         if executable not in executables:
@@ -1702,3 +1703,22 @@ class FIMS_Simulation:
         self._runGarfield('runBreakdown')
 
         return
+
+#**********************************************************************#
+    def runAnimation(self):
+        """
+        TODO
+        """
+
+    
+        self._checkParam()
+    
+        #Generate geometry for surrounding cells
+        self.setGeometry(surrounding=True)
+        self._generateGeometry()
+
+        #Solve fields and run Garfield
+        self._solveEFields(solveWeighting=True)
+        self._runGarfield('runAnimation')
+        
+        return 
