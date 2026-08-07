@@ -5,9 +5,11 @@ import math
 import matplotlib.pyplot as plt
 import glob
 import pandas as pd
+import json
 
 from scipy.special import gammaincc
 from scipy.stats import beta
+from scipy.interpolate import griddata
 
 """
 Functions:
@@ -728,3 +730,320 @@ def plotAllEfficiencies():
     plt.show()
 
     return fig
+
+#********************************************************************************#
+def getOT(hole, pitch):
+    holeArea = math.pi*hole**2
+    inRadius = pitch/2
+    hexArea = 2*math.sqrt(3)*inRadius**2
+
+    return holeArea / hexArea
+
+#********************************************************************************#
+def readScanData(filename):
+    """
+    TODO
+    """
+
+    rawLines = []
+    with open(filename, 'r') as f:
+        for line in f:
+            if line.strip():
+                rawLines.append(json.loads(line))
+
+    flatData = []
+    for run in rawLines:       
+        params = run.get('params', {})
+        results = run.get('results', [])
+        
+        for result in results:
+            simResults = result.get('simResults', {})
+            
+            flatData.append({
+                'pitch': params.get('pitch', -1),
+                'holeRadius': params.get('holeRadius', -1),
+                'standoff': params.get('gridStandoff', 50),
+                'fieldRatio': result.get('fieldRatio', -1),
+                'runNumber': result.get('runNumber', -1),
+                'meanGain': simResults.get('averageGain', 0),
+                'netEfficiency': simResults.get('netEff', 0),
+                'colEfficiency': simResults.get('collectionEff', 0),
+                'detEfficiency': simResults.get('detectionEff', 0),
+                'gainHist': simResults.get('gainHist', []),
+                'rawGains': simResults.get('rawGains', [])
+            })
+
+    scanData = pd.DataFrame(flatData)
+
+    return scanData
+
+#********************************************************************************#
+def getPolyaData(scanData):
+    """
+    TODO
+    """
+    from runDataClass import runData
+
+    allSimData = []
+    for _, inRow in scanData.iterrows():
+        inRun = int(inRow['runNumber'])
+        inField = inRow['fieldRatio']
+        inColEff = inRow['colEfficiency']
+    
+        simData = runData(inRun)
+        inGain = simData.getCalcParameter('Trimmed Gain')
+        inTheta = simData.getCalcParameter('Polya Theta')
+        inThetaErr = simData.getCalcParameter('Polya Theta Error')
+        inPGain = simData.getCalcParameter('Polya Gain')
+        inPGainErr = simData.getCalcParameter('Polya Gain Error')
+    
+        if not math.isnan(inGain):
+            inGain = int(inGain)
+        else:
+            inGain = 10
+    
+        collectEff = float(inColEff)
+
+        for inThresh in range(1, 101):
+            inDetectEff = simData._getEfficiency(threshold=inThresh)
+            detectEff = inDetectEff['efficiency']
+            
+            if detectEff < 0.01:
+                detectEff = 0.0
+                
+            netEfficiency = collectEff*detectEff
+    
+            allSimData.append({ 
+                'runNumber': inRun,
+                'fieldRatio': inField,
+                'gain': inGain,
+                'threshold': inThresh,
+                'netEfficiency': netEfficiency,
+                'detectEff': detectEff,
+                'collectEff': collectEff,
+                'theta': inTheta,
+                'thetaErr': inThetaErr,
+                'pGain': inPGain,
+                'pGainErr': inPGainErr
+            })
+    
+    allSimData = pd.DataFrame(allSimData)
+
+    return allSimData
+    
+#********************************************************************************#
+def getDataToPlot(dataFile):
+    scanData = readScanData(dataFile)
+    allData = getPolyaData(scanData)
+
+    return allData
+
+#********************************************************************************#
+def plotPolyaData(datasets, absField=False, vsGain=False):
+    fig, ax = plt.subplots(3, 1, figsize=(12, 8), sharex=True)
+
+    for name, data in datasets.items():
+        # Determine field scale factor
+        fieldScale = 1.0 if (not absField or name == 'ArCO2') else 0.280
+
+        # Extract and process core dataset
+        plotData = (
+            data[['fieldRatio', 'pGain', 'pGainErr', 'theta', 'thetaErr']]
+            .drop_duplicates()
+            .sort_values('fieldRatio')
+        )
+        
+        # Extract core dataset and minimum GTR at >= 95% efficiency
+        plotData = data[['fieldRatio', 'pGain', 'pGainErr', 'theta', 'thetaErr']].drop_duplicates().sort_values('fieldRatio')
+        aboveEff = data[data['detectEff'] >= 0.95].copy()
+        aboveEff['GTR'] = aboveEff['gain'] / aboveEff['threshold']
+        minGTR = aboveEff.loc[aboveEff.groupby('fieldRatio')['GTR'].idxmin()]
+
+        # Define raw physical quantities
+        field = (plotData['fieldRatio'] * fieldScale, None)
+        gain = (plotData['pGain'], plotData['pGainErr'])
+        theta = (plotData['theta'], plotData['thetaErr'])
+        gtr = (minGTR['GTR'], None)
+        gtrField = (minGTR['fieldRatio'] * fieldScale, None)
+        gtrGain = (minGTR['gain'], None)
+
+        # Configure and make plots
+        if vsGain:
+            panels = [(gain, field), (gain, theta), (gtrGain, gtr)]
+        else:
+            panels = [(field, gain), (field, theta), (gtrField, gtr)]
+
+        for inAx, ((x, xerr), (y, yerr)) in zip(ax, panels):
+            inAx.errorbar(
+                x, y, 
+                xerr=xerr, yerr=yerr, 
+                marker='x', ls='-', label=name
+            )
+
+    # Configure Labels and Formatting
+    fieldLabel = r'Amplification Field: $E_{\text{Amp}}$ (kV/cm)' if absField else r'Field Ratio: $E_{\text{Amp}}~/~E_{\text{Drift}}$'
+    gainLabel = r'Gas Gain: $\bar{n}$'
+    
+    xLabel = gainLabel if vsGain else fieldLabel
+    yLabels = [
+        fieldLabel if vsGain else gainLabel,
+        r'Polya Shape: $\theta$',
+        r'GTR for $\epsilon_{\text{d}}$=95%'
+    ]
+
+    # Set log scale and Y limits for gain and field plot
+    if vsGain:
+        ax[0].set_xscale('log')
+        ax[0].set_xlim(1, None)
+        ax[0].set_ylim(10, None)
+    else:
+        ax[0].set_yscale('log')
+        ax[0].set_xlim(10, None)
+        ax[0].set_ylim(1, None)
+
+    # Apply remaining panel formatting
+    for inAx, label in zip(ax, yLabels):
+        inAx.grid()
+        inAx.set_ylabel(label, fontsize=14)
+        if inAx != ax[0]:
+            inAx.set_ylim(0, None)
+
+    ax[2].set_xlabel(xLabel, fontsize=14)
+    ax[0].legend(fontsize=14, loc='upper left')
+
+    plt.tight_layout()
+    plt.show()
+    
+#********************************************************************************#
+def plotEfficiencyContours(allData, xLabel):
+    """
+    TODO
+    """
+    
+    fontsize = 14
+
+    x = np.array(allData['xData'])
+    y = np.array(allData['yData'])
+    z = np.array(allData['zData'])
+
+    fig = plt.figure(figsize=(10, 6))
+
+    # Plot the data
+    contour = plt.tricontourf(
+        x, y, z,
+        levels=np.linspace(0, 1, 101),
+        cmap="viridis",
+    )
+    cbar = plt.colorbar(contour)
+    cbar.set_ticks(np.linspace(0, 1, 11))
+    cbar.set_label('Net Efficiency', rotation=270, labelpad=15, fontsize=fontsize)
+
+    # Plot the contour lines
+    effLines = [.95, .90, .75, .50]
+    effLineStyle = ['-', '--', '-.', ':']
+    for inLevel, inLine in zip(effLines, effLineStyle):
+        contourLine = plt.tricontour(
+            x, y, z, 
+            levels=[inLevel], 
+            colors='m', 
+            linestyles=inLine,
+            linewidths=2.5
+        )
+        plt.clabel(contourLine, inline=True, fontsize=fontsize, fmt=f"{inLevel*100:.0f} %%")
+        plt.plot([], [], c='m', ls=inLine, lw=2.5, label=r"$\epsilon_{\text{Net}}$"+f" = {inLevel*100:.0f}%")
+
+    # Plot breakdown region
+    xBreakdown = allData['xBreakdown']
+    yBreakdown = allData['yBreakdown']
+    plt.fill_between(
+        xBreakdown, yBreakdown, y.max()*np.ones(len(yBreakdown)),
+        color='r', alpha=0.4, hatch='//')
+    plt.plot(
+        xBreakdown, yBreakdown, 
+        c='r', label='Breakdown Region', ls='-', lw=2.5
+    )
+
+    plt.xlabel(xLabel, fontsize=fontsize)
+    plt.ylabel('Field Ratio', fontsize=fontsize)
+    plt.legend(fontsize=fontsize)
+
+    plt.yscale('log')
+
+    plt.xlim([x.min(), x.max()])
+    plt.ylim([y.min(), y.max()])
+
+    plt.tight_layout()
+    plt.show()
+
+    return fig
+
+
+#********************************************************************************#
+def makePWL(runNumber, averageSignal=True, avalancheID=None):
+    """
+    Reads a run's Parquet signal file and exports an LTSpice-compatible PWL file.
+
+    Default is to export the average signal. 
+    If a single signal is desired, averageSignal must be False.
+    If no specific avalanche ID is given, one is chosen at random.
+
+    Args:
+        runNumber (int): The simulation run number.
+        averageSignal (bool): If true, exports the averae signal.
+        avalancheID (int): Specific avalanche ID to export.
+    """
+
+    # Read in data from file
+    filepath = '../Data/' # Ensure path to data (output will also be written here)
+    filename = f'allSignalsRun{runNumber}.parquet'
+    dataFile = os.path.join(filepath, filename)
+
+    allData = pd.read_parquet(dataFile)
+
+    # Time is common for all signals
+    relativeTime = allData['Relative Time'].values
+
+    #Get average signal
+    if averageSignal:
+        rawSignal = allData['Average Primary Signal'].values
+        signalLabel = 'AVERAGE'
+
+    # Get individual signal
+    else:
+        individualColumns = [
+            col for col in allData.columns if col.startswith('AvalancheID_')
+        ]
+
+        #Ensure data exists
+        if not individualColumns:
+            raise ValueError('No single signals in file')
+
+        #Get chosen avalancheID or select randomly
+        if avalancheID is not None:
+            targetColumn = f'AvalancheID_{avalancheID}'
+            if targetColumn not in individualColumns:
+                raise ValueError('Invalid avalanche ID')
+            chosenColumn = targetColumn                
+        else:
+            chosenColumn = np.random.choice(individualColumns)
+
+        rawSignal = allData[chosenColumn].values
+        signalLabel = chosenColumn
+
+    # Format time and amplitude
+    numPoints = len(relativeTime)
+    timeStep = (relativeTime[-1] - relativeTime[0]) / (numPoints - 1)
+    
+    cleanTime = np.arange(numPoints) * timeStep * 1e-9  # ns -> s
+    cleanSignal = rawSignal * 1e-6                     # uA -> A
+
+    # Export PWl file
+    pwlData = np.column_stack((cleanTime, cleanSignal))
+    outFilename = f'signalFileRun{runNumber}.txt'
+    outputFilename = os.path.join(filepath, outFilename)
+
+    np.savetxt(outputFilename, pwlData, fmt='%.8e', delimiter=' ')
+    print(f'Exported LTSpice PWL to: {outputFilename}')
+    print(f'\tContains the {signalLabel} signal.')
+
+    return

@@ -583,7 +583,7 @@ class runData:
         hole[0] = plt.Circle(
             (0, 0), holeRadius, 
             facecolor='none', edgecolor='k', lw=1,
-            label=f'Hole (r = {holeRadius:.0f} um)'
+            label=f'Hole (r = {holeRadius:.0f} '+ r'$\mu$m)'
         )
         # Neighboring cell holes (#808080 = Grey)
         for i in range(len(neighborX)):
@@ -601,7 +601,7 @@ class runData:
                  facecolor='none', edgecolor='#808080', ls='--', lw=1
             )
 
-        pillar[0].set_label(f'Pillar  (r = {pillarRadius:.0f} um)')
+        pillar[0].set_label(f'Pillar  (r = {pillarRadius:.0f} ' + r'$\mu$m)')
 
         # Make figure and add plots
         fig = plt.figure()
@@ -611,7 +611,7 @@ class runData:
         #Add the pad
         ax1.plot(
             padX, padY, 
-            label='Pad', c='m', lw=1
+            label='Pixel Pad', c='m', lw=1
         )
 
         #Add the cell boundary
@@ -649,11 +649,11 @@ class runData:
         #Add dimensions
         ax1.plot(
             [0, neighborX[4]], [0, neighborY[4]],
-            label=f'Pitch ({pitch:.0f} um)', c='r', ls=':', lw=1
+            label=f'Pitch ({pitch:.0f} ' + r'$\mu$m)', c='r', ls=':', lw=1
         )
         ax1.plot(
             [0, padLength], [0, 0],
-            label=f'Pad Length ({padLength:.0f} um)', c='r', ls='-', lw=1
+            label=f'Pad Length ({padLength:.0f} ' + r'$\mu$m)', c='r', ls='-', lw=1
         )
         ax1.plot(
             [0, 0], [0, holeRadius],
@@ -666,8 +666,8 @@ class runData:
         ax1.set_xlim(-axLim, axLim)
         ax1.set_ylim(-axLim, axLim)
         ax1.set_aspect('equal')
-        ax1.set_xlabel('x (um)')
-        ax1.set_ylabel('y (um)')
+        ax1.set_xlabel(r'x ($\mu$m)')
+        ax1.set_ylabel(r'y ($\mu$m)')
         ax1.legend(loc='center left', bbox_to_anchor=(1, 0.5))
         plt.tight_layout()   
         
@@ -734,8 +734,8 @@ class runData:
                 )
                 axis.add_patch(hole)
 
-                axis.set_xlabel('x (um)')
-                axis.set_ylabel('y (um)')
+                axis.set_xlabel(r'x ($\mu$m)')
+                axis.set_ylabel(r'y ($\mu$m)')
                 axis.set_xlim(-axLim, axLim)
                 axis.set_ylim(-axLim, axLim)
                 axis.set_aspect('equal')
@@ -764,8 +764,8 @@ class runData:
                     c='k', ls='-', lw=2
                 )
                 
-                axis.set_xlabel('x (um)')
-                axis.set_ylabel('z (um)')
+                axis.set_xlabel(r'x ($\mu$m)')
+                axis.set_ylabel(r'z ($\mu$m)')
                 axis.set_xlim(-axLim, axLim)
                 axis.set_ylim(padHeight, cathodeHeight)
 
@@ -793,8 +793,8 @@ class runData:
                     c='k', ls='-', lw=2
                 )
 
-                axis.set_xlabel('y (um)')
-                axis.set_ylabel('z (um)')
+                axis.set_xlabel(r'y ($\mu$m)')
+                axis.set_ylabel(r'z ($\mu$m)')
                 axis.set_xlim(-axLim, axLim)
                 axis.set_ylim(padHeight, cathodeHeight)
                 
@@ -1405,10 +1405,10 @@ class runData:
         
         #Add plot labels
         subZ.set_title('Drift in z')
-        subZ.set_xlabel('Drift in z (um)')
+        subZ.set_xlabel(r'Drift in z ($\mu$m)')
         
         subXY.set_title('Drift in xy Plane')
-        subXY.set_xlabel('Drift in r (um)')
+        subXY.set_xlabel(r'Drift in r ($\mu$m)')
 
         subZ.legend()
         subXY.legend()
@@ -1673,7 +1673,7 @@ class runData:
 
 
         polyaStats = f'Polya Fit Statistics\nChi2 = {polyaChi2['chi2']:.4f}\nrChi2 = {polyaChi2['rChi2']:.4f}'
-        '''
+        
         ax.text(
             0.8, 0.75, polyaStats, 
             fontsize=10, 
@@ -1682,7 +1682,7 @@ class runData:
             transform=ax.transAxes,
             bbox=dict(facecolor='none', edgecolor='k', boxstyle='round,pad=1')
         )
-        '''
+        
         plt.xlabel('Numer of Electrons in Avalanche: n')
         plt.ylabel('Probability of Avalanche Size: P(n)')
         plt.legend()
@@ -2169,7 +2169,8 @@ class runData:
         avalancheLimit = self.getRunParameter('Avalanche Limit')
 
         if threshold > avalancheLimit:
-            raise ValueError('Error - Threshold higher than simulation limit.')
+            print('Error - Threshold higher than simulation limit.')
+            threshold = avalancheLimit-1
         
         numSimulated = self.getRunParameter('Number of Avalanches')
         numAvalanches = len(allAvalancheData)
@@ -2188,7 +2189,7 @@ class runData:
         simEff = (numAboveThresh+1)/(numAvalanches+2)
         varience = ((numAboveThresh+1)*(numAboveThresh+2))/((numAvalanches+2)*(numAvalanches+3)) - simEff*simEff
 
-        simEffErr = math.sqrt(varience)
+        simEffErr = math.sqrt(max(0, varience))
 
         simEffErrLow, simEffErrHigh = functionsFIMS.getAsymErrs(simEff, simEffErr)
 
@@ -2224,7 +2225,8 @@ class runData:
         avalancheLimit = self.getRunParameter('Avalanche Limit')
 
         if threshold > avalancheLimit:
-            raise ValueError('Error - Threshold higher than simulation limit.')
+            print('Error - Threshold higher than simulation limit.')
+            threshold = avalancheLimit-1
         
         numSimulated = self.getRunParameter('Number of Avalanches')
         totalAvalanches = len(allAvalancheData)
@@ -2244,7 +2246,7 @@ class runData:
         simEff = (numAboveThresh+1)/(numAvalanches+2)
         varience = ((numAboveThresh+1)*(numAboveThresh+2))/((numAvalanches+2)*(numAvalanches+3)) - simEff*simEff
 
-        simEffErr = math.sqrt(varience)
+        simEffErr = math.sqrt(max(0, varience))
 
         errorLow, errorHigh = functionsFIMS.getAsymErrs(simEff, simEffErr)
 
@@ -2274,7 +2276,8 @@ class runData:
             
         except:#TODO - there may be a better way to handle this within _fitAvalancheSize
             print('Warning - Error in Polya Fit.')
-            return None, None
+
+            return {'theta': 0, 'thetaErr': 1, 'gain': 1, 'gainErr':1}
           
         polyaFitResults = {
             'theta': fitResults['fitPolya'].theta,
@@ -2601,6 +2604,7 @@ class runData:
         if math.fabs(totalCharge) <= math.fabs(adjacentCharge):
             primary, secondary = secondary, primary
 
+        timeData = singleData['Signal Time']+1 #Add 1ns to allow log-plot
 
         # Create figure
         fig = plt.figure(figsize=(10, 5))
@@ -2609,20 +2613,20 @@ class runData:
         ax2 = fig.add_subplot(122)
         
         ax1.plot(
-            singleData['Signal Time'], singleData[primary],
+            timeData, singleData[primary],
             label='Primary Induced Signal'
         )
         ax1.plot(
-            singleData['Signal Time'], singleData[secondary],
+            timeData, singleData[secondary],
             ls='--', label='Secondary Induced Average'
         )
 
         ax2.plot(
-            singleData['Signal Time'], singleData[primary].cumsum(),
+            timeData, singleData[primary].cumsum(),
             label='Primary Induced Signal'
         )
         ax2.plot(
-            singleData['Signal Time'], singleData[secondary].cumsum(),
+            timeData, singleData[secondary].cumsum(),
             ls='--', label='Secondary Adjacent Average'
         )
 
@@ -2642,6 +2646,9 @@ class runData:
         ax1.grid()
         ax2.grid()
 
+        ax1.set_xscale('log')
+        ax2.set_xscale('log')
+
         ax1.legend()
         ax2.legend()
 
@@ -2657,63 +2664,12 @@ class runData:
         TODO - Possible exclude single-e and overflowed avalanches from this. if so use trimmed gain.
         """
 
-        allSignals = self.getDataFrame('signalData')
-        groupedSignals = allSignals.groupby('Avalanche ID')
-        avalancheData = self.getDataFrame('avalancheData')
-        allGains = avalancheData.set_index('Avalanche ID')['Total Electrons']
+        aveSignalData = self._getAverageSignal()
 
-        commonTime = groupedSignals.get_group(0).sort_values('Signal Time')['Signal Time'].values
-        numPoints = len(commonTime)
-        alignIndex = int(numPoints*.2)#Guess where electron signal occurs (20% of full scale)
-        relativeTime = commonTime - commonTime[alignIndex]
-
-        #Align individual electron signals
-        alignPrimary = []
-        alignSecondary = []
-
-        for avID, inSignal in groupedSignals:
-            singleData = inSignal.sort_values('Signal Time').reset_index(drop=True)
-            gain = allGains.loc[avID]
-
-            #Determine primary and secondary signals
-            totalCharge = singleData['Signal Strength'].sum()
-            adjacentCharge = singleData['Adjacent Signal Average'].sum()
-
-            primary = 'Signal Strength' if abs(totalCharge) > abs(adjacentCharge) else 'Adjacent Signal Average'
-            secondary = 'Adjacent Signal Average' if primary == 'Signal Strength' else 'Signal Strength'
-
-            #Normalize by gain (get per-electron signals)
-            normPrimary = (singleData[primary]/gain).values
-            normSecondary = (singleData[secondary]/gain).values
-
-            #find electron signal by max derivitive
-            dy = np.diff(normPrimary)
-            slopeIndex = np.argmin(dy)
-            signalAlign = alignIndex - slopeIndex
-
-            #Shift data to align
-            shiftPrimary = np.roll(normPrimary, signalAlign)
-            shiftSecondary = np.roll(normSecondary, signalAlign)
-
-            #Clean edges
-            if signalAlign > 0:
-                shiftPrimary[:signalAlign] = 0.0
-                shiftSecondary[:signalAlign] = 0.0
-            elif signalAlign < 0:
-                shiftPrimary[signalAlign:] = shiftPrimary[signalAlign-1]
-                shiftSecondary[signalAlign:] = shiftSecondary[signalAlign-1]
-
-            alignPrimary.append(shiftPrimary)
-            alignSecondary.append(shiftSecondary)
-
-        #Get average per-electron
-        averagePrimarySingle = np.mean(alignPrimary, axis=0)
-        averageSecondarySingle = np.mean(alignSecondary, axis=0)
-
-        #Get average signal
-        meanGain = self._calculatedData['Raw Gain'].iloc[0]
-        averagePrimary = averagePrimarySingle*meanGain
-        averageSecondary = averageSecondarySingle*meanGain
+        relativeTime = aveSignalData['relativeTime']+1#Shift by 1ns for log plotting
+        averagePrimary = aveSignalData['averagePrimary']
+        averageSecondary = aveSignalData['averageSecondary']
+        meanGain = aveSignalData['meanGain']
 
         # Create figure
         fig = plt.figure(figsize=(10, 5))
@@ -2753,14 +2709,119 @@ class runData:
         ax2.set_xlabel('Aligned Time (ns)')
         ax2.set_ylabel('Charge (fC)')
 
+        ax1.set_xscale('log')
+        ax2.set_xscale('log')
+
         ax1.grid()
         ax2.grid()
         ax2.legend()
 
-        plt.tight_layout()   
+        plt.tight_layout()
         
         return fig
 
+#********************************************************************************#
+    def _getAverageSignal(self):
+        """TODO"""
+        allSignals = self.getDataFrame('signalData')
+        avalancheData = self.getDataFrame('avalancheData')
+        
+        # Pivot signals into 2D matrices (Rows = Avalanche ID, Columns = Signal Time)
+        sigMat = allSignals.pivot(index='Avalanche ID', columns='Signal Time', values='Signal Strength').values
+        adjMat = allSignals.pivot(index='Avalanche ID', columns='Signal Time', values='Adjacent Signal Average').values
+        
+        # Extract unique time axis directly from pivot columns
+        commonTime = allSignals['Signal Time'].unique()
+        commonTime.sort()
+        numPoints = len(commonTime)
+
+        # Match gain vector order directly to pivot row order
+        pivotedIds = allSignals['Avalanche ID'].unique()
+        gainSeries = avalancheData.set_index('Avalanche ID')['Total Electrons'].reindex(pivotedIds)
+        gainVec = gainSeries.values[:, None]
+
+        # Determine Primary vs Secondary based on total charge sum
+        totalSig = sigMat.sum(axis=1)
+        totalAdj = adjMat.sum(axis=1)
+        isPrimarySig = np.abs(totalSig) > np.abs(totalAdj)
+        isPrimaryMask = isPrimarySig[:, None]
+        
+        rawPrimary = np.where(isPrimaryMask, sigMat, adjMat)
+        rawSecondary = np.where(isPrimaryMask, adjMat, sigMat)
+
+        # Normalize by individual avalanche gain -> Get per-electron signal
+        normPrimary = rawPrimary / gainVec
+        normSecondary = rawSecondary / gainVec
+
+        # Integrate full signals to smooth out any noise
+        chargeIntegrated = np.cumsum(normPrimary, axis=1)
+        absCharge = np.abs(chargeIntegrated)
+
+        # Derive envelope/current magnitude
+        currentEnvelope = np.abs(np.diff(chargeIntegrated, axis=1, prepend=0))
+
+        # Find knee point (max of electron signal)\
+        peakIndices = np.argmax(currentEnvelope, axis=1)
+
+        # Define falling threshold (Current drops to 10% of peak after the peak)
+        peakAmplitudes = currentEnvelope[np.arange(len(pivotedIds)), peakIndices][:, None]
+        isBelowThresh = currentEnvelope < (0.10 * peakAmplitudes)
+
+        cols = np.arange(numPoints)
+        afterPeakMask = cols >= peakIndices[:, None]
+
+        # Knee index is the first time current drops below 10% after the peak
+        kneeIndices = np.argmax(isBelowThresh & afterPeakMask, axis=1)
+
+        # Handle edge cases where current stays high till end of trace
+        kneeIndices = np.where(kneeIndices == 0, numPoints - 1, kneeIndices)
+
+        # 4. Extract total ELECTRON charge (at knee point) and compute 50% crossing
+        totalElectronCharge = absCharge[np.arange(len(pivotedIds)), kneeIndices][:, None]
+        totalElectronCharge[totalElectronCharge == 0] = 1.0  # Prevent divide-by-zero
+
+        normalizedElectronCharge = absCharge / totalElectronCharge
+        crossings50Pct = np.argmax(normalizedElectronCharge >= 0.5, axis=1)
+
+        # Calculate time-step offsets for alignment
+        alignIndex = int(np.round(np.mean(crossings50Pct)))
+        alignOffsets = alignIndex - crossings50Pct
+
+        # Shift and pad aligned signals
+        numAvalanches = len(pivotedIds)
+        alignedPrimary = np.zeros_like(normPrimary)
+        alignedSecondary = np.zeros_like(normSecondary)
+
+        for i in range(numAvalanches):
+            shift = alignOffsets[i]
+            pRow = normPrimary[i]
+            sRow = normSecondary[i]
+            
+            alignedPrimary[i] = np.roll(pRow, shift)
+            alignedSecondary[i] = np.roll(sRow, shift)
+            
+            # Clean edges baseline
+            if shift > 0:
+                alignedPrimary[i, :shift] = 0.0
+                alignedSecondary[i, :shift] = 0.0
+            elif shift < 0:
+                alignedPrimary[i, shift:] = pRow[-1]
+                alignedSecondary[i, shift:] = sRow[-1]
+
+        # Compute per-electron averages and scale by mean gain
+        averagePrimarySingle = np.mean(alignedPrimary, axis=0)
+        averageSecondarySingle = np.mean(alignedSecondary, axis=0)
+
+        meanGain = self._calculatedData['Raw Gain'].iloc[0]
+
+        aveSignal = {
+            'relativeTime': commonTime,
+            'averagePrimary': averagePrimarySingle * meanGain,
+            'averageSecondary': averageSecondarySingle * meanGain,
+            'meanGain': meanGain
+        }
+
+        return aveSignal
 
 #********************************************************************************#
     def plotSignalvsGain(self):
@@ -2855,7 +2916,7 @@ class runData:
             ls='--', c='k'
         )
 
-        ax.set_xlabel('z (um)')
+        ax.set_xlabel(r'z ($\mu$m)')
         ax.set_ylabel('Electric Field Strength (kV/cm)')
 
         ax.legend()
@@ -2863,5 +2924,52 @@ class runData:
 
         return fig
 
+
+#********************************************************************************#
+    def _buildAllSignalDataframe(self):
+        """TODO"""
+        aveSignal = self._getAverageSignal()
+        relativeTime = aveSignal['relativeTime']
+        averagePrimary = aveSignal['averagePrimary']
+
+        # Extract original raw signals
+        allSignals = self.getDataFrame('signalData')
+
+        # Pivot both signal channels into 2D matrices (Rows = Avalanche ID, Cols = Signal Time)
+        sigMat = allSignals.pivot(index='Avalanche ID', columns='Signal Time', values='Signal Strength')
+        adjMat = allSignals.pivot(index='Avalanche ID', columns='Signal Time', values='Adjacent Signal Average')
+
+        # Determine Primary vs Secondary per avalanche (sum across time)
+        totalSig = sigMat.sum(axis=1)
+        totalAdj = adjMat.sum(axis=1)
+        isPrimarySig = np.abs(totalSig) > np.abs(totalAdj)
+
+        # Select primary signal for each avalanche row
+        rawPrimaryMat = np.where(isPrimarySig.values[:, None], sigMat.values, adjMat.values)
+
+        # Build the result dictionary
+        dfDict = {
+            'Relative Time': relativeTime,
+            'Average Primary Signal': averagePrimary
+        }
+
+        # Add each individual avalanche's primary signal as a column
+        avalancheIds = sigMat.index  # Unique Avalanche IDs
+        for i, avId in enumerate(avalancheIds):
+            colName = f'AvalancheID_{avId}'
+            dfDict[colName] = rawPrimaryMat[i]
+
+        newDF = pd.DataFrame(dfDict)
+
+        return newDF
+
+#********************************************************************************#
+    def saveSignalsAsPWL(self):
+        """TODO"""
+        allSignals = self._buildAllSignalDataframe()
+        filename = f'../Data/allSignalsRun{self.runNumber}.parquet'
+        allSignals.to_parquet(filename)
+
+        return
 
 
