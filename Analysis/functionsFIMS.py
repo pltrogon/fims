@@ -714,7 +714,8 @@ def readScanData(filename):
     rawLines = []
     with open(filename, 'r') as f:
         for line in f:
-            rawLines.append(json.loads(line))
+            if line.strip():
+                rawLines.append(json.loads(line))
 
     flatData = []
     for run in rawLines:       
@@ -722,17 +723,20 @@ def readScanData(filename):
         results = run.get('results', [])
         
         for result in results:
-            efficiencies = result.get('efficiencies', {})
+            simResults = result.get('simResults', {})
             
             flatData.append({
                 'pitch': params.get('pitch', -1),
                 'holeRadius': params.get('holeRadius', -1),
-                'standoff': params.get('gridStandoff', -1),
+                'standoff': params.get('gridStandoff', 50),
                 'fieldRatio': result.get('fieldRatio', -1),
                 'runNumber': result.get('runNumber', -1),
-                'netEfficiency': efficiencies.get('netEff', 0),
-                'colEfficiency': efficiencies.get('collectionEff', 0),
-                'detEfficiency': efficiencies.get('detectionEff', 0)
+                'meanGain': simResults.get('averageGain', 0),
+                'netEfficiency': simResults.get('netEff', 0),
+                'colEfficiency': simResults.get('collectionEff', 0),
+                'detEfficiency': simResults.get('detectionEff', 0),
+                'gainHist': simResults.get('gainHist', []),
+                'rawGains': simResults.get('rawGains', [])
             })
 
     scanData = pd.DataFrame(flatData)
@@ -929,6 +933,8 @@ def plotEfficiencyContours(allData, xLabel):
     plt.ylabel('Field Ratio', fontsize=fontsize)
     plt.legend(fontsize=fontsize)
 
+    plt.yscale('log')
+
     plt.xlim([x.min(), x.max()])
     plt.ylim([y.min(), y.max()])
 
@@ -954,7 +960,7 @@ def makePWL(runNumber, averageSignal=True, avalancheID=None):
     """
 
     # Read in data from file
-    filepath = './Data/' # Ensure path to data (output will also be written here)
+    filepath = '../Data/' # Ensure path to data (output will also be written here)
     filename = f'allSignalsRun{runNumber}.parquet'
     dataFile = os.path.join(filepath, filename)
 
