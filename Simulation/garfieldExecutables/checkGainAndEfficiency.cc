@@ -106,6 +106,13 @@ int main(int argc, char * argv[]) {
         xBoundary[1], yBoundary[1], zBoundary[1]
     );    
 
+    //Object for viewing drift
+    viewElectronDrift = new ViewDrift();
+    viewElectronDrift->SetArea(
+        xBoundary[0], yBoundary[0], zBoundary[0], 
+        xBoundary[1], yBoundary[1], zBoundary[1]
+    );
+
     //Define avalanche characteristics
     int electronLimit = simParams->avalancheLimit;
     AvalancheMicroscopic avalancheE;
@@ -113,7 +120,7 @@ int main(int argc, char * argv[]) {
     avalancheE.EnableAvalancheSizeLimit(electronLimit);
     {
         SilenceCerr guard;
-        avalancheE.EnablePlotting(nullptr, 10);//For velocity vector
+        avalancheE.EnablePlotting(viewElectronDrift, 10);//For velocity vector
     }
 
     //Deafult initial electron parameters
@@ -286,6 +293,7 @@ int main(int argc, char * argv[]) {
                         numHitLimit++;
                     }
                 }
+                viewElectronDrift->Clear();
             }//end of single-electron avalanche
         }//End of avalanche bunch
         std::cout << "Done " << numInitialElectrons << "trials." << std::endl;
