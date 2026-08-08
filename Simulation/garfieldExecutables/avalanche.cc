@@ -633,8 +633,9 @@ int main(int argc, char * argv[]) {
     int statIon;
     float electronDriftx, electronDrifty, electronDriftz;
     float ionDriftx, ionDrifty, ionDriftz, ionDriftt;
-    double signalTime, signalStrength; 
+    double signalTime; 
     std::vector<double> padSignals(sensorList.size(), 0.0);
+    std::vector<double> padSignalSum(sensorList.size(), 0.0);
 
     TTree* parallelAvalancheDataTree = new TTree("avalancheDataTree", "Avalanche Results");
     parallelAvalancheDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
@@ -689,7 +690,6 @@ int main(int argc, char * argv[]) {
     TTree* parallelSignalDataTree = new TTree("signalDataTree", "Induced Signal");
     parallelSignalDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
     parallelSignalDataTree->Branch("Signal Time", &signalTime, "signalTime/D");
-    parallelSignalDataTree->Branch("Signal Strength", &signalStrength, "signalStrength/D");
     for (size_t i = 0; i < sensorList.size(); i++) {
       parallelSignalDataTree->Branch(Form("Signal_%s", sensorList[i].c_str()), &padSignals[i]);
     }
@@ -807,11 +807,10 @@ int main(int argc, char * argv[]) {
       //Get signal for each timestep
       for(int inSignal = 0; inSignal < nSignalBins; inSignal++){
         signalTime = inSignal*timeStep;
-        signalStrength = parallelSensorFIMS->GetSignal("CentralPad", inSignal);
         
         for(size_t i = 0; i < sensorList.size(); i++){
           const char* inPad = sensorList[i].c_str();
-          padSignals[i] = sensorFIMS->GetSignal(inPad, inSignal);
+          padSignals[i] = parallelSensorFIMS->GetSignal(inPad, inSignal);
         }
 
         //Fill tree

@@ -158,25 +158,27 @@ int main(int argc, char * argv[]) {
 
     // ***** Signal tree ***** //
     TTree* signalDataTree = new TTree("signalDataTree", "Induced Signal");
-    double signalTime, signalStrength;
+    double signalTime;
     std::vector<double> padSignals(sensorList.size(), 0.0);
     std::vector<double> electronSignals(sensorList.size(), 0.0);
     std::vector<double> ionSignals(sensorList.size(), 0.0);
 
     signalDataTree->Branch("Avalanche ID", &avalancheID);
     signalDataTree->Branch("Time", &signalTime);
-    signalDataTree->Branch("Signal Strength", &signalStrength);
     for (size_t i = 0; i < sensorList.size(); i++) {
         signalDataTree->Branch(Form("Signal_%s", sensorList[i].c_str()), &padSignals[i]);
         signalDataTree->Branch(Form("Electron_%s", sensorList[i].c_str()), &electronSignals[i]);
         signalDataTree->Branch(Form("Ion_%s", sensorList[i].c_str()), &ionSignals[i]);
     }
 
+    std::cout << "Data trees created...\n";
 
     //*************** SIMULATION ***************//
 
     // Define and initialize the gas mixture
     MediumMagboltz* gasFIMS = initializeGas(*simParams); 
+
+    std::cout << "Done Gas...\n";
 
     //Import field-map
     std::string geometryPath = "../Geometry/";
@@ -190,6 +192,8 @@ int main(int argc, char * argv[]) {
         fieldPath, 
         "mum"
     );
+
+    std::cout << "Field map imported...\n";
 
     // Get region of elmer geometry
     double xmin, ymin, zmin, xmax, ymax, zmax;
@@ -216,6 +220,7 @@ int main(int argc, char * argv[]) {
         std::string fieldFilePath = elmerResultsPath + geometryModeString + inSensor + "Weighting.result";
         fieldFIMS.SetWeightingField(fieldFilePath, inSensor);
     }
+    std::cout << "Done weighting...\n";
 
     // Create a sensor
     Sensor* sensorFIMS = new Sensor();
@@ -227,6 +232,7 @@ int main(int argc, char * argv[]) {
     for(const auto& inSensor : sensorList){
         sensorFIMS->AddElectrode(&fieldFIMS, inSensor);
     }
+    std::cout << "Done Sensor...\n";
 
     //Set timing for signals
     double signalFinal = 500.;//ns
@@ -278,7 +284,7 @@ int main(int argc, char * argv[]) {
     //*************** FIELD LINES ***************//
     std::cout << "Generating field lines...\n";
 
-    const int numLines = 51;//simParam->numFieldLine;
+    const int numLines = 3;//simParam->numFieldLine;
     const double fieldLineStep = static_cast<double>(numLines - 1);
 
     dx = (xmax - xmin) / fieldLineStep;
@@ -297,7 +303,7 @@ int main(int argc, char * argv[]) {
         {-1, -gridLineStart},       // Below grid
         { 1,  gridLineStart}        // Above grid
     };
-
+    /*
     // Do all field lines
     for (const auto& inLineLoc : lineLocs) {
 
@@ -334,6 +340,7 @@ int main(int argc, char * argv[]) {
     }
     fieldLineTree->Write();
     delete fieldLineTree;
+    */
 
     //*************** AVALANCHES ***************//
     std::cout << "Running " << simParams->numAvalanche << " avalanches...\n";
@@ -468,7 +475,6 @@ int main(int argc, char * argv[]) {
         // ***** Induced Signals ***** //
         for(int inSignal=0; inSignal < numSignalBins; inSignal++){
             signalTime = inSignal*signalStep;
-            signalStrength = sensorFIMS->GetSignal("CentralPad", inSignal);
 
             for(size_t i = 0; i < sensorList.size(); i++){
                 const char* inPad = sensorList[i].c_str();
