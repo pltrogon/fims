@@ -107,7 +107,7 @@ int main(int argc, char * argv[]) {
     );    
 
     //Object for viewing drift
-    viewElectronDrift = new ViewDrift();
+    ViewDrift* viewElectronDrift = new ViewDrift();
     viewElectronDrift->SetArea(
         xBoundary[0], yBoundary[0], zBoundary[0], 
         xBoundary[1], yBoundary[1], zBoundary[1]
