@@ -675,12 +675,13 @@ class FIMS_Simulation:
         self._checkParam()
     
         #Generate geometry for surrounding cells
-        self._geoConfiguration.scale = ScaleOption.SURROUNDING
+        self._geoConfiguration.scale = ScaleOption.HALF
+        self._runMode = 'hexagonhalf' #TODO Use setgeometry and make sure that updates runOption.
         self._generateGeometry()
 
         #Solve fields and run Garfield
         self._solveEFields(solveWeighting=True)
-        self._runGarfield('runAvalancheSurrounding')
+        self._runGarfield()
         
         return runNo
     
@@ -1718,6 +1719,7 @@ class FIMS_Simulation:
             padShape=saveGeo.padShape,
             scale=ScaleOption.HALF,
         )
+        self._runMode = 'hexagonhalf'
 
         try:
             self.setGeometry(newGeo)
