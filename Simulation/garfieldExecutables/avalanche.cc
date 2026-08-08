@@ -215,9 +215,11 @@ int main(int argc, char * argv[]) {
   eFieldDataTree->Branch("E Field z Mag", &eFieldZMag, "eFieldZMag/D");
   eFieldDataTree->Branch("E Field Mag", &eFieldMag, "eFieldMag/D");
   
+
   //*************** SIMULATION ***************//
   // Define and initialize the gas mixture
   MediumMagboltz* gasFIMS = initializeGas(*simParams); 
+
 
   // Import elmer-generated field map
   std::string geometryPath = "../Geometry/";
@@ -436,6 +438,9 @@ int main(int argc, char * argv[]) {
   std::cout << "Done " << totalFieldLines << " field lines." << std::endl;
 
   // ***** Calculate E fields ***** //
+  std::cout << "****************************************\n";
+  std::cout << "Calculating field Strengths.\n";
+  std::cout << "****************************************\n";
   //Calculate E field at different z planes above and below grid
   double eFieldPlanes[6] = {
     zmax*.95, simParams->driftLength/2., 
@@ -542,6 +547,7 @@ int main(int argc, char * argv[]) {
     // Create thread-local objects
     #pragma omp critical
     {//Critical for file I/O
+      std::cout << "Setting up for parallel..." << std::endl;
 
       //Create objects for this thread
       parallelFieldFIMS = new ComponentElmer(
@@ -899,11 +905,11 @@ int main(int argc, char * argv[]) {
 
   metaDataTree->Branch("Pad Length", &simParams->padLength, "padLength/D");
   metaDataTree->Branch("Pitch", &simParams->pitch, "pitch/D");
-  metaDataTree->Branch("Grid Standoff", &simParams->amplificationGap, "amplificationGap/D");
+  metaDataTree->Branch("Amplification Gap", &simParams->amplificationGap, "amplificationGap/D");
   metaDataTree->Branch("Grid Thickness", &simParams->gridThickness, "gridThickness/D");
   metaDataTree->Branch("Pad Thickness", &simParams->padThickness, "padThickness/D");
   metaDataTree->Branch("Hole Radius", &simParams->holeRadius, "holeRadius/D");
-  metaDataTree->Branch("Cathode Height", &simParams->driftLength, "driftLength/D");
+  metaDataTree->Branch("Drift Length", &simParams->driftLength, "driftLength/D");
   metaDataTree->Branch("Thickness SiO2", &simParams->thicknessSiO2, "thicknessSiO2/D");
   metaDataTree->Branch("Pillar Radius", &simParams->pillarRadius, "pillarRadius/D");
 
