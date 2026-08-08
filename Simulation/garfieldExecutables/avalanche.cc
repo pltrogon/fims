@@ -508,7 +508,7 @@ int main(int argc, char * argv[]) {
   double e0 = 0.1;//eV (Garfield is weird when this is 0.)
   double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
 
-  double timeFinal = 10.;//ns
+  double timeFinal = 100.;//ns
   double timeStep = 0.01;//ns
   int nSignalBins = timeFinal/timeStep;
   
@@ -627,7 +627,8 @@ int main(int argc, char * argv[]) {
     int statIon;
     float electronDriftx, electronDrifty, electronDriftz;
     float ionDriftx, ionDrifty, ionDriftz, ionDriftt;
-    double signalTime, signalStrength, adjacentSignal;
+    double signalTime, signalStrength; 
+    std::vector<double> padSignals(sensorList.size(), 0.0);
 
     TTree* parallelAvalancheDataTree = new TTree("avalancheDataTree", "Avalanche Results");
     parallelAvalancheDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
@@ -683,7 +684,9 @@ int main(int argc, char * argv[]) {
     parallelSignalDataTree->Branch("Avalanche ID", &avalancheID, "avalancheID/I");
     parallelSignalDataTree->Branch("Signal Time", &signalTime, "signalTime/D");
     parallelSignalDataTree->Branch("Signal Strength", &signalStrength, "signalStrength/D");
-    parallelSignalDataTree->Branch("Adjacent Signal Average", &adjacentSignal, "adjacentSignal/D");
+    for (size_t i = 0; i < sensorList.size(); i++) {
+      parallelSignalDataTree->Branch(Form("Signal_%s", sensorList[i].c_str()), &padSignals[i]);
+    }
   
 
     //***** Parallel Avalanche Loop *****//
@@ -800,18 +803,9 @@ int main(int argc, char * argv[]) {
         signalTime = inSignal*timeStep;
         signalStrength = parallelSensorFIMS->GetSignal("CentralPad", inSignal);
         
-        double sumAdjacentSignal = 0.;
-        int numAdjacent = 0;
-
-        for(size_t i = 1; i < sensorList.size(); i++){
-          std::string inSensor = sensorList.at(i);
-          sumAdjacentSignal += parallelSensorFIMS->GetSignal(inSensor, inSignal);
-          numAdjacent++;
-        }
-
-        adjacentSignal = 0.;
-        if(numAdjacent > 0){
-          adjacentSignal = sumAdjacentSignal / numAdjacent;
+        for(size_t i = 0; i < sensorList.size(); i++){
+          const char* inPad = sensorList[i].c_str();
+          padSignals[i] = sensorFIMS->GetSignal(inPad, inSignal);
         }
 
         //Fill tree
