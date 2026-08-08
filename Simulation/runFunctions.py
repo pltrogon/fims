@@ -28,7 +28,7 @@ def timeSimulation():
     defaultSim.runSimulation()
     endTime = time.monotonic()
     totalTime = endTime - startTime
-    print(f'\Completed in: {totalTime} s.')
+    print(f'Completed in: {totalTime:.1f} s.')
 
     return 
     
