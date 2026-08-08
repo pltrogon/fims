@@ -49,27 +49,52 @@ int main(int argc, char * argv[]) {
     const double MICRONTOCM = 1e-4;
     const double ELEMENTARY_CHARGE = 1.602176634e-19;
 
-    // Handle geometry mode from input
     if(argc != 2){
         std::cerr << "Format: " << argv[0] << " <GeometryMode>" << std::endl;
         return -1;
     }
-    std::string geometryModeString = argv[1];
 
+    // Handle geometry mode from input
+    std::string geometryModeString = argv[1];
+    GeometryMode geometryMode = stringToGeometryMode(argv[1]);
+    if(geometryMode == GeometryMode::Unknown){
+        std::cerr << "Error: Invalid geometryMode: " << argv[1] << std::endl;
+        return -1;
+    }
 
     //Random seed
     std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
-    // Get sensor list - TODO currently only hex
+    // Get sensor list
     std::vector<std::string> sensorList;
     sensorList.push_back("CentralPad");
-    sensorList.push_back("TopPad");
-    sensorList.push_back("BottomPad");
-    sensorList.push_back("RightTopPad");
-    sensorList.push_back("RightBottomPad");
-    sensorList.push_back("LeftTopPad");
-    sensorList.push_back("LeftBottomPad");
+    switch(geometryMode){
+        case GeometryMode::SquareSurrounding:{
+            sensorList.push_back("TopPad");
+            sensorList.push_back("RightTopPad");
+            sensorList.push_back("RightPad");
+            sensorList.push_back("RightBottomPad");
+            sensorList.push_back("BottomPad");
+            sensorList.push_back("LeftBottomPad");
+            sensorList.push_back("LeftPad");
+            sensorList.push_back("LeftTopPad");
+            break;
+        }
 
+        case GeometryMode::HexagonalSurrounding:{
+            sensorList.push_back("TopPad");
+            sensorList.push_back("BottomPad");
+            sensorList.push_back("RightTopPad");
+            sensorList.push_back("RightBottomPad");
+            sensorList.push_back("LeftTopPad");
+            sensorList.push_back("LeftBottomPad");
+            break;
+        }
+
+        default:
+            return -1;
+    }
+    
     //***** Simulation Parameters *****//
     auto simParams = readSimulationParameters();
     if(!simParams){

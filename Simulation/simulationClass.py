@@ -1708,16 +1708,26 @@ class FIMS_Simulation:
         """
         TODO
         """
-
-    
+            
         self._checkParam()
-    
-        #Generate geometry for surrounding cells
-        self.setGeometry(surrounding=True)
-        self._generateGeometry()
+        saveGeo = self._geoConfiguration
 
-        #Solve fields and run Garfield
-        self._solveEFields(solveWeighting=True)
-        self._runGarfield('runAnimation')
+        newGeo = GeometryConfiguration(
+            unitCell=UnitCell.HEXAGON,
+            holeShape=saveGeo.holeShape,
+            padShape=saveGeo.padShape,
+            scale=ScaleOption.HALF,
+        )
+
+        try:
+            self.setGeometry(newGeo)
+            self._generateGeometry()
+
+            #Solve fields and run Garfield
+            self._solveEFields(solveWeighting=True)
+            self._runGarfield('runAnimation')
+        
+        finally:
+            self.setGeometry(saveGeo)
         
         return 
