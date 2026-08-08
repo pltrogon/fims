@@ -376,32 +376,39 @@ class runData:
             'Hole Radius',
             'Drift Length',
             'Thickness SiO2',
-            'Pillar Radius'
+            'Pillar Radius',
+            'Pad Thickness',
+            'Grid Standoff', 'Cathode Height'#TODO - kept for legacy runs
         ]
-        
+
+        ##### LEGACY ALIASING ####
+        paramAliases = {
+            'Drift Length': 'Cathode Height',
+            'Amplification Gap': 'Grid Standoff',
+        }
+
         metaData = self.getDataFrame('metaData')
-        if metaData is None:
-            print("Error: 'metaData' unavailable.")
-            return None
-        
-        if paramName not in metaData.columns:
-            print(f"Error: '{paramName}' not in 'metaData'.")
-            return None
+        if metaData is None or metaData.empty:
+            raise KeyError("'metaData' DataFrame is empty or unavailable.")
+
+        targetParam = paramName
+
+        if targetParam not in metaData.columns and targetParam in paramAliases:
+            alias = paramAliases[targetParam]
+            print(f'Warning - Aliasing {targetParam} to {alias} (legacy)')
+            targetParam = alias
+
+        if targetParam not in metaData.columns:
+            raise KeyError(f"Parameter '{paramName}' (or alias) not found in 'metaData'.")
+
             
         CMTOMICRON = 1e4
         try:
-            if paramName in dimensionalParams:
-                return metaData[paramName].iloc[0]*CMTOMICRON
-            else:
-                return metaData[paramName].iloc[0] 
+            targetValue = metaData[targetParam].iloc[0]
+            return targetValue * CMTOMICRON if targetParam in dimensionalParams else targetValue
         
-        except IndexError:
-            print(f"Error: 'metaData' DataFrame is empty.")
-            return None
         except Exception as e:
-            print(f"An unexpected error occurred retrieving '{paramName}': {e}")
-            return None
-        
+            raise RuntimeError(f"Unexpected error retrieving '{targetParam}': {e}") from e        
 
 #********************************************************************************#
     def getCalcParameter(self, paramName):
