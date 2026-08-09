@@ -2583,85 +2583,59 @@ class runData:
         gain = totalElectrons - attachedElectrons
 
         return gain.item()
-    
+
 #********************************************************************************#
-    def plotAvalancheSignal(self, avalancheID=0):
-        """
-        TODO:
-        """
+def plotAvalancheSignal(signalData, avalancheID=0):
+    """
+    TODO
+    """
+    allSignals = signalData.getDataFrame('signalData')
 
-        allData = self.getDataFrame('signalData')
-        singleData = allData[allData['Avalanche ID']==avalancheID]
-        
-        gain = self._getAvalancheGain(avalancheID)
-        totalCharge = singleData['Signal Strength'].sum()
-        adjacentCharge = singleData['Adjacent Signal Average'].sum()
+    singleSignal = allSignals[allSignals['Avalanche ID']==avalancheID]
+    gain = signalData._getAvalancheGain(avalancheID)
 
-        ## IMPORTANT NOTE:
-        # Because of mirroring, 'Signal Strength' can be the signal 
-        # at the center pad OR the top OR the bottom pad. 'Adjacent Signal Average'
-        # is the signal at any/all of the top-right, top-left, bottom-R, bottom-L.
-        # Solution here is to find where the max induced signal is, call that the
-        # primary, and the min the secondary. This essentially just shifts 
-        # the coordiante space around.
+    padSignals = [
+        pad
+        for pad in singleSignal.columns
+        if pad not in ['Avalanche ID', 'Signal Time']
+    ]
 
-        #Find primary and secondary signals
-        primary = 'Signal Strength'
-        secondary = 'Adjacent Signal Average'
-        if math.fabs(totalCharge) <= math.fabs(adjacentCharge):
-            primary, secondary = secondary, primary
+    signalSum = np.abs(singleSignal[padSignals].sum())
+    maxPad = signalSum.idxmax()
 
-        timeData = singleData['Signal Time']+1 #Add 1ns to allow log-plot
+    fig, axs = plt.subplots(1, 2, figsize=(12, 5))
+    fig.suptitle(f'Induced Signal from Avalanche: {avalancheID} (Gain={gain})')
 
-        # Create figure
-        fig = plt.figure(figsize=(10, 5))
-        fig.suptitle(f'Induced Signal from Avalanche: {avalancheID} (Gain={gain})')
-        ax1 = fig.add_subplot(121)
-        ax2 = fig.add_subplot(122)
-        
-        ax1.plot(
-            timeData, singleData[primary],
-            label='Primary Induced Signal'
+    for pad in padSignals:
+        isPrimary = pad == maxPad
+        axs[0].plot(
+            singleSignal['Signal Time'], singleSignal[pad],
+            label=f'{pad} (Max)' if isPrimary else pad,
+            ls='-' if isPrimary else '--',
+            lw=2.5 if isPrimary else 1
         )
-        ax1.plot(
-            timeData, singleData[secondary],
-            ls='--', label='Secondary Induced Average'
+        axs[1].plot(
+            singleSignal['Signal Time'], singleSignal[pad].cumsum(),
+            label=f'{pad} (Max)' if isPrimary else pad,
+            ls='-' if isPrimary else '--',
+            lw=2.5 if isPrimary else 1
         )
 
-        ax2.plot(
-            timeData, singleData[primary].cumsum(),
-            label='Primary Induced Signal'
-        )
-        ax2.plot(
-            timeData, singleData[secondary].cumsum(),
-            ls='--', label='Secondary Adjacent Average'
-        )
+    axs[0].set_title('Induced Signal')
+    axs[1].set_title('Integrated Signal')
+    
+    axs[0].set_ylabel('Current (fC/ns)')#TODO - The units here seem weird fC/ns should be uA?
+    axs[1].set_ylabel('Charge (fC)')
+    
+    for inAx in axs:
+        inAx.set_xlabel('Time (ns)')
+        inAx.grid()
+        inAx.set_xscale('log')
+        inAx.legend()
 
-        ax2.axhline(
-            totalCharge,
-            label=f'Total Charge = {totalCharge:.3f}', c='r', ls='--'
-        )
+    plt.tight_layout()
 
-        ax1.set_title('Induced Signal')
-        ax1.set_xlabel('Time (ns)')
-        ax1.set_ylabel('Current (fC/ns)')#TODO - The units here seem weird fC/ns should be uA?
-
-        ax2.set_title('Integrated Signal')
-        ax2.set_xlabel('Time (ns)')
-        ax2.set_ylabel('Charge (fC)')
-
-        ax1.grid()
-        ax2.grid()
-
-        ax1.set_xscale('log')
-        ax2.set_xscale('log')
-
-        ax1.legend()
-        ax2.legend()
-
-        plt.tight_layout()   
-        
-        return fig
+    return fig
     
 #********************************************************************************#
     def plotAverageSignal(self):
@@ -2829,52 +2803,6 @@ class runData:
         }
 
         return aveSignal
-
-#********************************************************************************#
-    def plotSignalvsGain(self):
-        """
-        Generates a 2D histogram of the induced signal vs the electron gain 
-        for all electron avalanches. 
-        """
-        allSignals = self.getDataFrame('signalData')
-        allAvalanche = self.getDataFrame('avalancheData')
-
-        sumSignals = allSignals.groupby('Avalanche ID')['Signal Strength'].sum()
-
-        allAvalanche['Gain'] = allAvalanche['Total Electrons'] - allAvalanche['Attached Electrons']
-        allAvalanche = allAvalanche.sort_values(by='Avalanche ID')
-        maxGain = allAvalanche['Gain'].max()+1
-
-
-        fig = plt.figure(figsize=(10, 5))
-        fig.suptitle('Total Integrated Signal vs. Gain')
-        ax = fig.add_subplot(111)
-
-        ax.hist2d(
-            allAvalanche['Gain'], sumSignals,
-            bins=maxGain, cmin=1
-        )
-
-        #TODO - Test linear/scaled line for this relationship.
-        scale = .25e17
-        charge = -1.6e-19
-        slope = charge*scale
-        ax.plot(
-            [0, maxGain], [0, maxGain*slope],
-            c='r', label=f'Slope = {slope:.2e}'
-        )
-        ax.axvline(
-            allAvalanche['Gain'].mean(),
-            c='g', ls='--', label=f'Average Gain = {allAvalanche['Gain'].mean():.1f}'
-        )
-
-        ax.set_xlabel('Electron Gain')
-        ax.set_ylabel('Total Signal (fC)')
-
-        ax.grid()
-        ax.legend()
-
-        return fig
 
 #********************************************************************************#
 

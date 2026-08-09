@@ -285,12 +285,6 @@ class App(tk.Tk):
             )
         self.showAverageSignal.pack(side=tk.RIGHT)
 
-        self.showSignalvsGain = tk.Button(
-            self.buttonFrame, text='Signal vs. Gain', 
-            command=lambda: self.plotButton('SignalvsGain')
-            )
-        self.showSignalvsGain.pack(side=tk.TOP)
-
 
 
         self.protocol("WM_DELETE_WINDOW", self.onClosing)
@@ -425,9 +419,6 @@ class App(tk.Tk):
                 case 'AverageSignal':
                     self.currentFig = self.simData.plotAverageSignal()
 
-                case 'SignalvsGain':
-                    self.currentFig = self.simData.plotSignalvsGain()
-
                 case _:
                     print('Incorrect plot - defaulting')
                     self.currentFig = self.simData.plotCellGeometry()
@@ -452,6 +443,8 @@ class App(tk.Tk):
             dataFrame = self.simData.getDataFrame(selectedName)
         
         if dataFrame is not None:
+            dataFrame = dataFrame.copy()
+            dataFrame.columns = [str(col) for col in dataFrame.columns]
             show(dataFrame)
         else:
             messagebox.showerror("Error", f"DataFrame '{selectedName}' not found in simData.")
