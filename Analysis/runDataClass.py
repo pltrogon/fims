@@ -2717,7 +2717,7 @@ class runData:
         #Get integrations
         alignedCharges = np.cumsum(alignedCurrents, axis=1)
         meanCharge = np.mean(alignedCharges, axis=0)
-        stdCharge = np.std(alignedCharges, axis=0)
+        #stdCharge = np.std(alignedCharges, axis=0)
 
         fig, axs = plt.subplots(1, 2, figsize=(12, 6))
         
@@ -2730,6 +2730,7 @@ class runData:
         axs[1].plot(commonTime, meanCharge, c='k', lw=2)
 
         #Errors
+        '''TODO the std above makes this take an absurdly long time to run?
         axs[0].fill_between(
             commonTime, 
             meanCurrent - stdCurrent, meanCurrent + stdCurrent, 
@@ -2741,6 +2742,7 @@ class runData:
             meanCharge + stdCharge, 
             color='k', alpha=0.25
         )
+        '''
 
         axs[0].set_title('Induced Current')
         axs[1].set_title('Integrated Charge')
@@ -2759,7 +2761,7 @@ class runData:
         return fig
 
 #********************************************************************************#
-    def alignAndAverageSignals(self, threshold=10):
+    def _alignAndAverageSignals(self, threshold=10):
         """
         TODO
         """
