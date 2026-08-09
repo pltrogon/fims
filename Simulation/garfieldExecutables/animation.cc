@@ -361,7 +361,7 @@ int main(int argc, char * argv[]) {
         avalanche.EnableAvalancheSizeLimit(simParams->avalancheLimit);
         
         double cellLength = simParams->pitch/sqrt(3.);
-        auto [x0, y0] = randomXYInHexagon(cellLength);
+        auto [x0, y0] = randomXYInHexagon(cellLength);//TODO - only set for hexagon atm
 
         avalanche.AddElectron(x0, y0, z0, t0, e0);
 

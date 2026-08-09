@@ -665,23 +665,33 @@ class FIMS_Simulation:
 
         Returns:
             int: The run number for this simulation.
+
+        TODO - THIS SHOULD GET DEPRECIATED
         """
 
         # Get the run number for this simulation
         runNo = self._param['runNumber']
         print('Running Surrounding simulation...')
         print(f'Running simulation - Run number: {runNo}')
-    
+
         self._checkParam()
-    
+
         #Generate geometry for surrounding cells
-        self._geoConfiguration.scale = ScaleOption.HALF
-        self._runMode = 'hexagonhalf' #TODO Use setgeometry and make sure that updates runOption.
+        saveGeo = self._geoConfiguration
+        newGeo = GeometryConfiguration(
+            unitCell=saveGeo.unitCell,
+            holeShape=saveGeo.holeShape,
+            padShape=saveGeo.padShape,
+            scale=ScaleOption.HALF,
+        )
+        self.setGeometry(newGeo)
         self._generateGeometry()
 
         #Solve fields and run Garfield
         self._solveEFields(solveWeighting=True)
         self._runGarfield()
+
+        self.setGeometry(newGeo)
         
         return runNo
     
@@ -1714,12 +1724,11 @@ class FIMS_Simulation:
         saveGeo = self._geoConfiguration
 
         newGeo = GeometryConfiguration(
-            unitCell=UnitCell.HEXAGON,
+            unitCell=saveGeo.unitCell,
             holeShape=saveGeo.holeShape,
             padShape=saveGeo.padShape,
             scale=ScaleOption.HALF,
         )
-        self._runMode = 'hexagonhalf'
 
         try:
             self.setGeometry(newGeo)
