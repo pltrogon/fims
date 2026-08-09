@@ -2702,171 +2702,119 @@ class runData:
         return fig
     
 #********************************************************************************#
-    def plotAverageSignal(self):
+    def plotAlignedAverage(self, threshold=10):
         """
-        Plots the average induced signal from all simulated electron avalanches.
-
-        TODO - Possible exclude single-e and overflowed avalanches from this. if so use trimmed gain.
+        TODO
         """
-
-        aveSignalData = self._getAverageSignal()
-
-        relativeTime = aveSignalData['relativeTime']+1#Shift by 1ns for log plotting
-        averagePrimary = aveSignalData['averagePrimary']
-        averageSecondary = aveSignalData['averageSecondary']
-        meanGain = aveSignalData['meanGain']
-
-        # Create figure
-        fig = plt.figure(figsize=(10, 5))
-        fig.suptitle(f'Average Induced Signal (Gain={meanGain:.1f})')
-        ax1 = fig.add_subplot(121)
-        ax2 = fig.add_subplot(122)
+        alignedAverage = self._alignAndAverageSignals(threshold=threshold)
         
-        #Plot signals for the central pad
-        ax1.plot(
-            relativeTime, averagePrimary,
-            label='Average Induced Signal'
+        commonTime = alignedAverage['commonTime']
+        alignedCurrents = alignedAverage['alignedCurrents']
+        meanCurrent = alignedAverage['meanCurrent']
+        stdCurrent = alignedAverage['stdCurrent']
+        timeOffset = alignedAverage['timeOffset']
+
+        #Get integrations
+        alignedCharges = np.cumsum(alignedCurrents, axis=1)
+        meanCharge = np.mean(alignedCharges, axis=0)
+        stdCharge = np.std(alignedCharges, axis=0)
+
+        fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+        
+        # Individual background traces
+        axs[0].plot(commonTime, alignedCurrents.T, c='r', alpha=0.01)
+        axs[1].plot(commonTime, alignedCharges.T, c='r', alpha=0.01)
+
+        # Mean curves
+        axs[0].plot(commonTime, meanCurrent, c='k', lw=2)
+        axs[1].plot(commonTime, meanCharge, c='k', lw=2)
+
+        #Errors
+        axs[0].fill_between(
+            commonTime, 
+            meanCurrent - stdCurrent, meanCurrent + stdCurrent, 
+            color='k', alpha=0.25
         )
-        ax1.plot(
-            relativeTime, averageSecondary,
-            ls='--', label='Average Adjacent Signal'
+        axs[1].fill_between(
+            commonTime, 
+            meanCharge - stdCharge, 
+            meanCharge + stdCharge, 
+            color='k', alpha=0.25
         )
 
-        ax2.plot(
-            relativeTime, averagePrimary.cumsum(),
-            label='Average Induced Signal'
-        )
-        ax2.plot(
-            relativeTime, averageSecondary.cumsum(),
-            ls='--', label='Average Adjacent Signal'
-        )
-        averageTotalCharge = averagePrimary.sum()
-        ax2.axhline(
-            averageTotalCharge,
-            label=f'Total Charge: {averageTotalCharge:.3f} fC', c='r', ls='--'
-        )
+        axs[0].set_title('Induced Current')
+        axs[1].set_title('Integrated Charge')
 
-        ax1.set_title('Average Induced Signal')
-        ax1.set_xlabel('Aligned Time (ns)')
-        ax1.set_ylabel('Current (fC/ns)')
+        axs[0].set_ylabel('Current (fC/ns)')
+        axs[1].set_ylabel('Charge (fC)')
 
-        ax2.set_title('Average Integrated Signal')
-        ax2.set_xlabel('Aligned Time (ns)')
-        ax2.set_ylabel('Charge (fC)')
-
-        ax1.set_xscale('log')
-        ax2.set_xscale('log')
-
-        ax1.grid()
-        ax2.grid()
-        ax2.legend()
+        for ax in axs:
+            ax.set_xlabel(f'Time Relative to Peak + {timeOffset} (ns)')
+            ax.grid()
+            ax.set_xscale('log')
+            ax.set_xlim([1, None])
 
         plt.tight_layout()
         
         return fig
 
 #********************************************************************************#
-    def _getAverageSignal(self):
-        """TODO"""
-        allSignals = self.getDataFrame('signalData')
+    def alignAndAverageSignals(self, threshold=10):
+        """
+        TODO
+        """
+        #Filter based on gain
         avalancheData = self.getDataFrame('avalancheData')
-        
-        # Pivot signals into 2D matrices (Rows = Avalanche ID, Columns = Signal Time)
-        sigMat = allSignals.pivot(index='Avalanche ID', columns='Signal Time', values='Signal Strength').values
-        adjMat = allSignals.pivot(index='Avalanche ID', columns='Signal Time', values='Adjacent Signal Average').values
-        
-        # Extract unique time axis directly from pivot columns
-        commonTime = allSignals['Signal Time'].unique()
-        commonTime.sort()
-        numPoints = len(commonTime)
+        filtered = avalancheData[avalancheData['Total Electrons'] >= threshold]
+        validIDs = set(filtered['Avalanche ID'])
 
-        # Match gain vector order directly to pivot row order
-        pivotedIds = allSignals['Avalanche ID'].unique()
-        gainSeries = avalancheData.set_index('Avalanche ID')['Total Electrons'].reindex(pivotedIds)
-        gainVec = gainSeries.values[:, None]
+        #Get all primary signals
+        signals = self._getAllPrimarySignals()
 
-        # Determine Primary vs Secondary based on total charge sum
-        totalSig = sigMat.sum(axis=1)
-        totalAdj = adjMat.sum(axis=1)
-        isPrimarySig = np.abs(totalSig) > np.abs(totalAdj)
-        isPrimaryMask = isPrimarySig[:, None]
-        
-        rawPrimary = np.where(isPrimaryMask, sigMat, adjMat)
-        rawSecondary = np.where(isPrimaryMask, adjMat, sigMat)
+        timeOffset = 2
+        refTime = signals[signals['Avalanche ID'] == 0]['Signal Time']
+        commonTime = (refTime - timeOffset).to_numpy()
 
-        # Normalize by individual avalanche gain -> Get per-electron signal
-        normPrimary = rawPrimary / gainVec
-        normSecondary = rawSecondary / gainVec
+        alignedCurrents = []
 
-        # Integrate full signals to smooth out any noise
-        chargeIntegrated = np.cumsum(normPrimary, axis=1)
-        absCharge = np.abs(chargeIntegrated)
+        for avalancheID, group in signals.groupby('Avalanche ID'):
+            if avalancheID not in validIDs:
+                continue
 
-        # Derive envelope/current magnitude
-        currentEnvelope = np.abs(np.diff(chargeIntegrated, axis=1, prepend=0))
+            rawTime = (group['Signal Time'] - timeOffset).to_numpy()
+            signal = group['Primary Signal'].to_numpy()
 
-        # Find knee point (max of electron signal)\
-        peakIndices = np.argmax(currentEnvelope, axis=1)
-
-        # Define falling threshold (Current drops to 10% of peak after the peak)
-        peakAmplitudes = currentEnvelope[np.arange(len(pivotedIds)), peakIndices][:, None]
-        isBelowThresh = currentEnvelope < (0.10 * peakAmplitudes)
-
-        cols = np.arange(numPoints)
-        afterPeakMask = cols >= peakIndices[:, None]
-
-        # Knee index is the first time current drops below 10% after the peak
-        kneeIndices = np.argmax(isBelowThresh & afterPeakMask, axis=1)
-
-        # Handle edge cases where current stays high till end of trace
-        kneeIndices = np.where(kneeIndices == 0, numPoints - 1, kneeIndices)
-
-        # 4. Extract total ELECTRON charge (at knee point) and compute 50% crossing
-        totalElectronCharge = absCharge[np.arange(len(pivotedIds)), kneeIndices][:, None]
-        totalElectronCharge[totalElectronCharge == 0] = 1.0  # Prevent divide-by-zero
-
-        normalizedElectronCharge = absCharge / totalElectronCharge
-        crossings50Pct = np.argmax(normalizedElectronCharge >= 0.5, axis=1)
-
-        # Calculate time-step offsets for alignment
-        alignIndex = int(np.round(np.mean(crossings50Pct)))
-        alignOffsets = alignIndex - crossings50Pct
-
-        # Shift and pad aligned signals
-        numAvalanches = len(pivotedIds)
-        alignedPrimary = np.zeros_like(normPrimary)
-        alignedSecondary = np.zeros_like(normSecondary)
-
-        for i in range(numAvalanches):
-            shift = alignOffsets[i]
-            pRow = normPrimary[i]
-            sRow = normSecondary[i]
+            # Isolate electron search window
+            winMask = (rawTime >= 0.1) & (rawTime <= 3.0)
+            if not np.any(winMask):
+                continue
+            t0Idx = np.argmin(signal[winMask])
+            t0 = rawTime[winMask][t0Idx]
             
-            alignedPrimary[i] = np.roll(pRow, shift)
-            alignedSecondary[i] = np.roll(sRow, shift)
+            # Shift time relative to peak (peak at t = offset)
+            timeAligned = (rawTime - t0) + timeOffset
+
+            if len(timeAligned) < 2:
+                continue
+
+            # Interpolate onto master grid
+            iInterp = np.interp(commonTime, timeAligned, signal, left=signal[0], right=signal[-1])
+            alignedCurrents.append(iInterp)
             
-            # Clean edges baseline
-            if shift > 0:
-                alignedPrimary[i, :shift] = 0.0
-                alignedSecondary[i, :shift] = 0.0
-            elif shift < 0:
-                alignedPrimary[i, shift:] = pRow[-1]
-                alignedSecondary[i, shift:] = sRow[-1]
+        alignedCurrents = np.array(alignedCurrents)
 
-        # Compute per-electron averages and scale by mean gain
-        averagePrimarySingle = np.mean(alignedPrimary, axis=0)
-        averageSecondarySingle = np.mean(alignedSecondary, axis=0)
+        # Compute mean current
+        meanCurrent = np.mean(alignedCurrents, axis=0)
 
-        meanGain = self._calculatedData['Raw Gain'].iloc[0]
-
-        aveSignal = {
-            'relativeTime': commonTime,
-            'averagePrimary': averagePrimarySingle * meanGain,
-            'averageSecondary': averageSecondarySingle * meanGain,
-            'meanGain': meanGain
+        alignedAverage = {
+            'commonTime': commonTime,
+            'alignedCurrents': alignedCurrents,
+            'meanCurrent': meanCurrent,
+            'stdCurrent': np.std(alignedCurrents, axis=0),
+            'timeOffset': timeOffset
         }
 
-        return aveSignal
+        return alignedAverage
 
 #********************************************************************************#
 

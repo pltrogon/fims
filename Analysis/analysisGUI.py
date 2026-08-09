@@ -417,7 +417,7 @@ class App(tk.Tk):
                     self.currentFig = self.simData.plotAvalancheSignal(avalancheID=self.curAvalancheID.get())
 
                 case 'AverageSignal':
-                    self.currentFig = self.simData.plotAverageSignal()
+                    self.currentFig = self.simData.plotAlignedAverage()
 
                 case _:
                     print('Incorrect plot - defaulting')
