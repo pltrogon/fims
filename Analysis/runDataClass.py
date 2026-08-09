@@ -2585,57 +2585,102 @@ class runData:
         return gain.item()
 
 #********************************************************************************#
-def plotAvalancheSignal(signalData, avalancheID=0):
-    """
-    TODO
-    """
-    allSignals = signalData.getDataFrame('signalData')
+    def plotAvalancheSignal(self, avalancheID=0):
+        """
+        TODO
+        """
+        allSignals = self.getDataFrame('signalData')
 
-    singleSignal = allSignals[allSignals['Avalanche ID']==avalancheID]
-    gain = signalData._getAvalancheGain(avalancheID)
+        singleSignal = allSignals[allSignals['Avalanche ID']==avalancheID]
+        gain = self._getAvalancheGain(avalancheID)
 
-    padSignals = [
-        pad
-        for pad in singleSignal.columns
-        if pad not in ['Avalanche ID', 'Signal Time']
-    ]
+        padSignals = [
+            pad
+            for pad in singleSignal.columns
+            if pad not in ['Avalanche ID', 'Signal Time']
+        ]
 
-    signalSum = np.abs(singleSignal[padSignals].sum())
-    maxPad = signalSum.idxmax()
+        signalSum = np.abs(singleSignal[padSignals].sum())
+        maxPad = signalSum.idxmax()
 
-    fig, axs = plt.subplots(1, 2, figsize=(12, 5))
-    fig.suptitle(f'Induced Signal from Avalanche: {avalancheID} (Gain={gain})')
+        fig, axs = plt.subplots(1, 2, figsize=(12, 5))
+        fig.suptitle(f'Induced Signal from Avalanche: {avalancheID} (Gain={gain})')
 
-    for pad in padSignals:
-        isPrimary = pad == maxPad
-        axs[0].plot(
-            singleSignal['Signal Time'], singleSignal[pad],
-            label=f'{pad} (Max)' if isPrimary else pad,
-            ls='-' if isPrimary else '--',
-            lw=2.5 if isPrimary else 1
-        )
-        axs[1].plot(
-            singleSignal['Signal Time'], singleSignal[pad].cumsum(),
-            label=f'{pad} (Max)' if isPrimary else pad,
-            ls='-' if isPrimary else '--',
-            lw=2.5 if isPrimary else 1
-        )
+        for pad in padSignals:
+            isPrimary = pad == maxPad
+            axs[0].plot(
+                singleSignal['Signal Time'], singleSignal[pad],
+                label=f'{pad} (Max)' if isPrimary else pad,
+                ls='-' if isPrimary else '--',
+                lw=2.5 if isPrimary else 1
+            )
+            axs[1].plot(
+                singleSignal['Signal Time'], singleSignal[pad].cumsum(),
+                label=f'{pad} (Max)' if isPrimary else pad,
+                ls='-' if isPrimary else '--',
+                lw=2.5 if isPrimary else 1
+            )
 
-    axs[0].set_title('Induced Signal')
-    axs[1].set_title('Integrated Signal')
-    
-    axs[0].set_ylabel('Current (fC/ns)')#TODO - The units here seem weird fC/ns should be uA?
-    axs[1].set_ylabel('Charge (fC)')
-    
-    for inAx in axs:
-        inAx.set_xlabel('Time (ns)')
-        inAx.grid()
-        inAx.set_xscale('log')
-        inAx.legend()
+        axs[0].set_title('Induced Signal')
+        axs[1].set_title('Integrated Signal')
+        
+        axs[0].set_ylabel('Current (fC/ns)')#TODO - The units here seem weird fC/ns should be uA?
+        axs[1].set_ylabel('Charge (fC)')
+        
+        for inAx in axs:
+            inAx.set_xlabel('Time (ns)')
+            inAx.grid()
+            inAx.set_xscale('log')
+            inAx.legend()
 
-    plt.tight_layout()
+        plt.tight_layout()
 
-    return fig
+        return fig
+
+#********************************************************************************#
+    def plotAllPrimarySignals(self):
+        """
+        TODO - Add this to gui
+        """
+        allSignals = self.getDataFrame('signalData')
+        
+        padSignals = [
+            pad for pad in allSignals.columns 
+            if pad not in ['Avalanche ID', 'Signal Time']
+        ]
+        
+        fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+        
+        # Group by each individual avalanche
+        grouped = allSignals.groupby('Avalanche ID')
+        
+        for avalancheID, singleSignal in grouped:
+            signalSum = np.abs(singleSignal[padSignals].sum())
+            maxPad = signalSum.idxmax()
+            
+            axs[0].plot(
+                singleSignal['Signal Time'], singleSignal[maxPad], 
+                c='r', alpha=0.01
+            )
+            axs[1].plot(
+                singleSignal['Signal Time'], singleSignal[maxPad].cumsum(), 
+                c='r', alpha=0.01
+            )
+            
+        axs[0].set_title('Induced Signal')
+        axs[1].set_title('Integrated Signal')
+        
+        axs[0].set_ylabel('Current (fC/ns)')#TODO - The units here seem weird fC/ns should be uA?
+        axs[1].set_ylabel('Charge (fC)')
+        
+        for inAx in axs:
+            inAx.set_xlabel('Time (ns)')
+            inAx.grid()
+            inAx.set_xscale('log')
+        
+        plt.tight_layout()
+        
+        return fig
     
 #********************************************************************************#
     def plotAverageSignal(self):
