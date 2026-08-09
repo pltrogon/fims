@@ -2819,7 +2819,20 @@ class runData:
         return alignedAverage
 
 #********************************************************************************#
+    def getNetChargeSummary(self):
+        """TODO - USeful?"""
+        allSignals = self.getDataFrame('signalData')
+        
+        padNames = [
+            col for col in allSignals.columns 
+            if col not in ['Avalanche ID', 'Signal Time']
+        ]
 
+        netCharge = allSignals.groupby('Avalanche ID')[padNames].sum()
+
+        return netCharge
+
+#********************************************************************************#
     def plotFieldStrength(self):
         """
         Plots the electric field strength along the central field line.
