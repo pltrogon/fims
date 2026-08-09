@@ -2632,54 +2632,73 @@ class runData:
             inAx.grid()
             inAx.set_xscale('log')
             inAx.legend()
+            inAx.set_xlim([1, None])
 
         plt.tight_layout()
 
         return fig
 
-#********************************************************************************#
-    def plotAllPrimarySignals(self):
+#********************************************************************************#  
+    def _getAllPrimarySignals(self):
         """
-        TODO - Add this to gui
+        TODO
         """
         allSignals = self.getDataFrame('signalData')
-        
-        padSignals = [
-            pad for pad in allSignals.columns 
-            if pad not in ['Avalanche ID', 'Signal Time']
-        ]
-        
+        padCols = [c for c in allSignals.columns if c not in ['Avalanche ID', 'Signal Time']]
+
+        # Find the pad with the maximum net magnitude per Avalanche ID
+        netPadMagnitude = allSignals.groupby('Avalanche ID')[padCols].sum().abs()
+        maxPads = netPadMagnitude.idxmax(axis=1).to_dict()
+
+        # Filter the primary signal for each group
+        records = []
+        for avalancheID, group in allSignals.groupby('Avalanche ID'):
+            primaryPad = maxPads[avalancheID]
+            records.append(pd.DataFrame({
+                'Avalanche ID': avalancheID,
+                'Signal Time': group['Signal Time'],
+                'Primary Signal': group[primaryPad],
+                'Primary Pad': primaryPad
+            }))
+
+        return pd.concat(records, ignore_index=True)
+
+#********************************************************************************#
+    def plotPrimarySignals(self):
+        """
+        TODO
+        """
+        allPrimary = self._getAllPrimarySignals()
+
         fig, axs = plt.subplots(1, 2, figsize=(12, 6))
-        
-        # Group by each individual avalanche
-        grouped = allSignals.groupby('Avalanche ID')
-        
-        for avalancheID, singleSignal in grouped:
-            signalSum = np.abs(singleSignal[padSignals].sum())
-            maxPad = signalSum.idxmax()
+
+        for avalancheID, group in allPrimary.groupby('Avalanche ID'):
+            time = group['Signal Time']
+            signal = group['Primary Signal']
             
             axs[0].plot(
-                singleSignal['Signal Time'], singleSignal[maxPad], 
-                c='r', alpha=0.01
+                time, signal,
+                c='r', alpha=.01
             )
             axs[1].plot(
-                singleSignal['Signal Time'], singleSignal[maxPad].cumsum(), 
-                c='r', alpha=0.01
+                time, signal.cumsum(),
+                c='r', alpha=.01
             )
-            
+
         axs[0].set_title('Induced Signal')
         axs[1].set_title('Integrated Signal')
-        
-        axs[0].set_ylabel('Current (fC/ns)')#TODO - The units here seem weird fC/ns should be uA?
+
+        axs[0].set_ylabel('Current (fC/ns)')  #1 fC/ns = 1 uA
         axs[1].set_ylabel('Charge (fC)')
-        
+
         for inAx in axs:
             inAx.set_xlabel('Time (ns)')
             inAx.grid()
             inAx.set_xscale('log')
-        
+            inAx.set_xlim([1, None])
+
         plt.tight_layout()
-        
+
         return fig
     
 #********************************************************************************#
