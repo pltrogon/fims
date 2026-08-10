@@ -100,6 +100,23 @@ int main(int argc, char * argv[]) {
     if(!simParams){
         return -1;
     }
+    //Get half of cell scale
+    double xScale, yScale;
+    switch(geometryMode){
+        case GeometryMode::SquareSurrounding:{
+            xScale = simParams->pitch/2.;
+            yScale = simParams->pitch/2.;
+            break;
+        }
+        case GeometryMode::HexagonalSurrounding:{
+            xScale = simParams->pitch/std::sqrt(3.);
+            yScale = simParams->pitch/2.;
+            break;
+        }
+        default:
+            return -1;
+    }
+
     std::cout << "Running avalanche animations... " << std::endl;
 
     //*************** DATA TREES ***************//
@@ -108,13 +125,50 @@ int main(int argc, char * argv[]) {
     std::string dataPath = "../../Data/"+dataFilename;
     TFile *dataFile = new TFile(dataPath.c_str(), "RECREATE");
 
-    // ***** Avalanche Info tree ***** // TODO add simParam data. standoff, hole, field strengths, etc.
+    // ***** Simulation Info tree ***** //
+    TTree *simDataTree = new TTree("simDataTree", "Simulation Data");
+
+    // Geometry parameters
+    simDataTree->Branch("padLength", &simParams->padLength);
+    simDataTree->Branch("pitch", &simParams->pitch);
+    simDataTree->Branch("amplificationGap", &simParams->amplificationGap);
+    simDataTree->Branch("gridThickness", &simParams->gridThickness);
+    simDataTree->Branch("padThickness", &simParams->padThickness);
+    simDataTree->Branch("holeRadius", &simParams->holeRadius);
+    simDataTree->Branch("driftLength", &simParams->driftLength);
+    simDataTree->Branch("thicknessSiO2", &simParams->thicknessSiO2);
+    simDataTree->Branch("pillarRadius", &simParams->pillarRadius);
+
+    // Field parameters
+    simDataTree->Branch("driftField", &simParams->driftField);
+    simDataTree->Branch("fieldRatio", &simParams->fieldRatio);
+    simDataTree->Branch("numFieldLine", &simParams->numFieldLine);
+
+    // Simulation parameters
+    simDataTree->Branch("runNumber", &simParams->runNumber);
+    simDataTree->Branch("numAvalanche", &simParams->numAvalanche);
+    simDataTree->Branch("avalancheLimit", &simParams->avalancheLimit);
+    simDataTree->Branch("numInputs", &simParams->numInputs);
+    simDataTree->Branch("initialZFraction", &simParams->initialZFraction);
+
+    // Gas parameters
+    simDataTree->Branch("gasCompAr", &simParams->gasCompAr);
+    simDataTree->Branch("gasCompCO2", &simParams->gasCompCO2);
+    simDataTree->Branch("gasCompCF4", &simParams->gasCompCF4);
+    simDataTree->Branch("gasCompIsobutane", &simParams->gasCompIsobutane);
+    simDataTree->Branch("gasPenning", &simParams->gasPenning);
+
+    simDataTree->Fill();
+    simDataTree->Write();
+    delete simDataTree;
+
+    // ***** Avalanche Info tree ***** //
     TTree *avalancheTree = new TTree("avalancheTree", "Avalanche Data");
     int avalancheID;
     int gain;
 
-    avalancheTree->Branch("avalancheID", &avalancheID);
-    avalancheTree->Branch("gain", &gain);
+    avalancheTree->Branch("AvalancheID", &avalancheID);
+    avalancheTree->Branch("Gain", &gain);
 
     // ***** Field tree ***** //
     TTree *fieldTree = new TTree("fieldTree", "Electric and Weighting Field Map");
@@ -135,8 +189,8 @@ int main(int argc, char * argv[]) {
     int fieldLineID, fieldLineStart;
     double fieldLineX, fieldLineY, fieldLineZ;
 
-    fieldLineTree->Branch("Field Line ID", &fieldLineID);
-    fieldLineTree->Branch("Field Start", &fieldLineStart);
+    fieldLineTree->Branch("FieldLineID", &fieldLineID);
+    fieldLineTree->Branch("FieldStart", &fieldLineStart);
     fieldLineTree->Branch("x", &fieldLineX);
     fieldLineTree->Branch("y", &fieldLineY);
     fieldLineTree->Branch("z", &fieldLineZ);
@@ -148,10 +202,10 @@ int main(int argc, char * argv[]) {
     std::vector<int> particleType; // 0 if electron, 1 if +ion, -1 if negative ion
     std::vector<double> xParticle, yParticle, zParticle;
 
-    particleTree->Branch("Avalanche ID", &avalancheID);
-    particleTree->Branch("Frame ID", &frameID);
+    particleTree->Branch("AvalancheID", &avalancheID);
+    particleTree->Branch("FrameID", &frameID);
     particleTree->Branch("Time", &frameTime);
-    particleTree->Branch("Particle Type", &particleType);
+    particleTree->Branch("ParticleType", &particleType);
     particleTree->Branch("x", &xParticle);
     particleTree->Branch("y", &yParticle);
     particleTree->Branch("z", &zParticle);
@@ -163,7 +217,7 @@ int main(int argc, char * argv[]) {
     std::vector<double> electronSignals(sensorList.size(), 0.0);
     std::vector<double> ionSignals(sensorList.size(), 0.0);
 
-    signalDataTree->Branch("Avalanche ID", &avalancheID);
+    signalDataTree->Branch("AvalancheID", &avalancheID);
     signalDataTree->Branch("Time", &signalTime);
     for (size_t i = 0; i < sensorList.size(); i++) {
         signalDataTree->Branch(Form("Signal_%s", sensorList[i].c_str()), &padSignals[i]);
@@ -246,22 +300,22 @@ int main(int argc, char * argv[]) {
 
     const int numBins = 101;
     const double nStep = static_cast<double>(numBins - 1);
-    double dx = (xmax - xmin) / nStep;
-    double dy = (ymax - ymin) / nStep;
-    double dz = (zmax - zmin) / nStep;
+    double dx = 2.*xScale/nStep;
+    double dy = 2.*yScale/nStep;
+    double dz = 0.95*(zmax - zmin)/nStep;
     Medium* inMedium;
     int status;
 
-
+    /*
     fieldTree->SetAutoSave(0);
-
+    
     //loop through all x, y, z coordinates
     for(int k=0; k<numBins; k++){
-        zField = zmin + k*dz;
+        zField = 0.95*zmin + k*dz;
         for(int i=0; i<numBins; i++){
-            xField = xmin + i*dx;
+            xField = -xScale + i*dx;
             for(int j=0; j<numBins; j++){
-                yField = ymin + j*dy;
+                yField = -yScale + j*dy;
 
                 fieldFIMS.ElectricField(
                     xField, yField, zField, 
@@ -280,15 +334,16 @@ int main(int argc, char * argv[]) {
     }
     fieldTree->Write();
     delete fieldTree;
+    */
 
     //*************** FIELD LINES ***************//
     std::cout << "Generating field lines...\n";
 
-    const int numLines = 3;//simParam->numFieldLine;
+    const int numLines = 11;//simParam->numFieldLine;
     const double fieldLineStep = static_cast<double>(numLines - 1);
 
-    dx = (xmax - xmin) / fieldLineStep;
-    dy = (ymax - ymin) / fieldLineStep;
+    dx = 2.*xScale/fieldLineStep;
+    dy = 2.*xScale/fieldLineStep;
 
     DriftLineRKF driftLines(sensorFIMS);
     driftLines.SetMaximumStepSize(MICRONTOCM);
@@ -303,7 +358,7 @@ int main(int argc, char * argv[]) {
         {-1, -gridLineStart},       // Below grid
         { 1,  gridLineStart}        // Above grid
     };
-    /*
+    
     // Do all field lines
     for (const auto& inLineLoc : lineLocs) {
 
@@ -316,8 +371,8 @@ int main(int argc, char * argv[]) {
 
                 fieldLineID = i*numLines + j;
 
-                double xPos = xmin + i*dx;
-                double yPos = ymin + j*dy;
+                double xPos = -xScale + i*dx;
+                double yPos = -yScale + j*dy;
 
                 // Skip any grid lines that are within the hole
                 if(isGrid && (xPos*xPos + yPos*yPos < holeRadius2)){
@@ -340,10 +395,12 @@ int main(int argc, char * argv[]) {
     }
     fieldLineTree->Write();
     delete fieldLineTree;
-    */
-
+    
+    
     //*************** AVALANCHES ***************//
-    std::cout << "Running " << simParams->numAvalanche << " avalanches...\n";
+    /*
+    int numAvalanche = 5;//simParams->numAvalanche;
+    std::cout << "Running " << numAvalanche << " avalanches...\n";
 
     //Set the Initial electron parameters
     double z0 = simParams->initialZFraction * simParams->driftLength;
@@ -352,8 +409,10 @@ int main(int argc, char * argv[]) {
     double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
 
     // ***** Single-Electron Avalanche ***** //
-    for(int inAvalanche=0; inAvalanche<simParams->numAvalanche; inAvalanche++){
+    for(int inAvalanche=0; inAvalanche<numAvalanche; inAvalanche++){
         avalancheID = inAvalanche;
+        std::cerr << "Beginning avalanche: " << inAvalanche << std::endl;
+        //std::cout << "Beginning avalanche: " << inAvalanche << std::endl;
         
 
         AvalancheMicroscopic avalanche(sensorFIMS);
@@ -381,12 +440,15 @@ int main(int argc, char * argv[]) {
             frameID++;
             tFrameStart += dt;
 
+            std::cerr << "\tFrame: " << inAvalanche << "." << frameID << std::endl;
+            //std::cout << "\tFrame: " << inAvalanche << "." << frameID << std::endl;
+
             //Check if any electrons or ions exist
             const bool noElectrons = avalanche.GetElectrons().empty();
             const bool noIons = drift.GetIons().empty();
             if(noElectrons && noIons){
                 activeAvalanche = false;
-                break;
+                continue;
             }
 
             //Determine frame timestep
@@ -472,6 +534,7 @@ int main(int argc, char * argv[]) {
             particleTree->Fill();
         }//End of frame loop
 
+        
         // ***** Induced Signals ***** //
         for(int inSignal=0; inSignal < numSignalBins; inSignal++){
             signalTime = inSignal*signalStep;
@@ -485,6 +548,7 @@ int main(int argc, char * argv[]) {
 
             signalDataTree->Fill();
         }
+        
 
         // ***** Avalanche Statistics ***** // 
         gain = avalanche.GetNumberOfElectronEndpoints();
@@ -493,7 +557,8 @@ int main(int argc, char * argv[]) {
         sensorFIMS->ClearSignal();
 
 
-    }//End single avalanche
+    }//End single avalanche/
+    */
 
     delete sensorFIMS;
     delete gasFIMS;
