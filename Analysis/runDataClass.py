@@ -2754,7 +2754,7 @@ class runData:
             ax.set_xlabel(f'Time Relative to Peak + {timeOffset} (ns)')
             ax.grid()
             ax.set_xscale('log')
-            ax.set_xlim([1, None])
+            ax.set_xlim([.1, None])
 
         plt.tight_layout()
         
@@ -2773,7 +2773,7 @@ class runData:
         #Get all primary signals
         signals = self._getAllPrimarySignals()
 
-        timeOffset = 2
+        timeOffset = 1
         refTime = signals[signals['Avalanche ID'] == 0]['Signal Time']
         commonTime = (refTime - timeOffset).to_numpy()
 
