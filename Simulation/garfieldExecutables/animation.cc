@@ -298,7 +298,7 @@ int main(int argc, char * argv[]) {
     //*************** FIELDS ***************//
     std::cout << "Getting electric and weighting field information...\n";
 
-    const int numBins = 101;
+    const int numBins = 21;
     const double nStep = static_cast<double>(numBins - 1);
     double dx = 2.*xScale/nStep;
     double dy = 2.*yScale/nStep;
@@ -306,35 +306,47 @@ int main(int argc, char * argv[]) {
     Medium* inMedium;
     int status;
 
-    /*
-    fieldTree->SetAutoSave(0);
-    
-    //loop through all x, y, z coordinates
     for(int k=0; k<numBins; k++){
         zField = 0.95*zmin + k*dz;
-        for(int i=0; i<numBins; i++){
-            xField = -xScale + i*dx;
-            for(int j=0; j<numBins; j++){
-                yField = -yScale + j*dy;
+                
+        //Do x=0 plane
+        for (int j = 0; j < numBins; j++) {
+            xField = 0.0;
+            yField = -yScale + j*dy;
 
-                fieldFIMS.ElectricField(
-                    xField, yField, zField, 
-                    eFieldX, eFieldY, eFieldZ, 
-                    inMedium, status
-                );
-
-                wField = fieldFIMS.WeightingPotential(
-                    xField, yField, zField,
-                    "CentralPad"
-                );
-
-                fieldTree->Fill();
-            }
+            fieldFIMS.ElectricField(
+                xField, yField, zField, 
+                eFieldX, eFieldY, eFieldZ, 
+                inMedium, status
+            );
+            wField = fieldFIMS.WeightingPotential(
+                xField, yField, zField, 
+                "Top"
+            );
+            fieldTree->Fill();
         }
+
+        //Do y=0 plane
+        for (int i = 0; i < numBins; i++) {
+            xField = -xScale + i*dx;
+            yField = 0.0;
+
+            fieldFIMS.ElectricField(
+                xField, yField, zField, 
+                eFieldX, eFieldY, eFieldZ, 
+                inMedium, status
+            );
+            wField = fieldFIMS.WeightingPotential(
+                xField, yField, zField, 
+                "Top"
+            );
+            fieldTree->Fill();
+        }
+
     }
     fieldTree->Write();
     delete fieldTree;
-    */
+    
 
     //*************** FIELD LINES ***************//
     std::cout << "Generating field lines...\n";
