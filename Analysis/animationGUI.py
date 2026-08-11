@@ -17,7 +17,8 @@ from matplotlib.animation import FuncAnimation
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QComboBox, QLabel, QSpinBox, QPushButton, QStackedWidget, QGroupBox,
-    QTableWidget, QTableWidgetItem, QHeaderView, QCheckBox, QButtonGroup
+    QTableWidget, QTableWidgetItem, QHeaderView, QCheckBox, QButtonGroup,
+    QRadioButton
 )
 from PyQt6.QtCore import Qt, QTimer
 
@@ -77,6 +78,8 @@ class AnimationData:
                     library='pd'
                 )
                 fieldDF[['x', 'y', 'z']] *= CMTOMICRON
+                fieldDF[['Ex', 'Ey', 'Ez']] /= 1e3
+                fieldDF['E'] = np.sqrt(fieldDF['Ex']**2 + fieldDF['Ey']**2 + fieldDF['Ez']**2)
                 self.fieldStrengths = fieldDF
 
             if 'fieldLineTree' in file:
@@ -143,6 +146,9 @@ class MplCanvas(FigureCanvas):
     def setupAxes(self, is2D=False):
         """Clears the figure and prepares 3D or dual 2D subplot axes."""
         self.fig.clear()
+        if hasattr(self, 'cbar') and self.cbar is not None:
+            self.cbar.remove()
+            self.cbar = None
 
         if is2D:
             gs = self.fig.add_gridspec(2, 2)
@@ -181,7 +187,7 @@ class FIMSVisualizer(QMainWindow):
 
         return
 
-#**********************************************************************#
+# **********************************************************************#
     def _init_UI(self):
         mainWidget = QWidget()
         self.setCentralWidget(mainWidget)
@@ -194,11 +200,12 @@ class FIMSVisualizer(QMainWindow):
         # Data Selection
         sidebarLayout.addWidget(QLabel('Select Data:'))
         self.viewSelector = QComboBox()
-        self.viewSelector.addItems([ # Match with order in _onViewChange
-            'Simulation Parameters', 
-            'Field Lines', 
-            'Electron Avalanche', 
-            'Induced Signals'
+        self.viewSelector.addItems([  # Match with order in _onViewChange
+            'Simulation Parameters',
+            'Field Lines',
+            'Field Strengths',
+            'Electron Avalanche',
+            'Induced Signals',
         ])
         self.viewSelector.currentIndexChanged.connect(self._onViewChange)
         sidebarLayout.addWidget(self.viewSelector)
@@ -228,7 +235,7 @@ class FIMSVisualizer(QMainWindow):
         # Controls Stack for mode-specific options
         self.controlsStack = QStackedWidget()
 
-        #========================================
+        # ========================================
         # Params options
         viewWidgetParams = QWidget()
         self.controlsStack.addWidget(viewWidgetParams)
@@ -237,11 +244,30 @@ class FIMSVisualizer(QMainWindow):
         viewWidgetFieldLines = QWidget()
         self.controlsStack.addWidget(viewWidgetFieldLines)
 
-        # Avalanche Animation controls
+        # Field Strength options
+        viewWidgetFieldStrengths = QWidget()
+        layoutFieldStrengths = QVBoxLayout(viewWidgetFieldStrengths)
+        layoutFieldStrengths.setContentsMargins(0, 0, 0, 0)
+
+        self.chkEField = QRadioButton('Electric Field')
+        self.chkWField = QRadioButton('Weighting Field')
+        self.chkEField.setChecked(True)
+
+        self.fieldGroup = QButtonGroup(self)
+        self.fieldGroup.setExclusive(True)
+        self.fieldGroup.addButton(self.chkEField)
+        self.fieldGroup.addButton(self.chkWField)
+        self.fieldGroup.buttonClicked.connect(self._onFieldModeChanged)
+
+        layoutFieldStrengths.addWidget(self.chkEField)
+        layoutFieldStrengths.addWidget(self.chkWField)
+        self.controlsStack.addWidget(viewWidgetFieldStrengths)
+
+        # 3. Avalanche Animation controls
         viewWidgetAvalanche = QWidget()
         layoutViewAvalanche = QVBoxLayout(viewWidgetAvalanche)
         layoutViewAvalanche.setContentsMargins(0, 0, 0, 0)
-        
+
         layoutViewAvalanche.addWidget(QLabel('AvalancheID:'))
         self.avalancheSpinBox = QSpinBox()
         if self.data.particleData is not None and not self.data.particleData.empty:
@@ -257,13 +283,13 @@ class FIMSVisualizer(QMainWindow):
         self.playButton.setCheckable(True)
         self.playButton.clicked.connect(self._toggleAnimation)
         layoutViewAvalanche.addWidget(self.playButton)
-        
+
         self.controlsStack.addWidget(viewWidgetAvalanche)
 
-        # Signals controls
+        # 4. Signals controls
         viewWidgetSignal = QWidget()
         self.controlsStack.addWidget(viewWidgetSignal)
-        #========================================
+        # ========================================
 
         sidebarLayout.addWidget(self.controlsStack)
         sidebarLayout.addStretch()
@@ -275,40 +301,32 @@ class FIMSVisualizer(QMainWindow):
 
         mainLayout.addWidget(sidebar, stretch=1)
 
-        # --- RIGHT SIDE (Display Stack) ---
+        # --- RIGHT SIDE (Display Area) ---
         displayPanel = QWidget()
         displayLayout = QVBoxLayout(displayPanel)
 
-        self.canvasStack = QStackedWidget()
+        # Simplified display stack: 0 = Parameters Table, 1 = Shared Matplotlib Canvas
+        self.displayStack = QStackedWidget()
 
-        #========================================
-        # Simulation Parameters Table Widget
+        # View 0: Table
         self.simParamTable = QTableWidget()
         self.simParamTable.setColumnCount(2)
         self.simParamTable.setHorizontalHeaderLabels(['Parameter', 'Value'])
-        self.simParamTable.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.simParamTable.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
         self.simParamTable.verticalHeader().setVisible(False)
-        self.canvasStack.addWidget(self.simParamTable)
+        self.displayStack.addWidget(self.simParamTable)
 
-        # Field lines
-        self.canvasField = MplCanvas(is3D=True)
-        self.canvasStack.addWidget(self.canvasField)
+        # View 1: Single Shared Canvas
+        self.canvas = MplCanvas()
+        self.displayStack.addWidget(self.canvas)
 
-        # Avalanche
-        self.canvasAvalanche = MplCanvas(is3D=True)
-        self.canvasStack.addWidget(self.canvasAvalanche)
+        # Navigation Toolbar tied directly to the single canvas
+        self.toolbar = NavigationToolbar(self.canvas, self)
 
-        # Signals
-        self.canvasSignal = MplCanvas(is3D=False)
-        self.canvasStack.addWidget(self.canvasSignal)
-        #========================================
-
-        # Navigation Toolbar initialized
-        self.toolbar = NavigationToolbar(self.canvasField, self)
-        self.toolbar.hide()
-        
         displayLayout.addWidget(self.toolbar)
-        displayLayout.addWidget(self.canvasStack)
+        displayLayout.addWidget(self.displayStack)
 
         mainLayout.addWidget(displayPanel, stretch=4)
 
@@ -323,33 +341,38 @@ class FIMSVisualizer(QMainWindow):
     
 #**********************************************************************#
     def _onViewChange(self, index):
+        """Handles main view changes from the viewSelector dropdown."""
+        # Stop animation when leaving/entering views
         self.animationTimer.stop()
         self.playButton.setChecked(False)
         self.playButton.setText('Play Animation')
-        
-        self.controlsStack.setCurrentIndex(index)
-        self.canvasStack.setCurrentIndex(index)
 
-        is3DView = index in (1, 2)
+        # Update control sidebar options
+        self.controlsStack.setCurrentIndex(index)
+
+        # Enable 2D/3D toggle
+        is3DView = index in (1, 2, 3)
         self.chk3D.setEnabled(is3DView)
         self.chk2D.setEnabled(is3DView)
 
-        # Match index order from _init_UI()
         if index == 0:
+            # Show parameters table (index 0 in displayStack)
+            self.displayStack.setCurrentIndex(0)
             self.toolbar.hide()
             self._plotSimParams()
         else:
-            currentCanvas = self.canvasStack.currentWidget()
-            self.toolbar.canvas = currentCanvas
-            self.toolbar.update()
+            # Show Matplotlib canvas (index 1 in displayStack)
+            self.displayStack.setCurrentIndex(1)
             self.toolbar.show()
 
-            # Plot something
+            # Match exact index order from _init_UI()
             if index == 1:
                 self._plotFieldLines()
             elif index == 2:
-                self._resetAvalancheAnimation()
+                self._plotFields()
             elif index == 3:
+                self._resetAvalancheAnimation()
+            elif index == 4:
                 self._plotSignals()
 
         return
@@ -361,6 +384,8 @@ class FIMSVisualizer(QMainWindow):
         if idx == 1:
             self._plotFieldLines()
         elif idx == 2:
+                    self._plotFields()
+        elif idx == 3:
             self._renderParticleFrame()
         return
     
@@ -371,7 +396,17 @@ class FIMSVisualizer(QMainWindow):
         if idx == 1:
             self._plotFieldLines()
         elif idx == 2:
+            self._plotFields()
+        elif idx == 3:
             self._renderParticleFrame()
+        return
+
+#**********************************************************************#
+    def _onFieldModeChanged(self, *args):
+        """Triggers re-render when the field is changed."""
+        idx = self.viewSelector.currentIndex()
+        if idx==2:
+            self._plotFields()
         return
     
 #**********************************************************************#
@@ -418,14 +453,10 @@ class FIMSVisualizer(QMainWindow):
             -1: 'green'     #Below the grid
         }
 
-
         groupedLines = self.data.fieldLines.groupby(['FieldLineID', 'FieldStart'])
 
         if use2D:
-            xz, yz, xy = self.canvasField.setupAxes(is2D=True)
-            if self.data.fieldLines is None or self.data.fieldLines.empty:
-                xy.text(0, 0, 0, 'No Field Line Data Found', color='r')
-                return
+            xz, yz, xy = self.canvas.setupAxes(is2D=True)
 
             for (lineID, startVal), lineData in groupedLines:
                 color = colorMap.get(startVal, 'k')
@@ -433,15 +464,12 @@ class FIMSVisualizer(QMainWindow):
                 yz.plot(lineData['y'], lineData['z'], c=color)
                 xy.plot(lineData['x'], lineData['y'], c=color)            
 
-            self._formatAxes((xz, yz, xy))
             if self.chkGeometry.isChecked():
                 self._drawGeometry((xz, yz, xy))
+            self._formatAxes((xz, yz, xy))
 
         else:
-            ax = self.canvasField.setupAxes(is2D=False)
-            if self.data.fieldLines is None or self.data.fieldLines.empty:
-                ax.text(0, 0, 0, 'No Field Line Data Found', color='r')
-                return
+            ax = self.canvas.setupAxes(is2D=False)
 
             for (lineID, startVal), lineData in groupedLines:
                 ax.plot(
@@ -449,12 +477,102 @@ class FIMSVisualizer(QMainWindow):
                     c=colorMap.get(startVal, 'k')
                 )
 
-            self._formatAxes(ax)
             if self.chkGeometry.isChecked():
                 self._drawGeometry(ax)
+            self._formatAxes(ax)
+            
 
-        self.canvasField.fig.tight_layout()
-        self.canvasField.draw()
+        self.canvas.fig.tight_layout()
+        self.canvas.draw()
+        return
+
+#**********************************************************************#
+    def _plotFields(self):
+        """TODO"""
+
+        use2D = self.chk2D.isChecked()
+        isEField = self.chkEField.isChecked()
+        fieldData = self.data.fieldStrengths.copy()
+
+        plotData = fieldData['E'] if isEField else fieldData['Weighting']
+
+        if isEField:
+            vmin = np.nanmin(plotData)
+            vmax = np.nanmax(plotData)
+            lineLevels = None
+        else:
+            vmin, vmax = 0.0, 1.0
+            lineLevels = np.arange(0.2, 1.2, 0.2)
+
+        contour = None
+        if use2D:
+            xz, yz, xy = self.canvas.setupAxes(is2D=True)
+        
+            xzMask = np.isclose(fieldData['y'], 0, atol=1e-6)
+            contour = xz.tricontourf(
+                fieldData['x'][xzMask], fieldData['z'][xzMask], plotData[xzMask], 
+                levels=101, cmap='viridis', vmin=vmin, vmax=vmax
+            )
+            if not isEField:
+                xzLines = xz.tricontour(
+                    fieldData['x'][xzMask], fieldData['z'][xzMask], plotData[xzMask], 
+                    levels=lineLevels, colors='c', lw=0.5, vmin=vmin, vmax=vmax
+                )
+                xz.clabel(xzLines, inline=True, fontsize=8, fmt='%.1f')
+
+            yzMask = np.isclose(fieldData['x'], 0, atol=1e-6)
+            contour = yz.tricontourf(
+                fieldData['y'][yzMask], fieldData['z'][yzMask], plotData[yzMask], 
+                levels=101, cmap='viridis', vmin=vmin, vmax=vmax
+            )
+            if not isEField:
+                yzLines = yz.tricontour(
+                    fieldData['y'][yzMask], fieldData['z'][yzMask], plotData[yzMask], 
+                    levels=lineLevels, colors='c', lw=0.5, vmin=vmin, vmax=vmax
+                )
+                yz.clabel(yzLines, inline=True, fontsize=8, fmt='%.1f')
+
+            if self.chkGeometry.isChecked():
+                self._drawGeometry((xz, yz, xy))
+            self._formatAxes((xz, yz, xy))
+            xy.set_visible(False)
+
+            if contour is not None:
+                self.cbar = self.canvas.fig.colorbar(
+                    contour, 
+                    ax=[xz, yz], 
+                    orientation='vertical', 
+                    fraction=0.03, 
+                    pad=0.04
+                )
+            
+        else:
+            ax = self.canvas.setupAxes(is2D=False)
+
+            mappable = ax.scatter(
+                fieldData['x'], fieldData['y'], fieldData['z'],
+                c=plotData, cmap='viridis', s=15
+            )
+
+            if self.chkGeometry.isChecked():
+                self._drawGeometry(ax)
+            self._formatAxes(ax)
+
+            self.cbar = self.canvas.fig.colorbar(
+                mappable,
+                ax=ax,
+                orientation='vertical',
+                fraction=0.03,
+                pad=0.04
+            )
+
+        if self.cbar is not None:
+            label = 'Field Strength (kV/cm)' if isEField else 'Weighting Potential'
+            self.cbar.set_label(label)
+
+        self.canvas.fig.tight_layout()
+        self.canvas.draw()
+
         return
 
 #**********************************************************************#
@@ -464,10 +582,10 @@ class FIMSVisualizer(QMainWindow):
         self.playButton.setText('Play Animation')
 
         if self.data.particleData is None or self.data.particleData.empty:
-            ax = self.canvasAvalanche.ax
+            ax = self.canvas.ax
             ax.clear()
             ax.text(0, 0, 0, 'No Particle Data Found', color='r')
-            self.canvas3DPart.draw()
+            self.canvas.draw()
             return
 
         avID = self.avalancheSpinBox.value()
@@ -496,7 +614,7 @@ class FIMSVisualizer(QMainWindow):
         if use2D:
             pass
         else:
-            ax = self.canvasField.setupAxes(is2D=False)
+            ax = self.canvas.setupAxes(is2D=False)
             ax.clear()
             
             ax.scatter(
@@ -521,7 +639,7 @@ class FIMSVisualizer(QMainWindow):
             ax.set_zlabel(r'z ($\mu$m)')
             ax.legend(loc='upper right')
 
-            self.canvas3DPart.draw()
+            self.canvas.draw()
 
         return
 
@@ -547,28 +665,29 @@ class FIMSVisualizer(QMainWindow):
 
 #**********************************************************************#
     def _plotSignals(self):
-        ax = self.canvas2DSignal.ax
-        ax.clear()
 
-        if self.data.signalData is None or self.data.signalData.empty:
-            ax.text(0.5, 0.5, 'No Signal Data Found', ha='center', va='center', color='r')
-        else:
-            inData = self.data.signalData
-            time = inData['Time'] if 'Time' in inData.columns else inData.index
+        isSignal = self.chkSignal.isChecked()
 
-            # Plot all dynamic signal branches
-            for col in inData.columns:
-                if col in ['AvalancheID', 'Time']:
-                    continue
-                ax.plot(time, inData[col], label=col)
+        xz, yz, xy = self.canvas.setupAxes(is2D=True)
 
-            ax.set_xlabel('Time (ns)')
-            ax.set_ylabel('Signal')
-            ax.set_title('Induced Signals')
-            ax.grid()
-            ax.legend(loc='upper right')
+        inData = self.data.signalData
+        time = inData['Time']
 
-        self.canvas2DSignal.draw()
+        # Plot all dynamic signal branches
+        for col in inData.columns:
+            if col in ['AvalancheID', 'Time']:
+                continue
+            xy.plot(time, inData[col], label=col)
+
+        xy.set_xlabel('Time (ns)')
+        xy.set_ylabel('Signal (fC/ns)' if isSignal else 'Charge (fC)')
+        xy.grid()
+        xy.legend(loc='upper right')
+
+        xz.set_visible(False)
+        yz.set_visible(False)
+
+        self.canvas.draw()
 
         return
 

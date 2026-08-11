@@ -298,7 +298,7 @@ int main(int argc, char * argv[]) {
     //*************** FIELDS ***************//
     std::cout << "Getting electric and weighting field information...\n";
 
-    const int numBins = 21;
+    const int numBins = 101;
     const double nStep = static_cast<double>(numBins - 1);
     double dx = 2.*xScale/nStep;
     double dy = 2.*yScale/nStep;
@@ -321,7 +321,7 @@ int main(int argc, char * argv[]) {
             );
             wField = fieldFIMS.WeightingPotential(
                 xField, yField, zField, 
-                "Top"
+                "TopPad"
             );
             fieldTree->Fill();
         }
@@ -338,7 +338,7 @@ int main(int argc, char * argv[]) {
             );
             wField = fieldFIMS.WeightingPotential(
                 xField, yField, zField, 
-                "Top"
+                "TopPad"
             );
             fieldTree->Fill();
         }
