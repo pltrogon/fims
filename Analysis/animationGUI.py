@@ -263,7 +263,7 @@ class FIMSVisualizer(QMainWindow):
         layoutFieldStrengths.addWidget(self.chkWField)
         self.controlsStack.addWidget(viewWidgetFieldStrengths)
 
-        # 3. Avalanche Animation controls
+        # Avalanche Animation controls
         viewWidgetAvalanche = QWidget()
         layoutViewAvalanche = QVBoxLayout(viewWidgetAvalanche)
         layoutViewAvalanche.setContentsMargins(0, 0, 0, 0)
@@ -286,8 +286,23 @@ class FIMSVisualizer(QMainWindow):
 
         self.controlsStack.addWidget(viewWidgetAvalanche)
 
-        # 4. Signals controls
+        # Signals controls
         viewWidgetSignal = QWidget()
+        layoutSignals = QVBoxLayout(viewWidgetSignal)
+        layoutSignals.setContentsMargins(0, 0, 0, 0)
+
+        self.chkSignal = QRadioButton('Induced Signal')
+        self.chkCharge = QRadioButton('Total Charge')
+        self.chkSignal.setChecked(True)
+
+        self.signalGroup = QButtonGroup(self)
+        self.signalGroup.setExclusive(True)
+        self.signalGroup.addButton(self.chkSignal)
+        self.signalGroup.addButton(self.chkCharge)
+        self.signalGroup.buttonClicked.connect(self._onSignalChange)
+
+        layoutSignals.addWidget(self.chkSignal)
+        layoutSignals.addWidget(self.chkCharge)
         self.controlsStack.addWidget(viewWidgetSignal)
         # ========================================
 
@@ -355,6 +370,10 @@ class FIMSVisualizer(QMainWindow):
         self.chk3D.setEnabled(is3DView)
         self.chk2D.setEnabled(is3DView)
 
+        # Enable Geometry toggle
+        isGeo = index in (1, 2, 3)
+        self.chkGeometry.setEnabled(isGeo)
+
         if index == 0:
             # Show parameters table (index 0 in displayStack)
             self.displayStack.setCurrentIndex(0)
@@ -407,6 +426,14 @@ class FIMSVisualizer(QMainWindow):
         idx = self.viewSelector.currentIndex()
         if idx==2:
             self._plotFields()
+        return
+
+#**********************************************************************#
+    def _onSignalChange(self, *args):
+        """Triggers re-render when the signal is changed."""
+        idx = self.viewSelector.currentIndex()
+        if idx==4:
+            self._plotSignals()
         return
     
 #**********************************************************************#
@@ -664,20 +691,25 @@ class FIMSVisualizer(QMainWindow):
         return
 
 #**********************************************************************#
-    def _plotSignals(self):
+    def _plotSignals(self): 
+        #TODO: checkboxes for total/ion/electron signals.
+        #All signals or just individual pads
 
         isSignal = self.chkSignal.isChecked()
 
         xz, yz, xy = self.canvas.setupAxes(is2D=True)
 
         inData = self.data.signalData
-        time = inData['Time']
 
         # Plot all dynamic signal branches
         for col in inData.columns:
             if col in ['AvalancheID', 'Time']:
                 continue
-            xy.plot(time, inData[col], label=col)
+            xy.plot(
+                inData['Time'], 
+                inData[col] if isSignal else inData[col].cumsum(),
+                label=col
+            )
 
         xy.set_xlabel('Time (ns)')
         xy.set_ylabel('Signal (fC/ns)' if isSignal else 'Charge (fC)')

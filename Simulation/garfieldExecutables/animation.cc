@@ -410,8 +410,8 @@ int main(int argc, char * argv[]) {
     
     
     //*************** AVALANCHES ***************//
-    /*
-    int numAvalanche = 5;//simParams->numAvalanche;
+    
+    int numAvalanche = 1;//simParams->numAvalanche;
     std::cout << "Running " << numAvalanche << " avalanches...\n";
 
     //Set the Initial electron parameters
@@ -425,7 +425,6 @@ int main(int argc, char * argv[]) {
         avalancheID = inAvalanche;
         std::cerr << "Beginning avalanche: " << inAvalanche << std::endl;
         //std::cout << "Beginning avalanche: " << inAvalanche << std::endl;
-        
 
         AvalancheMicroscopic avalanche(sensorFIMS);
         AvalancheMC drift(sensorFIMS);
@@ -453,7 +452,6 @@ int main(int argc, char * argv[]) {
             tFrameStart += dt;
 
             std::cerr << "\tFrame: " << inAvalanche << "." << frameID << std::endl;
-            //std::cout << "\tFrame: " << inAvalanche << "." << frameID << std::endl;
 
             //Check if any electrons or ions exist
             const bool noElectrons = avalanche.GetElectrons().empty();
@@ -473,6 +471,7 @@ int main(int argc, char * argv[]) {
             }
 
             frameTime = tFrameStart+dt;
+            std::cerr << "\tStepping by: "<< frameTime << std::endl;
 
 
             //Process next timestep
@@ -570,7 +569,7 @@ int main(int argc, char * argv[]) {
 
 
     }//End single avalanche/
-    */
+    
 
     delete sensorFIMS;
     delete gasFIMS;
