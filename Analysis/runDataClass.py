@@ -2890,40 +2890,22 @@ class runData:
 #********************************************************************************#
     def _buildAllSignalDataframe(self):
         """TODO"""
-        aveSignal = self._getAverageSignal()
-        relativeTime = aveSignal['relativeTime']
-        averagePrimary = aveSignal['averagePrimary']
+        alignedAverage = self._alignAndAverageSignals()
+        commonTime = alignedAverage['commonTime'] - alignedAverage['commonTime'][0]
+        meanCurrent = alignedAverage['meanCurrent']
 
-        # Extract original raw signals
-        allSignals = self.getDataFrame('signalData')
-
-        # Pivot both signal channels into 2D matrices (Rows = Avalanche ID, Cols = Signal Time)
-        sigMat = allSignals.pivot(index='Avalanche ID', columns='Signal Time', values='Signal Strength')
-        adjMat = allSignals.pivot(index='Avalanche ID', columns='Signal Time', values='Adjacent Signal Average')
-
-        # Determine Primary vs Secondary per avalanche (sum across time)
-        totalSig = sigMat.sum(axis=1)
-        totalAdj = adjMat.sum(axis=1)
-        isPrimarySig = np.abs(totalSig) > np.abs(totalAdj)
-
-        # Select primary signal for each avalanche row
-        rawPrimaryMat = np.where(isPrimarySig.values[:, None], sigMat.values, adjMat.values)
-
-        # Build the result dictionary
-        dfDict = {
-            'Relative Time': relativeTime,
-            'Average Primary Signal': averagePrimary
+        allData = {
+            'commonTime': commonTime,
+            'meanCurrent': meanCurrent
         }
 
-        # Add each individual avalanche's primary signal as a column
-        avalancheIds = sigMat.index  # Unique Avalanche IDs
-        for i, avId in enumerate(avalancheIds):
-            colName = f'AvalancheID_{avId}'
-            dfDict[colName] = rawPrimaryMat[i]
+        # Extract original raw signals
+        allSignals = self._getAllPrimarySignals()
 
-        newDF = pd.DataFrame(dfDict)
+        for avalancheID, signal in allSignals.groupby('Avalanche ID'):
+            allData[f'AvalancheID_{avalancheID}'] = signal['Primary Signal'].to_numpy()
 
-        return newDF
+        return pd.DataFrame(allData)
 
 #********************************************************************************#
     def saveSignalsAsPWL(self):

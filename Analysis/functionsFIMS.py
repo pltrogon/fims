@@ -1001,11 +1001,11 @@ def makePWL(runNumber, averageSignal=True, avalancheID=None):
     allData = pd.read_parquet(dataFile)
 
     # Time is common for all signals
-    relativeTime = allData['Relative Time'].values
+    relativeTime = allData['commonTime'].values
 
     #Get average signal
     if averageSignal:
-        rawSignal = allData['Average Primary Signal'].values
+        rawSignal = allData['meanCurrent'].values
         signalLabel = 'AVERAGE'
 
     # Get individual signal

@@ -302,12 +302,13 @@ int main(int argc, char * argv[]) {
     const double nStep = static_cast<double>(numBins - 1);
     double dx = 2.*xScale/nStep;
     double dy = 2.*yScale/nStep;
-    double dz = 0.95*(zmax - zmin)/nStep;
+    double zScale = .99;
+    double dz = zScale*(zmax - zmin)/nStep;
     Medium* inMedium;
     int status;
 
     for(int k=0; k<numBins; k++){
-        zField = 0.95*zmin + k*dz;
+        zField = zScale*zmin + k*dz;
                 
         //Do x=0 plane
         for (int j = 0; j < numBins; j++) {
@@ -366,7 +367,7 @@ int main(int argc, char * argv[]) {
     double gridLineStart= 2*simParams->gridThickness;
 
     std::pair<int, double> lineLocs[3] = {
-        { 0, zmax*0.95},            // Cathode
+        { 0, zmax*zScale},            // Cathode
         {-1, -gridLineStart},       // Below grid
         { 1,  gridLineStart}        // Above grid
     };
@@ -463,15 +464,15 @@ int main(int argc, char * argv[]) {
 
             //Determine frame timestep
             if(!noElectrons){
-                dt = 0.1;
-                drift.SetTimeSteps(0.05);
+                dt = 0.5;
+                drift.SetTimeSteps(dt/5.);
             }else{
-                dt = 10.;
-                drift.SetTimeSteps(0.5);
+                dt = 100.;
+                drift.SetTimeSteps(dt/5.);
             }
 
             frameTime = tFrameStart+dt;
-            std::cerr << "\tStepping by: "<< frameTime << std::endl;
+            std::cerr << "\tStepping by: "<< dt << std::endl;
 
 
             //Process next timestep
