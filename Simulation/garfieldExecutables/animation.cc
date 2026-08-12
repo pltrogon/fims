@@ -439,10 +439,9 @@ int main(int argc, char * argv[]) {
         std::vector<std::array<double, 5>> prevElectrons = {{x0, y0, z0, t0, e0}};
         double tFrameStart = 0., dt = 0.;
 
-        bool activeAvalanche = true;
         frameID = 0;
 
-        while(activeAvalanche){
+        while(true){
             //Clear memory
             particleType.clear();
             xParticle.clear();
@@ -452,33 +451,41 @@ int main(int argc, char * argv[]) {
             frameID++;
             tFrameStart += dt;
 
-            std::cerr << "\tFrame: " << inAvalanche << "." << frameID << std::endl;
-
-            //Check if any electrons or ions exist
-            const bool noElectrons = avalanche.GetElectrons().empty();
-            const bool noIons = drift.GetIons().empty();
-            if(noElectrons && noIons){
-                activeAvalanche = false;
-                continue;
+            if(tFrameStart > 100e3){
+                std::cerr << "*************** TIMEOUT ***************" << std::endl;
+                break;
             }
 
+            //Check if any active electrons or ions exist
+            bool activeElectrons = false;
+            for(const auto& inElectron : avalanche.GetElectrons()){
+                if(inElectron.path.back().t >= tFrameStart){
+                    activeElectrons = true;
+                    break;
+                }
+            }
+            bool activeIons = false;
+            for(const auto& inIon : drift.GetIons()){
+                if(inIon.path.back().t >= tFrameStart){
+                    activeIons = true;
+                    break;
+                }
+            }
+
+            if(!activeElectrons && !activeIons){
+                std::cerr << "*************** NO MORE PARTICLES ***************" << std::endl;
+                break;
+            }
+            
             //Determine frame timestep
-            if(!noElectrons){
-                dt = 0.5;
-                drift.SetTimeSteps(dt/5.);
-            }else{
-                dt = 100.;
-                drift.SetTimeSteps(dt/5.);
-            }
-
+            dt = activeElectrons ? 0.1 : 100.0;
+            drift.SetTimeSteps(dt/5.);
             frameTime = tFrameStart+dt;
-            std::cerr << "\tStepping by: "<< dt << std::endl;
-
 
             //Process next timestep
             
             //Process electrons
-            if(!noElectrons){
+            if(activeElectrons){
                 avalanche.SetTimeWindow(tFrameStart, frameTime);
                 avalanche.ResumeAvalanche();
 
@@ -529,7 +536,7 @@ int main(int argc, char * argv[]) {
             }
 
             //Process Ions
-            if(!noIons){
+            if(!drift.GetIons().empty()){
                 drift.SetTimeWindow(tFrameStart, frameTime);
                 drift.ResumeAvalanche();
 
