@@ -13,6 +13,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
 from matplotlib.animation import FuncAnimation
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
@@ -140,28 +141,36 @@ class MplCanvas(FigureCanvas):
         super().__init__(self.fig)
         self.is3D = is3D
 
-        self.ax = self.setupAxes(is2D=False)
+        self.ax = self.setupAxes(is3D=True)
         return
 
-    def setupAxes(self, is2D=False):
-        """Clears the figure and prepares 3D or dual 2D subplot axes."""
-        self.fig.clear()
-        if hasattr(self, 'cbar') and self.cbar is not None:
-            self.cbar.remove()
-            self.cbar = None
-
-        if is2D:
-            gs = self.fig.add_gridspec(2, 2)
-            xz = self.fig.add_subplot(gs[0, 0])
-            yz = self.fig.add_subplot(gs[1, 0])
-            xy = self.fig.add_subplot(gs[:, 1])
-            return xz, yz, xy
-        else:
-            if self.is3D:
+    def setupAxes(self, is3D=True, numPlots=3):
+            """Clears the figure and prepares 3D or dual 2D subplot axes."""
+            self.fig.clear()
+            if hasattr(self, 'cbar') and self.cbar is not None:
+                self.cbar.remove()
+                self.cbar = None
+    
+            if is3D:
                 self.ax = self.fig.add_subplot(1, 1, 1, projection='3d')
+                return self.ax
+
             else:
-                self.ax = self.fig.add_subplot(1, 1, 1)
-            return self.ax
+                if numPlots == 3:
+                    gs = self.fig.add_gridspec(2, 2)
+                    xz = self.fig.add_subplot(gs[0, 0])
+                    yz = self.fig.add_subplot(gs[1, 0])
+                    xy = self.fig.add_subplot(gs[:, 1])
+                    return xz, yz, xy
+                
+                elif numPlots == 2:
+                    ax1 = self.fig.add_subplot(1, 2, 1)
+                    ax2 = self.fig.add_subplot(1, 2, 2)
+                    return ax1, ax2
+
+                else:
+                    self.ax = self.fig.add_subplot(1, 1, 1)
+                    return self.ax
 
 
 # ==========================================
@@ -200,14 +209,15 @@ class FIMSVisualizer(QMainWindow):
         # Data Selection
         sidebarLayout.addWidget(QLabel('Select Data:'))
         self.viewSelector = QComboBox()
-        self.viewSelector.addItems([  # Match with order in _onViewChange
+        self.viewSelector.addItems([  # Match with order in _onChange
             'Simulation Parameters',
+            'Geometry',
             'Field Lines',
             'Field Strengths',
             'Electron Avalanche',
             'Induced Signals',
         ])
-        self.viewSelector.currentIndexChanged.connect(self._onViewChange)
+        self.viewSelector.currentIndexChanged.connect(self._onChange)
         sidebarLayout.addWidget(self.viewSelector)
 
         # Projection Mode - 2D vs 3D
@@ -220,7 +230,7 @@ class FIMSVisualizer(QMainWindow):
         self.projGroup.addButton(self.chk3D)
         self.projGroup.addButton(self.chk2D)
 
-        self.chk3D.toggled.connect(self._onProjectionModeChanged)
+        self.chk3D.toggled.connect(self._onChange)
 
         projLayout.addWidget(self.chk3D)
         projLayout.addWidget(self.chk2D)
@@ -229,7 +239,7 @@ class FIMSVisualizer(QMainWindow):
         # Show Geometry
         self.chkGeometry = QCheckBox('Show Geometry')
         self.chkGeometry.setChecked(True)
-        self.chkGeometry.toggled.connect(self._onGeometryToggled)
+        self.chkGeometry.toggled.connect(self._onChange)
         sidebarLayout.addWidget(self.chkGeometry)
 
         # Controls Stack for mode-specific options
@@ -240,6 +250,10 @@ class FIMSVisualizer(QMainWindow):
         viewWidgetParams = QWidget()
         self.controlsStack.addWidget(viewWidgetParams)
 
+        # Geometry options
+        viewWidgetGeometry = QWidget()
+        self.controlsStack.addWidget(viewWidgetGeometry)
+        
         # Field lines options
         viewWidgetFieldLines = QWidget()
         self.controlsStack.addWidget(viewWidgetFieldLines)
@@ -257,7 +271,7 @@ class FIMSVisualizer(QMainWindow):
         self.fieldGroup.setExclusive(True)
         self.fieldGroup.addButton(self.chkEField)
         self.fieldGroup.addButton(self.chkWField)
-        self.fieldGroup.buttonClicked.connect(self._onFieldModeChanged)
+        self.fieldGroup.buttonClicked.connect(self._onChange)
 
         layoutFieldStrengths.addWidget(self.chkEField)
         layoutFieldStrengths.addWidget(self.chkWField)
@@ -299,7 +313,7 @@ class FIMSVisualizer(QMainWindow):
         self.signalGroup.setExclusive(True)
         self.signalGroup.addButton(self.chkSignal)
         self.signalGroup.addButton(self.chkCharge)
-        self.signalGroup.buttonClicked.connect(self._onSignalChange)
+        self.signalGroup.buttonClicked.connect(self._onChange)
 
         layoutSignals.addWidget(self.chkSignal)
         layoutSignals.addWidget(self.chkCharge)
@@ -354,92 +368,54 @@ class FIMSVisualizer(QMainWindow):
     # SLOTS AND RENDER METHODS
     # ==========================================
     
-#**********************************************************************#
-    def _onViewChange(self, index):
-        """Handles main view changes from the viewSelector dropdown."""
-        # Stop animation when leaving/entering views
+# **********************************************************************#
+    def _onChange(self, *args):
+        """Unified handler for view selection, projection, geometry, field, and signal changes."""
+        idx = self.viewSelector.currentIndex()
+
+        # Reset animation state on any view change
         self.animationTimer.stop()
         self.playButton.setChecked(False)
-        self.playButton.setText('Play Animation')
+        self.playButton.setText("Play Animation")
 
-        # Update control sidebar options
-        self.controlsStack.setCurrentIndex(index)
-
-        # Enable 2D/3D toggle
-        is3DView = index in (1, 2, 3)
+        # Update sidebar and control button states based on view index
+        self.controlsStack.setCurrentIndex(idx)
+        is3DView = idx in (1, 2, 3, 4)
         self.chk3D.setEnabled(is3DView)
         self.chk2D.setEnabled(is3DView)
+        self.chkGeometry.setEnabled(idx in (1, 2, 3, 4))
 
-        # Enable Geometry toggle
-        isGeo = index in (1, 2, 3)
-        self.chkGeometry.setEnabled(isGeo)
-
-        if index == 0:
-            # Show parameters table (index 0 in displayStack)
+        # Handle non-plot view (Parameters Table)
+        if idx == 0:
             self.displayStack.setCurrentIndex(0)
             self.toolbar.hide()
             self._plotSimParams()
-        else:
-            # Show Matplotlib canvas (index 1 in displayStack)
-            self.displayStack.setCurrentIndex(1)
-            self.toolbar.show()
+            return
 
-            # Match exact index order from _init_UI()
-            if index == 1:
-                self._plotFieldLines()
-            elif index == 2:
-                self._plotFields()
-            elif index == 3:
-                self._resetAvalancheAnimation()
-            elif index == 4:
-                self._plotSignals()
+        # Handle plot views (Matplotlib Canvas)
+        self.displayStack.setCurrentIndex(1)
+        self.toolbar.show()
 
-        return
+        # View-to-plotting-function mapping
+        view_renderers = {
+            1: self._plotGeometry,
+            2: self._plotFieldLines,
+            3: self._plotFields,
+            4: self._resetAvalancheAnimation,
+            5: self._plotSignals,
+        }
 
-#**********************************************************************#
-    def _onProjectionModeChanged(self):
-        """Re-render current view when switching between 3D and 2D mode."""
-        idx = self.viewSelector.currentIndex()
-        if idx == 1:
-            self._plotFieldLines()
-        elif idx == 2:
-                    self._plotFields()
-        elif idx == 3:
-            self._renderParticleFrame()
-        return
-    
-#**********************************************************************#
-    def _onGeometryToggled(self):
-        """Triggers re-render when the geometry overlay is toggled."""
-        idx = self.viewSelector.currentIndex()
-        if idx == 1:
-            self._plotFieldLines()
-        elif idx == 2:
-            self._plotFields()
-        elif idx == 3:
-            self._renderParticleFrame()
-        return
+        # Dispatch execution
+        render_func = view_renderers.get(idx)
+        if render_func:
+            render_func()
 
-#**********************************************************************#
-    def _onFieldModeChanged(self, *args):
-        """Triggers re-render when the field is changed."""
-        idx = self.viewSelector.currentIndex()
-        if idx==2:
-            self._plotFields()
-        return
-
-#**********************************************************************#
-    def _onSignalChange(self, *args):
-        """Triggers re-render when the signal is changed."""
-        idx = self.viewSelector.currentIndex()
-        if idx==4:
-            self._plotSignals()
         return
     
 #**********************************************************************#
     def _reloadData(self):
         self.data.loadRootData()
-        self._onViewChange(self.viewSelector.currentIndex())
+        self._onChange(self.viewSelector.currentIndex())
         return
 
 
@@ -470,6 +446,23 @@ class FIMSVisualizer(QMainWindow):
         return
     
 #**********************************************************************#
+    def _plotGeometry(self):
+        use2D = self.chk2D.isChecked()
+        if use2D:
+            xz, yz, xy = self.canvas.setupAxes(is3D=False)
+            self._drawGeometry((xz, yz, xy))
+            self._formatAxes((xz, yz, xy))
+
+        else:
+            ax = self.canvas.setupAxes()
+            self._drawGeometry(ax)
+            self._formatAxes(ax)
+
+        self.canvas.fig.tight_layout()
+        self.canvas.draw()
+        return
+
+#**********************************************************************#
     def _plotFieldLines(self):
 
         use2D = self.chk2D.isChecked()
@@ -483,7 +476,7 @@ class FIMSVisualizer(QMainWindow):
         groupedLines = self.data.fieldLines.groupby(['FieldLineID', 'FieldStart'])
 
         if use2D:
-            xz, yz, xy = self.canvas.setupAxes(is2D=True)
+            xz, yz, xy = self.canvas.setupAxes(is3D=False)
 
             for (lineID, startVal), lineData in groupedLines:
                 color = colorMap.get(startVal, 'k')
@@ -496,7 +489,7 @@ class FIMSVisualizer(QMainWindow):
             self._formatAxes((xz, yz, xy))
 
         else:
-            ax = self.canvas.setupAxes(is2D=False)
+            ax = self.canvas.setupAxes()
 
             for (lineID, startVal), lineData in groupedLines:
                 ax.plot(
@@ -533,52 +526,43 @@ class FIMSVisualizer(QMainWindow):
 
         contour = None
         if use2D:
-            xz, yz, xy = self.canvas.setupAxes(is2D=True)
-        
-            xzMask = np.isclose(fieldData['y'], 0, atol=1e-6)
-            contour = xz.tricontourf(
-                fieldData['x'][xzMask], fieldData['z'][xzMask], plotData[xzMask], 
-                levels=101, cmap='viridis', vmin=vmin, vmax=vmax
-            )
-            if not isEField:
-                xzLines = xz.tricontour(
-                    fieldData['x'][xzMask], fieldData['z'][xzMask], plotData[xzMask], 
-                    levels=lineLevels, colors='c', lw=0.5, vmin=vmin, vmax=vmax
-                )
-                xz.clabel(xzLines, inline=True, fontsize=8, fmt='%.1f')
+            ax1, ax2 = self.canvas.setupAxes(is3D=False, numPlots=2)
+            layout = [
+                (ax1, 'y', 'x', 'z'),
+                (ax2, 'x', 'y', 'z')
+            ]
 
-            yzMask = np.isclose(fieldData['x'], 0, atol=1e-6)
-            contour = yz.tricontourf(
-                fieldData['y'][yzMask], fieldData['z'][yzMask], plotData[yzMask], 
-                levels=101, cmap='viridis', vmin=vmin, vmax=vmax
-            )
-            if not isEField:
-                yzLines = yz.tricontour(
-                    fieldData['y'][yzMask], fieldData['z'][yzMask], plotData[yzMask], 
-                    levels=lineLevels, colors='c', lw=0.5, vmin=vmin, vmax=vmax
+            for ax, fixed, x, y in layout:
+                mask = np.isclose(fieldData[fixed], 0, atol=1e-6)
+                xData, yData = fieldData[x][mask], fieldData[y][mask]
+                zData = plotData[mask]
+
+                contour = ax.tricontourf(
+                    xData, yData, zData, 
+                    levels=101, cmap='viridis', vmin=vmin, vmax=vmax
                 )
-                yz.clabel(yzLines, inline=True, fontsize=8, fmt='%.1f')
+                if not isEField:
+                    lines = ax.tricontour(
+                        xData, yData, zData,  
+                        levels=lineLevels, colors='c', lw=0.5, vmin=vmin, vmax=vmax
+                    )
+                    ax1.clabel(lines, inline=True, fontsize=8, fmt='%.1f')
 
             if self.chkGeometry.isChecked():
-                self._drawGeometry((xz, yz, xy))
-            self._formatAxes((xz, yz, xy))
-            xy.set_visible(False)
+                self._drawGeometry((ax1, ax2))
+            self._formatAxes((ax1, ax2))
 
             if contour is not None:
-                self.cbar = self.canvas.fig.colorbar(
-                    contour, 
-                    ax=[xz, yz], 
-                    orientation='vertical', 
-                    fraction=0.03, 
-                    pad=0.04
-                )
+                divider = make_axes_locatable(ax2)
+                cax = divider.append_axes("right", size="5%", pad=0.1)
+                self.cbar = self.canvas.fig.colorbar(contour, cax=cax)
             
         else:
-            ax = self.canvas.setupAxes(is2D=False)
+            ax = self.canvas.setupAxes()
 
             mappable = ax.scatter(
                 fieldData['x'], fieldData['y'], fieldData['z'],
-                c=plotData, cmap='viridis', s=15
+                c=plotData, cmap='viridis', s=15, alpha=.75
             )
 
             if self.chkGeometry.isChecked():
@@ -641,7 +625,7 @@ class FIMSVisualizer(QMainWindow):
         if use2D:
             pass
         else:
-            ax = self.canvas.setupAxes(is2D=False)
+            ax = self.canvas.setupAxes()
             ax.clear()
             
             ax.scatter(
@@ -697,7 +681,7 @@ class FIMSVisualizer(QMainWindow):
 
         isSignal = self.chkSignal.isChecked()
 
-        xz, yz, xy = self.canvas.setupAxes(is2D=True)
+        ax = self.canvas.setupAxes(is3D=False, numPlots=1)
 
         inData = self.data.signalData
 
@@ -705,19 +689,19 @@ class FIMSVisualizer(QMainWindow):
         for col in inData.columns:
             if col in ['AvalancheID', 'Time']:
                 continue
-            xy.plot(
+            ax.plot(
                 inData['Time'], 
                 inData[col] if isSignal else inData[col].cumsum(),
                 label=col
             )
 
-        xy.set_xlabel('Time (ns)')
-        xy.set_ylabel('Signal (fC/ns)' if isSignal else 'Charge (fC)')
-        xy.grid()
-        xy.legend(loc='upper right')
+        ax.set_xlabel('Time (ns)')
+        ax.set_ylabel('Signal (fC/ns)' if isSignal else 'Charge (fC)')
+        ax.grid()
+        ax.legend(loc='upper right')
 
-        xz.set_visible(False)
-        yz.set_visible(False)
+        ax.set_visible(False)
+        ax.set_visible(False)
 
         self.canvas.draw()
 
@@ -773,7 +757,7 @@ class FIMSVisualizer(QMainWindow):
         zBot = np.ma.masked_where(inHole, np.full_like(xGrid, -gridSize))
 
         if isinstance(axes, tuple):
-            xz, yz, xy = axes
+            xz, yz, *rest = axes
 
             gridMask = np.ma.masked_where(inHole, np.ones_like(xGrid))
             midIdx = gridRes // 2
@@ -786,10 +770,11 @@ class FIMSVisualizer(QMainWindow):
                 y, zBot[:, midIdx], zTop[:, midIdx], 
                 color='grey'
             )
-            xy.pcolormesh(
-                xGrid, yGrid, gridMask, 
-                cmap='Greys', vmin=0, vmax=2, alpha=0.5, shading='auto'
-            )
+            if rest:
+                rest[0].pcolormesh(
+                    xGrid, yGrid, gridMask, 
+                    cmap='Greys', vmin=0, vmax=2, alpha=0.5, shading='auto'
+                )
 
         else:
             ax = axes
@@ -824,14 +809,16 @@ class FIMSVisualizer(QMainWindow):
         ])
 
         if isinstance(axes, tuple):
-            xz, yz, xy = axes
+            xz, yz, *rest = axes
 
             for (i, j) in centers:
                 xLocs, yLocs = hexXY(padLength, i, j)
                 line = '-' if i==0 and j==0 else ':'
                 xz.plot(xLocs, zHeight*np.ones(len(xLocs)), c='m', ls=line)
                 yz.plot(yLocs, zHeight*np.ones(len(yLocs)), c='m', ls=line)
-                xy.plot(xLocs, yLocs, c='m', ls=line)
+
+                if rest:
+                    rest[0].plot(xLocs, yLocs, c='m', ls=line)
 
         else:
             ax = axes
@@ -858,8 +845,9 @@ class FIMSVisualizer(QMainWindow):
         padHeight = -amplificationGap#Not quite but okay
 
         if isinstance(axes, tuple):
-            xz, yz, xy = axes
-            xy.plot(xLocs, yLocs, c='c')
+            xz, yz, *rest = axes
+            if rest:
+                rest[0].plot(xLocs, yLocs, c='c')
 
         else:
             ax = axes
@@ -881,37 +869,44 @@ class FIMSVisualizer(QMainWindow):
         pitch = self.data.simData['pitch']*CMTOMICRON
         xScale = pitch*math.sqrt(3)/2
         yScale = pitch
+
+        amplificationGap = self.data.simData['amplificationGap']*CMTOMICRON
+        driftLength = self.data.simData['driftLength']*CMTOMICRON
+        zBuffer=5
+        zLim = [-amplificationGap-zBuffer, driftLength+zBuffer]
         
         if isinstance(axes, tuple):
-            xz, yz, xy = axes
-        
-            xz.set_xlabel(xLabel)
-            xz.set_ylabel(zLabel)
-            xz.set_xlim([-xScale, xScale])
+            xz, yz, *rest = axes
 
-            yz.set_xlabel(yLabel)
-            yz.set_ylabel(zLabel)
-            yz.set_xlim([-yScale, yScale])
-
-            xy.set_xlabel(xLabel)
-            xy.set_ylabel(yLabel)
-            xy.set_xlim([-xScale, xScale])
-            xy.set_ylim([-yScale, yScale])
-            xy.set_aspect('equal')
+            xz.set(
+                xlabel=xLabel, ylabel=zLabel, 
+                xlim=[-xScale, xScale], ylim=zLim
+            )
+            yz.set(
+                xlabel=yLabel, ylabel=zLabel, 
+                xlim=[-yScale, yScale], ylim=zLim
+            )
+            if rest: #xy
+                rest[0].set(
+                    xlabel=xLabel,
+                    ylabel=yLabel,
+                    xlim=[-xScale, xScale],
+                    ylim=[-yScale, yScale],
+                    aspect='equal',
+                )
 
             for ax in axes:
-                ax.grid(alpha=.5, ls=':')
+                ax.axvline(0, c='k', ls=':', alpha=.75)
+                ax.axhline(0, c='k', ls=':', alpha=.75)
+                ax.grid(alpha=.25, ls=':')
 
         else:
             ax = axes
 
-            ax.set_xlabel(xLabel)
-            ax.set_ylabel(yLabel)
-            ax.set_zlabel(zLabel)
-
-            ax.set_xlim([-xScale, xScale])
-            ax.set_ylim([-yScale, yScale])
-
+            ax.set(
+                xlabel=xLabel, ylabel=yLabel, zlabel=zLabel, 
+                xlim=[-xScale, xScale], ylim=[-yScale, yScale], zlim=zLim
+            )
             ax.grid(alpha=.5, ls=':')
 
         return

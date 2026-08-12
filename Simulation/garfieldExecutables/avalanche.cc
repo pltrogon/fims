@@ -513,7 +513,7 @@ int main(int argc, char * argv[]) {
   double e0 = 0.1;//eV (Garfield is weird when this is 0.)
   double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
 
-  double timeFinal = 500.;//ns
+  double timeFinal = 250.;//ns
   double timeStep = 0.01;//ns
   int nSignalBins = timeFinal/timeStep;
   
