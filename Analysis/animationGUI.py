@@ -25,6 +25,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QTimer
 
 CMTOMICRON = 1e4
+VCMTOkVCM = 1e-3
 
 
 
@@ -63,10 +64,22 @@ class AnimationData:
 
             # Simulation Metadata
             if 'simDataTree' in file:
-                self.simData = {
+                simDataDF = {
                     k: v[0]
                     for k, v in file['simDataTree'].arrays(library='np').items()
                 }
+                geoKeys = [
+                    'padLength', 'pitch', 'holeRadius',
+                    'amplificationGap', 'driftLength',
+                    'gridThickness', 'padThickness',
+                    'thicknessSiO2', 'pillarRadius'
+                ]
+                for key in geoKeys:
+                    if key in simDataDF:
+                        simDataDF[key] *= CMTOMICRON
+                if 'driftField' in simDataDF:
+                    simDataDF['driftField'] *= VCMTOkVCM
+                self.simData = simDataDF
 
             # Avalanche Overview Data
             if 'avalancheTree' in file:
@@ -78,7 +91,7 @@ class AnimationData:
             if 'fieldTree' in file:
                 fieldDF = file['fieldTree'].arrays(library='pd')
                 fieldDF[['x', 'y', 'z']] *= CMTOMICRON
-                fieldDF[['Ex', 'Ey', 'Ez']] /= 1e3
+                fieldDF[['Ex', 'Ey', 'Ez']] *= VCMTOkVCM
                 fieldDF['E'] = np.linalg.norm(
                     fieldDF[['Ex', 'Ey', 'Ez']].values, axis=1
                 )
@@ -273,6 +286,21 @@ class FIMSVisualizer(QMainWindow):
         
         # Field lines options
         viewWidgetFieldLines = QWidget()
+        layoutFieldLines = QVBoxLayout(viewWidgetFieldLines)
+
+        self.chkCathodeLines = QCheckBox('Cathode')
+        self.chkCathodeLines.setChecked(True)
+        self.chkCathodeLines.toggled.connect(self._onChange)
+        self.chkAboveGridLines = QCheckBox('Above Grid')
+        self.chkAboveGridLines.setChecked(False)
+        self.chkAboveGridLines.toggled.connect(self._onChange)
+        self.chkBelowGridLines = QCheckBox('Below Grid')
+        self.chkBelowGridLines.setChecked(False)
+        self.chkBelowGridLines.toggled.connect(self._onChange)
+
+        layoutFieldLines.addWidget(self.chkCathodeLines)
+        layoutFieldLines.addWidget(self.chkAboveGridLines)
+        layoutFieldLines.addWidget(self.chkBelowGridLines)
         self.controlsStack.addWidget(viewWidgetFieldLines)
 
         # Field Strength options
@@ -292,6 +320,16 @@ class FIMSVisualizer(QMainWindow):
 
         layoutFieldStrengths.addWidget(self.chkEField)
         layoutFieldStrengths.addWidget(self.chkWField)
+
+        layoutVMax = QHBoxLayout()
+        lblVMax = QLabel('Max Field:')
+        self.txtVMax = QLineEdit()
+        self.txtVMax.setPlaceholderText("Auto")
+        self.txtVMax.editingFinished.connect(self._onChange)
+        layoutVMax.addWidget(lblVMax)
+        layoutVMax.addWidget(self.txtVMax)
+        layoutFieldStrengths.addLayout(layoutVMax)
+
         self.controlsStack.addWidget(viewWidgetFieldStrengths)
 
         # Avalanche Animation controls
@@ -517,10 +555,10 @@ class FIMSVisualizer(QMainWindow):
 
         use2D = self.chk2D.isChecked()
 
-        colorMap = {
-            0: 'blue',      #Cathode
-            1: 'red',       #Above the grid
-            -1: 'green'     #Below the grid
+        lineSettings = {
+            0: {'plot': self.chkCathodeLines.isChecked(), 'c': 'b'}, #Cathode
+            1: {'plot': self.chkAboveGridLines.isChecked(), 'c': 'r'}, #Above the grid
+            -1: {'plot': self.chkBelowGridLines.isChecked(), 'c': 'g'} #Below the grid
         }
 
         groupedLines = self.data.fieldLines.groupby(['FieldLineID', 'FieldStart'])
@@ -529,10 +567,12 @@ class FIMSVisualizer(QMainWindow):
             xz, yz, xy = self.canvas.setupAxes(is3D=False)
 
             for (lineID, startVal), lineData in groupedLines:
-                color = colorMap.get(startVal, 'k')
-                xz.plot(lineData['x'], lineData['z'], c=color)
-                yz.plot(lineData['y'], lineData['z'], c=color)
-                xy.plot(lineData['x'], lineData['y'], c=color)            
+                setting = lineSettings.get(startVal)
+                if not setting or not setting['plot']:
+                    continue
+                xz.plot(lineData['x'], lineData['z'], c=setting['c'])
+                yz.plot(lineData['y'], lineData['z'], c=setting['c'])
+                xy.plot(lineData['x'], lineData['y'], c=setting['c'])            
 
             if self.chkGeometry.isChecked():
                 self._drawGeometry((xz, yz, xy))
@@ -542,9 +582,12 @@ class FIMSVisualizer(QMainWindow):
             ax = self.canvas.setupAxes()
 
             for (lineID, startVal), lineData in groupedLines:
+                setting = lineSettings.get(startVal)
+                if not setting or not setting['plot']:
+                    continue
                 ax.plot(
                     lineData['x'], lineData['y'], lineData['z'], 
-                    c=colorMap.get(startVal, 'k')
+                    c=setting['c']
                 )
 
             if self.chkGeometry.isChecked():
@@ -567,8 +610,10 @@ class FIMSVisualizer(QMainWindow):
         plotData = fieldData['E'] if isEField else fieldData['Weight_TopPad']
 
         if isEField:
+            textVal = self.txtVMax.text().strip()
             vmin = np.nanmin(plotData)
-            vmax = np.nanmax(plotData)
+            vmax = float(textVal) if textVal else np.nanmax(plotData)
+
         else:
             vmin, vmax = 0.0, 1.0
 
@@ -591,6 +636,7 @@ class FIMSVisualizer(QMainWindow):
                 )
                 if not isEField:
                     self._plotContours((xz, yz))
+                    self._plotContours((xz, yz), pad='RightBottomPad', color='m')
 
             if self.chkGeometry.isChecked():
                 self._drawGeometry((xz, yz))
@@ -632,7 +678,7 @@ class FIMSVisualizer(QMainWindow):
         return
 
 #**********************************************************************#
-    def _plotContours(self, axes):
+    def _plotContours(self, axes, pad='TopPad', color='c'):
         """
         Plots contour lines with inline labels on 2D spatial axes (xz and yz).
         """
@@ -643,21 +689,22 @@ class FIMSVisualizer(QMainWindow):
             (yz, 'x', 'y', 'z')
         ]
 
-        fieldData = self.data.fieldStrengths, 
-        plotData = self.data.fieldStrengths['Weight_TopPad']
+        fieldData = self.data.fieldStrengths
+        plotData = self.data.fieldStrengths[f'Weight_{pad}']
 
-        for ax, fixed, x_col, y_col in layout:
+        for ax, fixed, x, y in layout:
             mask = np.isclose(fieldData[fixed], 0, atol=1e-6)
-            xData = fieldData[x_col][mask]
-            yData = fieldData[y_col][mask]
+            xData = fieldData[x][mask]
+            yData = fieldData[y][mask]
             zData = plotData[mask]
 
+            sep=0.05
             lines = ax.tricontour(
                 xData, yData, zData,  
-                levels=np.arange(0.2, 1.2, 0.2), colors='c', linewidths=0.5, 
+                levels=np.arange(0, 1+sep, sep), colors=color, linewidths=0.5, 
                 vmin=0, vmax=1
             )
-            ax.clabel(lines, inline=True, fontsize=8, fmt='%.1f')
+            ax.clabel(lines, inline=True, fontsize=8, fmt='%.2f')
 
         return
     
@@ -962,6 +1009,7 @@ class FIMSVisualizer(QMainWindow):
                 ls=styles.get(prefix, "-"), c=padColor[pad],
                 label=pad if prefix == 'Signal' else None
             )
+            
 
         inTime = inFrameData['Time'].iloc[0] if not inFrameData.empty else -1
         
@@ -975,6 +1023,9 @@ class FIMSVisualizer(QMainWindow):
         sig.set_ylabel('Signal (fC/ns)' if isSignal else 'Charge (fC)')
         sig.grid()
         sig.legend()
+
+        xz.set_title(f'Time = ({inTime:.2f} ns) (Frame ID: {frameID})')
+        xz.legend()
 
         self.canvas.fig.tight_layout()
         self.canvas.draw()
@@ -990,7 +1041,7 @@ class FIMSVisualizer(QMainWindow):
         if self.data.simData is None:
             return
         
-        padLength = self.data.simData['padLength']*CMTOMICRON
+        padLength = self.data.simData['padLength']
         
         self._addGrid(axes)
         self._addPads(axes)
@@ -1000,9 +1051,9 @@ class FIMSVisualizer(QMainWindow):
 
 #**********************************************************************#
     def _addGrid(self, axes):
-        pitch = self.data.simData['pitch']*CMTOMICRON
-        holeRadius = self.data.simData['holeRadius']*CMTOMICRON
-        gridThickness = self.data.simData['gridThickness']*CMTOMICRON
+        pitch = self.data.simData['pitch']
+        holeRadius = self.data.simData['holeRadius']
+        gridThickness = self.data.simData['gridThickness']
         
         gridSize = gridThickness/2
 
@@ -1067,11 +1118,11 @@ class FIMSVisualizer(QMainWindow):
 
 #**********************************************************************#
     def _addPads(self, axes):
-        pitch = self.data.simData['pitch']*CMTOMICRON
-        padLength = self.data.simData['padLength']*CMTOMICRON
+        pitch = self.data.simData['pitch']
+        padLength = self.data.simData['padLength']
 
-        #padThickness = self.data.simData['padThickness']*CMTOMICRON
-        amplificationGap = self.data.simData['amplificationGap']*CMTOMICRON
+        #padThickness = self.data.simData['padThickness']
+        amplificationGap = self.data.simData['amplificationGap']
 
         zHeight = -amplificationGap
 
@@ -1110,17 +1161,24 @@ class FIMSVisualizer(QMainWindow):
 
 #**********************************************************************#
     def _addUnitCell(self, axes):
-        pitch = self.data.simData['pitch']*CMTOMICRON
+        pitch = self.data.simData['pitch']
 
         sqrt3 = math.sqrt(3)
         xLocs, yLocs = hexXY(pitch/sqrt3, 0, 0)
 
-        amplificationGap = self.data.simData['amplificationGap']*CMTOMICRON
-        driftLength = self.data.simData['driftLength']*CMTOMICRON
+        amplificationGap = self.data.simData['amplificationGap']
+        driftLength = self.data.simData['driftLength']
         padHeight = -amplificationGap#Not quite but okay
 
         if isinstance(axes, tuple):
             xz, yz, *rest = axes
+            xz.axvline(xLocs[0], c='c', ls='--')
+            xz.axvline(-xLocs[0], c='c', ls='--')
+            xz.axvline(xLocs[1], c='c', ls=':')
+            xz.axvline(-xLocs[1], c='c', ls=':')
+            yz.axvline(pitch/2, c='c', ls='--')
+            yz.axvline(-pitch/2, c='c', ls='--')
+            yz.axvline(0, c='c', ls=':')
             if rest:
                 rest[0].plot(xLocs, yLocs, c='c')
 
@@ -1129,6 +1187,11 @@ class FIMSVisualizer(QMainWindow):
             ax.plot(xLocs, yLocs, 0*np.ones(len(xLocs)), c='c')
             ax.plot(xLocs, yLocs, padHeight*np.ones(len(xLocs)), c='c')
             ax.plot(xLocs, yLocs, driftLength*np.ones(len(xLocs)), c='c')
+            for x, y in zip(xLocs, yLocs):
+                xLine = [x, x]
+                yLine = [y, y]
+                zLine = [driftLength, padHeight]
+                ax.plot(xLine, yLine, zLine, c='c', ls='--')
 
         return
 
@@ -1141,12 +1204,12 @@ class FIMSVisualizer(QMainWindow):
         yLabel = r'y ($\mu$m)'
         zLabel = r'z ($\mu$m)'
 
-        pitch = self.data.simData['pitch']*CMTOMICRON
+        pitch = self.data.simData['pitch']
         xScale = pitch*math.sqrt(3)/2
         yScale = pitch
 
-        amplificationGap = self.data.simData['amplificationGap']*CMTOMICRON
-        driftLength = self.data.simData['driftLength']*CMTOMICRON
+        amplificationGap = self.data.simData['amplificationGap']
+        driftLength = self.data.simData['driftLength']
         zBuffer=5
         zLim = [-amplificationGap-zBuffer, driftLength+zBuffer]
         

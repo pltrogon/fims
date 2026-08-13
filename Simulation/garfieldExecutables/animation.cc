@@ -130,6 +130,7 @@ int main(int argc, char * argv[]) {
 
     // ***** Simulation Info tree ***** //
     TTree *simDataTree = new TTree("simDataTree", "Simulation Data");
+    double amplificationField = simParams->driftField*simParams->fieldRatio;
 
     // Geometry parameters
     simDataTree->Branch("padLength", &simParams->padLength);
@@ -144,6 +145,7 @@ int main(int argc, char * argv[]) {
 
     // Field parameters
     simDataTree->Branch("driftField", &simParams->driftField);
+    simDataTree->Branch("amplificationField", &amplificationField);
     simDataTree->Branch("fieldRatio", &simParams->fieldRatio);
     simDataTree->Branch("numFieldLine", &simParams->numFieldLine);
 
