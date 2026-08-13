@@ -1734,7 +1734,11 @@ class FIMS_Simulation:
             self.setGeometry(newGeo)
             self._generateGeometry()
             saveParam = self.getAllParam()
-            self.setParameters({'initialZFraction': 0.2})
+            self.setParameters({
+                'initialZFraction': 0.2,
+                'numAvalanche': 10,
+                'numFieldLine': 21
+            })
 
             #Solve fields and run Garfield
             self._solveEFields(solveWeighting=True)
