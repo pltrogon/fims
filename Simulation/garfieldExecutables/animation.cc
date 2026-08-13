@@ -101,16 +101,19 @@ int main(int argc, char * argv[]) {
         return -1;
     }
     //Get half of cell scale
+    double cellXScale;
     double xScale, yScale;
     switch(geometryMode){
         case GeometryMode::SquareSurrounding:{
             xScale = simParams->pitch/2.;
             yScale = simParams->pitch/2.;
+            cellXScale = 0.5;
             break;
         }
         case GeometryMode::HexagonalSurrounding:{
             xScale = simParams->pitch/std::sqrt(3.);
             yScale = simParams->pitch/2.;
+            cellXScale = 1./std::sqrt(3.);
             break;
         }
         default:
@@ -367,7 +370,7 @@ int main(int argc, char * argv[]) {
     //*************** FIELD LINES ***************//
     std::cout << "Generating field lines...\n";
 
-    const int numLines = 11;//simParam->numFieldLine;
+    const int numLines = simParam->numFieldLine;
     const double fieldLineStep = static_cast<double>(numLines - 1);
 
     dx = 2.*xScale/fieldLineStep;
@@ -427,7 +430,7 @@ int main(int argc, char * argv[]) {
     
     //*************** AVALANCHES ***************//
 
-    int numAvalanche = 3;//simParams->numAvalanche;
+    int numAvalanche = simParams->numAvalanche;
     std::cout << "Running " << numAvalanche << " avalanches...\n";
 
     //Set the Initial electron parameters
@@ -446,8 +449,8 @@ int main(int argc, char * argv[]) {
         AvalancheMC drift(sensorFIMS);
         avalanche.EnableAvalancheSizeLimit(simParams->avalancheLimit);
         
-        double cellLength = simParams->pitch/sqrt(3.);
-        auto [x0, y0] = randomXYInHexagon(cellLength);//TODO - only set for hexagon atm
+        double cellLength = simParams->pitch*cellXScale;
+        auto [x0, y0] = randomXYinGeometry(geometryMode, cellLength)
 
         avalanche.AddElectron(x0, y0, z0, t0, e0);
 
