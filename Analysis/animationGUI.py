@@ -7,6 +7,7 @@ import awkward as ak
 import math
 
 import matplotlib
+import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 matplotlib.use('QtAgg')
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -19,7 +20,7 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QComboBox, QLabel, QSpinBox, QPushButton, QStackedWidget, QGroupBox,
     QTableWidget, QTableWidgetItem, QHeaderView, QCheckBox, QButtonGroup,
-    QRadioButton
+    QRadioButton, QLineEdit
 )
 from PyQt6.QtCore import Qt, QTimer
 
@@ -60,55 +61,57 @@ class AnimationData:
 
         with uproot.open(filePath) as file:
 
+            # Simulation Metadata
             if 'simDataTree' in file:
-                tree = file['simDataTree']
                 self.simData = {
-                    key: val[0] 
-                    for key, val in tree.arrays(library='np').items()
+                    k: v[0]
+                    for k, v in file['simDataTree'].arrays(library='np').items()
                 }
 
+            # Avalanche Overview Data
             if 'avalancheTree' in file:
                 self.avalancheData = file['avalancheTree'].arrays(
-                    ['AvalancheID', 'Gain'], 
-                    library='pd'
+                    ['AvalancheID', 'Gain'], library='pd'
                 )
 
+            # Electric & Weighting Fields
             if 'fieldTree' in file:
-                fieldDF = file['fieldTree'].arrays(
-                    ['x', 'y', 'z', 'Ex', 'Ey', 'Ez', 'Weighting'], 
-                    library='pd'
-                )
+                fieldDF = file['fieldTree'].arrays(library='pd')
                 fieldDF[['x', 'y', 'z']] *= CMTOMICRON
                 fieldDF[['Ex', 'Ey', 'Ez']] /= 1e3
-                fieldDF['E'] = np.sqrt(fieldDF['Ex']**2 + fieldDF['Ey']**2 + fieldDF['Ez']**2)
+                fieldDF['E'] = np.linalg.norm(
+                    fieldDF[['Ex', 'Ey', 'Ez']].values, axis=1
+                )
                 self.fieldStrengths = fieldDF
 
+            # Electric Field Lines
             if 'fieldLineTree' in file:
                 lineDF = file['fieldLineTree'].arrays(
-                    ['FieldLineID', 'FieldStart', 'x', 'y', 'z'],
-                    library='pd'
+                    ['FieldLineID', 'FieldStart', 'x', 'y', 'z'], library='pd'
                 )
                 lineDF[['x', 'y', 'z']] *= CMTOMICRON
                 self.fieldLines = lineDF
 
+            # Particle Tracks (Awkward Array -> Flattened DataFrame)
             if 'particleDataTree' in file:
                 pData = file['particleDataTree'].arrays(
-                    ['AvalancheID', 'FrameID', 'Time', 'ParticleType', 'x', 'y', 'z'],
-                    library='ak'
+                    [
+                        'AvalancheID', 'FrameID',
+                        'Time', 'ParticleType',
+                        'x', 'y', 'z',
+                    ],
+                    library='ak',
                 )
                 particleDF = self._flattenBranch(pData)
                 particleDF[['x', 'y', 'z']] *= CMTOMICRON
                 self.particleData = particleDF
 
+            # Induced Signal Traces
             if 'signalDataTree' in file:
-                signalTree = file['signalDataTree']
-                self.signalData = signalTree.arrays(
-                    signalTree.keys(), 
-                    library='pd'
-                )
+                self.signalData = file['signalDataTree'].arrays(library='pd')
 
         return
-
+    
 #**********************************************************************#
     @staticmethod
     def _flattenBranch(pData) -> pd.DataFrame:
@@ -216,6 +219,7 @@ class FIMSVisualizer(QMainWindow):
             'Field Strengths',
             'Electron Avalanche',
             'Induced Signals',
+            'Avalanche And Signal'
         ])
         self.viewSelector.currentIndexChanged.connect(self._onChange)
         sidebarLayout.addWidget(self.viewSelector)
@@ -241,6 +245,19 @@ class FIMSVisualizer(QMainWindow):
         self.chkGeometry.setChecked(True)
         self.chkGeometry.toggled.connect(self._onChange)
         sidebarLayout.addWidget(self.chkGeometry)
+
+        # Global Avalanche ID Selector
+        sidebarLayout.addWidget(QLabel('Avalanche ID:'))
+        self.avalancheSpinBox = QSpinBox()
+        if self.data.particleData is not None and not self.data.particleData.empty:
+            maxID = int(self.data.particleData['AvalancheID'].max())
+            self.avalancheSpinBox.setRange(0, maxID)
+        else:
+            self.avalancheSpinBox.setRange(0, 0)
+            self.avalancheSpinBox.setEnabled(False)
+
+        self.avalancheSpinBox.valueChanged.connect(self._onChange)
+        sidebarLayout.addWidget(self.avalancheSpinBox)
 
         # Controls Stack for mode-specific options
         self.controlsStack = QStackedWidget()
@@ -282,21 +299,39 @@ class FIMSVisualizer(QMainWindow):
         layoutViewAvalanche = QVBoxLayout(viewWidgetAvalanche)
         layoutViewAvalanche.setContentsMargins(0, 0, 0, 0)
 
-        layoutViewAvalanche.addWidget(QLabel('AvalancheID:'))
-        self.avalancheSpinBox = QSpinBox()
-        if self.data.particleData is not None and not self.data.particleData.empty:
-            maxID = int(self.data.particleData['AvalancheID'].max())
-            self.avalancheSpinBox.setRange(0, maxID)
-        else:
-            self.avalancheSpinBox.setRange(0, 0)
-            self.avalancheSpinBox.setEnabled(False)
-        self.avalancheSpinBox.valueChanged.connect(self._resetAvalancheAnimation)
-        layoutViewAvalanche.addWidget(self.avalancheSpinBox)
-
+        # Play / Pause Button
         self.playButton = QPushButton('Play Animation')
         self.playButton.setCheckable(True)
         self.playButton.clicked.connect(self._toggleAnimation)
         layoutViewAvalanche.addWidget(self.playButton)
+
+        # Step Navigation Buttons
+        stepLayout = QHBoxLayout()
+        self.prevFrameButton = QPushButton('Prev')
+        self.prevFrameButton.clicked.connect(self._prevFrame)
+        self.nextFrameButton = QPushButton('Next')
+        self.nextFrameButton.clicked.connect(self._nextFrame)
+        stepLayout.addWidget(self.prevFrameButton)
+        stepLayout.addWidget(self.nextFrameButton)
+        layoutViewAvalanche.addLayout(stepLayout)
+
+        # Jump to Time Layout
+        jumpLayout = QHBoxLayout()
+        lblJump = QLabel('Time (ns):')
+        self.timeInput = QLineEdit()
+        self.timeInput.setPlaceholderText('1.0')
+
+        self.jumpButton = QPushButton('Jump')
+        self.jumpButton.clicked.connect(self._jumpToTime)
+        self.timeInput.returnPressed.connect(self._jumpToTime)
+
+        jumpLayout.addWidget(lblJump)
+        jumpLayout.addWidget(self.timeInput)
+        jumpLayout.addWidget(self.jumpButton)
+        layoutViewAvalanche.addLayout(jumpLayout)
+
+        # Add spacer to keep controls pushed to the top
+        layoutViewAvalanche.addStretch()
 
         self.controlsStack.addWidget(viewWidgetAvalanche)
 
@@ -305,9 +340,20 @@ class FIMSVisualizer(QMainWindow):
         layoutSignals = QVBoxLayout(viewWidgetSignal)
         layoutSignals.setContentsMargins(0, 0, 0, 0)
 
+        self.chkLog = QCheckBox('Log Scale')
+        self.chkLog.setChecked(True)
+        self.chkLog.toggled.connect(self._onChange)
+
         self.chkSignal = QRadioButton('Induced Signal')
         self.chkCharge = QRadioButton('Total Charge')
         self.chkSignal.setChecked(True)
+
+        self.chkElecSignal = QCheckBox('Show Electron Signal')
+        self.chkElecSignal.setChecked(False)
+        self.chkElecSignal.toggled.connect(self._onChange)
+        self.chkIonSignal = QCheckBox('Show Ion Signal')
+        self.chkIonSignal.setChecked(False)
+        self.chkIonSignal.toggled.connect(self._onChange)
 
         self.signalGroup = QButtonGroup(self)
         self.signalGroup.setExclusive(True)
@@ -315,8 +361,12 @@ class FIMSVisualizer(QMainWindow):
         self.signalGroup.addButton(self.chkCharge)
         self.signalGroup.buttonClicked.connect(self._onChange)
 
+        layoutSignals.addWidget(self.chkLog)
         layoutSignals.addWidget(self.chkSignal)
         layoutSignals.addWidget(self.chkCharge)
+        layoutSignals.addWidget(self.chkElecSignal)
+        layoutSignals.addWidget(self.chkIonSignal)
+
         self.controlsStack.addWidget(viewWidgetSignal)
         # ========================================
 
@@ -372,6 +422,8 @@ class FIMSVisualizer(QMainWindow):
     def _onChange(self, *args):
         """Unified handler for view selection, projection, geometry, field, and signal changes."""
         idx = self.viewSelector.currentIndex()
+        controlsIdx = 4 if idx == 6 else idx
+        self.controlsStack.setCurrentIndex(controlsIdx)
 
         # Reset animation state on any view change
         self.animationTimer.stop()
@@ -379,14 +431,13 @@ class FIMSVisualizer(QMainWindow):
         self.playButton.setText("Play Animation")
 
         # Update sidebar and control button states based on view index
-        self.controlsStack.setCurrentIndex(idx)
-        is3DView = idx in (1, 2, 3, 4)
+        is3DView = idx in (1, 2, 3, 4, 6)
         self.chk3D.setEnabled(is3DView)
         self.chk2D.setEnabled(is3DView)
-        self.chkGeometry.setEnabled(idx in (1, 2, 3, 4))
+        self.chkGeometry.setEnabled(idx in (1, 2, 3, 4, 6))
 
         # Handle non-plot view (Parameters Table)
-        if idx == 0:
+        if controlsIdx == 0:
             self.displayStack.setCurrentIndex(0)
             self.toolbar.hide()
             self._plotSimParams()
@@ -397,18 +448,19 @@ class FIMSVisualizer(QMainWindow):
         self.toolbar.show()
 
         # View-to-plotting-function mapping
-        view_renderers = {
+        viewRenderers = {
             1: self._plotGeometry,
             2: self._plotFieldLines,
             3: self._plotFields,
             4: self._resetAvalancheAnimation,
             5: self._plotSignals,
+            6: self._resetAvalancheAnimation
         }
 
         # Dispatch execution
-        render_func = view_renderers.get(idx)
-        if render_func:
-            render_func()
+        renderFunction = viewRenderers.get(idx)
+        if renderFunction:
+            renderFunction()
 
         return
     
@@ -417,8 +469,6 @@ class FIMSVisualizer(QMainWindow):
         self.data.loadRootData()
         self._onChange(self.viewSelector.currentIndex())
         return
-
-
 
 # --- Plotting logic ---
 #**********************************************************************#
@@ -514,7 +564,7 @@ class FIMSVisualizer(QMainWindow):
         isEField = self.chkEField.isChecked()
         fieldData = self.data.fieldStrengths.copy()
 
-        plotData = fieldData['E'] if isEField else fieldData['Weighting']
+        plotData = fieldData['E'] if isEField else fieldData['TopPad']
 
         if isEField:
             vmin = np.nanmin(plotData)
@@ -557,9 +607,45 @@ class FIMSVisualizer(QMainWindow):
                 cax = divider.append_axes("right", size="5%", pad=0.1)
                 self.cbar = self.canvas.fig.colorbar(contour, cax=cax)
             
-        else:
+        else: 
             ax = self.canvas.setupAxes()
+            '''
+            mappable = ax.scatter(
+                fieldData['x'], fieldData['y'], fieldData['z'],
+                c=plotData, cmap='viridis', s=15, alpha=.75
+            )
+            
+            layout = [
+                ('y', 'x', 'z'),
+                ('x', 'y', 'z')
+            ]
+            for fixed, x, y in layout:
+                mask = np.isclose(fieldData[fixed], 0, atol=1e-6)
+                xData, yData, zData = fieldData[x][mask], fieldData[y][mask], plotData[mask]
 
+                contour = ax.tricontourf(
+                    xData, yData, zData, 
+                    zdir=fixed, offset=0, 
+                    levels=101, cmap='viridis', vmin=vmin, vmax=vmax, alpha=0.85
+                )
+                if not isEField:
+                    ax.tricontour(
+                        xData, yData, zData, 
+                        zdir=fixed, offset=0, 
+                        levels=lineLevels, colors='c', linewidths=0.5, vmin=vmin, vmax=vmax
+                    )
+
+            if self.chkGeometry.isChecked():
+                self._drawGeometry(ax)
+            self._formatAxes(ax)
+
+            if contour is not None:
+                self.cbar = self.canvas.fig.colorbar(
+                contour, ax=ax, orientation='vertical', fraction=0.03, pad=0.08
+            )'''
+
+
+            
             mappable = ax.scatter(
                 fieldData['x'], fieldData['y'], fieldData['z'],
                 c=plotData, cmap='viridis', s=15, alpha=.75
@@ -576,6 +662,7 @@ class FIMSVisualizer(QMainWindow):
                 fraction=0.03,
                 pad=0.04
             )
+            
 
         if self.cbar is not None:
             label = 'Field Strength (kV/cm)' if isEField else 'Weighting Potential'
@@ -587,24 +674,156 @@ class FIMSVisualizer(QMainWindow):
         return
 
 #**********************************************************************#
+    def _plotSignals(self): 
+        #TODO: All signals or just individual pads
+
+        isSignal = self.chkSignal.isChecked()
+        logScale = self.chkLog.isChecked()
+        pltElectrons = self.chkElecSignal.isChecked()
+        pltIons = self.chkIonSignal.isChecked()
+
+        ax = self.canvas.setupAxes(is3D=False, numPlots=1)
+
+        avID = self.avalancheSpinBox.value()
+        self.signalData = self.data.signalData[self.data.signalData['AvalancheID'] == avID]
+        inSignalData = self.signalData
+
+        time = inSignalData['Time']
+
+        padList = list(
+            dict.fromkeys(
+                col.split("_")[1]
+                for col in inSignalData.columns
+                if col not in ["AvalancheID", "Time"]
+            )
+        )
+
+        styles = {
+            'Signal': '-',
+            'Electron': '--',
+            'Ion': ':'
+        }
+
+        colors = plt.cm.tab10.colors
+        padColor = {
+            pad: colors[i % len(colors)] for i, pad in enumerate(padList)
+        }
+
+        # Plot all dynamic signal branches
+        for col in inSignalData.columns:
+            if col in ['AvalancheID', 'Time']:
+                continue
+
+            prefix, pad = col.split("_")
+
+            if prefix == 'Electron' and not pltElectrons:
+                continue
+            if prefix == 'Ion' and not pltIons:
+                continue
+
+            signal = inSignalData[col] if isSignal else inSignalData[col].cumsum()
+            ax.plot(
+                time+0.001, signal,
+                ls=styles.get(prefix, "-"), c=padColor[pad],
+                label=pad if prefix == 'Signal' else None
+            )
+
+        if logScale:
+            ax.set_xscale('log')
+
+        ax.set_xlim([.1, None])
+
+        ax.set_xlabel('Time (ns)')
+        ax.set_ylabel('Signal (fC/ns)' if isSignal else 'Charge (fC)')
+        ax.grid()
+        ax.legend()
+
+        self.canvas.fig.tight_layout()
+        self.canvas.draw()
+
+        return
+
+#**********************************************************************#
     def _resetAvalancheAnimation(self):
+        # Reset animation UI & Timer
         self.animationTimer.stop()
         self.playButton.setChecked(False)
         self.playButton.setText('Play Animation')
 
-        if self.data.particleData is None or self.data.particleData.empty:
-            ax = self.canvas.ax
-            ax.clear()
-            ax.text(0, 0, 0, 'No Particle Data Found', color='r')
-            self.canvas.draw()
-            return
-
+        # Reset common state variables
         avID = self.avalancheSpinBox.value()
-        self.inData = self.data.particleData[self.data.particleData['AvalancheID'] == avID]
-        self.allFrames = sorted(self.inData['FrameID'].unique())
+        self.inAvData = self.data.particleData[self.data.particleData['AvalancheID'] == avID]
+        self.signalData = self.data.signalData[self.data.signalData['AvalancheID'] == avID]
+        
+        self.allFrames = sorted(self.inAvData['FrameID'].unique())
         self.curFrameID = 0
 
-        self._renderParticleFrame()
+        # Route to the active view renderer
+        self._renderAnimation()
+
+        return
+
+#**********************************************************************#
+    def _renderAnimation(self):
+        idx = self.viewSelector.currentIndex()
+        if idx == 6:
+            self._plotAvalancheSignal()
+        else:
+            self._renderParticleFrame()
+
+#**********************************************************************#
+    def _nextFrame(self):
+        if not self.allFrames:
+            return
+        self.curFrameID = (self.curFrameID + 1) % len(self.allFrames)
+        self._renderAnimation()
+
+        return
+
+#**********************************************************************#
+    def _prevFrame(self):
+        if not self.allFrames:
+            return
+        self.curFrameID = (self.curFrameID - 1) % len(self.allFrames)
+        self._renderAnimation()
+
+        return
+
+# **********************************************************************#
+    def _jumpToTime(self):
+        """Finds the frame closest to the target time entered."""
+        if not self.allFrames or self.inAvData.empty:
+            return
+
+        text = self.timeInput.text().strip()
+        if not text:
+            return
+
+        try:
+            targetTime = float(text)
+        except ValueError:
+            return
+
+
+        # Calculate absolute difference to find the nearest frame index
+        frameTimes = (
+            self.inAvData.groupby('FrameID')['Time'].first().reindex(self.allFrames)
+        )
+        closestFrameID = (frameTimes - targetTime).abs().idxmin()
+        self.curFrameID = self.allFrames.index(closestFrameID)
+
+        # Render updated frame
+        self._renderAnimation()
+        return
+
+#**********************************************************************#
+    def _toggleAnimation(self, checked):
+        if checked:
+            self.playButton.setText('Pause')
+            self.animationTimer.start(80)  # 80=~12 FPS frame rate ()lower is faster
+        else:
+            self.playButton.setText('Play Animation')
+            self.animationTimer.stop()
 
         return
 
@@ -616,93 +835,152 @@ class FIMSVisualizer(QMainWindow):
         use2D = self.chk2D.isChecked()
 
         frameID = self.allFrames[self.curFrameID]
-        inFrameData = self.inData[self.inData['FrameID'] == frameID]
+        inFrameData = self.inAvData[self.inAvData['FrameID'] == frameID]
 
         elec = inFrameData[inFrameData['ParticleType'] == 0]
         ions = inFrameData[inFrameData['ParticleType'] != 0]
 
 
         if use2D:
-            pass
+            xz, yz, xy = self.canvas.setupAxes(is3D=False)
+
+            layout = [
+                (xz, 'x', 'z'),
+                (yz, 'y', 'z'),
+                (xy, 'x', 'y')
+            ]
+
+            for ax, x, y in layout:
+
+                ax.scatter(
+                    elec[x], elec[y],
+                    c='b', s=10, label='Electrons'
+                )
+                ax.scatter(
+                    ions[x], ions[y],
+                    c='r', s=15, label='Ions'
+                )
+
+            if self.chkGeometry.isChecked():
+                self._drawGeometry((xz, yz, xy))
+            self._formatAxes((xz, yz, xy))
+            labelAx = xz
+
         else:
             ax = self.canvas.setupAxes()
-            ax.clear()
             
             ax.scatter(
                 elec['x'], elec['y'], elec['z'], 
-                c='b', s=8, label='Electrons'
+                c='b', s=10, label='Electrons'
             )
             ax.scatter(
                 ions['x'], ions['y'], ions['z'], 
-                c='r', s=12, label='Ions'
+                c='r', s=15, label='Ions'
             )
 
-            # Fix spatial limits using full dataset bounds -- TODO use pitch?
-            df = self.inData
-            ax.set_xlim(df['x'].min(), df['x'].max())
-            ax.set_ylim(df['y'].min(), df['y'].max())
-            ax.set_zlim(df['z'].min(), df['z'].max())
+            if self.chkGeometry.isChecked():
+                self._drawGeometry(ax)
+            self._formatAxes(ax)
+            labelAx = ax
 
-            inTime = inFrameData['Time'].iloc[0] if not inFrameData.empty else 0.0
-            ax.set_title(f'Avalanche {self.avalancheSpinBox.value()} | Frame {frameID} ({inTime:.2f} ns)')
-            ax.set_xlabel(r'x ($\mu$m)')
-            ax.set_ylabel(r'y ($\mu$m)')
-            ax.set_zlabel(r'z ($\mu$m)')
-            ax.legend(loc='upper right')
+        inTime = inFrameData['Time'].iloc[0] if not inFrameData.empty else -1
+        labelAx.set_title(f'Time = ({inTime:.2f} ns) (Frame ID: {frameID})')
+        labelAx.legend()
 
-            self.canvas.draw()
+        self.canvas.fig.tight_layout()
+        self.canvas.draw()
 
         return
 
 #**********************************************************************#
-    def _toggleAnimation(self, checked):
-        if checked:
-            self.playButton.setText('Pause')
-            self.animationTimer.start(80)  # ~12 FPS frame rate
-        else:
-            self.playButton.setText('Play Animation')
-            self.animationTimer.stop()
+    def _plotAvalancheSignal(self):
+        xz, yz, sig = self.canvas.setupAxes(is3D=False)
 
-        return
+        frameID = self.allFrames[self.curFrameID]
+        inFrameData = self.inAvData[self.inAvData['FrameID'] == frameID]
+        inSignalData = self.signalData
 
-#**********************************************************************#
-    def _nextFrame(self):
-        if not self.allFrames:
-            return
-        self.curFrameID = (self.curFrameID + 1) % len(self.allFrames)
-        self._renderParticleFrame()
+        elec = inFrameData[inFrameData['ParticleType'] == 0]
+        ions = inFrameData[inFrameData['ParticleType'] != 0]
 
-        return
+        time = inSignalData['Time']
 
-#**********************************************************************#
-    def _plotSignals(self): 
-        #TODO: checkboxes for total/ion/electron signals.
-        #All signals or just individual pads
+        pltElectrons = False
+        pltIons = False
+        logScale = True
+        isSignal = False
+        
+        padList = list(
+            dict.fromkeys(
+                col.split("_")[1]
+                for col in inSignalData.columns
+                if col not in ["AvalancheID", "Time"]
+            )
+        )
 
-        isSignal = self.chkSignal.isChecked()
+        styles = {
+            'Signal': '-',
+            'Electron': '--',
+            'Ion': ':'
+        }
 
-        ax = self.canvas.setupAxes(is3D=False, numPlots=1)
+        colors = plt.cm.tab10.colors
+        padColor = {
+            pad: colors[i % len(colors)] for i, pad in enumerate(padList)
+        }
+        
+        layout = [
+            (xz, 'x', 'z'),
+            (yz, 'y', 'z')
+        ]
 
-        inData = self.data.signalData
+        for ax, x, y in layout:
+            ax.scatter(
+                elec[x], elec[y],
+                c='b', s=10, label='Electrons'
+            )
+            ax.scatter(
+                ions[x], ions[y],
+                c='r', s=15, label='Ions'
+            )
+
+        if self.chkGeometry.isChecked():
+            self._drawGeometry((xz, yz))
+        self._formatAxes((xz, yz))
 
         # Plot all dynamic signal branches
-        for col in inData.columns:
+        for col in inSignalData.columns:
             if col in ['AvalancheID', 'Time']:
                 continue
-            ax.plot(
-                inData['Time'], 
-                inData[col] if isSignal else inData[col].cumsum(),
-                label=col
+
+            prefix, pad = col.split("_")
+
+            if prefix == 'Electron' and not pltElectrons:
+                continue
+            if prefix == 'Ion' and not pltIons:
+                continue
+
+            signal = inSignalData[col] if isSignal else inSignalData[col].cumsum()
+            sig.plot(
+                time+0.001, signal,
+                ls=styles.get(prefix, "-"), c=padColor[pad],
+                label=pad if prefix == 'Signal' else None
             )
 
-        ax.set_xlabel('Time (ns)')
-        ax.set_ylabel('Signal (fC/ns)' if isSignal else 'Charge (fC)')
-        ax.grid()
-        ax.legend(loc='upper right')
+        inTime = inFrameData['Time'].iloc[0] if not inFrameData.empty else -1
+        
+        sig.axvline(inTime, c='r', ls='--')
 
-        ax.set_visible(False)
-        ax.set_visible(False)
+        if logScale:
+            sig.set_xscale('log')
+        sig.set_xlim([.1, None])
 
+        sig.set_xlabel('Time (ns)')
+        sig.set_ylabel('Signal (fC/ns)' if isSignal else 'Charge (fC)')
+        sig.grid()
+        sig.legend()
+
+        self.canvas.fig.tight_layout()
         self.canvas.draw()
 
         return
