@@ -167,9 +167,9 @@ class MplCanvas(FigureCanvas):
                     return xz, yz, xy
                 
                 elif numPlots == 2:
-                    ax1 = self.fig.add_subplot(1, 2, 1)
-                    ax2 = self.fig.add_subplot(1, 2, 2)
-                    return ax1, ax2
+                    xz = self.fig.add_subplot(1, 2, 1)
+                    yz = self.fig.add_subplot(1, 2, 2)
+                    return xz, yz
 
                 else:
                     self.ax = self.fig.add_subplot(1, 1, 1)
@@ -564,22 +564,20 @@ class FIMSVisualizer(QMainWindow):
         isEField = self.chkEField.isChecked()
         fieldData = self.data.fieldStrengths.copy()
 
-        plotData = fieldData['E'] if isEField else fieldData['TopPad']
+        plotData = fieldData['E'] if isEField else fieldData['Weight_TopPad']
 
         if isEField:
             vmin = np.nanmin(plotData)
             vmax = np.nanmax(plotData)
-            lineLevels = None
         else:
             vmin, vmax = 0.0, 1.0
-            lineLevels = np.arange(0.2, 1.2, 0.2)
 
         contour = None
         if use2D:
-            ax1, ax2 = self.canvas.setupAxes(is3D=False, numPlots=2)
+            xz, yz = self.canvas.setupAxes(is3D=False, numPlots=2)
             layout = [
-                (ax1, 'y', 'x', 'z'),
-                (ax2, 'x', 'y', 'z')
+                (xz, 'y', 'x', 'z'),
+                (yz, 'x', 'y', 'z')
             ]
 
             for ax, fixed, x, y in layout:
@@ -592,59 +590,19 @@ class FIMSVisualizer(QMainWindow):
                     levels=101, cmap='viridis', vmin=vmin, vmax=vmax
                 )
                 if not isEField:
-                    lines = ax.tricontour(
-                        xData, yData, zData,  
-                        levels=lineLevels, colors='c', lw=0.5, vmin=vmin, vmax=vmax
-                    )
-                    ax1.clabel(lines, inline=True, fontsize=8, fmt='%.1f')
+                    self._plotContours((xz, yz))
 
             if self.chkGeometry.isChecked():
-                self._drawGeometry((ax1, ax2))
-            self._formatAxes((ax1, ax2))
+                self._drawGeometry((xz, yz))
+            self._formatAxes((xz, yz))
 
             if contour is not None:
-                divider = make_axes_locatable(ax2)
+                divider = make_axes_locatable(yz)
                 cax = divider.append_axes("right", size="5%", pad=0.1)
                 self.cbar = self.canvas.fig.colorbar(contour, cax=cax)
             
         else: 
             ax = self.canvas.setupAxes()
-            '''
-            mappable = ax.scatter(
-                fieldData['x'], fieldData['y'], fieldData['z'],
-                c=plotData, cmap='viridis', s=15, alpha=.75
-            )
-            
-            layout = [
-                ('y', 'x', 'z'),
-                ('x', 'y', 'z')
-            ]
-            for fixed, x, y in layout:
-                mask = np.isclose(fieldData[fixed], 0, atol=1e-6)
-                xData, yData, zData = fieldData[x][mask], fieldData[y][mask], plotData[mask]
-
-                contour = ax.tricontourf(
-                    xData, yData, zData, 
-                    zdir=fixed, offset=0, 
-                    levels=101, cmap='viridis', vmin=vmin, vmax=vmax, alpha=0.85
-                )
-                if not isEField:
-                    ax.tricontour(
-                        xData, yData, zData, 
-                        zdir=fixed, offset=0, 
-                        levels=lineLevels, colors='c', linewidths=0.5, vmin=vmin, vmax=vmax
-                    )
-
-            if self.chkGeometry.isChecked():
-                self._drawGeometry(ax)
-            self._formatAxes(ax)
-
-            if contour is not None:
-                self.cbar = self.canvas.fig.colorbar(
-                contour, ax=ax, orientation='vertical', fraction=0.03, pad=0.08
-            )'''
-
-
             
             mappable = ax.scatter(
                 fieldData['x'], fieldData['y'], fieldData['z'],
@@ -673,6 +631,36 @@ class FIMSVisualizer(QMainWindow):
 
         return
 
+#**********************************************************************#
+    def _plotContours(self, axes):
+        """
+        Plots contour lines with inline labels on 2D spatial axes (xz and yz).
+        """
+        xz, yz = axes
+        
+        layout = [
+            (xz, 'y', 'x', 'z'),
+            (yz, 'x', 'y', 'z')
+        ]
+
+        fieldData = self.data.fieldStrengths, 
+        plotData = self.data.fieldStrengths['Weight_TopPad']
+
+        for ax, fixed, x_col, y_col in layout:
+            mask = np.isclose(fieldData[fixed], 0, atol=1e-6)
+            xData = fieldData[x_col][mask]
+            yData = fieldData[y_col][mask]
+            zData = plotData[mask]
+
+            lines = ax.tricontour(
+                xData, yData, zData,  
+                levels=np.arange(0.2, 1.2, 0.2), colors='c', linewidths=0.5, 
+                vmin=0, vmax=1
+            )
+            ax.clabel(lines, inline=True, fontsize=8, fmt='%.1f')
+
+        return
+    
 #**********************************************************************#
     def _plotSignals(self): 
         #TODO: All signals or just individual pads
@@ -832,6 +820,8 @@ class FIMSVisualizer(QMainWindow):
         if not self.allFrames:
             return
 
+        plotWeight = True
+
         use2D = self.chk2D.isChecked()
 
         frameID = self.allFrames[self.curFrameID]
@@ -860,6 +850,8 @@ class FIMSVisualizer(QMainWindow):
                     ions[x], ions[y],
                     c='r', s=15, label='Ions'
                 )
+            if plotWeight:
+                self._plotContours((xz, yz))
 
             if self.chkGeometry.isChecked():
                 self._drawGeometry((xz, yz, xy))
@@ -909,6 +901,7 @@ class FIMSVisualizer(QMainWindow):
         pltIons = False
         logScale = True
         isSignal = False
+        plotWeight = True
         
         padList = list(
             dict.fromkeys(
@@ -933,6 +926,8 @@ class FIMSVisualizer(QMainWindow):
             (xz, 'x', 'z'),
             (yz, 'y', 'z')
         ]
+        if plotWeight:
+            self._plotContours((xz, yz))
 
         for ax, x, y in layout:
             ax.scatter(
@@ -943,6 +938,7 @@ class FIMSVisualizer(QMainWindow):
                 ions[x], ions[y],
                 c='r', s=15, label='Ions'
             )
+        
 
         if self.chkGeometry.isChecked():
             self._drawGeometry((xz, yz))
@@ -985,6 +981,7 @@ class FIMSVisualizer(QMainWindow):
 
         return
 
+#----- Formatting figures -----
 #**********************************************************************#
     def _drawGeometry(self, axes):
         """
