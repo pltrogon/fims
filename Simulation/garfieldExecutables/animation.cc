@@ -116,6 +116,9 @@ int main(int argc, char * argv[]) {
         default:
             return -1;
     }
+    // TEST: scale up to unit cell size
+    xScale *= 1.5;
+    yScale *= 2.0;
 
     std::cout << "Running avalanche animations... " << std::endl;
 
@@ -174,7 +177,7 @@ int main(int argc, char * argv[]) {
     TTree *fieldTree = new TTree("fieldTree", "Electric and Weighting Field Map");
     double xField, yField, zField;
     double eFieldX, eFieldY, eFieldZ;
-    double wField;
+    std::vector<double> padWeights(sensorList.size(), 0.0);
 
     fieldTree->Branch("x", &xField);
     fieldTree->Branch("y", &yField);
@@ -182,7 +185,9 @@ int main(int argc, char * argv[]) {
     fieldTree->Branch("Ex", &eFieldX);
     fieldTree->Branch("Ey", &eFieldY);
     fieldTree->Branch("Ez", &eFieldZ);
-    fieldTree->Branch("Weighting", &wField);
+    for (size_t i = 0; i < sensorList.size(); i++) {
+        fieldTree->Branch(Form("Weight_%s", sensorList[i].c_str()), &padWeights[i]);
+    }
 
     //***** Field Line Data Tree *****//
     TTree *fieldLineTree = new TTree("fieldLineTree", "Field Lines");
@@ -320,10 +325,14 @@ int main(int argc, char * argv[]) {
                 eFieldX, eFieldY, eFieldZ, 
                 inMedium, status
             );
-            wField = fieldFIMS.WeightingPotential(
-                xField, yField, zField, 
-                "TopPad"
-            );
+
+            for(size_t i = 0; i < sensorList.size(); i++){
+                const char* inPad = sensorList[i].c_str();
+                padWeights[i] = fieldFIMS.WeightingPotential(
+                    xField, yField, zField, 
+                    inPad
+                );
+            }
             fieldTree->Fill();
         }
 
@@ -337,10 +346,14 @@ int main(int argc, char * argv[]) {
                 eFieldX, eFieldY, eFieldZ, 
                 inMedium, status
             );
-            wField = fieldFIMS.WeightingPotential(
-                xField, yField, zField, 
-                "TopPad"
-            );
+
+            for(size_t i = 0; i < sensorList.size(); i++){
+                const char* inPad = sensorList[i].c_str();
+                padWeights[i] = fieldFIMS.WeightingPotential(
+                    xField, yField, zField, 
+                    inPad
+                );
+            }
             fieldTree->Fill();
         }
 
@@ -364,7 +377,7 @@ int main(int argc, char * argv[]) {
     std::vector<std::array<float, 3> > fieldLines;
 
     double holeRadius2 = std::pow(simParams->holeRadius, 2.);
-    double gridLineStart= 2*simParams->gridThickness;
+    double gridLineStart= 5.*simParams->gridThickness;
 
     std::pair<int, double> lineLocs[3] = {
         { 0, zmax*zScale},            // Cathode
@@ -411,8 +424,8 @@ int main(int argc, char * argv[]) {
     
     
     //*************** AVALANCHES ***************//
-    
-    int numAvalanche = 1;//simParams->numAvalanche;
+
+    int numAvalanche = 3;//simParams->numAvalanche;
     std::cout << "Running " << numAvalanche << " avalanches...\n";
 
     //Set the Initial electron parameters
@@ -448,11 +461,14 @@ int main(int argc, char * argv[]) {
             yParticle.clear();
             zParticle.clear();
 
-            frameID++;
+            if(frameID%100==0){
+                std::cout << "\tProcessing frame: " << inAvalanche << "." << frameID<< std::endl;
+            }
+
             tFrameStart += dt;
 
             if(tFrameStart > 100e3){
-                std::cerr << "*************** TIMEOUT ***************" << std::endl;
+                std::cout << "***** TIMEOUT *****" << std::endl;
                 break;
             }
 
@@ -465,20 +481,34 @@ int main(int argc, char * argv[]) {
                 }
             }
             bool activeIons = false;
+            bool ionsBelowGrid = false;
             for(const auto& inIon : drift.GetIons()){
                 if(inIon.path.back().t >= tFrameStart){
                     activeIons = true;
+                }
+                if(inIon.path.back().z <= 0.0) {
+                    ionsBelowGrid = true;
+                }
+                if(activeIons && ionsBelowGrid){
                     break;
                 }
             }
 
             if(!activeElectrons && !activeIons){
-                std::cerr << "*************** NO MORE PARTICLES ***************" << std::endl;
+                std::cout << "***** NO MORE PARTICLES *****" << std::endl;
                 break;
             }
             
             //Determine frame timestep
-            dt = activeElectrons ? 0.1 : 100.0;
+            if(activeElectrons){
+                dt = 0.01;
+            }
+            else if(ionsBelowGrid){
+                dt = 1.0;
+            }
+            else{
+                dt = 100.0;
+            }
             drift.SetTimeSteps(dt/5.);
             frameTime = tFrameStart+dt;
 
@@ -551,6 +581,7 @@ int main(int argc, char * argv[]) {
 
             //Fill particle tree with electron and ion data
             particleTree->Fill();
+            frameID++;
         }//End of frame loop
 
         
