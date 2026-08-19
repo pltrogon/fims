@@ -41,6 +41,7 @@ class AnimationData:
         self.avalancheData = None
         self.fieldStengths = None
         self.fieldLines = None
+        self.animationData = None
         self.particleData = None
         self.signalData = None
         
@@ -82,9 +83,9 @@ class AnimationData:
                 self.simData = simDataDF
 
             # Avalanche Overview Data
-            if 'avalancheTree' in file:
-                self.avalancheData = file['avalancheTree'].arrays(
-                    ['AvalancheID', 'Gain'], library='pd'
+            if 'avalancheDataTree' in file:
+                self.avalancheData = file['avalancheDataTree'].arrays(
+                    ['AvalancheID', 'Gain', 'numPosIons', 'numNegIons'], library='pd'
                 )
 
             # Electric & Weighting Fields
@@ -106,8 +107,8 @@ class AnimationData:
                 self.fieldLines = lineDF
 
             # Particle Tracks (Awkward Array -> Flattened DataFrame)
-            if 'particleDataTree' in file:
-                pData = file['particleDataTree'].arrays(
+            if 'animationDataTree' in file:
+                anData = file['animationDataTree'].arrays(
                     [
                         'AvalancheID', 'FrameID',
                         'Time', 'ParticleType',
@@ -115,9 +116,16 @@ class AnimationData:
                     ],
                     library='ak',
                 )
-                particleDF = self._flattenBranch(pData)
-                particleDF[['x', 'y', 'z']] *= CMTOMICRON
-                self.particleData = particleDF
+                animationDF = self._flattenBranch(anData)
+                animationDF[['x', 'y', 'z']] *= CMTOMICRON
+                self.animationData = animationDF
+
+            # All Partile Info
+            if 'particleDataTree' in file:
+                pDF = file['particleDataTree'].arrays(library='pd')
+                pDF[['xInitial', 'yInitial', 'zInitial']] *= CMTOMICRON
+                pDF[['xFinal', 'yFinal', 'zFinal']] *= CMTOMICRON
+                self.particleData = pDF
 
             # Induced Signal Traces
             if 'signalDataTree' in file:
@@ -262,8 +270,8 @@ class FIMSVisualizer(QMainWindow):
         # Global Avalanche ID Selector
         sidebarLayout.addWidget(QLabel('Avalanche ID:'))
         self.avalancheSpinBox = QSpinBox()
-        if self.data.particleData is not None and not self.data.particleData.empty:
-            maxID = int(self.data.particleData['AvalancheID'].max())
+        if self.data.animationData is not None and not self.data.animationData.empty:
+            maxID = int(self.data.animationData['AvalancheID'].max())
             self.avalancheSpinBox.setRange(0, maxID)
         else:
             self.avalancheSpinBox.setRange(0, 0)
@@ -787,7 +795,7 @@ class FIMSVisualizer(QMainWindow):
 
         # Reset common state variables
         avID = self.avalancheSpinBox.value()
-        self.inAvData = self.data.particleData[self.data.particleData['AvalancheID'] == avID]
+        self.inAvData = self.data.animationData[self.data.animationData['AvalancheID'] == avID]
         self.signalData = self.data.signalData[self.data.signalData['AvalancheID'] == avID]
         
         self.allFrames = sorted(self.inAvData['FrameID'].unique())
