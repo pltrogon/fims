@@ -75,11 +75,13 @@ class AnimationData:
                     'gridThickness', 'padThickness',
                     'thicknessSiO2', 'pillarRadius'
                 ]
+                fieldKeys = ['driftField', 'amplificationField']
                 for key in geoKeys:
                     if key in simDataDF:
                         simDataDF[key] *= CMTOMICRON
-                if 'driftField' in simDataDF:
-                    simDataDF['driftField'] *= VCMTOkVCM
+                for key in fieldKeys:
+                    if key in simDataDF:
+                        simDataDF[key] *= VCMTOkVCM
                 self.simData = simDataDF
 
             # Avalanche Overview Data
@@ -233,7 +235,8 @@ class FIMSVisualizer(QMainWindow):
             'Field Strengths',
             'Electron Avalanche',
             'Induced Signals',
-            'Avalanche And Signal'
+            'Avalanche And Signal',
+            'Avalanche Info'
         ])
         self.viewSelector.currentIndexChanged.connect(self._onChange)
         sidebarLayout.addWidget(self.viewSelector)
@@ -495,10 +498,13 @@ class FIMSVisualizer(QMainWindow):
         self.chkGeometry.setEnabled(idx in (1, 2, 3, 4, 6))
 
         # Handle non-plot view (Parameters Table)
-        if controlsIdx == 0:
+        if controlsIdx in [0, 7]:
             self.displayStack.setCurrentIndex(0)
             self.toolbar.hide()
-            self._plotSimParams()
+            if controlsIdx == 0:
+                self._plotSimParams()
+            elif controlsIdx == 7:
+                self._plotAvalancheInfo()
             return
 
         # Handle plot views (Matplotlib Canvas)
@@ -512,7 +518,7 @@ class FIMSVisualizer(QMainWindow):
             3: self._plotFields,
             4: self._resetAvalancheAnimation,
             5: self._plotSignals,
-            6: self._resetAvalancheAnimation
+            6: self._resetAvalancheAnimation,
         }
 
         # Dispatch execution
@@ -550,6 +556,31 @@ class FIMSVisualizer(QMainWindow):
 
             self.simParamTable.setItem(row, 0, keyItem)
             self.simParamTable.setItem(row, 1, valItem)
+
+        return
+
+#**********************************************************************#
+    def _plotAvalancheInfo(self):
+        """Populates the main display table with avalanmche info."""
+        self.simParamTable.setRowCount(0)
+        
+        if self.data.avalancheData is None or self.data.avalancheData.empty:
+            return
+
+        df = self.data.avalancheData
+        
+        self.simParamTable.setRowCount(len(df))
+        self.simParamTable.setColumnCount(len(df.columns))
+        self.simParamTable.setHorizontalHeaderLabels(list(df.columns))
+
+        for row_idx, row_data in df.iterrows():
+            for col_idx, value in enumerate(row_data):
+                valStr = f"{value:.4g}" if isinstance(value, (float, np.floating)) else str(value)
+                
+                item = QTableWidgetItem(valStr)
+                item.setFlags(item.flags() ^ Qt.ItemFlag.ItemIsEditable)
+                
+                self.simParamTable.setItem(row_idx, col_idx, item)
 
         return
     
