@@ -338,6 +338,15 @@ class FIMSVisualizer(QMainWindow):
         layoutVMax.addWidget(self.txtVMax)
         layoutFieldStrengths.addLayout(layoutVMax)
 
+        self.chkContours = QCheckBox('Weighting Contours')
+        self.chkContours.setChecked(True)
+        self.chkContours.toggled.connect(self._onChange)
+        self.chkAdjacent = QCheckBox('Adjacent Contour')
+        self.chkAdjacent.setChecked(False)
+        self.chkAdjacent.toggled.connect(self._onChange)
+        layoutFieldStrengths.addWidget(self.chkContours)
+        layoutFieldStrengths.addWidget(self.chkAdjacent)
+
         self.controlsStack.addWidget(viewWidgetFieldStrengths)
 
         # Avalanche Animation controls
@@ -375,6 +384,16 @@ class FIMSVisualizer(QMainWindow):
         jumpLayout.addWidget(self.timeInput)
         jumpLayout.addWidget(self.jumpButton)
         layoutViewAvalanche.addLayout(jumpLayout)
+
+        self.chkWeighing = QCheckBox('Weighting Contours')
+        self.chkWeighing.setChecked(False)
+        self.chkWeighing.toggled.connect(self._onChange)
+        layoutViewAvalanche.addWidget(self.chkWeighing)
+
+        self.chkAvSig = QCheckBox('Induced Signal')
+        self.chkAvSig.setChecked(False)
+        self.chkAvSig.toggled.connect(self._onChange)
+        layoutViewAvalanche.addWidget(self.chkAvSig)
 
         # Add spacer to keep controls pushed to the top
         layoutViewAvalanche.addStretch()
@@ -643,8 +662,10 @@ class FIMSVisualizer(QMainWindow):
                     levels=101, cmap='viridis', vmin=vmin, vmax=vmax
                 )
                 if not isEField:
-                    self._plotContours((xz, yz))
-                    self._plotContours((xz, yz), pad='RightBottomPad', color='m')
+                    if self.chkContours.isChecked():
+                        self._plotContours((xz, yz))
+                    if self.chkAdjacent.isChecked():
+                        self._plotContours((xz, yz), pad='RightBottomPad', color='m')
 
             if self.chkGeometry.isChecked():
                 self._drawGeometry((xz, yz))
@@ -875,63 +896,48 @@ class FIMSVisualizer(QMainWindow):
         if not self.allFrames:
             return
 
-        plotWeight = True
-
-        use2D = self.chk2D.isChecked()
-
         frameID = self.allFrames[self.curFrameID]
         inFrameData = self.inAvData[self.inAvData['FrameID'] == frameID]
 
-        elec = inFrameData[inFrameData['ParticleType'] == 0]
-        ions = inFrameData[inFrameData['ParticleType'] != 0]
-
-
-        if use2D:
+        particleConfig = [
+            {'ID': 0, 'c': 'b', 's': 10, 'label': 'Electrons'},
+            {'ID': 1, 'c': 'r', 's': 15, 'label': 'Positive Ions'},
+            {'ID': -1, 'c': 'g', 's': 15, 'label': 'Negative Ions'},
+        ]
+        
+        if self.chk2D.isChecked():
             xz, yz, xy = self.canvas.setupAxes(is3D=False)
+            allAxs = (xz, yz, xy)
 
-            layout = [
-                (xz, 'x', 'z'),
-                (yz, 'y', 'z'),
-                (xy, 'x', 'y')
+            plots = [
+                (xz, ('x', 'z')),
+                (yz, ('y', 'z')),
+                (xy, ('x', 'y')),
             ]
-
-            for ax, x, y in layout:
-
-                ax.scatter(
-                    elec[x], elec[y],
-                    c='b', s=10, label='Electrons'
-                )
-                ax.scatter(
-                    ions[x], ions[y],
-                    c='r', s=15, label='Ions'
-                )
-            if plotWeight:
-                self._plotContours((xz, yz))
-
-            if self.chkGeometry.isChecked():
-                self._drawGeometry((xz, yz, xy))
-            self._formatAxes((xz, yz, xy))
             labelAx = xz
+                
+            if self.chkWeighing.isChecked():
+                self._plotContours((xz, yz))
 
         else:
             ax = self.canvas.setupAxes()
-            
-            ax.scatter(
-                elec['x'], elec['y'], elec['z'], 
-                c='b', s=10, label='Electrons'
-            )
-            ax.scatter(
-                ions['x'], ions['y'], ions['z'], 
-                c='r', s=15, label='Ions'
-            )
-
-            if self.chkGeometry.isChecked():
-                self._drawGeometry(ax)
-            self._formatAxes(ax)
+            allAxs = ax
+            plots = [(ax, ('x', 'y', 'z'))]
             labelAx = ax
 
+        for inAx, cols in plots:
+            for p in particleConfig:
+                subData = inFrameData[inFrameData['ParticleType'] == p['ID']]
+                coords = [subData[col] for col in cols]
+                inAx.scatter(*coords, c=p['c'], s=p['s'], label=p['label'])
+
+        if self.chkGeometry.isChecked():
+            self._drawGeometry(allAxs)
+        self._formatAxes(allAxs)
+
         inTime = inFrameData['Time'].iloc[0] if not inFrameData.empty else -1
-        labelAx.set_title(f'Time = ({inTime:.2f} ns) (Frame ID: {frameID})')
+        timeLabel = f'{inTime:.2f} ns' if inTime <= 250 else rf'{inTime/1e3:.2f} $\mu$s'
+        labelAx.set_title(f'Time = ({timeLabel}) (Frame ID: {frameID})')
         labelAx.legend()
 
         self.canvas.fig.tight_layout()
@@ -947,84 +953,54 @@ class FIMSVisualizer(QMainWindow):
         inFrameData = self.inAvData[self.inAvData['FrameID'] == frameID]
         inSignalData = self.signalData
 
-        elec = inFrameData[inFrameData['ParticleType'] == 0]
-        ions = inFrameData[inFrameData['ParticleType'] != 0]
-
-        time = inSignalData['Time']
-
-        pltElectrons = False
-        pltIons = False
-        logScale = True
-        isSignal = False
-        plotWeight = True
-        
-        padList = list(
-            dict.fromkeys(
-                col.split("_")[1]
-                for col in inSignalData.columns
-                if col not in ["AvalancheID", "Time"]
-            )
-        )
-
-        styles = {
-            'Signal': '-',
-            'Electron': '--',
-            'Ion': ':'
-        }
-
-        colors = plt.cm.tab10.colors
-        padColor = {
-            pad: colors[i % len(colors)] for i, pad in enumerate(padList)
-        }
-        
-        layout = [
-            (xz, 'x', 'z'),
-            (yz, 'y', 'z')
+        particleConfig = [
+            {'ID':  0, 'c': 'b', 's': 10, 'label': 'Electrons'},
+            {'ID':  1, 'c': 'r', 's': 15, 'label': 'Positive Ions'},
+            {'ID': -1, 'c': 'g', 's': 15, 'label': 'Negative Ions'},
         ]
-        if plotWeight:
+
+        if self.chkWeighing.isChecked():
             self._plotContours((xz, yz))
 
-        for ax, x, y in layout:
-            ax.scatter(
-                elec[x], elec[y],
-                c='b', s=10, label='Electrons'
-            )
-            ax.scatter(
-                ions[x], ions[y],
-                c='r', s=15, label='Ions'
-            )
-        
+        for ax, x, y in [(xz, 'x', 'z'), (yz, 'y', 'z')]:
+            for p in particleConfig:
+                subData = inFrameData[inFrameData['ParticleType'] == p['ID']]
+                label = p['label'] if ax == xz else None
+                ax.scatter(subData[x], subData[y], c=p['c'], s=p['s'], label=label)
 
         if self.chkGeometry.isChecked():
             self._drawGeometry((xz, yz))
         self._formatAxes((xz, yz))
 
-        # Plot all dynamic signal branches
+        padList = list({col.split('_')[1] for col in inSignalData.columns if col not in ['AvalancheID', 'Time']})
+        colors = plt.cm.tab10.colors
+        padColor = {pad: colors[i % len(colors)] for i, pad in enumerate(padList)}
+
+        styles = {'Signal': '-', 'Electron': '--', 'Ion': ':'}
+        isSignal = self.chkAvSig.isChecked()
+        time = inSignalData['Time']
+
+        activePrefixes = {'Signal'}
         for col in inSignalData.columns:
             if col in ['AvalancheID', 'Time']:
                 continue
 
-            prefix, pad = col.split("_")
-
-            if prefix == 'Electron' and not pltElectrons:
-                continue
-            if prefix == 'Ion' and not pltIons:
+            prefix, pad = col.split('_')
+            if prefix not in activePrefixes:
                 continue
 
             signal = inSignalData[col] if isSignal else inSignalData[col].cumsum()
             sig.plot(
                 time+0.001, signal,
-                ls=styles.get(prefix, "-"), c=padColor[pad],
+                ls=styles.get(prefix, '-'), c=padColor[pad],
                 label=pad if prefix == 'Signal' else None
             )
-            
 
         inTime = inFrameData['Time'].iloc[0] if not inFrameData.empty else -1
         
         sig.axvline(inTime, c='r', ls='--')
 
-        if logScale:
-            sig.set_xscale('log')
+        sig.set_xscale('log')
         sig.set_xlim([.1, None])
 
         sig.set_xlabel('Time (ns)')
@@ -1032,7 +1008,8 @@ class FIMSVisualizer(QMainWindow):
         sig.grid()
         sig.legend()
 
-        xz.set_title(f'Time = ({inTime:.2f} ns) (Frame ID: {frameID})')
+        timeLabel = f'{inTime:.2f} ns' if inTime <= 250 else rf'{inTime/1e3:.2f} $\mu$s'
+        xz.set_title(f'Time = ({timeLabel}) (Frame ID: {frameID})')
         xz.legend()
 
         self.canvas.fig.tight_layout()
