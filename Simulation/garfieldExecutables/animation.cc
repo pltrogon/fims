@@ -221,27 +221,6 @@ int main(int argc, char * argv[]) {
     animationTree->Branch("y", &yParticle);
     animationTree->Branch("z", &zParticle);
 
-    // ***** Particle tree ***** //
-    TTree* particleDataTree = new TTree("particleDataTree", "Patricle Info");
-    int particleID, particleTypeID; // 0 if electron, 1 if +ion, -1 if negative ion
-    double xi, yi, zi, ti, Ei, xf, yf, zf, tf, Ef;
-    int exitStatus;
-
-    particleDataTree->Branch("AvalancheID", &avalancheID);
-    particleDataTree->Branch("ParticleID", &particleID);
-    particleDataTree->Branch("ParticleTypeID", &particleTypeID);
-    particleDataTree->Branch("xInitial", &xi);
-    particleDataTree->Branch("yInitial", &yi);
-    particleDataTree->Branch("zInitial", &zi);
-    particleDataTree->Branch("tInitial", &ti);
-    particleDataTree->Branch("eInitial", &Ei);
-    particleDataTree->Branch("xFinal", &xf);
-    particleDataTree->Branch("yFinal", &yf);
-    particleDataTree->Branch("zFinal", &zf);
-    particleDataTree->Branch("tFinal", &tf);
-    particleDataTree->Branch("eFinal", &Ef);
-    particleDataTree->Branch("ExitStatus", &exitStatus);
-
     // ***** Signal tree ***** //
     TTree* signalDataTree = new TTree("signalDataTree", "Induced Signal");
     double signalTime;
@@ -466,18 +445,19 @@ int main(int argc, char * argv[]) {
         double cellLength = simParams->pitch*cellXScale;
         auto [x0, y0] = randomXYinGeometry(geometryMode, cellLength);
 
-        electronAvalanche.AddElectron(x0, y0, z0, t0, e0);
+        //For tracking particles processed
+        std::unordered_set<size_t> electronsWithIonsSpawned;
+        std::unordered_set<size_t> attachedElectronsProcessed;
+        int totalElectrons = 1;
+        int totalPosIons = 0;
+        int totalNegIons = 0;
 
         double tFrameStart = 0., dt = 0.;
         frameID = 0;
 
-        //For tracking particles processed
-        size_t numProcessedElectrons = 1; //Primary is ID 0
-        std::unordered_set<size_t> attachedElectronsProcessed;
-        std::unordered_set<int> savedElectronIndices;
-        std::unordered_set<const void*> savedIonPointers;
-        std::unordered_set<const void*> savedNegIonPointers;
-
+        //Initial electron
+        electronAvalanche.AddElectron(x0, y0, z0, t0, e0);
+            
         while(true){
             //Clear memory
             particleType.clear();
@@ -536,40 +516,45 @@ int main(int argc, char * argv[]) {
             ionDrift.SetTimeSteps(dt/5.);
             frameTime = tFrameStart+dt;
             
-            // ***** Process Particles ***** //
-            //Electrons
+            // ***** Process Electrons ***** //
             if(activeElectrons){
                 electronAvalanche.SetTimeWindow(tFrameStart, frameTime);
                 electronAvalanche.ResumeAvalanche();
 
                 const auto& electrons = electronAvalanche.GetElectrons();
 
-                //Add positive ion for all new electrons
-                for(size_t i = numProcessedElectrons; i < electrons.size(); i++){
-                    if(electrons[i].path.empty()){continue;}
-                    // Positive ion is spawned at creation point of secondary electron
-                    const double xIon = electrons[i].path.front().x;
-                    const double yIon = electrons[i].path.front().y;
-                    const double zIon = electrons[i].path.front().z;
-                    const double tIon = electrons[i].path.front().t;
-                    ionDrift.AddIon(xIon, yIon, zIon, tIon);
-                }
-                numProcessedElectrons = electrons.size();
-
-                //Check for any attachments and fill vectors for animation
-                for (size_t i = 0; i < electrons.size(); i++){
+                for(size_t i = 0; i < electrons.size(); i++){
                     const auto& inElectron = electrons[i];
-                    if(inElectron.path.empty()){continue;}
-                        if(inElectron.status == -7 && attachedElectronsProcessed.find(i) == attachedElectronsProcessed.end()){
+                    if(inElectron.path.empty()){ continue; }
+
+                    // Spawn positive ions for new secondary electrons
+                    if(i > 0 && electronsWithIonsSpawned.find(i) == electronsWithIonsSpawned.end()){
+                        const double xIon = inElectron.path.front().x;
+                        const double yIon = inElectron.path.front().y;
+                        const double zIon = inElectron.path.front().z;
+                        const double tIon = inElectron.path.front().t;
+
+                        ionDrift.AddIon(xIon, yIon, zIon, tIon);
+                        electronsWithIonsSpawned.insert(i);
+
+                        totalElectrons++;
+                        totalPosIons++;
+                    }
+
+                    // Handle electron attachments -> spawn negative ions
+                    if(inElectron.status == -7 && attachedElectronsProcessed.find(i) == attachedElectronsProcessed.end()){
                         const double xAtt = inElectron.path.back().x;
                         const double yAtt = inElectron.path.back().y;
                         const double zAtt = inElectron.path.back().z;
                         const double tAtt = inElectron.path.back().t;
+
                         ionDrift.AddNegativeIon(xAtt, yAtt, zAtt, tAtt);
                         attachedElectronsProcessed.insert(i);
+
+                        totalNegIons++;
                     }
 
-                    // Append current electron tip to frame animation vectors
+                    // Animation tracking
                     particleType.push_back(0);
                     xParticle.push_back(inElectron.path.back().x);
                     yParticle.push_back(inElectron.path.back().y);
@@ -577,101 +562,44 @@ int main(int argc, char * argv[]) {
                 }
             }
 
-            //Process Ions
+            // ***** Process Ions ***** //
             if(!ionDrift.GetIons().empty() || !ionDrift.GetNegativeIons().empty()){
                 ionDrift.SetTimeWindow(tFrameStart, frameTime);
                 ionDrift.ResumeAvalanche();
 
+                // Positive Ions
                 for(const auto& inIon : ionDrift.GetIons()){
-                    if (inIon.path.empty()){continue;}
+                    if(inIon.path.empty()){ continue; }
+
                     particleType.push_back(1);
                     xParticle.push_back(inIon.path.back().x);
                     yParticle.push_back(inIon.path.back().y);
                     zParticle.push_back(inIon.path.back().z);
                 }
 
+                // Negative Ions
                 for(const auto& inNegIon : ionDrift.GetNegativeIons()){
-                    if(inNegIon.path.empty()){continue;}
+                    if(inNegIon.path.empty()){ continue; }
+
                     particleType.push_back(-1);
                     xParticle.push_back(inNegIon.path.back().x);
                     yParticle.push_back(inNegIon.path.back().y);
                     zParticle.push_back(inNegIon.path.back().z);
                 }
             }
-            //Fill particle tree with electron and ion data
+
+            // Fill animation frame
             animationTree->Fill();
             frameID++;
 
-            // ***** Particle Endpoints ***** //
-            if(activeElectrons){
-                int nEndpoints = electronAvalanche.GetNumberOfElectronEndpoints();
-                for(int i = 0; i < nEndpoints; i++){
-                    electronAvalanche.GetElectronEndpoint(i, xi, yi, zi, ti, Ei, xf, yf, zf, tf, Ef, exitStatus);
-                    
-                    if(exitStatus != 0 && savedElectronIndices.find(i) == savedElectronIndices.end()){
-                        particleTypeID = 0;
-                        particleID = i;
-                        particleDataTree->Fill();
-                        savedElectronIndices.insert(i);
-                    }
-                }
-            }
-            const auto& posIons = ionDrift.GetIons();
-            for(const auto& ion : posIons){
-                if(ion.path.empty()){continue;}
-
-                if(ion.status != 0 && savedIonPointers.find(&ion) == savedIonPointers.end()){
-                    particleTypeID = 1;
-                    particleID = static_cast<int>(savedIonPointers.size());
-
-                    xi = ion.path.front().x;
-                    yi = ion.path.front().y;
-                    zi = ion.path.front().z;
-                    ti = ion.path.front().t;
-
-                    xf = ion.path.back().x;
-                    yf = ion.path.back().y;
-                    zf = ion.path.back().z;
-                    tf = ion.path.back().t;
-                    Ei = 0.0; Ef = 0.0;
-                    exitStatus = ion.status;
-
-                    particleDataTree->Fill();
-                    savedIonPointers.insert(&ion);
-                }
-            }
-            const auto& negIons = ionDrift.GetNegativeIons();
-            for(const auto& negIon : negIons){
-                if(negIon.path.empty()){continue;}
-
-                if(negIon.status != 0 && savedNegIonPointers.find(&negIon) == savedNegIonPointers.end()){
-                    particleTypeID = -1;
-                    particleID = static_cast<int>(savedNegIonPointers.size());
-
-                    xi = negIon.path.front().x;
-                    yi = negIon.path.front().y;
-                    zi = negIon.path.front().z;
-                    ti = negIon.path.front().t;
-
-                    xf = negIon.path.back().x;
-                    yf = negIon.path.back().y;
-                    zf = negIon.path.back().z;
-                    tf = negIon.path.back().t;
-                    Ei = 0.0; Ef = 0.0;
-                    exitStatus = negIon.status;
-
-                    particleDataTree->Fill();
-                    savedNegIonPointers.insert(&negIon);
-                }
-            }  
-        }//End of frame loop
+        }// End of frame loop
 
         // ********** Avalanche Completed ********** //
 
         // ***** Avalanche Statistics ***** // 
-        gain = savedElectronIndices.size();
-        numPosIons = savedIonPointers.size();
-        numNegIons = savedNegIonPointers.size();
+        gain = totalElectrons;
+        numPosIons = totalPosIons;
+        numNegIons = totalNegIons;
         avalancheTree->Fill();
 
         // ***** Induced Signals ***** //
@@ -697,8 +625,6 @@ int main(int argc, char * argv[]) {
 
     animationTree->Write();
     delete animationTree;
-    particleDataTree->Write();
-    delete particleDataTree;
     signalDataTree->Write();
     delete signalDataTree;
 

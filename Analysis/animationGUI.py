@@ -120,13 +120,6 @@ class AnimationData:
                 animationDF[['x', 'y', 'z']] *= CMTOMICRON
                 self.animationData = animationDF
 
-            # All Partile Info
-            if 'particleDataTree' in file:
-                pDF = file['particleDataTree'].arrays(library='pd')
-                pDF[['xInitial', 'yInitial', 'zInitial']] *= CMTOMICRON
-                pDF[['xFinal', 'yFinal', 'zFinal']] *= CMTOMICRON
-                self.particleData = pDF
-
             # Induced Signal Traces
             if 'signalDataTree' in file:
                 self.signalData = file['signalDataTree'].arrays(library='pd')
