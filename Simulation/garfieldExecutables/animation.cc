@@ -257,14 +257,10 @@ int main(int argc, char * argv[]) {
         signalDataTree->Branch(Form("Ion_%s", sensorList[i].c_str()), &ionSignals[i]);
     }
 
-    std::cout << "Data trees created...\n";
-
     //*************** SIMULATION ***************//
 
     // Define and initialize the gas mixture
     MediumMagboltz* gasFIMS = initializeGas(*simParams); 
-
-    std::cout << "Done Gas...\n";
 
     //Import field-map
     std::string geometryPath = "../Geometry/";
@@ -278,8 +274,6 @@ int main(int argc, char * argv[]) {
         fieldPath, 
         "mum"
     );
-
-    std::cout << "Field map imported...\n";
 
     // Get region of elmer geometry
     double xmin, ymin, zmin, xmax, ymax, zmax;
@@ -306,7 +300,6 @@ int main(int argc, char * argv[]) {
         std::string fieldFilePath = elmerResultsPath + geometryModeString + inSensor + "Weighting.result";
         fieldFIMS.SetWeightingField(fieldFilePath, inSensor);
     }
-    std::cout << "Done weighting...\n";
 
     // Create a sensor
     Sensor* sensorFIMS = new Sensor();
@@ -318,7 +311,6 @@ int main(int argc, char * argv[]) {
     for(const auto& inSensor : sensorList){
         sensorFIMS->AddElectrode(&fieldFIMS, inSensor);
     }
-    std::cout << "Done Sensor...\n";
 
     //Set timing for signals
     double signalFinal = 500.;//ns
@@ -467,19 +459,24 @@ int main(int argc, char * argv[]) {
         std::cerr << "Beginning avalanche: " << inAvalanche << std::endl;
         //std::cout << "Beginning avalanche: " << inAvalanche << std::endl;
 
-        AvalancheMicroscopic avalanche(sensorFIMS);
-        AvalancheMC drift(sensorFIMS);
-        avalanche.EnableAvalancheSizeLimit(simParams->avalancheLimit);
+        AvalancheMicroscopic electronAvalanche(sensorFIMS);
+        AvalancheMC ionDrift(sensorFIMS);
+        electronAvalanche.EnableAvalancheSizeLimit(simParams->avalancheLimit);
         
         double cellLength = simParams->pitch*cellXScale;
         auto [x0, y0] = randomXYinGeometry(geometryMode, cellLength);
 
-        avalanche.AddElectron(x0, y0, z0, t0, e0);
+        electronAvalanche.AddElectron(x0, y0, z0, t0, e0);
 
-        std::vector<std::array<double, 5>> prevElectrons = {{x0, y0, z0, t0, e0}};
         double tFrameStart = 0., dt = 0.;
-
         frameID = 0;
+
+        //For tracking particles processed
+        size_t numProcessedElectrons = 1; //Primary is ID 0
+        std::unordered_set<size_t> attachedElectronsProcessed;
+        std::unordered_set<int> savedElectronIndices;
+        std::unordered_set<const void*> savedIonPointers;
+        std::unordered_set<const void*> savedNegIonPointers;
 
         while(true){
             //Clear memory
@@ -501,32 +498,25 @@ int main(int argc, char * argv[]) {
 
             //Check if any active electrons or ions exist
             bool activeElectrons = false;
-            for(const auto& inElectron : avalanche.GetElectrons()){
-                if(inElectron.path.back().t >= tFrameStart){
+            for(const auto& inElectron : electronAvalanche.GetElectrons()){
+                if(!inElectron.path.empty() && inElectron.path.back().t >= tFrameStart){
                     activeElectrons = true;
                     break;
                 }
             }
-            bool activeIons = false;
-            bool ionsBelowGrid = false;
-            bool ionsNearGrid = false;
-            for(const auto& inIon : drift.GetIons()){
-                if(inIon.path.back().t >= tFrameStart){
-                    activeIons = true;
-                }
-                if(inIon.path.back().z <= 0.0){
-                    ionsBelowGrid = true;
-                }
-                if(inIon.path.back().z <= 10.0*MICRONTOCM){
-                    ionsNearGrid = true;
-                }
-                if(activeIons && ionsBelowGrid){
-                    break;
+
+            bool activeIons = false, ionsBelowGrid = false, ionsNearGrid = false;
+            for(const auto& inIon : ionDrift.GetIons()){
+                if(!inIon.path.empty()){
+                    if(inIon.path.back().t >= tFrameStart){activeIons = true;}
+                    if(inIon.path.back().z <= 0.0){ionsBelowGrid = true;}
+                    if(inIon.path.back().z <= 10.0 * MICRONTOCM){ionsNearGrid = true;}
                 }
             }
+
             bool activeNegIons = false;
-            for(const auto& inNegIon : drift.GetNegativeIons()){
-                if(inNegIon.path.back().t >= tFrameStart){
+            for(const auto& inNegIon : ionDrift.GetNegativeIons()) {
+                if(!inNegIon.path.empty() && inNegIon.path.back().t >= tFrameStart){
                     activeNegIons = true;
                     break;
                 }
@@ -538,138 +528,151 @@ int main(int argc, char * argv[]) {
             }
             
             //Determine frame timestep
-            if(activeElectrons){
-                dt = 0.01;
-            }
-            else if(ionsBelowGrid){
-                dt = 1.0;
-            }
-            else if(ionsNearGrid){
-                dt = 10.0;
-            }
-            else{
-                dt = 1000.0;
-            }
-            drift.SetTimeSteps(dt/5.);
+            if(activeElectrons){dt = 0.01;}
+            else if(ionsBelowGrid || activeNegIons){dt = 1.0;}
+            else if(ionsNearGrid){dt = 10.0;}
+            else{dt = 1000.0;}
+
+            ionDrift.SetTimeSteps(dt/5.);
             frameTime = tFrameStart+dt;
-
-            //Process next timestep
             
-            //Process electrons
+            // ***** Process Particles ***** //
+            //Electrons
             if(activeElectrons){
-                avalanche.SetTimeWindow(tFrameStart, frameTime);
-                avalanche.ResumeAvalanche();
+                electronAvalanche.SetTimeWindow(tFrameStart, frameTime);
+                electronAvalanche.ResumeAvalanche();
 
-                std::vector<std::array<double, 5>> nextElectrons;
+                const auto& electrons = electronAvalanche.GetElectrons();
 
-                //Loop through all electrons
-                for(const auto& inElectron : avalanche.GetElectrons()){
-                    //Get initial locations
-                    const double x1 = inElectron.path.front().x;
-                    const double y1 = inElectron.path.front().y;
-                    const double z1 = inElectron.path.front().z;
-                    const double t1 = inElectron.path.front().t;
+                //Add positive ion for all new electrons
+                for(size_t i = numProcessedElectrons; i < electrons.size(); i++){
+                    if(electrons[i].path.empty()){continue;}
+                    // Positive ion is spawned at creation point of secondary electron
+                    const double xIon = electrons[i].path.front().x;
+                    const double yIon = electrons[i].path.front().y;
+                    const double zIon = electrons[i].path.front().z;
+                    const double tIon = electrons[i].path.front().t;
+                    ionDrift.AddIon(xIon, yIon, zIon, tIon);
+                }
+                numProcessedElectrons = electrons.size();
 
-                    //Check each electron if is is new
-                    bool existing = false;
-                    constexpr double tol = 1.e-5;
-                    for(const auto& p : prevElectrons){
-                        bool xTol = fabs(x1 - p[0]) < tol;
-                        bool yTol = fabs(y1 - p[1]) < tol;
-                        bool zTol = fabs(z1 - p[2]) < tol;
-                        bool tTol = fabs(t1 - p[3]) < tol;
-
-                        if(xTol && yTol && zTol && tTol){
-                            existing = true;
-                            break;
-                        }
-                    }
-                    //Add new ion if new electron
-                    if(!existing){
-                        drift.AddIon(x1, y1, z1, t1);
+                //Check for any attachments and fill vectors for animation
+                for (size_t i = 0; i < electrons.size(); i++){
+                    const auto& inElectron = electrons[i];
+                    if(inElectron.path.empty()){continue;}
+                        if(inElectron.status == -7 && attachedElectronsProcessed.find(i) == attachedElectronsProcessed.end()){
+                        const double xAtt = inElectron.path.back().x;
+                        const double yAtt = inElectron.path.back().y;
+                        const double zAtt = inElectron.path.back().z;
+                        const double tAtt = inElectron.path.back().t;
+                        ionDrift.AddNegativeIon(xAtt, yAtt, zAtt, tAtt);
+                        attachedElectronsProcessed.insert(i);
                     }
 
-                    //Get final locations
-                    const double x2 = inElectron.path.back().x;
-                    const double y2 = inElectron.path.back().y;
-                    const double z2 = inElectron.path.back().z;
-                    const double t2 = inElectron.path.back().t;
-                    const double e2 = inElectron.path.back().energy;
-
-                    //Add negative ion if attatched
-                    if(inElectron.status == -7){
-                        drift.AddNegativeIon(x2, y2, z2, t2);
-                    }
-
-                    nextElectrons.push_back({x2, y2, z2, t2, e2});
-
-                    //Update data
+                    // Append current electron tip to frame animation vectors
                     particleType.push_back(0);
-                    xParticle.push_back(x2);
-                    yParticle.push_back(y2);
-                    zParticle.push_back(z2);
-                }//end of all electrons
-                prevElectrons.swap(nextElectrons);
+                    xParticle.push_back(inElectron.path.back().x);
+                    yParticle.push_back(inElectron.path.back().y);
+                    zParticle.push_back(inElectron.path.back().z);
+                }
             }
 
             //Process Ions
-            if(!drift.GetIons().empty() || !drift.GetNegativeIons().empty()){
-                drift.SetTimeWindow(tFrameStart, frameTime);
-                drift.ResumeAvalanche();
+            if(!ionDrift.GetIons().empty() || !ionDrift.GetNegativeIons().empty()){
+                ionDrift.SetTimeWindow(tFrameStart, frameTime);
+                ionDrift.ResumeAvalanche();
 
-                //Loop through positive ions
-                for(const auto& inIon : drift.GetIons()){
+                for(const auto& inIon : ionDrift.GetIons()){
+                    if (inIon.path.empty()){continue;}
                     particleType.push_back(1);
                     xParticle.push_back(inIon.path.back().x);
                     yParticle.push_back(inIon.path.back().y);
                     zParticle.push_back(inIon.path.back().z);
                 }
-                // Loop through Negative Ions
-                for (const auto& inNegIon : drift.GetNegativeIons()) {
+
+                for(const auto& inNegIon : ionDrift.GetNegativeIons()){
+                    if(inNegIon.path.empty()){continue;}
                     particleType.push_back(-1);
                     xParticle.push_back(inNegIon.path.back().x);
                     yParticle.push_back(inNegIon.path.back().y);
                     zParticle.push_back(inNegIon.path.back().z);
                 }
             }
-
             //Fill particle tree with electron and ion data
             animationTree->Fill();
             frameID++;
+
+            // ***** Particle Endpoints ***** //
+            if(activeElectrons){
+                int nEndpoints = electronAvalanche.GetNumberOfElectronEndpoints();
+                for(int i = 0; i < nEndpoints; i++){
+                    electronAvalanche.GetElectronEndpoint(i, xi, yi, zi, ti, Ei, xf, yf, zf, tf, Ef, exitStatus);
+                    
+                    if(exitStatus != 0 && savedElectronIndices.find(i) == savedElectronIndices.end()){
+                        particleTypeID = 0;
+                        particleID = i;
+                        particleDataTree->Fill();
+                        savedElectronIndices.insert(i);
+                    }
+                }
+            }
+            const auto& posIons = ionDrift.GetIons();
+            for(const auto& ion : posIons){
+                if(ion.path.empty()){continue;}
+
+                if(ion.status != 0 && savedIonPointers.find(&ion) == savedIonPointers.end()){
+                    particleTypeID = 1;
+                    particleID = static_cast<int>(savedIonPointers.size());
+
+                    xi = ion.path.front().x;
+                    yi = ion.path.front().y;
+                    zi = ion.path.front().z;
+                    ti = ion.path.front().t;
+
+                    xf = ion.path.back().x;
+                    yf = ion.path.back().y;
+                    zf = ion.path.back().z;
+                    tf = ion.path.back().t;
+                    Ei = 0.0; Ef = 0.0;
+                    exitStatus = ion.status;
+
+                    particleDataTree->Fill();
+                    savedIonPointers.insert(&ion);
+                }
+            }
+            const auto& negIons = ionDrift.GetNegativeIons();
+            for(const auto& negIon : negIons){
+                if(negIon.path.empty()){continue;}
+
+                if(negIon.status != 0 && savedNegIonPointers.find(&negIon) == savedNegIonPointers.end()){
+                    particleTypeID = -1;
+                    particleID = static_cast<int>(savedNegIonPointers.size());
+
+                    xi = negIon.path.front().x;
+                    yi = negIon.path.front().y;
+                    zi = negIon.path.front().z;
+                    ti = negIon.path.front().t;
+
+                    xf = negIon.path.back().x;
+                    yf = negIon.path.back().y;
+                    zf = negIon.path.back().z;
+                    tf = negIon.path.back().t;
+                    Ei = 0.0; Ef = 0.0;
+                    exitStatus = negIon.status;
+
+                    particleDataTree->Fill();
+                    savedNegIonPointers.insert(&negIon);
+                }
+            }  
         }//End of frame loop
 
         // ********** Avalanche Completed ********** //
 
-        // ***** Particle Endpoints ***** //
-        particleTypeID = 0; //Electrons
-        int numElectrons = avalanche.GetNumberOfElectronEndpoints();
-        for(int inElectron=0; inElectron<numElectrons; inElectron++){
-            particleID = inElectron;
-            avalanche.GetElectronEndpoint(inElectron, xi, yi, zi, ti, Ei, xf, yf, zf, tf, Ef, exitStatus);
-            particleDataTree->Fill();
-        }
-
-        particleTypeID = 1;//Positive Ions
-        Ei = 0.; Ef = 0.; //No initial/final Energy for ions
-        numPosIons = drift.GetNumberOfIonEndpoints();
-        for(int inIon=0; inIon<numPosIons; inIon++){
-            particleID = inIon;
-            drift.GetIonEndpoint(inIon, xi, yi, zi, ti, xf, yf, zf, tf, exitStatus);
-            particleDataTree->Fill();
-        }
-
-        particleTypeID = -1;//Negative Ions
-        numNegIons = drift.GetNegativeIons().size();
-        for(int inIon=0; inIon<numNegIons; inIon++){
-            particleID = inIon;
-            drift.GetNegativeIonEndpoint(inIon, xi, yi, zi, ti, xf, yf, zf, tf, exitStatus);
-            particleDataTree->Fill();
-        }
-
         // ***** Avalanche Statistics ***** // 
-        gain = avalanche.GetNumberOfElectronEndpoints();
+        gain = savedElectronIndices.size();
+        numPosIons = savedIonPointers.size();
+        numNegIons = savedNegIonPointers.size();
         avalancheTree->Fill();
-
 
         // ***** Induced Signals ***** //
         for(int inSignal=0; inSignal < numSignalBins; inSignal++){
@@ -685,9 +688,8 @@ int main(int argc, char * argv[]) {
             signalDataTree->Fill();
         }
         sensorFIMS->ClearSignal();
-
-
-    }//End single avalanche/
+    }
+    // ********** All Avalanches Completed ********** //
     
 
     delete sensorFIMS;
