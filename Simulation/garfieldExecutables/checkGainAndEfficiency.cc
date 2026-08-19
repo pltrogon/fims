@@ -172,7 +172,7 @@ int main(int argc, char * argv[]) {
             numInitialElectrons++;
 
             //Reset parameters to initial and random xy on plane
-            auto [sampleX, sampleY] = randomXYInHexagon(cellLength);
+            auto [sampleX, sampleY] = randomXYinGeometry(geometryMode, cellLength);
             curX = sampleX, curY = sampleY, curZ = z0;
             curTime = t0;
             curEnergy = e0;
@@ -199,7 +199,7 @@ int main(int argc, char * argv[]) {
                 //Electron disappeared - Completely restart with new point
                 if(numAvalancheElectrons == 0){
                     //Random xy on plane
-                    auto [sampleX, sampleY] = randomXYInHexagon(cellLength);
+                    auto [sampleX, sampleY] = randomXYinGeometry(geometryMode, cellLength);
                     curX = sampleX, curY = sampleY, curZ = z0;
                     curTime = t0;
                     curEnergy = e0;
@@ -331,8 +331,8 @@ int main(int argc, char * argv[]) {
         detectEffErr = std::max(detectionEff.lowError, detectionEff.highError);
         netEffErr = std::max(netEfficiency.lowError, netEfficiency.highError);
         
-
-        if(netEffErr <= 0.01 && gainRelErr <= 0.1){
+        //Run until eff and gain are known to within +/- 5 percent
+        if(netEffErr <= 0.05 && gainRelErr <= 0.05){
             runAvalanche = false;
         }
 
