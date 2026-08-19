@@ -171,12 +171,13 @@ int main(int argc, char * argv[]) {
     delete simDataTree;
 
     // ***** Avalanche Info tree ***** //
-    TTree *avalancheTree = new TTree("avalancheTree", "Avalanche Data");
-    int avalancheID;
-    int gain;
+    TTree *avalancheTree = new TTree("avalancheDataTree", "Avalanche Data");
+    int avalancheID, gain, numPosIons, numNegIons;
 
     avalancheTree->Branch("AvalancheID", &avalancheID);
     avalancheTree->Branch("Gain", &gain);
+    avalancheTree->Branch("numPosIons", &numPosIons);
+    avalancheTree->Branch("numNegIons", &numNegIons);
 
     // ***** Field tree ***** //
     TTree *fieldTree = new TTree("fieldTree", "Electric and Weighting Field Map");
@@ -206,19 +207,40 @@ int main(int argc, char * argv[]) {
     fieldLineTree->Branch("z", &fieldLineZ);
 
     // ***** Particle Data tree ***** // 
-    TTree *particleTree = new TTree("particleDataTree", "3D Particle Data");
+    TTree *animationTree = new TTree("animationDataTree", "3D Particle Data");
     int frameID;
     double frameTime;
     std::vector<int> particleType; // 0 if electron, 1 if +ion, -1 if negative ion
     std::vector<double> xParticle, yParticle, zParticle;
 
-    particleTree->Branch("AvalancheID", &avalancheID);
-    particleTree->Branch("FrameID", &frameID);
-    particleTree->Branch("Time", &frameTime);
-    particleTree->Branch("ParticleType", &particleType);
-    particleTree->Branch("x", &xParticle);
-    particleTree->Branch("y", &yParticle);
-    particleTree->Branch("z", &zParticle);
+    animationTree->Branch("AvalancheID", &avalancheID);
+    animationTree->Branch("FrameID", &frameID);
+    animationTree->Branch("Time", &frameTime);
+    animationTree->Branch("ParticleType", &particleType);
+    animationTree->Branch("x", &xParticle);
+    animationTree->Branch("y", &yParticle);
+    animationTree->Branch("z", &zParticle);
+
+    // ***** Particle tree ***** //
+    TTree* particleDataTree = new TTree("particleDataTree", "Patricle Info");
+    int particleID, particleTypeID; // 0 if electron, 1 if +ion, -1 if negative ion
+    double xi, yi, zi, ti, Ei, xf, yf, zf, tf, Ef;
+    int exitStatus;
+
+    particleDataTree->Branch("AvalancheID", &avalancheID);
+    particleDataTree->Branch("ParticleID", &particleID);
+    particleDataTree->Branch("ParticleTypeID", &particleTypeID);
+    particleDataTree->Branch("xInitial", &xi);
+    particleDataTree->Branch("yInitial", &yi);
+    particleDataTree->Branch("zInitial", &zi);
+    particleDataTree->Branch("tInitial", &ti);
+    particleDataTree->Branch("eInitial", &Ei);
+    particleDataTree->Branch("xFinal", &xf);
+    particleDataTree->Branch("yFinal", &yf);
+    particleDataTree->Branch("zFinal", &zf);
+    particleDataTree->Branch("tFinal", &tf);
+    particleDataTree->Branch("eFinal", &Ef);
+    particleDataTree->Branch("ExitStatus", &exitStatus);
 
     // ***** Signal tree ***** //
     TTree* signalDataTree = new TTree("signalDataTree", "Induced Signal");
@@ -370,7 +392,7 @@ int main(int argc, char * argv[]) {
     //*************** FIELD LINES ***************//
     std::cout << "Generating field lines...\n";
 
-    const int numLines = simParam->numFieldLine;
+    const int numLines = simParams->numFieldLine;
     const double fieldLineStep = static_cast<double>(numLines - 1);
 
     dx = 2.*xScale/fieldLineStep;
@@ -450,7 +472,7 @@ int main(int argc, char * argv[]) {
         avalanche.EnableAvalancheSizeLimit(simParams->avalancheLimit);
         
         double cellLength = simParams->pitch*cellXScale;
-        auto [x0, y0] = randomXYinGeometry(geometryMode, cellLength)
+        auto [x0, y0] = randomXYinGeometry(geometryMode, cellLength);
 
         avalanche.AddElectron(x0, y0, z0, t0, e0);
 
@@ -487,19 +509,30 @@ int main(int argc, char * argv[]) {
             }
             bool activeIons = false;
             bool ionsBelowGrid = false;
+            bool ionsNearGrid = false;
             for(const auto& inIon : drift.GetIons()){
                 if(inIon.path.back().t >= tFrameStart){
                     activeIons = true;
                 }
-                if(inIon.path.back().z <= 0.0) {
+                if(inIon.path.back().z <= 0.0){
                     ionsBelowGrid = true;
+                }
+                if(inIon.path.back().z <= 10.0*MICRONTOCM){
+                    ionsNearGrid = true;
                 }
                 if(activeIons && ionsBelowGrid){
                     break;
                 }
             }
+            bool activeNegIons = false;
+            for(const auto& inNegIon : drift.GetNegativeIons()){
+                if(inNegIon.path.back().t >= tFrameStart){
+                    activeNegIons = true;
+                    break;
+                }
+            }
 
-            if(!activeElectrons && !activeIons){
+            if(!activeElectrons && !activeIons && !activeNegIons){
                 std::cout << "***** NO MORE PARTICLES *****" << std::endl;
                 break;
             }
@@ -511,8 +544,11 @@ int main(int argc, char * argv[]) {
             else if(ionsBelowGrid){
                 dt = 1.0;
             }
+            else if(ionsNearGrid){
+                dt = 10.0;
+            }
             else{
-                dt = 100.0;
+                dt = 1000.0;
             }
             drift.SetTimeSteps(dt/5.);
             frameTime = tFrameStart+dt;
@@ -559,6 +595,12 @@ int main(int argc, char * argv[]) {
                     const double z2 = inElectron.path.back().z;
                     const double t2 = inElectron.path.back().t;
                     const double e2 = inElectron.path.back().energy;
+
+                    //Add negative ion if attatched
+                    if(inElectron.status == -7){
+                        drift.AddNegativeIon(x2, y2, z2, t2);
+                    }
+
                     nextElectrons.push_back({x2, y2, z2, t2, e2});
 
                     //Update data
@@ -571,25 +613,64 @@ int main(int argc, char * argv[]) {
             }
 
             //Process Ions
-            if(!drift.GetIons().empty()){
+            if(!drift.GetIons().empty() || !drift.GetNegativeIons().empty()){
                 drift.SetTimeWindow(tFrameStart, frameTime);
                 drift.ResumeAvalanche();
 
-                //Loop through all ions
+                //Loop through positive ions
                 for(const auto& inIon : drift.GetIons()){
                     particleType.push_back(1);
                     xParticle.push_back(inIon.path.back().x);
                     yParticle.push_back(inIon.path.back().y);
                     zParticle.push_back(inIon.path.back().z);
                 }
+                // Loop through Negative Ions
+                for (const auto& inNegIon : drift.GetNegativeIons()) {
+                    particleType.push_back(-1);
+                    xParticle.push_back(inNegIon.path.back().x);
+                    yParticle.push_back(inNegIon.path.back().y);
+                    zParticle.push_back(inNegIon.path.back().z);
+                }
             }
 
             //Fill particle tree with electron and ion data
-            particleTree->Fill();
+            animationTree->Fill();
             frameID++;
         }//End of frame loop
 
-        
+        // ********** Avalanche Completed ********** //
+
+        // ***** Particle Endpoints ***** //
+        particleTypeID = 0; //Electrons
+        int numElectrons = avalanche.GetNumberOfElectronEndpoints();
+        for(int inElectron=0; inElectron<numElectrons; inElectron++){
+            particleID = inElectron;
+            avalanche.GetElectronEndpoint(inElectron, xi, yi, zi, ti, Ei, xf, yf, zf, tf, Ef, exitStatus);
+            particleDataTree->Fill();
+        }
+
+        particleTypeID = 1;//Positive Ions
+        Ei = 0.; Ef = 0.; //No initial/final Energy for ions
+        numPosIons = drift.GetNumberOfIonEndpoints();
+        for(int inIon=0; inIon<numPosIons; inIon++){
+            particleID = inIon;
+            drift.GetIonEndpoint(inIon, xi, yi, zi, ti, xf, yf, zf, tf, exitStatus);
+            particleDataTree->Fill();
+        }
+
+        particleTypeID = -1;//Negative Ions
+        numNegIons = drift.GetNegativeIons().size();
+        for(int inIon=0; inIon<numNegIons; inIon++){
+            particleID = inIon;
+            drift.GetNegativeIonEndpoint(inIon, xi, yi, zi, ti, xf, yf, zf, tf, exitStatus);
+            particleDataTree->Fill();
+        }
+
+        // ***** Avalanche Statistics ***** // 
+        gain = avalanche.GetNumberOfElectronEndpoints();
+        avalancheTree->Fill();
+
+
         // ***** Induced Signals ***** //
         for(int inSignal=0; inSignal < numSignalBins; inSignal++){
             signalTime = inSignal*signalStep;
@@ -603,12 +684,6 @@ int main(int argc, char * argv[]) {
 
             signalDataTree->Fill();
         }
-        
-
-        // ***** Avalanche Statistics ***** // 
-        gain = avalanche.GetNumberOfElectronEndpoints();
-        avalancheTree->Fill();
-
         sensorFIMS->ClearSignal();
 
 
@@ -618,8 +693,10 @@ int main(int argc, char * argv[]) {
     delete sensorFIMS;
     delete gasFIMS;
 
-    particleTree->Write();
-    delete particleTree;
+    animationTree->Write();
+    delete animationTree;
+    particleDataTree->Write();
+    delete particleDataTree;
     signalDataTree->Write();
     delete signalDataTree;
 
