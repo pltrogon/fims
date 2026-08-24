@@ -561,7 +561,7 @@ class FIMSVisualizer(QMainWindow):
 
 #**********************************************************************#
     def _plotAvalancheInfo(self):
-        """Populates the main display table with avalanmche info."""
+        """Populates the main display table with avalannche info."""
         self.simParamTable.setRowCount(0)
         
         if self.data.avalancheData is None or self.data.avalancheData.empty:
@@ -586,6 +586,7 @@ class FIMSVisualizer(QMainWindow):
     
 #**********************************************************************#
     def _plotGeometry(self):
+        """Plot the geometry components"""
         use2D = self.chk2D.isChecked()
         if use2D:
             xz, yz, xy = self.canvas.setupAxes(is3D=False)
@@ -603,7 +604,7 @@ class FIMSVisualizer(QMainWindow):
 
 #**********************************************************************#
     def _plotFieldLines(self):
-
+        """Plot field lines"""
         use2D = self.chk2D.isChecked()
 
         lineSettings = {
@@ -652,7 +653,7 @@ class FIMSVisualizer(QMainWindow):
 
 #**********************************************************************#
     def _plotFields(self):
-        """TODO"""
+        """Plot the 2D slices of the fields along x and y planes"""
 
         use2D = self.chk2D.isChecked()
         isEField = self.chkEField.isChecked()
@@ -764,7 +765,8 @@ class FIMSVisualizer(QMainWindow):
     
 #**********************************************************************#
     def _plotSignals(self): 
-        #TODO: All signals or just individual pads
+        """Plot induced signals"""
+        #TODO: All signals or just individual pads?
 
         isSignal = self.chkSignal.isChecked()
         logScale = self.chkLog.isChecked()
@@ -1045,9 +1047,7 @@ class FIMSVisualizer(QMainWindow):
 #----- Formatting figures -----
 #**********************************************************************#
     def _drawGeometry(self, axes):
-        """
-        TODO
-        """
+        """Incldue the geometry components"""
         if self.data.simData is None:
             return
         
@@ -1061,6 +1061,7 @@ class FIMSVisualizer(QMainWindow):
 
 #**********************************************************************#
     def _addGrid(self, axes):
+        """Draw amplification grid"""
         pitch = self.data.simData['pitch']
         holeRadius = self.data.simData['holeRadius']
         gridThickness = self.data.simData['gridThickness']
@@ -1128,6 +1129,7 @@ class FIMSVisualizer(QMainWindow):
 
 #**********************************************************************#
     def _addPads(self, axes):
+        """Draw readout pads"""
         pitch = self.data.simData['pitch']
         padLength = self.data.simData['padLength']
 
@@ -1171,6 +1173,7 @@ class FIMSVisualizer(QMainWindow):
 
 #**********************************************************************#
     def _addUnitCell(self, axes):
+        """Draw Unit cell boundaries"""
         pitch = self.data.simData['pitch']
 
         sqrt3 = math.sqrt(3)
@@ -1207,9 +1210,7 @@ class FIMSVisualizer(QMainWindow):
 
 #**********************************************************************#
     def _formatAxes(self, axes):
-        """
-        TODO
-        """
+        """Format general axis"""
         xLabel = r'x ($\mu$m)'
         yLabel = r'y ($\mu$m)'
         zLabel = r'z ($\mu$m)'

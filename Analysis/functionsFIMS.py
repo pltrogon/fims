@@ -691,7 +691,7 @@ def getAsymErrs(eff, effErr):
 #********************************************************************************#
 def plotAllEfficiencies():
     """
-    TODO
+    Plot the efficiencies (net, detect, collect) as a fucntion of field ratio.
     """
 
     runData = pd.read_csv('../Data/allEfficiencyResults.csv')
@@ -741,9 +741,7 @@ def getOT(hole, pitch):
 
 #********************************************************************************#
 def readScanData(filename):
-    """
-    TODO
-    """
+    """"""
 
     rawLines = []
     with open(filename, 'r') as f:
@@ -780,7 +778,7 @@ def readScanData(filename):
 #********************************************************************************#
 def getPolyaData(scanData):
     """
-    TODO
+    Get the Polya information from scanned runs,
     """
     from runDataClass import runData
 
@@ -917,7 +915,7 @@ def plotPolyaData(datasets, absField=False, vsGain=False):
 #********************************************************************************#
 def plotEfficiencyContours(allData, xLabel):
     """
-    TODO
+    Plot the efficiency data across 2D scans wiht contours indicated.
     """
     
     fontsize = 14
