@@ -12,14 +12,19 @@
 #include <TTree.h>
 #include <TFile.h>
 
-#include "MediumMagboltz.hh"
-#include "ComponentElmer.hh"
-#include "Sensor.hh"
+#include "Garfield/ComponentElmer.hh"
+#include "Garfield/AvalancheMicroscopic.hh"
+#include "Garfield/MediumMagboltz.hh"
+#include "Garfield/Medium.hh"
+#include "Garfield/AvalancheMC.hh"
+#include "Garfield/Sensor.hh"
+#include "Garfield/DriftLineRKF.hh"
+#include "Garfield/ViewDrift.hh"
+#include "Garfield/ViewSignal.hh"
+
 #include "GarfieldConstants.hh"
 #include "Random.hh"
 #include "AvalancheNIMicroscopic.hh"
-#include "AvalancheMicroscopic.hh"
-#include "AvalancheMC.hh"
 
 #include "myFunctions.hh"
 
