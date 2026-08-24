@@ -690,6 +690,7 @@ class FIMSVisualizer(QMainWindow):
                         self._plotContours((xz, yz))
                     if self.chkAdjacent.isChecked():
                         self._plotContours((xz, yz), pad='RightBottomPad', color='m')
+                        self._plotContours((xz, yz), pad='LeftTopPad', color='m')
 
             if self.chkGeometry.isChecked():
                 self._drawGeometry((xz, yz))
