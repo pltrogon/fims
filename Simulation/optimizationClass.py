@@ -316,14 +316,15 @@ class FIMS_Optimizer:
             lowerBounds.append(limit)
     
         if not matrixRows:
-            return LinearConstraint(np.empty((0, numParams)), [], [])
+            return [LinearConstraint(np.empty((0, numParams)), [], [], keep_feasible=True)]
         
-        geometryConstraints = LinearConstraint(
+        geometryConstraints = [LinearConstraint(
             A=np.array(matrixRows),
             lb=np.array(lowerBounds),
-            ub=np.full(len(lowerBounds), np.inf)
-        )
-
+            ub=np.full(len(lowerBounds), np.inf),
+            keep_feasible=True
+        )]
+        
         return geometryConstraints
 
 #**********************************************************************#
@@ -637,10 +638,13 @@ class FIMS_Optimizer:
             )
             
             # Unpack optimizer output
-            finalParams = optimizerResult.x
+            normalFinalParams = optimizerResult.x
             finalFunction = optimizerResult.fun
             finalStatus = optimizerResult.success
-
+            
+            finalDict = dict(zip(inputList, normalFinalParams))
+            finalParams = self._unNormalizeInputs(finalDict) 
+            
         except StopIteration:
             print('Optimization terminated due to convergence.')
             print(finalParams, finalFunction, finalStatus)
@@ -648,7 +652,6 @@ class FIMS_Optimizer:
 
         print('\n*************** Optimization Complete ***************')
         # Put results into simulation instance
-        finalParams = dict(zip(inputList, optimizerResult.x))
         self.simFIMS.setParameters(finalParams)
         
         resultVals = {
@@ -715,17 +718,19 @@ class FIMS_Optimizer:
             )
             
             # Unpack optimizer output
-            finalParams = optimizerResult.x
+            normalFinalParams = optimizerResult.x
             finalFunction = optimizerResult.fun
             finalStatus = optimizerResult.success
-
+            
+            finalDict = dict(zip(inputList, normalFinalParams))
+            finalParams = self._unNormalizeInputs(finalDict) 
+            
         except StopIteration:
             print('Optimization terminated due to convergence.')
             print(finalParams, finalFunction, finalStatus)
             
         print('\n*************** Optimization Complete ***************')
         # Put results into simulation instance
-        finalParams = dict(zip(inputList, optimizerResult.x))
         self.simFIMS.setParameters(finalParams)
         
         resultVals = {
@@ -734,7 +739,7 @@ class FIMS_Optimizer:
             'success': optimizerResult.success
         }
         
-        print(f"Optimal IBN value = {resultVals['fieldValue']}")
+        print(f"Optimal Field value = {resultVals['fieldValue']}")
         print(self.simFIMS)
         
         return resultVals
