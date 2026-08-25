@@ -529,7 +529,7 @@ class runData:
             singleInfo = self._getSingleElectronAvalancheData()
             self._calculatedData['Num Avalanche'] = singleInfo['numTotal']
             self._calculatedData['Num 1e'] = singleInfo['numSingle']
-            self._calculatedData['Num Lost - Attached'] = singleInfo['numAttatched']
+            self._calculatedData['Num Lost - Attached'] = singleInfo['numAttached']
             self._calculatedData['Num Lost - Hit Grid'] = singleInfo['numHitGrid']
             self._calculatedData['Num Lost - Drift'] = singleInfo['numExitArea']
             self._calculatedData['Num No Avalanche'] = singleInfo['numExitMedium']
