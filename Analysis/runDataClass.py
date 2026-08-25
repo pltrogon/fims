@@ -500,7 +500,7 @@ class runData:
             self._calculatedData['IBF * Trimmed Gain'] = dataIBF['meanIBF']*trimmedGain
 
             # Efficiencies
-            rawEfficiency = self._getRawEfficiency(threshold=10)
+            rawEfficiency = self._getEfficiency(threshold=10, trim=False)
             self._calculatedData['Raw Efficiency (10e)'] = rawEfficiency['efficiency']
             self._calculatedData['Raw Efficiency Error (Low)'] = rawEfficiency['efficiencyErrLow']
             self._calculatedData['Raw Efficiency Error (High)'] = rawEfficiency['efficiencyErrHigh']
@@ -2152,83 +2152,31 @@ class runData:
         }
 
         return chi2Param
-    
 
 #********************************************************************************#
-    def _getRawEfficiency(self, threshold=0):
-        """
-        Calculates the raw efficiency of all simulated avalanches based on the
-        fraction of total sizes that exceed the given threshold.
-
-        Utilizes baysian statistics to determine the efficiency.
-
-        Args:
-            threshold (int): The minimum avalanche size to be considered a 'success'.
-
-        Returns:
-            tuple: A tuple containing the calculated efficiency and its uncertainty:
-                   - simEff (float): The estimated raw efficiency.
-                   - simEffErr (float): The standard error of the estimated efficiency.
-        """
-
-        allAvalancheData = self.getDataFrame('avalancheData')
-
-        avalancheLimit = self.getRunParameter('Avalanche Limit')
-
-        if threshold > avalancheLimit:
-            print('Error - Threshold higher than simulation limit.')
-            threshold = avalancheLimit-1
-        
-        numSimulated = self.getRunParameter('Number of Avalanches')
-        numAvalanches = len(allAvalancheData)
-
-        if numAvalanches != numSimulated:
-            raise ValueError('Error - Avalanche numbers disagree.')
-        
-        aboveThresh = allAvalancheData['Total Electrons'] > threshold
-        numAboveThresh = aboveThresh.sum()
-
-        #For Binomial statistics:
-        #simEff = numAboveThresh / numAvalanches
-        #varience = simEff*(1-simEff)/numAvalanches
-
-        #For Bayesian Statistics:
-        simEff = (numAboveThresh+1)/(numAvalanches+2)
-        varience = ((numAboveThresh+1)*(numAboveThresh+2))/((numAvalanches+2)*(numAvalanches+3)) - simEff*simEff
-
-        simEffErr = math.sqrt(max(0, varience))
-
-        simEffErrLow, simEffErrHigh = functionsFIMS.getAsymErrs(simEff, simEffErr)
-
-        efficiency = {
-            'efficiency': simEff,
-            'efficiencyErr': simEffErr,
-            'efficiencyErrLow': simEffErrLow,
-            'efficiencyErrHigh': simEffErrHigh
-        }
-
-        return efficiency
-
-#********************************************************************************#
-    def _getEfficiency(self, threshold=0):
+    def _getEfficiency(self, threshold=0, trim=True):
         """
         Calculates the efficiency of the simulated avalanches based on the
         fraction of total sizes that exceed the given threshold. 
-        Excludes any avalanches where the intial electron does not generate an avalanche.
+
+        Can exclude any avalanches where the intial electron does not generate an avalanche.
 
         Utilizes baysian statistics to determine the efficiency. 
 
         Args:
-            threshold (int): The minimum avalanche size to be considered a 'success'.
+            threshold (int): Minimum avalanche size ('Total Electrons') required to be considered a 'success'.
+            trim (bool): If True, excludes events where no avalanche occurred (Total Electrons == 1). 
+                         If False, computes raw efficiency across all simulated events.
 
         Returns:
-            tuple: A tuple containing the calculated efficiency and its uncertainty:
-                   - simEff (float): The estimated efficiency.
-                   - simEffErr (float): The standard error of the estimated efficiency.
+            dict: Dictionary containing:
+                - 'efficiency': Bayesian point estimate of efficiency.
+                - 'efficiencyErr': Standard error derived from Bayesian variance.
+                - 'efficiencyErrLow': Lower asymmetric error bound.
+                - 'efficiencyErrHigh': Upper asymmetric error bound.
         """
 
         allAvalancheData = self.getDataFrame('avalancheData')
-
         avalancheLimit = self.getRunParameter('Avalanche Limit')
 
         if threshold > avalancheLimit:
@@ -2241,21 +2189,24 @@ class runData:
         if totalAvalanches != numSimulated:
             raise ValueError('Error - Avalanche numbers disagree.')
         
-        aboveThresh = allAvalancheData['Total Electrons'] > threshold
-        numAboveThresh = aboveThresh.sum()
+        numAboveThresh = (allAvalancheData['Total Electrons'] > threshold).sum()
 
-        noAvalanche = allAvalancheData['Total Electrons'] == 1
-        numNoAvalanche = noAvalanche.sum()
+        if trim:
+            numNoAvalanche = (allAvalancheData['Total Electrons'] == 1).sum()
+            numAvalanches = totalAvalanches - numNoAvalanche
+        else:
+            numAvalanches = totalAvalanches
 
-        numAvalanches = totalAvalanches - numNoAvalanche
+        if numAvalanches == 0:
+            raise ValueError('Error - No avalanches')
 
         #Efficiency Statistics:
-        simEff = (numAboveThresh+1)/(numAvalanches+2)
+        simEff = (numAboveThresh+1) / (numAvalanches+2)
         varience = ((numAboveThresh+1)*(numAboveThresh+2))/((numAvalanches+2)*(numAvalanches+3)) - simEff*simEff
 
         simEffErr = math.sqrt(max(0, varience))
 
-        errorLow, errorHigh = functionsFIMS.getAsymErrs(simEff, simEffErr)
+        errorLow, errorHigh = functionsFIMS.getAsymErrs(numAboveThresh, numAvalanches)
 
         efficiency = {
             'efficiency': simEff,
@@ -2372,61 +2323,57 @@ class runData:
 
 #********************************************************************************#
     def _getSingleElectronAvalancheData(self):
-        """TODO"""
+        """
+        Get information for avalanches with only 1 electron.
 
-        #Get avalanche IDs for those with only 1 electron
+        Returns:
+            dict: Dictionary containing number of particular events.
+        """
+
+        #Get all avalanches
         allAvalancheData = self.getDataFrame('avalancheData')
-        singleElectron = allAvalancheData[allAvalancheData['Total Electrons'] == 1]
-        singleElectronID = singleElectron['Avalanche ID'].tolist()
         numTotal = len(allAvalancheData)
+
+        #Get avalanche IDs for those with only 1 electron - Must check end status
+        singleElectron = allAvalancheData[allAvalancheData['Total Electrons'] == 1]
         numSingle = len(singleElectron)
+        singleIDS = set(singleElectron['Avalanche ID'])
 
         allElectronData = self.getDataFrame('electronData')
-        singleElectronData = allElectronData[allElectronData['Avalanche ID'].isin(singleElectronID)]
+        singleElectronData = allElectronData[allElectronData['Avalanche ID'].isin(singleIDS)]
 
-        attachedElectrons = singleElectronData[singleElectronData['Exit Status'] == -7]
-        numAttatched = len(attachedElectrons)
-        attatchedIDs = attachedElectrons['Avalanche ID'].tolist()
+        # Create masks for signle-electron data
+        isAttached = singleElectronData['Exit Status'] == -7
+        isExitArea = singleElectronData['Exit Status'] == -1
+        isExitMedium = singleElectronData['Exit Status'] == -5
 
-        noAttachment = singleElectronData[singleElectronData['Exit Status'] != -7]
-
-        # Count as hit git if within 1% of the grid plane
         gridLength = 1.01*self.getRunParameter('Grid Thickness')/2
-        hitGrid = noAttachment[(noAttachment['Final z'] <= gridLength) & (noAttachment['Final z'] >= -gridLength)]
-        numHitGrid = len(hitGrid)
-        hitGridIDs = hitGrid['Avalanche ID'].tolist()
+        isHitGrid = (
+            ~isAttached &
+            ~isExitArea &
+            singleElectronData['Final z'].abs() <= gridLength
+        )
 
-        exitNoAvalanche = noAttachment[~noAttachment['Avalanche ID'].isin(hitGridIDs)]
+        # Slice and extract data
+        numAttached = isAttached.sum()
+        numExitArea = isExitArea.sum()
+        numExitMedium = isExitMedium.sum()
+        numHitGrid = isHitGrid.sum()
 
-        # Exit status = -1: Leaves drift area
-        ## Note: These are electrons that exit the sides of the simulation volume.
-        ## They could still hit attach, hit the grid, or cause an avalanche
-        exitArea = exitNoAvalanche[exitNoAvalanche['Exit Status'] == -1]
-        numExitArea = len(exitArea)
-        exitAreaIDs = exitArea['Avalanche ID'].tolist()
-
-
-        # Exit status = -5: Leave drift medium
-        ## Note: These are electrons that leave the drift medium.
-        ## By inspection, these all reach the pad/dielectric without avalanching.
-        exitMedium = exitNoAvalanche[exitNoAvalanche['Exit Status'] == -5]
-        numExitMedium = len(exitMedium)
-        exitMediumIDs = exitMedium['Avalanche ID'].tolist()
-
-        singleAvalancheInfo = {
+        singleElectronInfo = {
             'numTotal': numTotal,
             'numSingle': numSingle,
-            'numAttatched': numAttatched,
-            'numHitGrid': numHitGrid,
+            'numAttached': numAttached,
             'numExitArea': numExitArea,
+            'numHitGrid': numHitGrid,
             'numExitMedium': numExitMedium,
-            'attatchedIDs': attatchedIDs,
-            'hitGridIDs': hitGridIDs,
-            'exitAreaIDs': exitAreaIDs,
-            'exitMediumIDs': exitMediumIDs
+            'attachedIDs': singleElectronData.loc[isAttached, 'Avalanche ID'].tolist(),
+            'exitAreaIDs': singleElectronData.loc[isExitArea, 'Avalanche ID'].tolist(),
+            'hitGridIDs': singleElectronData.loc[isHitGrid, 'Avalanche ID'].tolist(),
+            'exitMediumIDs': singleElectronData.loc[isExitMedium, 'Avalanche ID'].tolist(),
         }
 
-        return singleAvalancheInfo
+        return singleElectronInfo
     
 #********************************************************************************#
     def _getChargeCollectionEfficiency(self):
@@ -2436,32 +2383,32 @@ class runData:
 
         numTotal = singleAvalancheInfo['numTotal']
 
-        numAttached = singleAvalancheInfo['numAttatched']
+        numAttached = singleAvalancheInfo['numAttached']
         numHitGrid = singleAvalancheInfo['numHitGrid']
         numExitArea = singleAvalancheInfo['numExitArea']
         numExitMedium = singleAvalancheInfo['numExitMedium']
 
-        # Do not count the following:
+        # Ignore the following:
         # Num exit area -> Drifted out of region without avalanching
         # Num attached -> Electron attached without avalanching
         numValid = numTotal - numExitArea - numAttached
 
-        # Undetected are those that hit the grid (a no-avalanche outcome is still detected)
-        numCount = numValid - numHitGrid
-
         if numValid == 0:
             raise ValueError('Error: No valid avalanches to calculate efficiency.')
-        
-        chargeEff = numCount / numValid
-        chargeEffErr = math.sqrt(chargeEff*(1-chargeEff)/numValid)
 
-        chargeErrLow, chargeErrHigh = functionsFIMS.getAsymErrs(chargeEff, chargeEffErr)
+        # Collected are those that do not hit the grid
+        numCollect = numValid - numHitGrid
+
+        collEff = numCollect / numValid
+        collEffErr = math.sqrt(collEff*(1-collEff)/numValid)
+
+        collErrLow, collErrHigh = functionsFIMS.getAsymErrs(numCollect, numValid)
 
         chargeCollectionEff = {
-            'efficiency': chargeEff,
-            'efficiencyErr': chargeEffErr,
-            'efficiencyErrLow': chargeErrLow,
-            'efficiencyErrHigh': chargeErrHigh
+            'efficiency': collEff,
+            'efficiencyErr': collEffErr,
+            'efficiencyErrLow': collErrLow,
+            'efficiencyErrHigh': collErrHigh
         }
 
         return chargeCollectionEff

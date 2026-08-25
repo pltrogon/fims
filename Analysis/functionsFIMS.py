@@ -658,33 +658,30 @@ def plotFullFieldMapping(runNum):
     return mapFig
 
 #********************************************************************************#
-def getAsymErrs(eff, effErr):
+def getAsymErrs(numSuccess, numTotal):
     """
-    Extracts asymmetrical 1-standard deviation baysian errors on efficiencies 
-    based on the mean value and Gaussian errors.
+    TODO
+    """
 
-    Args:
-        eff (float): Mean value of the efficiency.
-        effErrs (float): Gaussian error from variance calculations.
-        
-    Returns:
-        errorLow (float): Lower bound of 1 standard deviation from mean.
-        errorHigh (float): Upper bound of 1 standard deviation from mean.
-    """
-    
-    #Reconstruct the bayesian success, fail, and total values
-    variance = effErr*effErr
-    
-    if variance <= 0 or eff <= 0 or eff >= 1:
+    if numTotal <= 0:
         return 0.0, 0.0
 
-    total = eff*(1-eff)/variance - 1
-    success = eff*total
-    fail = (1-eff)*total
+    # Beta posterior (Laplace prior)
+    a = numSuccess + 1
+    b = (numTotal - numSuccess) + 1
 
-    # 1 stdDev range of the beta distribution
-    errorLow = eff - beta.ppf(0.16, success, fail)
-    errorHigh = beta.ppf(0.84, success, fail) - eff
+    meanEff = a / (a+b)
+
+    # 1-sigma bounds
+    pLow = (1 - .6827) / 2
+    pHigh = 1 - pLow
+
+    lowerBound = beta.ppf(pLow, a, b)
+    upperBound = beta.ppf(pHigh, a, b)
+
+    #Errors on mean
+    errorLow = meanEff - lowerBound
+    errorHigh = upperBound - meanEff
 
     return errorLow, errorHigh
 
