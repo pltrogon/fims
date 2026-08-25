@@ -122,11 +122,11 @@ int main(int argc, char * argv[]) {
     case GeometryMode::HexagonalSurrounding: {
       // Add pads to sensor list
       sensorList.push_back("TopPad");
-      sensorList.push_back("BottomPad");
       sensorList.push_back("RightTopPad");
       sensorList.push_back("RightBottomPad");
-      sensorList.push_back("LeftTopPad");
+      sensorList.push_back("BottomPad");
       sensorList.push_back("LeftBottomPad");
+      sensorList.push_back("LeftTopPad");
       break;
     }
 
