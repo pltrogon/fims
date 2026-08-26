@@ -45,14 +45,26 @@ set(EXECUTABLES
 # --- Loop to create and link everything ---
 while(EXECUTABLES)
     list(POP_FRONT EXECUTABLES EXE_NAME EXE_SRC)
-    
-    add_executable(${EXE_NAME} 
-        "${CMAKE_CURRENT_SOURCE_DIR}/garfieldExecutables/${EXE_SRC}"
+
+    set(EXTRA_SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}/myFunctions.cc"
     )
-    
-    target_include_directories(${EXE_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-    
+    if(EXE_SRC STREQUAL "avalancheNID.cc")
+        list(APPEND EXTRA_SOURCES
+            "${CMAKE_CURRENT_SOURCE_DIR}/garfieldExecutables/AvalancheNIMicroscopic.cc"
+        )
+    endif()
+
+    add_executable(${EXE_NAME}
+        "${CMAKE_CURRENT_SOURCE_DIR}/garfieldExecutables/${EXE_SRC}"
+        ${EXTRA_SOURCES}
+    )
+
+    target_include_directories(${EXE_NAME} PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/garfieldExecutables"
+    )
+
     target_link_libraries(${EXE_NAME} PRIVATE ${COMMON_LIBS})
 endwhile()
 

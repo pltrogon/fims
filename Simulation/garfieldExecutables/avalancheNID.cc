@@ -22,8 +22,9 @@
 #include "Garfield/ViewDrift.hh"
 #include "Garfield/ViewSignal.hh"
 
-#include "GarfieldConstants.hh"
-#include "Random.hh"
+#include "Garfield/GarfieldConstants.hh"
+#include "Garfield/FundamentalConstants.hh"
+#include "Garfield/Random.hh"
 #include "AvalancheNIMicroscopic.hh"
 
 #include "myFunctions.hh"
