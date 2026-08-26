@@ -96,7 +96,27 @@ class FIMS_Optimizer:
         }
         self.geoConfig = self.simFIMS._geoConfiguration
         self._checkParameters()
+        
+        # Shape scaling factors lookup
+        octagonFactor = 2 * math.cos(math.radians(67.5))
+        kikiFactor = math.sqrt(3)
 
+        self.holeShapeFactors = {
+            'circle':  (-2, -2),
+            'hexagon': (-math.sqrt(3), -2),
+            'octagon': (-2.0173, -octagonFactor),
+            'triangle': (-2, -2),
+            'kiki': (-math.sqrt(3), -2),
+            'nesteggs': (-7.1, -7.1),
+            'trivialpursuit': (-4.4, -4.4)
+        }
+    
+        self.padShapeFactors = {
+            'square':  (-4 / math.sqrt(3), -1),
+            'hexagon': (-math.sqrt(3), -2),
+            'octagon': (-1.9601, -octagonFactor),
+        } 
+        
         # Create log file for optimizer
         try:
             with open('log/logOptimizer.txt', 'w') as file:
@@ -242,40 +262,22 @@ class FIMS_Optimizer:
             square unit cell: circle = 2, square = 1, hexagon = 2, octagon = 2*cos(67.5)
             Note: octagon length defined as distance from center to vertex. 
         '''
-        
-        # Shape scaling factors lookup
-        octagonFactor = 2 * math.cos(math.radians(67.5))
-        kikiFactor = math.sqrt(3)
-
-        holeShapeFactors = {
-            'circle':  (-2, -2),
-            'hexagon': (-math.sqrt(3), -2),
-            'octagon': (-2.0173, -octagonFactor),
-            'triangle': (-2, -2),
-            'kiki': (-math.sqrt(3), -2),
-            'nesteggs': (-7.1, -7.1),
-            'trivialpursuit': (-4.4, -4.4)
-        }
-    
-        padShapeFactors = {
-            'square':  (-4 / math.sqrt(3), -1),
-            'hexagon': (-math.sqrt(3), -2),
-            'octagon': (-1.9601, -octagonFactor),
-        }
     
         # Get all geometry values
-        initGeometry = self.initialGeometry.copy()
+        initGeometry = {}
+        for key in self.initialGeometry:
+            initGeometry[key] = self.initialGeometry[key]
         hexCell = 'Hexagonal' in self.geoConfig.unitCell
         hexID = 0 if hexCell else 1
         
         # Apply geometry-dependent multipliers
         holeShape = self.geoConfig.holeShape
-        if holeShape in holeShapeFactors:
-            initGeometry['holeRadius'] *= holeShapeFactors[holeShape][hexID]
+        if holeShape in self.holeShapeFactors:
+            initGeometry['holeRadius'] *= self.holeShapeFactors[holeShape][hexID]
     
         padShape = self.geoConfig.padShape
-        if padShape in padShapeFactors:
-            initGeometry['padLength'] *= padShapeFactors[padShape][hexID]
+        if padShape in self.padShapeFactors:
+            initGeometry['padLength'] *= self.padShapeFactors[padShape][hexID]
         
         # Set Other geometry parameters
         initGeometry['pillarRadius'] *= -1
@@ -326,6 +328,75 @@ class FIMS_Optimizer:
         )]
         
         return geometryConstraints
+
+#**********************************************************************#
+
+    def _constraintFailSafe(self, geoDict):
+        """
+        Ensures geometry values are feasible. Adjusts them if not.
+        
+        args:
+            geoDict (dict): dictionary of optimizer values
+        
+        returns: 
+            verifiedDict (dict): dictionary of optimizer values that are
+        verified to be feasible.
+        """
+        
+        # Get all geometry values
+        verifiedDict = {
+            'pitch': [],
+            'holeRadius': [],
+            'padLength': []
+        }
+
+        for key in verifiedDict.keys():
+            if key in geoDict:
+                verifiedDict[key] = geoDict[key]
+            else:
+                verifiedDict[key] = self.simFIMS.getParam(key)
+        
+        hexCell = 'Hexagonal' in self.geoConfig.unitCell
+        hexID = 0 if hexCell else 1
+        
+        # Apply geometry-dependent multipliers
+        holeShape = self.geoConfig.holeShape
+        if holeShape in self.holeShapeFactors:
+            holeScale = -1 * self.holeShapeFactors[holeShape][hexID]
+    
+        padShape = self.geoConfig.padShape
+        if padShape in self.padShapeFactors:
+            padScale = -1 * self.padShapeFactors[padShape][hexID]
+        
+        # Grid hole must be smaller than the pitch
+        maxHole = verifiedDict['pitch'] / holeScale
+        maxPad = verifiedDict['pitch'] / padScale
+        
+        if verifiedDict['holeRadius'] >= maxHole:
+            if 'holeRadius' in geoDict:
+                verifiedDict['holeRadius'] = maxHole * .98
+                print(f'Warning: hole larger than cell. Radius set to {maxHole*.98}')
+            
+            elif 'pitch' in geoDict:
+                verifiedDict['pitch'] = verifiedDict['holeRadius'] * (2*holeScale) * 1.02
+                print(f'Warning: hole larger than cell. Pitch set to {verifiedDict["holeRadius"]*holeScale*1.02}')
+            
+            else:
+                raise ValueError('Error - Hole larger than cell.')
+            
+        if verifiedDict['padLength'] >= maxPad:
+            if 'padLength' in geoDict:
+                verifiedDict['padLength'] = maxPad * .98
+                print(f'Warning: pad larger than cell. Pad set to {maxPad*.98}')
+                
+            elif 'pitch' in geoDict:
+                verifiedDict['pitch'] = verifiedDict['padLength'] * padScale * 1.02 
+                print(f'Warning: pad larger than cell. Pitch set to {verifiedDict["padLength"]*padScale*1.02}')
+                
+            else:
+                raise ValueError('Error - Pad larger than cell.')
+        
+        return verifiedDict
 
 #**********************************************************************#
 
@@ -461,7 +532,8 @@ class FIMS_Optimizer:
         # Unpack and Upload the optimizer parameters into the simulation
         paramDict = dict(zip(inputList, optimizerParam))
         unNormalizedDict = self._unNormalizeInputs(paramDict)
-        self.simFIMS.setParameters(unNormalizedDict)
+        verifiedGeo = self._constraintFailSafe(unNormalizedDict)
+        self.simFIMS.setParameters(verifiedGeo)
         
         # Run simulation and get the IBN
         resultIBN = self._getIBN()
@@ -537,7 +609,8 @@ class FIMS_Optimizer:
         # Unpack and Upload the optimizer parameters into the simulation
         paramDict = dict(zip(inputList, optimizerParam))
         unNormalizedDict = self._unNormalizeInputs(paramDict)
-        self.simFIMS.setParameters(unNormalizedDict)
+        verifiedGeo = self._constraintFailSafe(unNormalizedDict)
+        self.simFIMS.setParameters(verifiedGeo)
         
         # Run simulation and get the minimum field ratio
         fieldRatio = self._getEff()
