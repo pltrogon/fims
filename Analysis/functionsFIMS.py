@@ -1042,3 +1042,65 @@ def makePWL(runNumber, averageSignal=True, avalancheID=None):
     print(f'\tContains the {signalLabel} signal.')
 
     return
+
+#********************************************************************************#
+def plotEfficiencies(dataFull=None, dataScan=None, vsGain=False):
+    '''TODO'''
+    # TODO - Currently hardcoded for T2K and gridpix geometry
+
+    if dataFull is not None:
+        dataFull['netEff'] = dataFull['Charge Collection Eff'] * dataFull['Efficiency (10e)']
+        dataFull['netEff (Low)'] = dataFull['Charge Collection Eff Err (Low)'] * dataFull['Efficiency Error (Low)']
+        dataFull['netEff (High)'] = dataFull['Charge Collection Eff Err (High)'] * dataFull['Efficiency Error (High)']
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    if dataFull is not None:
+        configsFull = [
+            {'data': 'netEff', 'error': 'netEff ', 'label': 'Net', 'c': 'g', 'ls': '-'},
+            {'data': 'Charge Collection Eff', 'error': 'Charge Collection Eff Err ', 'label': 'Collection', 'c': 'r', 'ls': '-'},
+            {'data': 'Efficiency (10e)', 'error': 'Efficiency Error ', 'label': 'Detection', 'c': 'b', 'ls': '-'},
+        ]
+        xDataFull = dataFull['Trimmed Gain'] if vsGain else dataFull['ampField']/280
+        for cfg in configsFull:
+            inData = cfg['data']
+            ax.errorbar(
+                xDataFull, dataFull[inData],
+                xerr=dataFull['Gain Error'] if vsGain else None,
+                yerr=[dataFull[cfg['error']+'(Low)'], dataFull[cfg['error']+'(High)']],
+                label=cfg['label']+' (Full)', c=cfg['c'], ls=cfg['ls']
+            )
+
+    if dataScan is not None:
+        configsScan = [
+            {'data': 'netEff', 'label': 'Net', 'c': 'g', 'ls': '--'},
+            {'data': 'collectionEff', 'label': 'Collection', 'c': 'r', 'ls': '--'},
+            {'data': 'detectionEff', 'label': 'Detection', 'c': 'b', 'ls': '--'},
+        ]
+        xDataScan = dataScan['averageGain'] if vsGain else dataScan['fieldRatio']
+        for cfg in configsScan:
+            inData = cfg['data']
+            ax.errorbar(
+                xDataScan, dataScan[inData],
+                xerr=dataScan['averageGainErr'] if vsGain else None,
+                yerr=dataScan[f'{inData}Err'],
+                label=cfg['label']+' (Check)', c=cfg['c'], ls=cfg['ls']
+            )
+    
+    optTrans = math.pi*(17.5/55)**2
+    ax.axhline(optTrans, ls='-', c='c', label=f'OT ({optTrans:.3f})')
+    ax.axhline(1-optTrans, ls='--', c='c', label='1 - OT')
+    if vsGain:
+        ax.axvline(10, ls='--', c='m', label='Threshold')
+
+    xLabel = r'Gas Gain: $\overline{n}$' if vsGain else r'Field Ratio: $E_{\text{Amp}}~/~E_{\text{Drift}}$'
+    ax.set_xlabel(xLabel, fontsize=14)
+    ax.set_ylabel(r'Efficiency: $\epsilon$', fontsize=14)
+    ax.set_xscale('log' if vsGain else 'linear')
+    
+    ax.grid()
+    ax.legend(fontsize=14)
+    
+    plt.tight_layout()
+
+    return fig

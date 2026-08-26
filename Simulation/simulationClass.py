@@ -152,7 +152,6 @@ class FIMS_Simulation:
             'fieldRatio': 150.,
             'numFieldLine': 25,
             'numAvalanche': 5000,
-            'avalancheLimit': 600,
             'initialZFraction': .75,
             'avalancheLimit': 500,
             'gasCompAr': 0.95,
