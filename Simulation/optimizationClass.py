@@ -264,9 +264,7 @@ class FIMS_Optimizer:
         '''
     
         # Get all geometry values
-        initGeometry = {}
-        for key in self.initialGeometry:
-            initGeometry[key] = self.initialGeometry[key]
+        initGeometry = {key: self.initialGeometry[key] for key in self.initialGeometry}
         hexCell = 'Hexagonal' in self.geoConfig.unitCell
         hexID = 0 if hexCell else 1
         
