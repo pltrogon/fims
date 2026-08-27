@@ -280,7 +280,7 @@ class FIMS_Optimizer:
             initGeometry['padLength'] *= self.padShapeFactors[padShape][hexID]
         
         # Set Other geometry parameters
-        initGeometry['pillarRadius'] *= -1
+        initGeometry['pillarRadius'] = 0 # TODO: include pillar
         initGeometry['thicknessSiO2'] *= -1
         
         # Active vs fixed parameters
@@ -331,71 +331,78 @@ class FIMS_Optimizer:
 
 #**********************************************************************#
 
+    def _projectValue(self, paramName, scale, valDict, varDict):
+        """
+        Takes a given parameter and projects it into a feasible region.
+        
+        args:
+            paramName (str): name of the parameter to be checked.
+            scale (float): how the parameter scales.
+            valDict (dict): dictionary of values for all parameters.
+            varDict (dict): dictionary of variabels.
+        
+        returns:
+            valDict: the new values for the parameters.
+        """
+        buffer = 0.98
+        maxVal = buffer * valDict['pitch'] / scale
+        
+        if valDict[paramName] <= maxVal:
+	        return valDict
+
+        if paramName in varDict:
+            valDict[paramName] = maxVal
+            print(f'Warning: {paramName} larger than cell. Changed to {maxVal}')
+        
+        elif 'pitch' in varDict:
+            newPitch = valDict[paramName] * scale * (2-buffer)
+            valDict['pitch'] = newPitch
+            print(f'Warning: {paramName} larger than cell. Pitch set to {newPitch}')
+        
+        else:
+            raise ValueError(
+                f'Error: {paramName} larger than cell AND constant. '
+                f'Adjust value and then restart the optimizer.'
+            )
+        
+        return valDict
+
+    #**********************************************************************#
+
     def _constraintFailSafe(self, geoDict):
         """
         Ensures geometry values are feasible. Adjusts them if not.
-        
+
         args:
             geoDict (dict): dictionary of optimizer values
-        
+
         returns: 
             verifiedDict (dict): dictionary of optimizer values that are
         verified to be feasible.
         """
-        
         # Get all geometry values
-        verifiedDict = {
-            'pitch': [],
-            'holeRadius': [],
-            'padLength': []
-        }
+        hexID = 0 if 'Hexagonal' in self.geoConfig.unitCell else 1
+        parameters = ['pitch', 'holeRadius', 'padLength']
+        valuesDict = {
+            key: geoDict[key] if key in geoDict else self.simFIMS.getParam(key)
+            for key in parameters
+        }    
 
-        for key in verifiedDict.keys():
-            if key in geoDict:
-                verifiedDict[key] = geoDict[key]
-            else:
-                verifiedDict[key] = self.simFIMS.getParam(key)
-        
-        hexCell = 'Hexagonal' in self.geoConfig.unitCell
-        hexID = 0 if hexCell else 1
-        
-        # Apply geometry-dependent multipliers
+	    # Apply geometry-dependent multipliers
         holeShape = self.geoConfig.holeShape
         if holeShape in self.holeShapeFactors:
             holeScale = -1 * self.holeShapeFactors[holeShape][hexID]
-    
+        
         padShape = self.geoConfig.padShape
         if padShape in self.padShapeFactors:
             padScale = -1 * self.padShapeFactors[padShape][hexID]
         
-        # Grid hole must be smaller than the pitch
-        maxHole = verifiedDict['pitch'] / holeScale
-        maxPad = verifiedDict['pitch'] / padScale
+        # Grid hole must be smaller than the cell size
+        verifiedDict = self._projectValue('holeRadius', holeScale, valuesDict, geoDict)    
         
-        if verifiedDict['holeRadius'] >= maxHole:
-            if 'holeRadius' in geoDict:
-                verifiedDict['holeRadius'] = maxHole * .98
-                print(f'Warning: hole larger than cell. Radius set to {maxHole*.98}')
-            
-            elif 'pitch' in geoDict:
-                verifiedDict['pitch'] = verifiedDict['holeRadius'] * (2*holeScale) * 1.02
-                print(f'Warning: hole larger than cell. Pitch set to {verifiedDict["holeRadius"]*holeScale*1.02}')
-            
-            else:
-                raise ValueError('Error - Hole larger than cell.')
-            
-        if verifiedDict['padLength'] >= maxPad:
-            if 'padLength' in geoDict:
-                verifiedDict['padLength'] = maxPad * .98
-                print(f'Warning: pad larger than cell. Pad set to {maxPad*.98}')
-                
-            elif 'pitch' in geoDict:
-                verifiedDict['pitch'] = verifiedDict['padLength'] * padScale * 1.02 
-                print(f'Warning: pad larger than cell. Pitch set to {verifiedDict["padLength"]*padScale*1.02}')
-                
-            else:
-                raise ValueError('Error - Pad larger than cell.')
-        
+        # Pad size must be smaller than the cell size
+        verifiedDict = self._projectValue('padLength', padScale, verifiedDict, geoDict) 
+    	    
         return verifiedDict
 
 #**********************************************************************#
@@ -703,11 +710,15 @@ class FIMS_Optimizer:
                 fun=self._IBNObjective,
                 x0=initNormGuess,
                 args=(inputList,),
-                method='COBYQA', #or 'Nelder-Mead'
+                method='COBYQA', # or 'Nelder-Mead' / 'trust-constr'
                 constraints=self._getGeometryConstraints(),
                 callback=self._checkConvergence,
                 bounds=optimizerBounds,
-                options = {'initial_tr_radius': .2} # initial step of 20%
+                options = {
+                    'initial_tr_radius': .2, # initial step of 20%
+                    'final_tr_radius': 1e-3,
+                    'disp': False
+                }
             )
             
             # Unpack optimizer output
@@ -783,11 +794,15 @@ class FIMS_Optimizer:
                 fun=self._effObjective,
                 x0=initNormGuess,
                 args=(inputList,),
-                method='COBYQA', #or 'Nelder-Mead'
+                method='COBYQA', # or 'Nelder-Mead' / 'trust-constr'
                 constraints=self._getGeometryConstraints(),
                 callback=self._checkConvergence,
                 bounds=optimizerBounds,
-                options = {'initial_tr_radius': .2} # initial step of 20%
+                options = {
+                    'initial_tr_radius': .2,  # initial step of 20%
+                    'final_tr_radius': 1e-3,
+                    'disp': False
+                }
             )
             
             # Unpack optimizer output
