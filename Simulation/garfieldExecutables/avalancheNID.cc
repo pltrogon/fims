@@ -134,7 +134,7 @@ int main(int argc, char *argv[]){
     
 	// Set STP gas parameters
     double gasTemperature = 293.15;  // K
-    double gasPressure = 760.0;       // torr     NOTE: Example is at 76 torr!
+    double gasPressure = 76.0;       // torr     NOTE: Example is at 76 torr!
     int maxElectronE = 200;           // eV
 
     gasNID->SetComposition("sf6", 100.0);
@@ -198,7 +198,12 @@ int main(int argc, char *argv[]){
         sensorFIMS->AddElectrode(&fieldFIMS, inSensor);
     }
 
-
+    //View drifts
+    ViewDrift *viewDrift = new ViewDrift();
+	viewDrift->SetArea(
+        xBoundary[0], yBoundary[0], zBoundary[0], 
+        xBoundary[1], yBoundary[1], zBoundary[1]
+    );
 
 	//*************** AVALANCHES ***************//
 
@@ -206,28 +211,34 @@ int main(int argc, char *argv[]){
 	avalancheNID->SetSensor(sensorFIMS);
 	avalancheNID->SetElectronTransportCut(1e-20);
 	avalancheNID->SetNegativeIonMass(146);
-	avalancheNID->SetDistanceSteps(1e-4); // cm
+	avalancheNID->SetDistanceSteps(1e-6); // cm
+
+    avalancheNID->EnablePlotting(viewDrift, 250);
 
 	//set detachment cross section
 	avalancheNID->InputDetachCrossSectionData("../NID/SF6-_F-_Detach.txt");
-	avalancheNID->SetDetachModel(0); //0: CrossSection, 1: Threshold
-
+	//avalancheNID->InputDetachCrossSectionData("../NID/SF6-_e-_Detach.txt");
+	avalancheNID->SetDetachModel(1); //0: CrossSection, 1: Threshold   
 
 	//Set the Initial electron parameters
-	double x0 = 0.0, y0 = 0.0, z0 = 0.01;
+	double x0 = 0.0, y0 = 0.0, z0 = 0.002;
 	//auto [x0, y0] = randomXYinGeometry(geometryMode, cellLength)
   	//double z0 = simParams->initialZFraction * simParams->driftLength;
 	double t0 = 0.;//ns
 	double e0 = 0.1;//eV (Garfield is weird when this is 0.)
 	double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
 
+    avalancheNID->EnableDebugging();
+
 	avalancheNID->AvalancheNegativeIon(x0, y0, z0, 0., e0, dx0, dy0, dz0);
 	Int_t numElectrons = avalancheNID->GetNumberOfElectronEndpoints();
+    std::cerr << "*****\nNum electrons: " << numElectrons << "\n*****" << std::endl;
 
 	for(int i=0; i<numElectrons; i++){
+        std::cout << "Processing electron: " << i << std::endl;
 		//Clear memory
 		xPos.clear();
-		yPox.clear();
+		yPos.clear();
 		zPos.clear();
 		time.clear();
 		changePoint.clear();
@@ -236,6 +247,10 @@ int main(int argc, char *argv[]){
 		double xi, yi, zi, ti, Ei;
 		double xf, yf, zf, tf, Ef;
 		avalancheNID->GetElectronEndpoint(i, xi, yi, zi, ti, Ei, xf, yf, zf, tf, Ef, stat);
+
+        std::cout << "\tInitial: " << xi << ", " << yi << ", " << zi << ", " << ti << std::endl;
+        std::cout << "\tFinal: " << xf << ", " << yf << ", " << zf << ", " << tf << std::endl;
+        std::cout << "\tStatus: " << stat << std::endl;
 
 		unsigned int nStep = avalancheNID->GetNumberOfElectronDriftLinePoints(i);
 		exitStatus = stat;
