@@ -118,8 +118,11 @@ int main(int argc, char *argv[]){
 	// ***** Particle Data tree ***** // 
 	TTree *particleDataTree = new TTree("particleDataTree", "Particle Data");
 	std::vector<double> xPos, yPos, zPos, time, changePoint;
+    int avalancheID, particleID;
 	int numSteps, exitStatus;
-
+    
+    particleDataTree->Branch("avalancheID", &avalancheID);
+    particleDataTree->Branch("particleID", &particleID);
 	particleDataTree->Branch("numSteps", &numSteps);
 	particleDataTree->Branch("exitStatus", &exitStatus);
 	particleDataTree->Branch("xPos", &xPos);
@@ -213,7 +216,7 @@ int main(int argc, char *argv[]){
 	avalancheNID->SetNegativeIonMass(146);
 	avalancheNID->SetDistanceSteps(1e-6); // cm
 
-    avalancheNID->EnablePlotting(viewDrift, 250);
+    avalancheNID->EnablePlotting(viewDrift, 100);
 
 	//set detachment cross section
 	avalancheNID->InputDetachCrossSectionData("../NID/SF6-_F-_Detach.txt");
@@ -228,45 +231,47 @@ int main(int argc, char *argv[]){
 	double e0 = 0.1;//eV (Garfield is weird when this is 0.)
 	double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
 
-    avalancheNID->EnableDebugging();
+    //avalancheNID->EnableDebugging();
 
-	avalancheNID->AvalancheNegativeIon(x0, y0, z0, 0., e0, dx0, dy0, dz0);
-	Int_t numElectrons = avalancheNID->GetNumberOfElectronEndpoints();
-    std::cerr << "*****\nNum electrons: " << numElectrons << "\n*****" << std::endl;
+    int numAvalanche = 10;//simParams->numAvalanche;
+    std::cout << "Running " << numAvalanche << " avalanches...\n";
 
-	for(int i=0; i<numElectrons; i++){
-        std::cout << "Processing electron: " << i << std::endl;
-		//Clear memory
-		xPos.clear();
-		yPos.clear();
-		zPos.clear();
-		time.clear();
-		changePoint.clear();
+    for(int inAvalanche=0; inAvalanche<numAvalanche; inAvalanche++){
+        avalancheID = inAvalanche;
 
-		int stat;
-		double xi, yi, zi, ti, Ei;
-		double xf, yf, zf, tf, Ef;
-		avalancheNID->GetElectronEndpoint(i, xi, yi, zi, ti, Ei, xf, yf, zf, tf, Ef, stat);
+        avalancheNID->AvalancheNegativeIon(x0, y0, z0, 0., e0, dx0, dy0, dz0);
+        Int_t numElectrons = avalancheNID->GetNumberOfElectronEndpoints();
 
-        std::cout << "\tInitial: " << xi << ", " << yi << ", " << zi << ", " << ti << std::endl;
-        std::cout << "\tFinal: " << xf << ", " << yf << ", " << zf << ", " << tf << std::endl;
-        std::cout << "\tStatus: " << stat << std::endl;
+        for(int inElectron=0; inElectron<numElectrons; inElectron++){
+            particleID = inElectron;
+            //Clear memory
+            xPos.clear();
+            yPos.clear();
+            zPos.clear();
+            time.clear();
+            changePoint.clear();
 
-		unsigned int nStep = avalancheNID->GetNumberOfElectronDriftLinePoints(i);
-		exitStatus = stat;
-		numSteps  = nStep;
-		for(int step=0; step<nStep; step++){
-			double x, y, z, t;
-			int change;
-			avalancheNID->GetElectronDriftLinePoint(x, y, z, t, change, step, i);
-			xPos.push_back(x);
-			yPos.push_back(y);
-			zPos.push_back(z);
-			time.push_back(t);
-			changePoint.push_back(change);
-		}
-		particleDataTree->Fill();
-	}
+            int stat;
+            double xi, yi, zi, ti, Ei;
+            double xf, yf, zf, tf, Ef;
+            avalancheNID->GetElectronEndpoint(inElectron, xi, yi, zi, ti, Ei, xf, yf, zf, tf, Ef, stat);
+            exitStatus = stat;
+
+            unsigned int nStep = avalancheNID->GetNumberOfElectronDriftLinePoints();
+            numSteps  = nStep;
+            for(int step=0; step<nStep; step++){
+                double x, y, z, t;
+                int change;
+                avalancheNID->GetElectronDriftLinePoint(x, y, z, t, change, step, inElectron);
+                xPos.push_back(x);
+                yPos.push_back(y);
+                zPos.push_back(z);
+                time.push_back(t);
+                changePoint.push_back(change);
+            }
+            particleDataTree->Fill();
+        }
+    }
 
 	particleDataTree->Write();
 	delete particleDataTree;

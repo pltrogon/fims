@@ -7,7 +7,7 @@
 
 #include "AvalancheNIMicroscopic.hh"
 #include "Garfield/FundamentalConstants.hh"
-#include "Random.hh"
+#include "Garfield/Random.hh"
 
 namespace {
 
