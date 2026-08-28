@@ -72,7 +72,7 @@ class FIMS_Optimizer:
             'thicknessSiO2': 5.,
             'pillarRadius': 5.,
         }
-        self.curGeometry = self.initialGeometry
+        self.curGeometry = self.initialGeometry.deepcopy()
 
         self.geoConfig = self.simFIMS._geoConfiguration
         self._checkParameters()
@@ -317,7 +317,7 @@ class FIMS_Optimizer:
         """
         runStart = time.perf_counter()
 
-        # Unpack and Upload the optimizer parameters into the simulation
+        # Unpack and Upload the optimizer parameters
         paramDict = dict(zip(inputList, optimizerParam))
         self.curGeometry.update(paramDict)
 
