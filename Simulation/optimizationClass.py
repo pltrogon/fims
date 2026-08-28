@@ -194,7 +194,7 @@ class FIMS_Optimizer:
         padScale = -1.0 * self.padShapeFactors.get(padShape, (-2.0, -2.0))[hexID]
 
         hasPitch = 'pitch' in inputList
-        hasHole = 'hole' in inputList
+        hasHole = 'holeRadius' in inputList
         hasPad = 'padLength' in inputList
 
         pitchID = inputList.index('pitch') if hasPitch else -1
@@ -239,7 +239,7 @@ class FIMS_Optimizer:
                     torch.tensor([-padScale], dtype=torch.double),
                     buffer - pitch
                 ))
-        elif hasPitch and not hasHole: #fixed pitch
+        elif hasPitch and not hasPad: #fixed pitch
             padLength = self.initialGeometry['padLength']
             constraints.append((
                 torch.tensor([pitchID], dtype=torch.long),
