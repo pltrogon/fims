@@ -13,6 +13,12 @@ import warnings
 import math
 
 from scipy.optimize import Bounds, minimize, NonlinearConstraint, LinearConstraint
+import torch
+from botorch.models import SingleTaskGP
+from botorch.fit import fit_gpytorch_model
+from gpytorch.mlls import ExactMarginalLogLikelihood
+from botorch.acquisition import ExpectedImprovement
+from botorch.optim import optimize_acqf
 
 simDir = os.getcwd()
 analysisDir = os.path.join(simDir, '..', 'Analysis')
@@ -33,12 +39,12 @@ class FIMS_Optimizer:
     
     Utilizes scipy.optimize's minimize method with the COBYQA method 
     to minimize a target parameter. 
-	
-	Note - Currently only accepts as inputs:
-		hole radius, 
-		pitch, 
-		amplification distance (grid standoff height), 
-		pad lengthand 
+    
+    Note - Currently only accepts as inputs:
+        hole radius, 
+        pitch, 
+        amplification distance (grid standoff height), 
+        pad lengthand 
     """
 
 #**********************************************************************#
@@ -54,7 +60,7 @@ class FIMS_Optimizer:
         
         Args:
             params (dict): Dictionary where keys are parameter names 
-						   and values are lists of [Minimum, Maximum].
+                           and values are lists of [Minimum, Maximum].
         """
         self.simFIMS = FIMS_Simulation()
         
@@ -72,8 +78,8 @@ class FIMS_Optimizer:
         }
         self.geoConfig = self.simFIMS._geoConfiguration
         self._checkParameters()
-		
-		self._setupScalings()
+
+        self._setupScalings()
         
         # Create log file for optimizer
         try:
@@ -117,7 +123,7 @@ class FIMS_Optimizer:
         """
         if self.params is None:
             raise ValueError('Error - No parameters provided.')
-			
+            
         allowedParams = [
             'holeRadius', 
             'amplificationGap', 
@@ -127,9 +133,9 @@ class FIMS_Optimizer:
         ]
         paramCopy = self.params.copy()
 
-		for paramName, bounds in paramCopy.items():
-			if paramName not in allowedParams:
-				raiseValueError(f'Error: {name} not a valid parameter.')
+        for paramName, bounds in paramCopy.items():
+            if paramName not in allowedParams:
+                raiseValueError(f'Error: {name} not a valid parameter.')
             if not isinstance(bounds, list) or len(bounds) != 2:
                 raise ValueError(f'Error: Invalid bounds {bounds}.')
 
@@ -160,10 +166,10 @@ class FIMS_Optimizer:
         return
 
 #**********************************************************************#
-	def _setupScalings(self):
-		"""
-		Set up scaling factors for various geometries
-		"""
+    def _setupScalings(self):
+        """
+        Set up scaling factors for various geometries
+        """
         octagonFactor = 2 * math.cos(math.radians(67.5))
         kikiFactor = math.sqrt(3)
 
@@ -182,8 +188,8 @@ class FIMS_Optimizer:
             'hexagon': (-math.sqrt(3), -2),
             'octagon': (-1.9601, -octagonFactor),
         } 
-		return
-		
+        return
+        
 #**********************************************************************#
 
     def _makeConstraintEquation(self, keys, variables, constants):
@@ -324,7 +330,7 @@ class FIMS_Optimizer:
         maxVal = buffer * valDict['pitch'] / scale
         
         if valDict[paramName] <= maxVal:
-	        return valDict
+            return valDict
 
         if paramName in varDict:
             valDict[paramName] = maxVal
@@ -364,7 +370,7 @@ class FIMS_Optimizer:
             for key in parameters
         }    
 
-	    # Apply geometry-dependent multipliers
+        # Apply geometry-dependent multipliers
         holeShape = self.geoConfig.holeShape
         if holeShape in self.holeShapeFactors:
             holeScale = -1 * self.holeShapeFactors[holeShape][hexID]
@@ -679,48 +685,102 @@ class FIMS_Optimizer:
         normMaxBounds = self._normalizeValues(initialValues, maxBounds)
         optimizerBounds = Bounds(normMinBounds, normMaxBounds)
 
-        print('Beginning optimization...')
+        print('Beginning BoTorch optimization...')
 
+        # Prepare normalized bounds for BoTorch (torch tensors)
+        lower = torch.tensor(normMinBounds, dtype=torch.double)
+        upper = torch.tensor(normMaxBounds, dtype=torch.double)
+
+        # Objective wrapper for BoTorch: accepts 2D tensor (q x d) and returns 2D tensor (q x 1)
+        def _torchObj(xTorch: torch.Tensor) -> torch.Tensor:
+            # xTorch is shape (q, d)
+            xNp = xTorch.detach().cpu().numpy()
+            ys = []
+            for row in xNp:
+                try:
+                    y = float(self._IBNObjective(row, inputList))
+                except Exception:
+                    y = float('nan')
+                ys.append([y])
+            return torch.tensor(ys, dtype=torch.double)
+
+        # Run a simple sequential BO loop
         try:
-            optimizerResult = minimize(
-                fun=self._IBNObjective,
-                x0=initNormGuess,
-                args=(inputList,),
-                method='COBYQA', # or 'Nelder-Mead' / 'trust-constr'
-                constraints=self._getGeometryConstraints(),
-                callback=self._checkConvergence,
-                bounds=optimizerBounds,
-                options = {
-                    'initial_tr_radius': .2, # initial step of 20%
-                    'final_tr_radius': 1e-3,
-                    'disp': False
-                }
-            )
-            
-            # Unpack optimizer output
-            normalFinalParams = optimizerResult.x
-            finalFunction = optimizerResult.fun
-            finalStatus = optimizerResult.success
-            
-            finalDict = dict(zip(inputList, normalFinalParams))
-            finalParams = self._unNormalizeInputs(finalDict) 
-            
-        except StopIteration:
-            print('Optimization terminated due to convergence.')
-            print(finalParams, finalFunction, finalStatus)
-			lastLog = self._optimizerLog[-1]
-			finalParams = lastLog['params']
-			finalFunction = lastLog['IBN']
-            
+            best_x = None
+            best_y = float('inf')
+
+            # initial design: random samples
+            nInit = max(5, min(20, len(inputList)*3))
+            xInit = lower + (upper - lower) * torch.rand(nInit, len(inputList), dtype=torch.double)
+            yList = []
+            for i in range(xInit.shape[0]):
+                y = float(self._IBNObjective(xInit[i].numpy(), inputList))
+                yList.append([y])
+                if y < best_y:
+                    best_y = y
+                    best_x = xInit[i].clone()
+
+            X = xInit.clone()
+            Y = torch.tensor(yList, dtype=torch.double)
+
+            n_iter = 25
+            for it in range(n_iter):
+                # fit GP
+                gp = SingleTaskGP(X, Y)
+                mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
+                fit_gpytorch_model(mll)
+
+                # acquisition
+                ei = ExpectedImprovement(model=gp, best_f=Y.min())
+
+                # optimize acquisition over bounds
+                candidate, _ = optimize_acqf(
+                    acq_function=ei,
+                    bounds=torch.stack([lower, upper]),
+                    q=1,
+                    num_restarts=5,
+                    raw_samples=20,
+                )
+
+                # ensure candidate respects geometry constraints by projecting
+                candNp = candidate.detach().cpu().numpy().ravel()
+                candUn = self._unNormalizeInputs(dict(zip(inputList, candNp)))
+                candProj = self._constraintFailSafe(candUn)
+                # re-normalize
+                candNorm = torch.tensor([candProj[p] / self.initialGeometry[p] for p in inputList], dtype=torch.double)
+
+                yNew = float(self._IBNObjective(candNorm.numpy(), inputList))
+                X = torch.cat([X, candNorm.unsqueeze(0)], dim=0)
+                Y = torch.cat([Y, torch.tensor([[yNew]], dtype=torch.double)], dim=0)
+
+                if yNew < best_y:
+                    best_y = yNew
+                    best_x = candNorm.clone()
+
+                # simple convergence check
+                if len(Y) > 10 and torch.isclose(Y[-1], Y[-5], rtol=1e-4, atol=1e-6):
+                    break
+
+            finalDict = dict(zip(inputList, best_x.numpy()))
+            finalParams = self._unNormalizeInputs(finalDict)
+            finalFunction = best_y
+            finalStatus = True
+
+        except Exception as e:
+            print('BoTorch optimization failed:', e)
+            lastLog = self._optimizerLog[-1] if self._optimizerLog else {'params': self.initialGeometry, 'IBN': None}
+            finalParams = lastLog['params']
+            finalFunction = lastLog.get('IBN', None)
+            finalStatus = False
 
         print('\n*************** Optimization Complete ***************')
         # Put results into simulation instance
         self.simFIMS.setParameters(finalParams)
         
         resultVals = {
-            'params': self.simFIMS.getAllParam(), 
-            'IBNValue': optimizerResult.fun, 
-            'success': optimizerResult.success
+            'params': self.simFIMS.getAllParam(),
+            'IBNValue': finalFunction,
+            'success': finalStatus,
         }
         
         print(f"Optimal IBN value = {resultVals['IBNValue']}")
@@ -766,47 +826,90 @@ class FIMS_Optimizer:
         normMaxBounds = self._normalizeValues(initialValues, maxBounds)
         optimizerBounds = Bounds(normMinBounds, normMaxBounds)
 
-        print('Beginning optimization...')
+        print('Beginning BoTorch optimization...')
+
+        # Prepare normalized bounds for BoTorch (torch tensors)
+        lower = torch.tensor(normMinBounds, dtype=torch.double)
+        upper = torch.tensor(normMaxBounds, dtype=torch.double)
+
+        def _torchEffObj(xTorch: torch.Tensor) -> torch.Tensor:
+            xNp = xTorch.detach().cpu().numpy()
+            ys = []
+            for row in xNp:
+                try:
+                    y = float(self._effObjective(row, inputList))
+                except Exception:
+                    y = float('nan')
+                ys.append([y])
+            return torch.tensor(ys, dtype=torch.double)
 
         try:
-            optimizerResult = minimize(
-                fun=self._effObjective,
-                x0=initNormGuess,
-                args=(inputList,),
-                method='COBYQA', # or 'Nelder-Mead' / 'trust-constr'
-                constraints=self._getGeometryConstraints(),
-                callback=self._checkConvergence,
-                bounds=optimizerBounds,
-                options = {
-                    'initial_tr_radius': .2,  # initial step of 20%
-                    'final_tr_radius': 1e-3,
-                    'disp': False
-                }
-            )
-            
-            # Unpack optimizer output
-            normalFinalParams = optimizerResult.x
-            finalFunction = optimizerResult.fun
-            finalStatus = optimizerResult.success
-            
-            finalDict = dict(zip(inputList, normalFinalParams))
-            finalParams = self._unNormalizeInputs(finalDict) 
-            
-        except StopIteration:
-            print('Optimization terminated due to convergence.')
-            print(finalParams, finalFunction, finalStatus)
-			lastLog = self._optimizerLog[-1]
-			finalParams = lastLog['params']
-			finalFunction = lastLog['IBN']
-            
+            best_x = None
+            best_y = float('inf')
+
+            nInit = max(5, min(20, len(inputList)*3))
+            xInit = lower + (upper - lower) * torch.rand(nInit, len(inputList), dtype=torch.double)
+            yList = []
+            for i in range(xInit.shape[0]):
+                y = float(self._effObjective(xInit[i].numpy(), inputList))
+                yList.append([y])
+                if y < best_y:
+                    best_y = y
+                    best_x = xInit[i].clone()
+
+            X = xInit.clone()
+            Y = torch.tensor(yList, dtype=torch.double)
+
+            n_iter = 25
+            for it in range(n_iter):
+                gp = SingleTaskGP(X, Y)
+                mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
+                fit_gpytorch_model(mll)
+
+                ei = ExpectedImprovement(model=gp, best_f=Y.min())
+                candidate, _ = optimize_acqf(
+                    acq_function=ei,
+                    bounds=torch.stack([lower, upper]),
+                    q=1,
+                    num_restarts=5,
+                    raw_samples=20,
+                )
+
+                candNp = candidate.detach().cpu().numpy().ravel()
+                candUn = self._unNormalizeInputs(dict(zip(inputList, candNp)))
+                candProj = self._constraintFailSafe(candUn)
+                candNorm = torch.tensor([candProj[p] / self.initialGeometry[p] for p in inputList], dtype=torch.double)
+
+                yNew = float(self._effObjective(candNorm.numpy(), inputList))
+                X = torch.cat([X, candNorm.unsqueeze(0)], dim=0)
+                Y = torch.cat([Y, torch.tensor([[yNew]], dtype=torch.double)], dim=0)
+
+                if yNew < best_y:
+                    best_y = yNew
+                    best_x = candNorm.clone()
+
+                if len(Y) > 10 and torch.isclose(Y[-1], Y[-5], rtol=1e-4, atol=1e-6):
+                    break
+
+            finalDict = dict(zip(inputList, best_x.numpy()))
+            finalParams = self._unNormalizeInputs(finalDict)
+            finalFunction = best_y
+            finalStatus = True
+
+        except Exception as e:
+            print('BoTorch optimization failed:', e)
+            lastLog = self._optimizerLog[-1] if self._optimizerLog else {'params': self.initialGeometry, 'IBN': None}
+            finalParams = lastLog['params']
+            finalFunction = lastLog.get('IBN', None)
+            finalStatus = False
         print('\n*************** Optimization Complete ***************')
         # Put results into simulation instance
         self.simFIMS.setParameters(finalParams)
         
         resultVals = {
-            'params': self.simFIMS.getAllParam(), 
-            'fieldValue': optimizerResult.fun, 
-            'success': optimizerResult.success
+            'params': self.simFIMS.getAllParam(),
+            'fieldValue': finalFunction,
+            'success': finalStatus,
         }
         
         print(f"Optimal Field value = {resultVals['fieldValue']}")
