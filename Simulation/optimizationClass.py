@@ -11,9 +11,9 @@ import math
 import torch
 
 from botorch.models import SingleTaskGP
-from botorch.fit import fit_gpytorch_model
+from botorch.fit import fit_gpytorch_mll
 from gpytorch.mlls import ExactMarginalLogLikelihood
-from botorch.acquisition import ExpectedImprovement
+from botorch.acquisition import qLogNoisyExpectedImprovement
 from botorch.optim import optimize_acqf
 
 # Torch precision
@@ -60,6 +60,7 @@ class FIMS_Optimizer:
         
         # Set geometry configuration and values
         self.params = params
+        self._setupScalings()
 
         self.initialGeometry = {
             'padLength': 25.,
@@ -122,7 +123,7 @@ class FIMS_Optimizer:
 
         for paramName, bounds in paramCopy.items():
             if paramName not in allowedParams:
-                raise ValueError(f'Error: {name} not a valid parameter.')
+                raise ValueError(f'Error: {paramName} not a valid parameter.')
             if not isinstance(bounds, list) or len(bounds) != 2:
                 raise ValueError(f'Error: Invalid bounds {bounds}.')
 
@@ -167,6 +168,28 @@ class FIMS_Optimizer:
         Sets the precision limit of geometry values.
         """
         self._precisionLimit = geoLimit
+        return
+
+#**********************************************************************#
+    def _setupScalings(self):
+        octagonFactor = 2 * math.cos(math.radians(67.5))
+
+        self.holeShapeFactors = {
+            'circle': (-2, -2),
+            'hexagon': (-math.sqrt(3), -2),
+            'octagon': (-2.0173, -octagonFactor),
+            'triangle': (-2, -2),
+            'kiki': (-math.sqrt(3), -2),
+            'nesteggs': (-7.1, -7.1),
+            'trivialpursuit': (-4.4, -4.4)
+        }
+
+        self.padShapeFactors = {
+            'square': (-4 / math.sqrt(3), -1),
+            'hexagon': (-math.sqrt(3), -2),
+            'octagon': (-1.9601, -octagonFactor),
+        }
+
         return
         
 #**********************************************************************#
@@ -271,7 +294,7 @@ class FIMS_Optimizer:
         # Get the IBN
         simData = runData(runNumber)
         IBN = simData.getCalcParameter('Average IBN')
-        IBNError = simData.getCalcParameter('Average IBN')
+        IBNError = simData.getCalcParameter('IBN Error')
 
         return IBN, IBNError
 
@@ -397,7 +420,7 @@ class FIMS_Optimizer:
 
         #Initial Design
         numInit = max(5, len(inputList)*3)
-        rawValues = lower + (upper - lower) * torch.rand(nInit, len(inputList), dtype=dtype)
+        rawValues = lower + (upper - lower) * torch.rand(numInit, len(inputList), dtype=dtype)
         snapValues = self._snapToPrecision(rawValues)
 
         inValues = torch.tensor(snapValues, dtype=dtype)
@@ -411,14 +434,19 @@ class FIMS_Optimizer:
         inResults = torch.tensor(IBNList, dtype=dtype)
         inResultsVar = torch.tensor(IBNVarList, dtype=dtype)
 
+        finalParams = self.initialGeometry
+        finalIBN = None
+        finalIBNErr = None
+        finalStatus = False
+        
         try:
             # Optimization steps
             for inIter in range(self._iterationLimit):
-                gp = SingleTaskGP(inValues, inResults, train_YVar=inResultsVar)
-                mll = ExactMarginalLogLikelihood(gp.liklihood, gp)
+                gp = SingleTaskGP(inValues, inResults, train_Yvar=inResultsVar)
+                mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
                 fit_gpytorch_mll(mll)
 
-                aqcFunction = qLogNoiyExpetedImprovement(
+                aqcFunction = qLogNoisyExpectedImprovement(
                     model=gp,
                     X_baseline=inValues,
                     prune_baseline=True
@@ -447,7 +475,7 @@ class FIMS_Optimizer:
                 inResults = torch.cat([inResults, torch.tensor([[-newIBN]], dtype=dtype)], dim=0) #BoTorch tries to maximize, so invert
                 inResultsVar = torch.cat([inResultsVar, torch.tensor([[newIBNErr**2]], dtype=dtype)], dim=0)
 
-            bestIDx = torch.armax(inResults)
+            bestIDx = torch.argmax(inResults)
             finalParams = dict(zip(inputList, inValues[bestIDx].numpy()))
             finalIBN = -inResults[bestIDx].item()
             finalIBNErr = math.sqrt(inResultsVar[bestIDx].item())
