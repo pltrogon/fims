@@ -72,6 +72,7 @@ class FIMS_Optimizer:
             'thicknessSiO2': 5.,
             'pillarRadius': 5.,
         }
+        self.curGeometry = self.initialGeometry
 
         self.geoConfig = self.simFIMS._geoConfiguration
         self._checkParameters()
@@ -283,12 +284,8 @@ class FIMS_Optimizer:
             Average IBN and its standard error.
         """
         
-        print(f'********** Iteration {len(self._optimizerLog)+1:<3}************')
-        allParams = self.simFIMS.getAllParam()
-        for elem in self.params:
-            print(f'\t{elem}: {allParams[elem]}')
-        print('************************************')
         self.simFIMS.setGeometry(self.geoConfig)
+        self.simFIMS.setParameters(self.curGeometry)
         runNumber = self.simFIMS.runForIBNOptimizer()
         
         # Get the IBN
@@ -319,11 +316,10 @@ class FIMS_Optimizer:
             resultIBNError (flaot): The SEM of the IBN.
         """
         runStart = time.perf_counter()
-        
+
         # Unpack and Upload the optimizer parameters into the simulation
         paramDict = dict(zip(inputList, optimizerParam))
-        fullGeo = self.initialGeometry.copy()
-        fullGeo.update(paramDict)
+        self.curGeometry.update(paramDict)
 
         try:
             resultIBN, resultIBNError = self._getIBN()
@@ -438,7 +434,7 @@ class FIMS_Optimizer:
         finalIBN = None
         finalIBNErr = None
         finalStatus = False
-        
+
         try:
             # Optimization steps
             for inIter in range(self._iterationLimit):
