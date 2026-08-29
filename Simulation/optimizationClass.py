@@ -9,6 +9,7 @@ import time
 import numpy as np
 import math
 import torch
+import copy
 
 from botorch.models import SingleTaskGP
 from botorch.fit import fit_gpytorch_mll
@@ -72,7 +73,7 @@ class FIMS_Optimizer:
             'thicknessSiO2': 5.,
             'pillarRadius': 5.,
         }
-        self.curGeometry = self.initialGeometry.deepcopy()
+        self.curGeometry = copy.deepcopy(self.initialGeometry)
 
         self.geoConfig = self.simFIMS._geoConfiguration
         self._checkParameters()
@@ -209,7 +210,7 @@ class FIMS_Optimizer:
         buffer = 1 #1 um buffer
 
         #Get unit cell geometry
-        hexCell = 'Hexagonal' in getattr(self.geoConfig, 'unitCell', 'Hexagonal')
+        hexCell = 'hexagon' in getattr(self.geoConfig, 'unitCell', 'hexagon')
         hexID = 0 if hexCell else 1
 
         holeShape = getattr(self.geoConfig, 'holeShape', 'circle')
@@ -418,8 +419,8 @@ class FIMS_Optimizer:
         numInit = max(5, len(inputList)*3)
         rawValues = lower + (upper - lower) * torch.rand(numInit, len(inputList), dtype=dtype)
         snapValues = self._snapToPrecision(rawValues)
-
-        inValues = torch.tensor(snapValues, dtype=dtype)
+        
+        inValues = snapValues.detach().clone()
 
         IBNList, IBNVarList = [], []
         for i in range(inValues.shape[0]):
