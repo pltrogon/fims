@@ -243,7 +243,7 @@ class FIMS_Optimizer:
     
         # Get all geometry values
         initGeometry = {key: self.initialGeometry[key] for key in self.initialGeometry}
-        hexCell = 'Hexagonal' in self.geoConfig.unitCell
+        hexCell = 'hexagon' in self.geoConfig.unitCell
         hexID = 0 if hexCell else 1
         
         # Apply geometry-dependent multipliers
@@ -357,7 +357,7 @@ class FIMS_Optimizer:
         verified to be feasible.
         """
         # Get all geometry values
-        hexID = 0 if 'Hexagonal' in self.geoConfig.unitCell else 1
+        hexID = 0 if 'hexagon' in self.geoConfig.unitCell else 1
         parameters = ['pitch', 'holeRadius', 'padLength']
         valuesDict = {
             key: geoDict[key] if key in geoDict else self.simFIMS.getParam(key)
