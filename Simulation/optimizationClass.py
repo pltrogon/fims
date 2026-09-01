@@ -500,7 +500,7 @@ class FIMS_Optimizer:
         
         print(f"Optimal IBN value = {resultVals['IBNValue']} +/- {resultVals['IBNError']}")
         print('Optimal Parameter Values:')
-        print(f'\t{param}: {fullFinalParams[param]}\n' for param in fullFinalParams)
+        print(self.simFIMS)
         
         return resultVals
     
