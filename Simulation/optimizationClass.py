@@ -346,6 +346,7 @@ class FIMS_Optimizer:
                 for param, value in paramDict.items():
                     file.write(f'\t{param}: {value}\n')
                 file.write(f'\tIBN: {resultIBN}\n')
+                file.write(f'\tIBNError: {resultIBNError}\n')
                 file.write(f'Run Time: {runTime}\n')
                 file.write(f'Total Time: {totalTime}')
                 
@@ -498,7 +499,8 @@ class FIMS_Optimizer:
         }
         
         print(f"Optimal IBN value = {resultVals['IBNValue']} +/- {resultVals['IBNError']}")
-        print(self.simFIMS)
+        print('Optimal Parameter Values:')
+        print(f'\t{param}: {fullFinalParams[param]}\n' for param in fullFinalParams)
         
         return resultVals
     
