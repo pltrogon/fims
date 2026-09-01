@@ -68,7 +68,9 @@ class Reconstruction:
         self.rawData = self._getCoordinates(dataFrame)
         
         # Set constant values
-        self.timeRez = 25 # microns TODO: convert to time
+        self.timeRez = 25 # ns
+        self.driftVelocity = 1 # microns/ns
+        self.zRez = self.timeRez*self.driftVelocity # microns
         self.initialDriftDistance = 10 # cm
         
         # Values from Tanner sim
@@ -346,8 +348,8 @@ class Reconstruction:
         # Group data by pixel
         groupedData = self._groupData(inputData)
 
-        chargeSum = [sum(q) for q in groupdedData['q']]
-        chargeLen = [len(q) for q in groupdedData['q']]
+        chargeSum = [sum(q) for q in groupedData['q']]
+        chargeLen = [len(q) for q in groupedData['q']]
         chargeMask = [(s > threshold) and (s > l) for s, l in zip(chargeSum, chargeLen)]
 
         filteredData = groupedData[chargeMask].copy()
@@ -448,6 +450,46 @@ class Reconstruction:
         
     #********************************************************************************#
     
+    def getFIMSPileup(self, drift=25, reset=25):
+        """
+        Determines the efficiency for a FIMS readout based on given input parameters.
+        
+        args:
+            drift (float): initial drift distance of the electron in centimeters.
+            reset (float): the time for the reset signal in nanoseconds.
+        returns:
+            efficiency (float): detection efficiency, measured as # initial/# counted.
+        """
+        
+        # Extract relevant data from dictionary and set constant values
+        holePitch = self.reconInfo['Hole Pitch']
+        pixPitch = self.reconInfo['Pixel Pitch']
+        zRez = reset*self.driftVelocity
+        
+        transDif = self.transDriftDifCoef*math.sqrt(drift)
+        lonDif = self.lonDriftDifCoef*math.sqrt(drift)
+        firstDifWidths = (transDif, transDif, lonDif)
+        
+        # Apply Gaussian smear to approximate diffusion
+        smearData = self.diffuseData(self.rawData, firstDifWidths)
+
+        # Discretize data to approximate falling into grid holes and being read by the readout.
+        bins = {'x': holePitch, 'y': holePitch, 'z': zRez}
+        discreteData = self.discretizeData(smearData, bins)
+        
+        # Approximate avalanches
+        # Diffusion is smaller than the pitch between pixels, so there
+        # is zero net diffusion in the amplification region.
+        numBelowThresh = int(len(discreteData)*0.05)
+        belowID = np.random.choice(discreteData.index, size=numBelowThresh, replace=False)
+        avalData = discreteData.drop(belowID).reset_index(drop=True)
+        
+        efficiency = 1
+        
+        return efficiency
+    
+    #********************************************************************************#
+    
     def reconstructFIMS(self):
         """
         Approximates an event reconstruction using a FIMS readout.
@@ -462,7 +504,7 @@ class Reconstruction:
         # Extract relevant data from dictionary and set constant values
         holePitch = self.reconInfo['Hole Pitch']
         pixPitch = self.reconInfo['Pixel Pitch']
-        timeRez = self.timeRez
+        zRez = self.zRez
         
         transDif = self.transDriftDifCoef*math.sqrt(self.initialDriftDistance)
         lonDif = self.lonDriftDifCoef*math.sqrt(self.initialDriftDistance)
@@ -472,7 +514,7 @@ class Reconstruction:
         smearData = self.diffuseData(self.rawData, firstDifWidths)
 
         # Discretize data to approximate falling into grid holes and being read by the readout.
-        bins = {'x': holePitch, 'y': holePitch, 'z': timeRez}
+        bins = {'x': holePitch, 'y': holePitch, 'z': zRez}
         discreteData = self.discretizeData(smearData, bins)
         
         # Approximate avalanches
@@ -504,7 +546,7 @@ class Reconstruction:
         holePitch = self.reconInfo['Hole Pitch']
         pixPitch = self.reconInfo['Pixel Pitch']
         standoff = self.reconInfo['Standoff']
-        timeRez = self.timeRez
+        zRez = self.zRez
         
         transDif = self.transDriftDifCoef*math.sqrt(self.initialDriftDistance)
         lonDif = self.lonDriftDifCoef*math.sqrt(self.initialDriftDistance)
@@ -535,7 +577,7 @@ class Reconstruction:
         avalData2 = self.avalancheData(discreteData2, secondDifWidths)
         
         # Discretize data to approximate pixels readout
-        pixBins = {'x': pixPitch, 'y': pixPitch, 'z': timeRez}
+        pixBins = {'x': pixPitch, 'y': pixPitch, 'z': zRez}
         readoutData = self.discretizeData(avalData2, pixBins)
         
         # Group Data by pixel
@@ -569,7 +611,7 @@ class Reconstruction:
         holePitch = self.reconInfo['Hole Pitch']
         pixPitch = self.reconInfo['Pixel Pitch']
         standoff = self.reconInfo['Standoff']
-        timeRez = self.timeRez
+        zRez = self.zRez
         
         transDif = self.transDriftDifCoef*math.sqrt(self.initialDriftDistance)
         lonDif = self.lonDriftDifCoef*math.sqrt(self.initialDriftDistance)
@@ -590,7 +632,7 @@ class Reconstruction:
         avalData = self.avalancheData(discreteData, secondDifWidths)
         
         # Discretize data to approximate pixels readout
-        pixBins = {'x': pixPitch, 'y': pixPitch, 'z': timeRez}
+        pixBins = {'x': pixPitch, 'y': pixPitch, 'z': zRez}
         padData = self.discretizeData(avalData, pixBins)
 
         # Approximate Signal Readout
@@ -639,7 +681,7 @@ class Reconstruction:
         holePitch = self.reconInfo['Hole Pitch']
         pixPitch = self.reconInfo['Pixel Pitch']
         standoff = self.reconInfo['Standoff']
-        timeRez = self.timeRez
+        zRez = self.zRez
         
         transDif = self.transDriftDifCoef*math.sqrt(self.initialDriftDistance)
         lonDif = self.lonDriftDifCoef*math.sqrt(self.initialDriftDistance)
@@ -660,7 +702,7 @@ class Reconstruction:
         avalData = self.avalancheData(discreteData, secondDifWidths)
 
         # Discretize data to approximate pixels readout
-        pixBins = {'x': pixPitch, 'y': pixPitch, 'z': timeRez}
+        pixBins = {'x': pixPitch, 'y': pixPitch, 'z': zRez}
         padData = self.discretizeData(avalData, pixBins)
 
         # Approximate Signal Readout
