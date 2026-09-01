@@ -125,11 +125,21 @@ int main(int argc, char *argv[]){
     particleDataTree->Branch("particleID", &particleID);
 	particleDataTree->Branch("numSteps", &numSteps);
 	particleDataTree->Branch("exitStatus", &exitStatus);
-	particleDataTree->Branch("xPos", &xPos);
-	particleDataTree->Branch("yPos", &yPos);
-	particleDataTree->Branch("zPos", &zPos);
+	particleDataTree->Branch("x", &xPos);
+	particleDataTree->Branch("y", &yPos);
+	particleDataTree->Branch("z", &zPos);
 	particleDataTree->Branch("time", &time);
 	particleDataTree->Branch("changePoint", &changePoint);
+
+    // ***** Electron Drift Tree ***** //
+    TTree* driftDataTree = new TTree("driftDataTree", "Drift Tracks");
+    std::vector<double> xDrift, yDrift, zDrift;
+
+    driftDataTree->Branch("avalancheID", &avalancheID);
+    driftDataTree->Branch("particleID", &particleID);
+    driftDataTree->Branch("x", &xDrift);
+	driftDataTree->Branch("y", &yDrift);
+	driftDataTree->Branch("z", &zDrift);
 
 	
 	std::cout << "Initializing gas mixture..." << std::endl;
@@ -221,7 +231,7 @@ int main(int argc, char *argv[]){
 	//set detachment cross section
 	avalancheNID->InputDetachCrossSectionData("../NID/SF6-_F-_Detach.txt");
 	//avalancheNID->InputDetachCrossSectionData("../NID/SF6-_e-_Detach.txt");
-	avalancheNID->SetDetachModel(1); //0: CrossSection, 1: Threshold   
+	avalancheNID->SetDetachModel(0); //0: CrossSection, 1: Threshold   
 
 	//Set the Initial electron parameters
 	double x0 = 0.0, y0 = 0.0, z0 = 0.002;
@@ -231,9 +241,9 @@ int main(int argc, char *argv[]){
 	double e0 = 0.1;//eV (Garfield is weird when this is 0.)
 	double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
 
-    //avalancheNID->EnableDebugging();
+    avalancheNID->EnableDebugging();
 
-    int numAvalanche = 10;//simParams->numAvalanche;
+    int numAvalanche = 1;//simParams->numAvalanche;
     std::cout << "Running " << numAvalanche << " avalanches...\n";
 
     for(int inAvalanche=0; inAvalanche<numAvalanche; inAvalanche++){
@@ -270,11 +280,30 @@ int main(int argc, char *argv[]){
                 changePoint.push_back(change);
             }
             particleDataTree->Fill();
+
+            int numDrift = viewDrift->GetNumberOfDriftLines();
+            bool isElectron;
+            std::vector<std::array<float, 3> > driftLines;
+            viewDrift->GetDriftLine(inElectron, driftLines, isElectron);
+            xDrift.clear();
+            yDrift.clear();
+            zDrift.clear();
+            for(int inPoint=0; inPoint<driftLines.size(); inPoint++){
+                xDrift.push_back(driftLines[inPoint][0]);
+                yDrift.push_back(driftLines[inPoint][1]);
+                zDrift.push_back(driftLines[inPoint][2]);
+            }
+            driftDataTree->Fill();
         }
+        viewDrift->Clear();
+        
     }
 
 	particleDataTree->Write();
 	delete particleDataTree;
+
+    driftDataTree->Write();
+    delete driftDataTree;
 
 	dataFile->Close();
     delete dataFile;

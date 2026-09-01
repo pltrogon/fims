@@ -812,7 +812,6 @@ bool AvalancheNIMicroscopic::TransportNegativeIon(const double x0, const double 
         std::cout << "newky    : " << newKy <<std::endl;
         std::cout << "newkz    : " << newKz <<std::endl;
         */
-
         newEnergy = 1./(2*SpeedOfLight*SpeedOfLight) * negativeionMass * newV2;
 
         std::array<double, 3> x_diff  = {x1, y1, z1};
@@ -893,15 +892,23 @@ bool AvalancheNIMicroscopic::TransportNegativeIon(const double x0, const double 
             // input x-section
             double Torr = medium->GetPressure();
             double dx = dStep;
+            std::cerr << "This step: " << dx << std::endl;
             double prob=0;
+            std::cerr << "New energy: " << newEnergy << std::endl;
             double this_xsec = GetDetachCrossSection(newEnergy);
+            std::cerr << "New xSec: " << this_xsec << std::endl;
             double this_lambda = ComputeLambda(Torr,this_xsec);
-            if(this_lambda <= 0) return -1;
-
-            prob = 1. - exp(-dx/this_lambda);
-            //std::cerr << "probability : " << prob <<std::endl;
+            std::cerr << "New Lambda: " << this_lambda << std::endl;
+            //if(this_lambda <= 0) return -1;
+            prob = 0;
+            if(this_lambda > 0){
+              prob = 1. - exp(-dx/this_lambda);
+            }
+            
+            std::cerr << "Probability: " << prob <<std::endl;
             if(RndmUniform() < prob ){ //40kV/cm
               detachmentFlag = true;
+              std::cerr << "DETACHMENT " << std::endl;
             }
           }
 
@@ -913,6 +920,7 @@ bool AvalancheNIMicroscopic::TransportNegativeIon(const double x0, const double 
             //std::cerr << "prob = " << prob << " , Efield = " << EfieldAbs << " V/cm" <<std::endl;
             if(RndmUniform() < prob ){ //40kV/cm
               detachmentFlag = true;
+              std::cerr << "DETACHMENT " << std::endl;
             }
           }
         }
@@ -1820,6 +1828,7 @@ double AvalancheNIMicroscopic::GetDetachCrossSection(double energy)
   //Liner
   if(true){
     if(energy < Emin || Emax < energy){
+      //std::cerr << "Error: Energy out of range" << std::endl;
       return -1;
     }else{
       double lowEne=Emin,highEne=Emax;
@@ -1852,7 +1861,7 @@ double AvalancheNIMicroscopic::ComputeLambda(double pressure, double x_sec)
   double lambda; // m
   ndensity = pressure*133.32 / (1.38066*1e-23*Temp) /1e20; // *1e20 m^3
   lambda = 1./ (ndensity * x_sec); // 1 / ( 1e20 * m^3 * 1e-20 * m^2) -> m
-  //cerr << "x-sec : " << x_sec << ", lambda : " << lambda*100 << endl;
+  //std::cerr << "x-sec : " << x_sec << ", lambda : " << lambda*100 << std::endl;
   return lambda*100; // [cm]
 }
 
