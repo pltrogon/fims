@@ -83,55 +83,16 @@ int main(int argc, char * argv[]) {
     std::cerr << "Error: Invalid geometryMode: " << argv[1] << std::endl;
     return -1;
   }
-
-  std::vector<std::string> sensorList;
-  sensorList.push_back("CentralPad");
+  
+  std::vector<std::string> sensorList = getSensorList(geometryMode);
   double cellXScale = 1. / sqrt(3.);
   double cellYScale = 0.5;
   bool hexCell = true;
   
-  switch(geometryMode){
-    case GeometryMode::Square: {
-      // Adjust E-Field line generation points
+  // Adjust E-Field line generation points if the unit cell is a square
+  if(geometryMode == GeometryMode::Square || geometryMode == GeometryMode::SquareSurrounding){
       cellXScale = 0.5;
       hexCell = false;
-      break;
-    }
-    case GeometryMode::SquareSurrounding: {
-      // Add pads to sensor list
-      sensorList.push_back("TopPad");
-      sensorList.push_back("RightTopPad");
-      sensorList.push_back("RightPad");
-      sensorList.push_back("RightBottomPad");
-      sensorList.push_back("BottomPad");
-      sensorList.push_back("LeftBottomPad");
-      sensorList.push_back("LeftPad");
-      sensorList.push_back("LeftTopPad");
-      // Adjust E-Field line generation points
-      cellXScale = 0.5;
-      hexCell = false;
-      break;
-    }
-    
-    case GeometryMode::Hexagonal: {
-      // Add pads to sensor list
-      sensorList.push_back("RightTopPad");
-      break;
-    }
-
-    case GeometryMode::HexagonalSurrounding: {
-      // Add pads to sensor list
-      sensorList.push_back("TopPad");
-      sensorList.push_back("RightTopPad");
-      sensorList.push_back("RightBottomPad");
-      sensorList.push_back("BottomPad");
-      sensorList.push_back("LeftBottomPad");
-      sensorList.push_back("LeftTopPad");
-      break;
-    }
-
-    default:
-      return -1;
   }
   
   //Random seed

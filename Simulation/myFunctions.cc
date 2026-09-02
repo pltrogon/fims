@@ -50,6 +50,50 @@ std::string getGitVersion() {
 }
 
 /**
+ * @brief Determines the correct list of pad names and returns them as a list.
+ * @param geometryMode the current geometry mode.
+ * 
+ * @return A list of pad names.
+ */
+std::vector<std::string>  getSensorList(GeometryMode geometryMode){
+  std::vector<std::string> sensorList;
+  
+  sensorList.push_back("CentralPad");
+  
+  switch(geometryMode){
+    case GeometryMode::Square: {
+      return sensorList;
+    }
+    case GeometryMode::SquareSurrounding: {
+      sensorList.push_back("TopPad");
+      sensorList.push_back("RightTopPad");
+      sensorList.push_back("RightPad");
+      sensorList.push_back("RightBottomPad");
+      sensorList.push_back("BottomPad");
+      sensorList.push_back("LeftBottomPad");
+      sensorList.push_back("LeftPad");
+      sensorList.push_back("LeftTopPad");
+      return sensorList;
+    }
+    
+    case GeometryMode::Hexagonal: {
+      sensorList.push_back("RightTopPad");
+      return sensorList;
+    }
+
+    case GeometryMode::HexagonalSurrounding: {
+      sensorList.push_back("TopPad");
+      sensorList.push_back("RightTopPad");
+      sensorList.push_back("RightBottomPad");
+      sensorList.push_back("BottomPad");
+      sensorList.push_back("LeftBottomPad");
+      sensorList.push_back("LeftTopPad");
+      return sensorList;
+    }
+  }
+}
+
+/**
  * @brief Generates a random (x,y) point uniformly distributed within a hexagon centered at the origin with the specified side length.
  * @param sideLength The length of each side of the hexagon.
  * 
