@@ -351,7 +351,7 @@ class Reconstruction:
         filteredData = groupedData[chargeMask].copy()
         if filteredData.empty:
             raise ValueError('Empty Dataframe.')
-
+        
         # Calculate ToT by converting charge to voltage
         print('Calculating ToT...')
         signals = [
@@ -366,12 +366,12 @@ class Reconstruction:
         filteredData.drop(columns=['z', 'q'], inplace=True)
 
         readoutData = filteredData.explode(['crossing', 'ToT'], ignore_index=True)
- 
+        
         return readoutData
     
     #********************************************************************************#
     
-    def _format3DPlot(self, plotData, title='', charge=False):
+    def _format3DPlot(self, plotData, title=''):
         """
         Creates a 3D and 2D plot of a given dataset.
         
@@ -390,9 +390,9 @@ class Reconstruction:
         sub2D = fig3D.add_subplot(122)
         
         # Assign point color, if given
-        if charge:
+        try:
             color = plotData['q']
-        else:
+        except:
             color = 'g'
         
         # Plot data in 2D and 3D
@@ -405,11 +405,10 @@ class Reconstruction:
             plotData['x'], plotData['y'],
             s=.3, c=color, label=f'{title} Readout Data', cmap='viridis'
         )
-        # TODO: 2D plot should always be density
-        # Add color bar
-        if charge:
-            colorBar = plt.colorbar(sub2DRef, pad=.2)
-            colorBar.set_label('Charge')
+        
+        # Add color bar    
+        colorBar = plt.colorbar(sub2DRef, pad=.2)
+        colorBar.set_label('Charge')
 
         # Add labels and adjust formatting
         sub3D.set_xlabel('x pixels')
@@ -560,8 +559,10 @@ class Reconstruction:
         belowID = np.random.choice(discreteData.index, size=numBelowThresh, replace=False)
         avalData = discreteData.drop(belowID).reset_index(drop=True)
         
+        plotData = avalData.groupby(['x', 'y', 'z']).size().reset_index(name='q')
+
         # Plot data
-        FIMSfig = self._format3DPlot(avalData, title='FIMS')
+        FIMSfig = self._format3DPlot(plotData, title='FIMS')
         
         return FIMSfig
         
@@ -626,7 +627,7 @@ class Reconstruction:
         plotData['q'] = groupedData['q'].apply(sum)
 
         # Plot data
-        beastFig = self._format3DPlot(plotData, title='BEAST', charge=True)
+        beastFig = self._format3DPlot(plotData, title='BEAST')
         
         return beastFig
 
@@ -670,23 +671,19 @@ class Reconstruction:
         # Discretize data to approximate pixels readout
         pixBins = {'x': pixPitch, 'y': pixPitch, 'z': zRez}
         padData = self.discretizeData(avalData, pixBins)
-
-        # Approximate Signal Readout
-        #readoutData = self.approximateReadout(padData)
-        readoutData = padData.copy()
         
         # Plot data
         # Extract Data
-        totalXWidth = max(readoutData['x']) - min(readoutData['x'])
-        totalYWidth = max(readoutData['y']) - min(readoutData['y'])
+        totalXWidth = max(padData['x']) - min(padData['x'])
+        totalYWidth = max(padData['y']) - min(padData['y'])
         numXBins = int(totalXWidth/pixPitch)
         numYBins = int(totalYWidth/pixPitch)
         
         # Create figure
         migdalFig = plt.figure()
         plt.hist2d(
-            readoutData['x'],
-            readoutData['y'],
+            padData['x'],
+            padData['y'],
             bins=(numXBins, numYBins)
         )
         
@@ -743,12 +740,13 @@ class Reconstruction:
 
         # Approximate Signal Readout
         readoutData = self.approximateReadout(padData)
+        readoutData.dropna(inplace = True)
         
         # Format data for plotting
         plotData = readoutData.rename(columns={'crossing': 'z', 'ToT': 'q'})
         
         # Plot data
-        gridPixFig = self._format3DPlot(plotData, title='GridPix', charge=True)
+        gridPixFig = self._format3DPlot(plotData, title='GridPix')
         
         return gridPixFig
 
