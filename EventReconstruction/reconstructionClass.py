@@ -162,7 +162,7 @@ class Reconstruction:
             zip(trialData['x']*10000, trialData['y']*10000, trialData['z']),
             columns=['x','y','z']
         )
-        # TODO: convert z-data to time
+        
         return rawData
     
     #********************************************************************************#
@@ -196,8 +196,6 @@ class Reconstruction:
             upCrossPoints (list): list of threshold crossing times
             ToTList (list): list of ToT times
         """
-
-        ## TODO verify
         threshold = self.reconInfo['Signal Threshold']
         decayRate = self.reconInfo['Signal Decay Rate']
 
@@ -341,8 +339,6 @@ class Reconstruction:
         returns:
             readoutData (dataframe): x,y,z coordinates of the charge bundles as well as the time over threshold.
         """
-
-        ## TODO: Verify
         threshold = self.reconInfo['Signal Threshold']
 
         # Group data by pixel
@@ -432,7 +428,27 @@ class Reconstruction:
         plt.subplots_adjust(wspace=0.2)
         
         return fig3D
-
+    #********************************************************************************#
+    
+    def _calcAverage(self, values):
+        """
+        Takes a list and calculates the average along with the error.
+        
+        args:
+            values (list): list of values.
+        
+        returns:
+            average (tuple): average value along with its uncertainty.
+        """
+        total = len(values)
+        mean = sum(values)/total
+        variance = sum([(elem - mean)**2 for elem in values]) / (total - 1)
+        error = variance ** .5
+        
+        average = (mean, error)
+        
+        return average
+    
     #********************************************************************************#
     ############## Reconstruction Wrapper Functions for Specific Setups ##############
     #********************************************************************************#
@@ -450,17 +466,18 @@ class Reconstruction:
         
     #********************************************************************************#
     
-    def getFIMSPileup(self, drift=25, reset=25):
+    def getFIMSPileup(self, drift=10, reset=25, numTrials=100):
         """
         Determines the efficiency for a FIMS readout based on given input parameters.
         
         args:
             drift (float): initial drift distance of the electron in centimeters.
             reset (float): the time for the reset signal in nanoseconds.
+            numTrials (int): number of data sets to sample.
+            
         returns:
             efficiency (float): detection efficiency, measured as # initial/# counted.
         """
-        
         # Extract relevant data from dictionary and set constant values
         holePitch = self.reconInfo['Hole Pitch']
         pixPitch = self.reconInfo['Pixel Pitch']
@@ -469,22 +486,41 @@ class Reconstruction:
         transDif = self.transDriftDifCoef*math.sqrt(drift)
         lonDif = self.lonDriftDifCoef*math.sqrt(drift)
         firstDifWidths = (transDif, transDif, lonDif)
+        efficiencies = []
         
-        # Apply Gaussian smear to approximate diffusion
-        smearData = self.diffuseData(self.rawData, firstDifWidths)
+        trialNum = 0
+        while trialNum < numTrials: 
+            # Apply Gaussian smear to approximate diffusion
+            smearData = self.diffuseData(self.rawData, firstDifWidths)
+            totalElecNum = len(smearData['z'])
+            
+            # Discretize data to approximate falling into grid holes.
+            bins = {'x': holePitch, 'y': holePitch, 'z': 0}
+            discreteData = self.discretizeData(smearData, bins)
+            
+            # Convert the z position to arrival time
+            minZ = abs(min(discreteData['z']))
+            discreteData['t'] = (discreteData['z'] + minZ)/self.driftVelocity
 
-        # Discretize data to approximate falling into grid holes and being read by the readout.
-        bins = {'x': holePitch, 'y': holePitch, 'z': zRez}
-        discreteData = self.discretizeData(smearData, bins)
+            # Determine how many electrons are seen by the readout.
+            groupedData = discreteData.groupby(['x','y']).agg(t=('t', list)).reset_index()
+
+            check = [pixel for pixel in groupedData['t'] if len(pixel) > 1] #TODO: improve
+            numDrop = 0
+            for pixel in check:
+                elecID = 1
+                pixel.sort()
+                while elecID < len(pixel):
+                    if abs(pixel[elecID] - pixel[elecID-1]) < reset:
+                        numDrop += 1
+                    elecID += 1
+            
+            singleEff = (totalElecNum - numDrop)/totalElecNum
+            efficiencies.append(singleEff)
+
+            trialNum += 1
         
-        # Approximate avalanches
-        # Diffusion is smaller than the pitch between pixels, so there
-        # is zero net diffusion in the amplification region.
-        numBelowThresh = int(len(discreteData)*0.05)
-        belowID = np.random.choice(discreteData.index, size=numBelowThresh, replace=False)
-        avalData = discreteData.drop(belowID).reset_index(drop=True)
-        
-        efficiency = 1
+        efficiency = self._calcAverage(efficiencies)
         
         return efficiency
     
