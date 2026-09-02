@@ -525,6 +525,80 @@ class Reconstruction:
     
     #********************************************************************************#
     
+    def getGridPixPileup(self, drift=10, reset=25, numTrials=100):
+        """
+        Determines the efficiency for a GridPix readout based on given input parameters.
+        
+        args:
+            drift (float): initial drift distance of the electron in centimeters.
+            reset (float): the time for the reset signal in nanoseconds.
+            numTrials (int): number of data sets to sample.
+            
+        returns:
+            efficiency (float): detection efficiency, measured as # initial/# counted.
+        """
+        # Extract and calculate relevant data
+        holePitch = self.reconInfo['Hole Pitch']
+        pixPitch = self.reconInfo['Pixel Pitch']
+        standoff = self.reconInfo['Standoff']
+        zRez = reset*self.driftVelocity
+        
+        transDif = self.transDriftDifCoef*math.sqrt(drift)
+        lonDif = self.lonDriftDifCoef*math.sqrt(drift)
+        firstDifWidths = (transDif, transDif, lonDif)
+        
+        secondTransDif = self.transAmpDifCoef*math.sqrt(standoff/10000.) # Convert to cm
+        secondLonDif = self.lonAmpDifCoef*math.sqrt(standoff/10000.)
+        secondDifWidths = (secondTransDif, secondTransDif, secondLonDif)
+        
+        efficiencies = []
+        
+        trialNum = 0
+        while trialNum < numTrials: 
+            totalElecNum = len(self.rawData['z'])
+            
+            # Apply Gaussian smear to approximate initial drift diffusion
+            smearData = self.diffuseData(self.rawData, firstDifWidths)
+            
+            # Discretize data to approximate falling into grid holes
+            holeBins = {'x': holePitch, 'y': holePitch, 'z': 0}
+            discreteData = self.discretizeData(smearData, holeBins)
+            
+            # Approximate diffusion from avalanche
+            avalData = self.diffuseData(discreteData, secondDifWidths)
+
+            # Discretize data to approximate pixels readout
+            pixBins = {'x': pixPitch, 'y': pixPitch, 'z': 0}
+            padData = self.discretizeData(avalData, pixBins)
+            
+            # Convert the z position to arrival time
+            minZ = abs(min(padData['z']))
+            padData['t'] = (padData['z'] + minZ)/self.driftVelocity
+            
+            # Determine how many electrons are seen by the readout. #TODO: improve
+            groupedData = padData.groupby(['x','y']).agg(t=('t', list)).reset_index()
+            check = [pixel for pixel in groupedData['t'] if len(pixel) > 1]
+            
+            numDrop = 0
+            for pixel in check:
+                elecID = 1
+                pixel.sort()
+                while elecID < len(pixel):
+                    if abs(pixel[elecID] - pixel[elecID-1]) < reset:
+                        numDrop += 1
+                    elecID += 1
+            
+            singleEff = (totalElecNum - numDrop)/totalElecNum
+            efficiencies.append(singleEff)
+
+            trialNum += 1
+        
+        efficiency = self._calcAverage(efficiencies)
+        
+        return efficiency
+    
+    #********************************************************************************#
+    
     def reconstructFIMS(self):
         """
         Approximates an event reconstruction using a FIMS readout.
