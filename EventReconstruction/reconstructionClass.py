@@ -47,8 +47,9 @@ class Reconstruction:
             approximateReadout
 
         ## Wrapper functions ##
-        TODO: add z-distribution wrapper to quantify typical spacing between hits
         plotRaw
+        getFIMSPileup
+        getGridPixPileup
         reconstructFIMS
         reconstructBEAST
         reconstructMigdal
@@ -64,8 +65,9 @@ class Reconstruction:
         self._checkInput()
         
         # Get Data
-        dataFrame = self._getDataFrames()
-        self.rawData = self._getCoordinates(dataFrame)
+        self.trialID = 0
+        self.dataframe = self._getDataFrames()
+        self.rawData = self._getCoordinates()
         
         # Set constant values
         self.timeRez = 25 # ns
@@ -141,27 +143,33 @@ class Reconstruction:
 
     #********************************************************************************#
     
-    def _getCoordinates(self, dataframes):
+    def _getCoordinates(self):
         """
         Takes a given dataframe and extracts the x,y,z coordinates from a specified branch.
         
         Note: Assumes coordinates are given in cm and converts them to microns.
         
-        Args:
-            dataframes: pandas dataframe
-        
         Returns:
             rawData (dataframe): the x,y,z coordinates of every electron
         """
         treeName = self.reconInfo['Tree Name']
+        if self.trialID >= 100:
+            print('Warning: invalid trial ID. Setting trial ID to 0.')
+            trialID = 0
+        else:
+            trialID = self.trialID
         
         # Get data of a single trial
-        trialData = dataframes[treeName][['x', 'y', 'z']].iloc[0]
-        # convert to proper formating
+        trialData = self.dataframe[treeName][['x', 'y', 'z']].iloc[trialID]
+        
+        # convert to proper formatting and units (microns)
         rawData = pd.DataFrame(
-            zip(trialData['x']*10000, trialData['y']*10000, trialData['z']),
+            zip(trialData['x']*10000, trialData['y']*10000, trialData['z']*10000),
             columns=['x','y','z']
         )
+        
+        # z is relative, so the minimum value is set to zero for simplicity.
+        rawData['z'] -= min(rawData['z'])
         
         return rawData
     
@@ -488,10 +496,14 @@ class Reconstruction:
         efficiencies = []
         
         trialNum = 0
-        while trialNum < numTrials: 
+        while trialNum < numTrials:
+            # Get new set of coordinates
+            self.trialID = trialNum
+            trialData = self._getCoordinates()
+            totalElecNum = len(trialData['z'])
+            
             # Apply Gaussian smear to approximate diffusion
-            smearData = self.diffuseData(self.rawData, firstDifWidths)
-            totalElecNum = len(smearData['z'])
+            smearData = self.diffuseData(trialData, firstDifWidths)
             
             # Discretize data to approximate falling into grid holes.
             bins = {'x': holePitch, 'y': holePitch, 'z': 0}
@@ -504,8 +516,9 @@ class Reconstruction:
             # Determine how many electrons are seen by the readout.
             groupedData = discreteData.groupby(['x','y']).agg(t=('t', list)).reset_index()
 
-            check = [pixel for pixel in groupedData['t'] if len(pixel) > 1] #TODO: improve
+            check = [pixel for pixel in groupedData['t'] if len(pixel) > 1]
             numDrop = 0
+            # TODO: improve
             for pixel in check:
                 elecID = 1
                 pixel.sort()
