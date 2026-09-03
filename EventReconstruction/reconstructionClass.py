@@ -563,10 +563,13 @@ class Reconstruction:
         
         trialNum = 0
         while trialNum < numTrials: 
-            totalElecNum = len(self.rawData['z'])
+            # Get new set of coordinates
+            self.trialID = trialNum
+            trialData = self._getCoordinates()
+            totalElecNum = len(trialData['z'])
             
             # Apply Gaussian smear to approximate initial drift diffusion
-            smearData = self.diffuseData(self.rawData, firstDifWidths)
+            smearData = self.diffuseData(trialData, firstDifWidths)
             
             # Discretize data to approximate falling into grid holes
             holeBins = {'x': holePitch, 'y': holePitch, 'z': 0}
@@ -580,25 +583,21 @@ class Reconstruction:
             padData = self.discretizeData(avalData, pixBins)
             
             # Convert the z position to arrival time
-            minZ = abs(min(padData['z']))
-            padData['t'] = (padData['z'] + minZ)/self.driftVelocity
+            padData['t'] = padData['z']/self.driftVelocity
+            padData.sort_values(by='t', inplace=True)
             
-            # Determine how many electrons are seen by the readout. #TODO: improve
-            groupedData = padData.groupby(['x','y']).agg(t=('t', list)).reset_index()
-            check = [pixel for pixel in groupedData['t'] if len(pixel) > 1]
+            # Group data by pixel and remove pixels with only 1 electron
+            filteredData = padData.groupby(['x','y']).filter(lambda q: len(q) > 1)
+            groupedData = filteredData.groupby(['x','y']).agg(t=('t', list)).reset_index()
             
-            numDrop = 0
-            for pixel in check:
-                elecID = 1
-                pixel.sort()
-                while elecID < len(pixel):
-                    if abs(pixel[elecID] - pixel[elecID-1]) < reset:
-                        numDrop += 1
-                    elecID += 1
+            # Determine how many electrons are NOT seen by the readout.
+            gaps = groupedData['t'].apply(lambda p: np.array(p)[1:] - np.array(p)[:-1]).explode()
+            numDrop = len(gaps[abs(gaps) < reset])
             
+            # Calculate the efficiency of this trial
             singleEff = (totalElecNum - numDrop)/totalElecNum
             efficiencies.append(singleEff)
-
+            
             trialNum += 1
         
         efficiency = self._calcAverage(efficiencies)
