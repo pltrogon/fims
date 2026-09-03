@@ -513,13 +513,24 @@ class Reconstruction:
             discreteData['t'] = discreteData['z']/self.driftVelocity
             discreteData.sort_values(by='t', inplace=True)
             
-            # Group data by pixel and remove pixels with only 1 electron
-            filteredData = discreteData.groupby(['x','y']).filter(lambda q: len(q) > 1)
-            groupedData = filteredData.groupby(['x','y']).agg(t=('t', list)).reset_index()
+            # Group data by pixel
+            groupedData = discreteData.groupby(['x','y']).agg(t=('t', list), q=('t', lambda z: len(z))).reset_index()
+            filteredData = groupedData[groupedData['q'] > 1] # remove pixels with only 1 electron
             
             # Determine how many electrons are NOT seen by the readout.
-            gaps = groupedData['t'].apply(lambda p: np.array(p)[1:] - np.array(p)[:-1]).explode()
-            numDrop = len(gaps[abs(gaps) < reset])
+            dropped = []
+
+            # Loop through every pixel group
+            for pixel in filteredData['t']:
+                elecID = 0
+                
+                # Loop through all electron IDs
+                while elecID+1 < len(pixel): 
+                    if pixel[elecID+1] - pixel[elecID] < reset:
+                        dropped.append(pixel.pop(elecID+1))
+                        continue
+                    elecID += 1
+            numDrop = len(dropped)
             
             # Calculate the efficiency of this trial
             singleEff = (totalElecNum - numDrop)/totalElecNum
@@ -586,13 +597,24 @@ class Reconstruction:
             padData['t'] = padData['z']/self.driftVelocity
             padData.sort_values(by='t', inplace=True)
             
-            # Group data by pixel and remove pixels with only 1 electron
-            filteredData = padData.groupby(['x','y']).filter(lambda q: len(q) > 1)
-            groupedData = filteredData.groupby(['x','y']).agg(t=('t', list)).reset_index()
+            # Group data by pixel
+            groupedData = padData.groupby(['x','y']).agg(t=('t', list), q=('t', lambda z: len(z))).reset_index()
+            filteredData = groupedData[groupedData['q'] > 1] # remove pixels with only 1 electron
             
             # Determine how many electrons are NOT seen by the readout.
-            gaps = groupedData['t'].apply(lambda p: np.array(p)[1:] - np.array(p)[:-1]).explode()
-            numDrop = len(gaps[abs(gaps) < reset])
+            dropped = []
+
+            # Loop through every pixel group
+            for pixel in filteredData['t']:
+                elecID = 0
+                
+                # Loop through all electron IDs
+                while elecID+1 < len(pixel): 
+                    if pixel[elecID+1] - pixel[elecID] < reset:
+                        dropped.append(pixel.pop(elecID+1))
+                        continue
+                    elecID += 1
+            numDrop = len(dropped)
             
             # Calculate the efficiency of this trial
             singleEff = (totalElecNum - numDrop)/totalElecNum
