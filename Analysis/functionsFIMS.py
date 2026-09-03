@@ -760,7 +760,7 @@ def readScanData(filename):
             flatData.append({
                 'pitch': params.get('pitch', -1),
                 'holeRadius': params.get('holeRadius', -1),
-                'standoff': params.get('gridStandoff', 50),
+                'amplificationGap': params.get('amplificationGap', 50),
                 'fieldRatio': result.get('fieldRatio', -1),
                 'runNumber': result.get('runNumber', -1),
                 'meanGain': simResults.get('averageGain', 0),
@@ -913,7 +913,7 @@ def plotPolyaData(datasets, absField=False, vsGain=False):
     plt.show()
     
 #********************************************************************************#
-def plotEfficiencyContours(allData, xLabel):
+def plotEfficiencyContours(allData, xLabel, isGain):
     """
     Plot the efficiency data across 2D scans wiht contours indicated.
     """
@@ -954,21 +954,23 @@ def plotEfficiencyContours(allData, xLabel):
     xBreakdown = allData['xBreakdown']
     yBreakdown = allData['yBreakdown']
     plt.fill_between(
-        xBreakdown, yBreakdown, y.max()*np.ones(len(yBreakdown)),
+        xBreakdown, 
+        yBreakdown, max(y.max(), yBreakdown.max()+5)*np.ones(len(yBreakdown)),
         color='r', alpha=0.4, hatch='//')
     plt.plot(
         xBreakdown, yBreakdown, 
-        c='r', label='Breakdown Region', ls='-', lw=2.5
+        c='r', label=f'Breakdown Region', ls='-', lw=2.5
     )
 
     plt.xlabel(xLabel, fontsize=fontsize)
-    plt.ylabel('Field Ratio', fontsize=fontsize)
+    plt.ylabel(r'Gas Gain: $\overline{n}$' if isGain else 'Field Ratio', fontsize=fontsize)
     plt.legend(fontsize=fontsize)
 
-    plt.yscale('log')
+    if isGain:
+        plt.yscale('log')
 
     plt.xlim([x.min(), x.max()])
-    plt.ylim([y.min(), y.max()])
+    plt.ylim([y.min(), max(y.max(), yBreakdown.max()+5)])
 
     plt.tight_layout()
     plt.show()
