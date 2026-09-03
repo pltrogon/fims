@@ -509,24 +509,19 @@ class Reconstruction:
             bins = {'x': holePitch, 'y': holePitch, 'z': 0}
             discreteData = self.discretizeData(smearData, bins)
             
-            # Convert the z position to arrival time
-            minZ = abs(min(discreteData['z']))
-            discreteData['t'] = (discreteData['z'] + minZ)/self.driftVelocity
-
-            # Determine how many electrons are seen by the readout.
-            groupedData = discreteData.groupby(['x','y']).agg(t=('t', list)).reset_index()
-
-            check = [pixel for pixel in groupedData['t'] if len(pixel) > 1]
-            numDrop = 0
-            # TODO: improve
-            for pixel in check:
-                elecID = 1
-                pixel.sort()
-                while elecID < len(pixel):
-                    if abs(pixel[elecID] - pixel[elecID-1]) < reset:
-                        numDrop += 1
-                    elecID += 1
+            # Convert the z position to arrival time and sort by that time
+            discreteData['t'] = discreteData['z']/self.driftVelocity
+            discreteData.sort_values(by='t', inplace=True)
             
+            # Group data by pixel and remove pixels with only 1 electron
+            filteredData = discreteData.groupby(['x','y']).filter(lambda q: len(q) > 1)
+            groupedData = filteredData.groupby(['x','y']).agg(t=('t', list)).reset_index()
+            
+            # Determine how many electrons are NOT seen by the readout.
+            gaps = groupedData['t'].apply(lambda p: np.array(p)[1:] - np.array(p)[:-1]).explode()
+            numDrop = len(gaps[abs(gaps) < reset])
+            
+            # Calculate the efficiency of this trial
             singleEff = (totalElecNum - numDrop)/totalElecNum
             efficiencies.append(singleEff)
 
