@@ -39,7 +39,7 @@ class AnimationData:
         self.fileName = fileName if fileName else self.DEFAULT_FILENAME
         self.simData = None
         self.avalancheData = None
-        self.fieldStengths = None
+        self.fieldStrengths = None
         self.fieldLines = None
         self.animationData = None
         self.particleData = None
@@ -340,8 +340,14 @@ class FIMSVisualizer(QMainWindow):
         self.chkAdjacent = QCheckBox('Adjacent Contour')
         self.chkAdjacent.setChecked(False)
         self.chkAdjacent.toggled.connect(self._onChange)
+
+        self.zoomAmp = QCheckBox('Amplification Field - Zoom')
+        self.zoomAmp.setChecked(False)
+        self.zoomAmp.toggled.connect(self._onChange)
+
         layoutFieldStrengths.addWidget(self.chkContours)
         layoutFieldStrengths.addWidget(self.chkAdjacent)
+        layoutFieldStrengths.addWidget(self.zoomAmp)
 
         self.controlsStack.addWidget(viewWidgetFieldStrengths)
 
@@ -700,7 +706,7 @@ class FIMSVisualizer(QMainWindow):
             if contour is not None:
                 divider = make_axes_locatable(yz)
                 cax = divider.append_axes("right", size="5%", pad=0.1)
-                self.cbar = self.canvas.fig.colorbar(contour, cax=cax)
+                self.cbar = self.canvas.fig.colorbar(contour, cax=cax)            
             
         else: 
             ax = self.canvas.setupAxes()
@@ -721,7 +727,6 @@ class FIMSVisualizer(QMainWindow):
                 fraction=0.03,
                 pad=0.04
             )
-            
 
         if self.cbar is not None:
             label = 'Field Strength (kV/cm)' if isEField else 'Weighting Potential'
@@ -754,9 +759,11 @@ class FIMSVisualizer(QMainWindow):
             zData = plotData[mask]
 
             sep=0.05
+            #levels = np.arange(0, 1+sep, sep)
+            levels = [.01, .05, .1, .25, .5, .75, .9, .99]
             lines = ax.tricontour(
                 xData, yData, zData,  
-                levels=np.arange(0, 1+sep, sep), colors=color, linewidths=0.5, 
+                levels=levels, colors=color, linewidths=0.5, 
                 vmin=0, vmax=1
             )
             ax.clabel(lines, inline=True, fontsize=8, fmt='%.2f')
@@ -1221,8 +1228,12 @@ class FIMSVisualizer(QMainWindow):
 
         amplificationGap = self.data.simData['amplificationGap']
         driftLength = self.data.simData['driftLength']
-        zBuffer=5
-        zLim = [-amplificationGap-zBuffer, driftLength+zBuffer]
+
+        isZoom = self.zoomAmp.isChecked()
+        zBuffer = 2
+        lowZ = -amplificationGap-zBuffer
+        highZ = 6*zBuffer if isZoom else driftLength+zBuffer
+        zLim = [lowZ, highZ]
         
         if isinstance(axes, tuple):
             xz, yz, *rest = axes
