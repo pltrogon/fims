@@ -33,6 +33,7 @@ set(COMMON_LIBS
 # Format: executable_name source_file.cc
 set(EXECUTABLES
     runAvalanche            	avalanche.cc
+    runSimple            	    simpleAvalanche.cc
     runMagboltz             	magboltz.cc
     runEfficiency               checkEfficiency.cc
     runFullField		        plotFullField.cc

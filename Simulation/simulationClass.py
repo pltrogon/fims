@@ -552,7 +552,8 @@ class FIMS_Simulation:
             'runFullField',
             'runBreakdown',
             'runGainEfficiency',#Todo - add to docstring
-            'runAnimation'
+            'runAnimation',
+            'runSimple'
         ]
 
         if executable not in executables:
@@ -1749,3 +1750,20 @@ class FIMS_Simulation:
             self.setParameters(saveParam)
         
         return 
+
+#**********************************************************************#
+    def runSimple(self):
+        """TODO"""
+        # Get the run number for this simulation
+        runNo = self._param['runNumber']
+        print(f'Running simulation - Run number: {runNo}')
+    
+        self._checkParam()
+        self._generateGeometry()
+            
+        #Solve fields and run Garfield
+        self._solveEFields()
+        self._runGarfield('runSimple')
+        
+        return runNo
+    
