@@ -34,7 +34,7 @@ class Reconstruction:
         ## Base functions ##
         Private:
             _checkInput
-            _getDataFrames
+            _getData
             _getCoordinates
             _groupData
             _convertToSignal
@@ -66,7 +66,7 @@ class Reconstruction:
         
         # Get Data
         self.trialID = 0
-        self.dataframe = self._getDataFrames()
+        self.allTrials = self._getData()
         self.rawData = self._getCoordinates()
 
         # Values for T2K gas assuming 0.28 KV/cm drift field and ~140 KV/cm amplification field
@@ -113,14 +113,18 @@ class Reconstruction:
     
     #********************************************************************************#
 
-    def _getDataFrames(self):
+    def _getData(self):
         """
-        Unpacks a root file from a given filename
+        Unpacks a root file from a given filename and tree name.
+        
+        Note: Assumes coordinates are given in cm and converts them to microns.
         
         returns:
-            dataframes (pandas dataframe): unpacked root file
+            allTrials (pandas dataframe): unpacked root file
         """
         filePath = self.reconInfo['File Location']
+        treeName = self.reconInfo['Tree Name']
+        
         with uproot.open(filePath) as rootFile:
             dataframes = {}
             for treeKey in rootFile.keys():
@@ -135,37 +139,29 @@ class Reconstruction:
                     except Exception as e:
                         print(f"Error reading tree '{treeKey}': {e}")
         
-        return dataframes
+        # Get data of a single trial
+        fileData = dataframes[treeName][['x', 'y', 'z']]
+        
+        # convert units to microns
+        allTrials = fileData*10000
+        
+        # z is relative, so the minimum value is set to zero for simplicity.
+        allTrials['z'] = allTrials['z'].apply(lambda row: np.array(row) - min(row))
+        
+        return allTrials
 
     #********************************************************************************#
     
     def _getCoordinates(self):
         """
-        Takes a given dataframe and extracts the x,y,z coordinates from a specified branch.
+        Takes a given dataframe and extracts the x,y,z coordinates from a single trial
         
-        Note: Assumes coordinates are given in cm and converts them to microns.
         
-        Returns:
+        returns:
             rawData (dataframe): the x,y,z coordinates of every electron
         """
-        treeName = self.reconInfo['Tree Name']
-        if self.trialID >= 100:
-            print('Warning: invalid trial ID. Setting trial ID to 0.')
-            trialID = 0
-        else:
-            trialID = self.trialID
-        
-        # Get data of a single trial
-        trialData = self.dataframe[treeName][['x', 'y', 'z']].iloc[trialID]
-        
-        # convert to proper formatting and units (microns)
-        rawData = pd.DataFrame(
-            zip(trialData['x']*10000, trialData['y']*10000, trialData['z']*10000),
-            columns=['x','y','z']
-        )
-        
-        # z is relative, so the minimum value is set to zero for simplicity.
-        rawData['z'] -= min(rawData['z'])
+        singleTrial = self.allTrials.iloc[self.trialID]
+        rawData = pd.DataFrame(zip(*singleTrial), columns=['x', 'y', 'z'])
         
         return rawData
     
@@ -181,13 +177,13 @@ class Reconstruction:
         dEdX = .2525 # eV/micron
         dx = 10400 # microns
         minE = 26.0 # eV
-        numElec = dEdX * dx / minE
+        numElec = int(dEdX * dx / minE)
         
         # Randomly assign a location for each point along the line.
         start = np.array([-5700, -5200, 0], dtype=float)
         end = np.array([0, 0, 7000], dtype=float)
         points = np.random.rand(numElec)
-        data = start + np.outer(t_values, (end - start))
+        data = start + np.outer(points, (end - start))
         rawData = pd.DataFrame(data, columns=['x', 'y', 'z'])
         
         return rawData
@@ -486,6 +482,7 @@ class Reconstruction:
         returns:
             rawFig: matplotlib figure
         """
+        
         rawFig = self._format3DPlot(self.rawData, title='Raw Data')
         
         return rawFig
@@ -513,14 +510,14 @@ class Reconstruction:
         lonDif = self.lonDriftDifCoef*math.sqrt(drift)
         firstDifWidths = (transDif, transDif, lonDif)
         efficiencies = []
-        
+
         trialNum = 0
         while trialNum < numTrials:
             # Get new set of coordinates
-            self.trialID = trialNum
             if MIP:
                 trialData = self._approximateMIP()
             else:
+                self.trialID = trialNum
                 trialData = self._getCoordinates()
             totalElecNum = len(trialData['z'])
             
