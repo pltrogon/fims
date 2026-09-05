@@ -68,24 +68,20 @@ class Reconstruction:
         self.trialID = 0
         self.dataframe = self._getDataFrames()
         self.rawData = self._getCoordinates()
+
+        # Values for T2K gas assuming 0.28 KV/cm drift field and ~140 KV/cm amplification field
+        self.driftVelocity = 80 # microns/ns 
         
-        # Set constant values
-        self.timeRez = 25 # ns
-        self.driftVelocity = 1 # microns/ns
-        self.zRez = self.timeRez*self.driftVelocity # microns
-        self.initialDriftDistance = 10 # cm
-        
-        # Values from Tanner sim
         self.transDriftDifCoef = 320 # microns/sqrt(cm)
         self.lonDriftDifCoef = 200 # microns/sqrt(cm)
         
         self.transAmpDifCoef = 190 # microns/sqrt(cm)
         self.lonAmpDifCoef = 150 # microns/sqrt(cm)
         
-        # Values from Majd paper
-        #self.transDriftDifCoef = 136 # microns/sqrt(cm)
-        #self.lonDriftDifCoef = 114 # microns/sqrt(cm)
-        
+        # Set constant values
+        self.timeRez = 25 # ns
+        self.zRez = self.timeRez*self.driftVelocity # microns
+        self.initialDriftDistance = 10 # cm
         
         return
     
@@ -174,7 +170,30 @@ class Reconstruction:
         return rawData
     
     #********************************************************************************#
-
+    
+    def _approximateMIP(self):
+        """
+        Creates a line of approximate MIP interaction electrons.
+        
+        Returns: 
+            rawData (dataframe): the x,y,z coordinates of every electron
+        """
+        dEdX = 200 # eV/micron
+        dx = 10400 # microns TODO: this results in 80,000 electrons. Surely this is wrong?
+        minE = 26.0 # eV
+        numElec = dEdX * dx / minE
+        
+        # Randomly assign a location for each point along the line.
+        start = np.array([-5700, -5200, 0], dtype=float)
+        end = np.array([0, 0, 7000], dtype=float)
+        points = np.random.rand(numElec)
+        data = start + np.outer(t_values, (end - start))
+        rawData = pd.DataFrame(data, columns=['x', 'y', 'z'])
+        
+        return rawData
+    
+    #********************************************************************************#
+    
     def _groupData(self, inputData):
         """
         Takes the x,y,z coordinates and groups the amount of charge by location.
@@ -473,9 +492,9 @@ class Reconstruction:
         
     #********************************************************************************#
     
-    def getFIMSPileup(self, drift=10, reset=25, numTrials=100):
+    def getPileup(self, drift=10, reset=25, numTrials=100, MIP=False):
         """
-        Determines the efficiency for a FIMS readout based on given input parameters.
+        Determines the efficiency for a readout based on given input parameters.
         
         args:
             drift (float): initial drift distance of the electron in centimeters.
@@ -499,7 +518,10 @@ class Reconstruction:
         while trialNum < numTrials:
             # Get new set of coordinates
             self.trialID = trialNum
-            trialData = self._getCoordinates()
+            if MIP:
+                trialData = self._approximateMIP()
+            else:
+                trialData = self._getCoordinates()
             totalElecNum = len(trialData['z'])
             
             # Apply Gaussian smear to approximate diffusion
@@ -536,90 +558,6 @@ class Reconstruction:
             singleEff = (totalElecNum - numDrop)/totalElecNum
             efficiencies.append(singleEff)
 
-            trialNum += 1
-        
-        efficiency = self._calcAverage(efficiencies)
-        
-        return efficiency
-    
-    #********************************************************************************#
-    
-    def getGridPixPileup(self, drift=10, reset=25, numTrials=100):
-        """
-        Determines the efficiency for a GridPix readout based on given input parameters.
-        
-        args:
-            drift (float): initial drift distance of the electron in centimeters.
-            reset (float): the time for the reset signal in nanoseconds.
-            numTrials (int): number of data sets to sample.
-            
-        returns:
-            efficiency (float): detection efficiency, measured as # initial/# counted.
-        """
-        # Extract and calculate relevant data
-        holePitch = self.reconInfo['Hole Pitch']
-        pixPitch = self.reconInfo['Pixel Pitch']
-        standoff = self.reconInfo['Standoff']
-        zRez = reset*self.driftVelocity
-        
-        transDif = self.transDriftDifCoef*math.sqrt(drift)
-        lonDif = self.lonDriftDifCoef*math.sqrt(drift)
-        firstDifWidths = (transDif, transDif, lonDif)
-        
-        secondTransDif = self.transAmpDifCoef*math.sqrt(standoff/10000.) # Convert to cm
-        secondLonDif = self.lonAmpDifCoef*math.sqrt(standoff/10000.)
-        secondDifWidths = (secondTransDif, secondTransDif, secondLonDif)
-        
-        efficiencies = []
-        
-        trialNum = 0
-        while trialNum < numTrials: 
-            # Get new set of coordinates
-            self.trialID = trialNum
-            trialData = self._getCoordinates()
-            totalElecNum = len(trialData['z'])
-            
-            # Apply Gaussian smear to approximate initial drift diffusion
-            smearData = self.diffuseData(trialData, firstDifWidths)
-            
-            # Discretize data to approximate falling into grid holes
-            holeBins = {'x': holePitch, 'y': holePitch, 'z': 0}
-            discreteData = self.discretizeData(smearData, holeBins)
-            
-            # Approximate diffusion from avalanche
-            avalData = self.diffuseData(discreteData, secondDifWidths)
-
-            # Discretize data to approximate pixels readout
-            pixBins = {'x': pixPitch, 'y': pixPitch, 'z': 0}
-            padData = self.discretizeData(avalData, pixBins)
-            
-            # Convert the z position to arrival time
-            padData['t'] = padData['z']/self.driftVelocity
-            padData.sort_values(by='t', inplace=True)
-            
-            # Group data by pixel
-            groupedData = padData.groupby(['x','y']).agg(t=('t', list), q=('t', lambda z: len(z))).reset_index()
-            filteredData = groupedData[groupedData['q'] > 1] # remove pixels with only 1 electron
-            
-            # Determine how many electrons are NOT seen by the readout.
-            dropped = []
-
-            # Loop through every pixel group
-            for pixel in filteredData['t']:
-                elecID = 0
-                
-                # Loop through all electron IDs
-                while elecID+1 < len(pixel): 
-                    if pixel[elecID+1] - pixel[elecID] < reset:
-                        dropped.append(pixel.pop(elecID+1))
-                        continue
-                    elecID += 1
-            numDrop = len(dropped)
-            
-            # Calculate the efficiency of this trial
-            singleEff = (totalElecNum - numDrop)/totalElecNum
-            efficiencies.append(singleEff)
-            
             trialNum += 1
         
         efficiency = self._calcAverage(efficiencies)
