@@ -178,8 +178,8 @@ class Reconstruction:
         Returns: 
             rawData (dataframe): the x,y,z coordinates of every electron
         """
-        dEdX = 200 # eV/micron
-        dx = 10400 # microns TODO: this results in 80,000 electrons. Surely this is wrong?
+        dEdX = .2525 # eV/micron
+        dx = 10400 # microns
         minE = 26.0 # eV
         numElec = dEdX * dx / minE
         
