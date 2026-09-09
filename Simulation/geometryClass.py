@@ -363,7 +363,7 @@ class gmshClass:
                 xHalf = xLength/2
             case UnitCell.SQUARE:
                 xLength = length
-                xHalf = length/2
+                xHalf = length
             case _:
                 raise ValueError(f"Unsupported unit cell: {self._geoConfig.unitCell}")
 
@@ -488,7 +488,7 @@ class gmshClass:
             adjustedDielectric,
             padHoleTools,
         )
-        
+
         return dielectricVolume, padVolumes
 
 #**********************************************************************#
@@ -590,7 +590,7 @@ class gmshClass:
             )
         else:
             # Append original to list
-            fullGeometry.append(geometry)
+            fullGeometry.insert(0, geometry)
         
         return fullGeometry
 

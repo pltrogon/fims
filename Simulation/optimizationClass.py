@@ -28,42 +28,17 @@ class RepeatedInputs(Warning):
 
 class FIMS_Optimizer:
     """
-    ===============================================
-    TODO: Review Docstring
-    ===============================================
-    
+        
     Class representing the FIMS optimization algorithm.
     
     Utilizes scipy.optimize's minimize method with the COBYQA method 
-    to minimize a target parameter. Currently only accepts the hole 
-    radius, pitch, grid standoff height (amplification distance), and 
-    pad length as input parameters. 
-    
-    Note: Currently only minimizes the IBN.
-    
-    Private Attributes:
-        params (dict of lists):
-            first param name: [minimum value, maximum value],
-            .
-            .
-            .
-            last param name: [minimum value, maximum value]
-        
-        initialGeometry (dict): dictionary of geometry values to be used
-        as initial values for the optimizer.
-        
-        simFIMS (simulationClass): a simulation class object that 
-    represents the simulation pipeline.
-        
-        optimizerLog (list): input values and the corresponding target
-        output value for each iteration of the optimizer.
-        
-        startTime (float): timestamp of the beginning of the optimizer
-        lastRunParams (dictionary): parameters and values from the 
-    previous iteration.
-        
-        lastRunResults (float): the target output value of the 
-        previous iteration.
+    to minimize a target parameter. 
+	
+	Note - Currently only accepts as inputs:
+		hole radius, 
+		pitch, 
+		amplification distance (grid standoff height), 
+		pad lengthand 
     """
 
 #**********************************************************************#
@@ -78,7 +53,8 @@ class FIMS_Optimizer:
         - The maximum value for the parameter (float)
         
         Args:
-            params (list of lists): List of parameters with bounds.
+            params (dict): Dictionary where keys are parameter names 
+						   and values are lists of [Minimum, Maximum].
         """
         self.simFIMS = FIMS_Simulation()
         
@@ -96,13 +72,15 @@ class FIMS_Optimizer:
         }
         self.geoConfig = self.simFIMS._geoConfiguration
         self._checkParameters()
-
+		
+		self._setupScalings()
+        
         # Create log file for optimizer
         try:
             with open('log/logOptimizer.txt', 'w') as file:
                 file.write('## FIMS Optimization Log ##\n')
-        except:
-            raise FileNotFoundError('Unable to create log file.')
+        except OSError as e:
+            raise FileNotFoundError(f'Unable to create log file: {e}') from e
         
         # Setup log file and timestamps
         self._optimizerLog = []
@@ -137,7 +115,9 @@ class FIMS_Optimizer:
         """
         Checks the input parameters for correct format.
         """
-        
+        if self.params is None:
+            raise ValueError('Error - No parameters provided.')
+			
         allowedParams = [
             'holeRadius', 
             'amplificationGap', 
@@ -146,20 +126,12 @@ class FIMS_Optimizer:
             'fieldRatio'
         ]
         paramCopy = self.params.copy()
-        
-        if paramCopy is None:
-            raise ValueError('Error - No parameters.')
 
-        for paramName in paramCopy:
-            if not isinstance(paramCopy[paramName], list) or len(paramCopy[paramName]) != 2:
-                raise ValueError(f'Error: {paramName} is invalid.')
-                
-            name = paramName
-            minVal = min(paramCopy[paramName])
-            maxVal = max(paramCopy[paramName])
-            
-            if name not in allowedParams:
-                raise ValueError(f'Error: {name} not a valid parameter.')
+		for paramName, bounds in paramCopy.items():
+			if paramName not in allowedParams:
+				raiseValueError(f'Error: {name} not a valid parameter.')
+            if not isinstance(bounds, list) or len(bounds) != 2:
+                raise ValueError(f'Error: Invalid bounds {bounds}.')
 
         return 
 
@@ -177,15 +149,41 @@ class FIMS_Optimizer:
         if not isinstance(initialGuess, dict):
             raise ValueError('Error: Initial guess is not a dictionary')
 
-        for param in initialGuess:
-            if not isinstance(initialGuess[param], (int, float)):
+        for param, value in initialGuess.items():
+            if not isinstance(value, (int, float)):
                 raise ValueError(f'Error: {param} value is not valid. Must be a number.')
         
         # Update default values with given values, if any provided
-        for geo in initialGuess:
-            self.initialGeometry[geo] = initialGuess[geo]
+        for geo, value in initialGuess.items():
+            self.initialGeometry[geo] = value
         
         return
+
+#**********************************************************************#
+	def _setupScalings(self):
+		"""
+		Set up scaling factors for various geometries
+		"""
+        octagonFactor = 2 * math.cos(math.radians(67.5))
+        kikiFactor = math.sqrt(3)
+
+        self.holeShapeFactors = {
+            'circle':  (-2, -2),
+            'hexagon': (-math.sqrt(3), -2),
+            'octagon': (-2.0173, -octagonFactor),
+            'triangle': (-2, -2),
+            'kiki': (-math.sqrt(3), -2),
+            'nesteggs': (-7.1, -7.1),
+            'trivialpursuit': (-4.4, -4.4)
+        }
+    
+        self.padShapeFactors = {
+            'square':  (-4 / math.sqrt(3), -1),
+            'hexagon': (-math.sqrt(3), -2),
+            'octagon': (-1.9601, -octagonFactor),
+        } 
+		return
+		
 #**********************************************************************#
 
     def _makeConstraintEquation(self, keys, variables, constants):
@@ -242,43 +240,23 @@ class FIMS_Optimizer:
             square unit cell: circle = 2, square = 1, hexagon = 2, octagon = 2*cos(67.5)
             Note: octagon length defined as distance from center to vertex. 
         '''
-        
-        # Shape scaling factors lookup
-        octagonFactor = 2 * math.cos(math.radians(67.5))
-        kikiFactor = math.sqrt(3)
-
-        holeShapeFactors = {
-            'circle':  (-2, -2),
-            'hexagon': (-math.sqrt(3), -2),
-            'octagon': (-2.0173, -octagonFactor),
-            'triangle': (-2, -2),
-            'kiki': (-math.sqrt(3), -2),
-            'nesteggs': (-7.1, -7.1),
-            'trivialpursuit': (-4.4, -4.4)
-        }
-    
-        padShapeFactors = {
-            'square':  (-4 / math.sqrt(3), -1),
-            'hexagon': (-math.sqrt(3), -2),
-            'octagon': (-1.9601, -octagonFactor),
-        }
     
         # Get all geometry values
-        initGeometry = self.initialGeometry.copy()
-        hexCell = 'Hexagonal' in self.geoConfig.unitCell
+        initGeometry = {key: self.initialGeometry[key] for key in self.initialGeometry}
+        hexCell = 'hexagon' in self.geoConfig.unitCell
         hexID = 0 if hexCell else 1
         
         # Apply geometry-dependent multipliers
         holeShape = self.geoConfig.holeShape
-        if holeShape in holeShapeFactors:
-            initGeometry['holeRadius'] *= holeShapeFactors[holeShape][hexID]
+        if holeShape in self.holeShapeFactors:
+            initGeometry['holeRadius'] *= self.holeShapeFactors[holeShape][hexID]
     
         padShape = self.geoConfig.padShape
-        if padShape in padShapeFactors:
-            initGeometry['padLength'] *= padShapeFactors[padShape][hexID]
+        if padShape in self.padShapeFactors:
+            initGeometry['padLength'] *= self.padShapeFactors[padShape][hexID]
         
         # Set Other geometry parameters
-        initGeometry['pillarRadius'] *= -1
+        initGeometry['pillarRadius'] = 0 # TODO: include pillar
         initGeometry['thicknessSiO2'] *= -1
         
         # Active vs fixed parameters
@@ -316,15 +294,92 @@ class FIMS_Optimizer:
             lowerBounds.append(limit)
     
         if not matrixRows:
-            return LinearConstraint(np.empty((0, numParams)), [], [])
+            return [LinearConstraint(np.empty((0, numParams)), [], [], keep_feasible=True)]
         
-        geometryConstraints = LinearConstraint(
+        geometryConstraints = [LinearConstraint(
             A=np.array(matrixRows),
             lb=np.array(lowerBounds),
-            ub=np.full(len(lowerBounds), np.inf)
-        )
-
+            ub=np.full(len(lowerBounds), np.inf),
+            keep_feasible=True
+        )]
+        
         return geometryConstraints
+
+#**********************************************************************#
+
+    def _projectValue(self, paramName, scale, valDict, varDict):
+        """
+        Takes a given parameter and projects it into a feasible region.
+        
+        args:
+            paramName (str): name of the parameter to be checked.
+            scale (float): how the parameter scales.
+            valDict (dict): dictionary of values for all parameters.
+            varDict (dict): dictionary of variabels.
+        
+        returns:
+            valDict: the new values for the parameters.
+        """
+        buffer = 0.98
+        maxVal = buffer * valDict['pitch'] / scale
+        
+        if valDict[paramName] <= maxVal:
+	        return valDict
+
+        if paramName in varDict:
+            valDict[paramName] = maxVal
+            print(f'Warning: {paramName} larger than cell. Changed to {maxVal}')
+        
+        elif 'pitch' in varDict:
+            newPitch = valDict[paramName] * scale * (2-buffer)
+            valDict['pitch'] = newPitch
+            print(f'Warning: {paramName} larger than cell. Pitch set to {newPitch}')
+        
+        else:
+            raise ValueError(
+                f'Error: {paramName} larger than cell AND constant. '
+                f'Adjust value and then restart the optimizer.'
+            )
+        
+        return valDict
+
+    #**********************************************************************#
+
+    def _constraintFailSafe(self, geoDict):
+        """
+        Ensures geometry values are feasible. Adjusts them if not.
+
+        args:
+            geoDict (dict): dictionary of optimizer values
+
+        returns: 
+            verifiedDict (dict): dictionary of optimizer values that are
+        verified to be feasible.
+        """
+        # Get all geometry values
+        hexID = 0 if 'hexagon' in self.geoConfig.unitCell else 1
+        parameters = ['pitch', 'holeRadius', 'padLength']
+        valuesDict = {
+            key: geoDict[key] if key in geoDict else self.simFIMS.getParam(key)
+            for key in parameters
+        }    
+
+	    # Apply geometry-dependent multipliers
+        holeShape = self.geoConfig.holeShape
+        if holeShape in self.holeShapeFactors:
+            holeScale = -1 * self.holeShapeFactors[holeShape][hexID]
+        
+        padShape = self.geoConfig.padShape
+        if padShape in self.padShapeFactors:
+            padScale = -1 * self.padShapeFactors[padShape][hexID]
+        
+        # Grid hole must be smaller than the cell size
+        verifiedDict = self._projectValue('holeRadius', holeScale, valuesDict, geoDict)    
+        
+        # Pad size must be smaller than the cell size
+        verifiedDict = self._projectValue('padLength', padScale, verifiedDict, geoDict) 
+    	    
+        return verifiedDict
 
 #**********************************************************************#
 
@@ -460,7 +515,8 @@ class FIMS_Optimizer:
         # Unpack and Upload the optimizer parameters into the simulation
         paramDict = dict(zip(inputList, optimizerParam))
         unNormalizedDict = self._unNormalizeInputs(paramDict)
-        self.simFIMS.setParameters(unNormalizedDict)
+        verifiedGeo = self._constraintFailSafe(unNormalizedDict)
+        self.simFIMS.setParameters(verifiedGeo)
         
         # Run simulation and get the IBN
         resultIBN = self._getIBN()
@@ -536,7 +592,8 @@ class FIMS_Optimizer:
         # Unpack and Upload the optimizer parameters into the simulation
         paramDict = dict(zip(inputList, optimizerParam))
         unNormalizedDict = self._unNormalizeInputs(paramDict)
-        self.simFIMS.setParameters(unNormalizedDict)
+        verifiedGeo = self._constraintFailSafe(unNormalizedDict)
+        self.simFIMS.setParameters(verifiedGeo)
         
         # Run simulation and get the minimum field ratio
         fieldRatio = self._getEff()
@@ -629,26 +686,35 @@ class FIMS_Optimizer:
                 fun=self._IBNObjective,
                 x0=initNormGuess,
                 args=(inputList,),
-                method='COBYQA', #or 'Nelder-Mead'
+                method='COBYQA', # or 'Nelder-Mead' / 'trust-constr'
                 constraints=self._getGeometryConstraints(),
                 callback=self._checkConvergence,
                 bounds=optimizerBounds,
-                options = {'initial_tr_radius': .2} # initial step of 20%
+                options = {
+                    'initial_tr_radius': .2, # initial step of 20%
+                    'final_tr_radius': 1e-3,
+                    'disp': False
+                }
             )
             
             # Unpack optimizer output
-            finalParams = optimizerResult.x
+            normalFinalParams = optimizerResult.x
             finalFunction = optimizerResult.fun
             finalStatus = optimizerResult.success
-
+            
+            finalDict = dict(zip(inputList, normalFinalParams))
+            finalParams = self._unNormalizeInputs(finalDict) 
+            
         except StopIteration:
             print('Optimization terminated due to convergence.')
             print(finalParams, finalFunction, finalStatus)
+			lastLog = self._optimizerLog[-1]
+			finalParams = lastLog['params']
+			finalFunction = lastLog['IBN']
             
 
         print('\n*************** Optimization Complete ***************')
         # Put results into simulation instance
-        finalParams = dict(zip(inputList, optimizerResult.x))
         self.simFIMS.setParameters(finalParams)
         
         resultVals = {
@@ -707,25 +773,34 @@ class FIMS_Optimizer:
                 fun=self._effObjective,
                 x0=initNormGuess,
                 args=(inputList,),
-                method='COBYQA', #or 'Nelder-Mead'
+                method='COBYQA', # or 'Nelder-Mead' / 'trust-constr'
                 constraints=self._getGeometryConstraints(),
                 callback=self._checkConvergence,
                 bounds=optimizerBounds,
-                options = {'initial_tr_radius': .2} # initial step of 20%
+                options = {
+                    'initial_tr_radius': .2,  # initial step of 20%
+                    'final_tr_radius': 1e-3,
+                    'disp': False
+                }
             )
             
             # Unpack optimizer output
-            finalParams = optimizerResult.x
+            normalFinalParams = optimizerResult.x
             finalFunction = optimizerResult.fun
             finalStatus = optimizerResult.success
-
+            
+            finalDict = dict(zip(inputList, normalFinalParams))
+            finalParams = self._unNormalizeInputs(finalDict) 
+            
         except StopIteration:
             print('Optimization terminated due to convergence.')
             print(finalParams, finalFunction, finalStatus)
+			lastLog = self._optimizerLog[-1]
+			finalParams = lastLog['params']
+			finalFunction = lastLog['IBN']
             
         print('\n*************** Optimization Complete ***************')
         # Put results into simulation instance
-        finalParams = dict(zip(inputList, optimizerResult.x))
         self.simFIMS.setParameters(finalParams)
         
         resultVals = {
@@ -734,7 +809,7 @@ class FIMS_Optimizer:
             'success': optimizerResult.success
         }
         
-        print(f"Optimal IBN value = {resultVals['fieldValue']}")
+        print(f"Optimal Field value = {resultVals['fieldValue']}")
         print(self.simFIMS)
         
         return resultVals

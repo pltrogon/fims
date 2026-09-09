@@ -757,7 +757,7 @@ def readScanData(filename):
             flatData.append({
                 'pitch': params.get('pitch', -1),
                 'holeRadius': params.get('holeRadius', -1),
-                'standoff': params.get('gridStandoff', 50),
+                'amplificationGap': params.get('amplificationGap', 50),
                 'fieldRatio': result.get('fieldRatio', -1),
                 'runNumber': result.get('runNumber', -1),
                 'meanGain': simResults.get('averageGain', 0),
@@ -910,68 +910,97 @@ def plotPolyaData(datasets, absField=False, vsGain=False):
     plt.show()
     
 #********************************************************************************#
-def plotEfficiencyContours(allData, xLabel):
+def plotEfficiencyContours(allData=None, breakDownData=None, xData='', isGain=False, contourLevel=0, vLine=0):
     """
     Plot the efficiency data across 2D scans wiht contours indicated.
     """
     
     fontsize = 14
 
-    x = np.array(allData['xData'])
-    y = np.array(allData['yData'])
-    z = np.array(allData['zData'])
+    optTrans = getOT(allData['holeRadius'], allData['pitch'])
+    xMap = {'OT': optTrans, 'Amp': allData['amplificationGap']}
+    if xData not in xMap.keys():
+        raise KeyError('Invalid x')
+    x = xMap[xData]
+
+    y = allData['meanGain'] if isGain else allData['fieldRatio']
+    z = np.array(allData['netEfficiency'])
 
     fig = plt.figure(figsize=(10, 6))
 
-    # Plot the data
+    # Plot the net efficiency data
     contour = plt.tricontourf(
         x, y, z,
         levels=np.linspace(0, 1, 101),
-        cmap="viridis",
+        cmap='viridis',
     )
     cbar = plt.colorbar(contour)
     cbar.set_ticks(np.linspace(0, 1, 11))
     cbar.set_label('Net Efficiency', rotation=270, labelpad=15, fontsize=fontsize)
 
     # Plot the contour lines
-    effLines = [.95, .90, .75, .50]
-    effLineStyle = ['-', '--', '-.', ':']
-    for inLevel, inLine in zip(effLines, effLineStyle):
-        contourLine = plt.tricontour(
-            x, y, z, 
-            levels=[inLevel], 
-            colors='m', 
-            linestyles=inLine,
-            linewidths=2.5
-        )
-        plt.clabel(contourLine, inline=True, fontsize=fontsize, fmt=f"{inLevel*100:.0f} %%")
-        plt.plot([], [], c='m', ls=inLine, lw=2.5, label=r"$\epsilon_{\text{Net}}$"+f" = {inLevel*100:.0f}%")
+    if contourLevel > 0:
+        configs = [
+                {'key': 'netEfficiency', 'label': 'Net Efficiency', 'c': 'm'},
+                {'key': 'colEfficiency', 'label': 'Collection', 'c': 'g'},
+                {'key': 'detEfficiency', 'label': 'Detection', 'c': 'b'},
+            ]
+        lineLevels = [contourLevel]
+        lineStyles = ['-']
+    else:
+
+        configs = [{'key': 'netEfficiency', 'label': r'$\epsilon_{\text{Net}}$', 'c': 'm'}]
+        lineLevels = [.95, .90, .75, .50]
+        lineStyles = ['-', '--', '-.', ':']
+
+    for cfg in configs:
+        for inLevel, inLine in zip(lineLevels, lineStyles):
+            z = allData[cfg['key']]
+            contourLine = plt.tricontour(
+                x, y, z, 
+                levels=[inLevel], 
+                colors=cfg['c'], 
+                linestyles=inLine,
+                linewidths=2.5
+            )
+            plt.clabel(contourLine, inline=True, fontsize=fontsize, fmt=f"{inLevel*100:.0f} %%")
+            plt.plot([], [], c=cfg['c'], ls=inLine, lw=2.5, label=cfg['label']+ f' ({inLevel*100:.0f}%)')
 
     # Plot breakdown region
-    xBreakdown = allData['xBreakdown']
-    yBreakdown = allData['yBreakdown']
+    xBreakdown = breakDownData['xBreakdown']
+    yBreakdown = breakDownData['gainBreakdown'] if isGain else breakDownData['fieldBreakdown']
     plt.fill_between(
-        xBreakdown, yBreakdown, y.max()*np.ones(len(yBreakdown)),
+        xBreakdown, 
+        yBreakdown, max(y.max(), yBreakdown.max()+5)*np.ones(len(yBreakdown)),
         color='r', alpha=0.4, hatch='//')
     plt.plot(
         xBreakdown, yBreakdown, 
-        c='r', label='Breakdown Region', ls='-', lw=2.5
+        c='r', label=f'Breakdown Region', ls='-', lw=2.5
     )
+    if vLine>0:
+        plt.axvline(
+            vLine,
+            c='c'
+        )
 
-    plt.xlabel(xLabel, fontsize=fontsize)
-    plt.ylabel('Field Ratio', fontsize=fontsize)
+    labelMap = {
+        'OT': r'Optical Transparency', 
+        'Amp': r'Amplification Length ($\mu$m)'
+    }
+    plt.xlabel(labelMap[xData], fontsize=fontsize)
+    plt.ylabel(r'Gas Gain: $\overline{n}$' if isGain else 'Field Ratio', fontsize=fontsize)
     plt.legend(fontsize=fontsize)
 
-    plt.yscale('log')
+    if isGain:
+        plt.yscale('log')
 
     plt.xlim([x.min(), x.max()])
-    plt.ylim([y.min(), y.max()])
+    plt.ylim([y.min(), max(y.max(), yBreakdown.max()+5)])
 
     plt.tight_layout()
     plt.show()
 
     return fig
-
 
 #********************************************************************************#
 def makePWL(runNumber, averageSignal=True, avalancheID=None):
@@ -1044,6 +1073,24 @@ def makePWL(runNumber, averageSignal=True, avalancheID=None):
     return
 
 #********************************************************************************#
+def getBreakdownField(gap_um):
+    '''TODO'''
+    gasData = pd.read_csv('./Data/gasBreakdown.dat')
+    gasData.columns = gasData.columns.str.strip()
+
+    gap_cm = gap_um / 1e4
+    paschen_cm = (gasData['paschenX_Torrcm']/760).to_numpy() #Assume atm
+    paschen_Vb = gasData['paschenY_V'].to_numpy()
+
+    sort_idx = np.argsort(paschen_cm)
+    paschen_cm_sorted = paschen_cm[sort_idx]
+    paschen_Vb_sorted = paschen_Vb[sort_idx]
+    
+    breakdownV = np.interp(gap_cm, paschen_cm_sorted, paschen_Vb_sorted)
+
+    breakDownField = breakdownV / gap_cm
+
+    return breakDownField/1000 #kV/cm
 def plotEfficiencies(dataFull=None, dataScan=None, vsGain=False):
     '''TODO'''
     # TODO - Currently hardcoded for T2K and gridpix geometry
