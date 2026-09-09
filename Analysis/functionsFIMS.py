@@ -913,7 +913,7 @@ def plotPolyaData(datasets, absField=False, vsGain=False):
     plt.show()
     
 #********************************************************************************#
-def plotEfficiencyContours(allData=None, breakDownData=None, xData='', isGain=False, contourLevel=0):
+def plotEfficiencyContours(allData=None, breakDownData=None, xData='', isGain=False, contourLevel=0, vLine=0):
     """
     Plot the efficiency data across 2D scans wiht contours indicated.
     """
@@ -980,6 +980,11 @@ def plotEfficiencyContours(allData=None, breakDownData=None, xData='', isGain=Fa
         xBreakdown, yBreakdown, 
         c='r', label=f'Breakdown Region', ls='-', lw=2.5
     )
+    if vLine>0:
+        plt.axvline(
+            vLine,
+            c='c'
+        )
 
     labelMap = {
         'OT': r'Optical Transparency', 

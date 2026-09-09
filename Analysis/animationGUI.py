@@ -26,7 +26,8 @@ from PyQt6.QtCore import Qt, QTimer
 
 CMTOMICRON = 1e4
 VCMTOkVCM = 1e-3
-
+plt.rcParams.update({'font.size': 14})
+plt.rcParams['lines.linewidth'] = 2
 
 
 # ==========================================
@@ -628,9 +629,9 @@ class FIMSVisualizer(QMainWindow):
                 setting = lineSettings.get(startVal)
                 if not setting or not setting['plot']:
                     continue
-                xz.plot(lineData['x'], lineData['z'], c=setting['c'])
-                yz.plot(lineData['y'], lineData['z'], c=setting['c'])
-                xy.plot(lineData['x'], lineData['y'], c=setting['c'])            
+                xz.plot(lineData['x'], lineData['z'], c=setting['c'], lw=1)
+                yz.plot(lineData['y'], lineData['z'], c=setting['c'], lw=1)
+                xy.plot(lineData['x'], lineData['y'], c=setting['c'], lw=1)            
 
             if self.chkGeometry.isChecked():
                 self._drawGeometry((xz, yz, xy))
@@ -645,7 +646,7 @@ class FIMSVisualizer(QMainWindow):
                     continue
                 ax.plot(
                     lineData['x'], lineData['y'], lineData['z'], 
-                    c=setting['c']
+                    c=setting['c'], lw=1
                 )
 
             if self.chkGeometry.isChecked():
