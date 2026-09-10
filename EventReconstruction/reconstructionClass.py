@@ -50,8 +50,7 @@ class Reconstruction:
 
         ## Wrapper functions ##
         plotRaw
-        getFIMSPileup
-        getGridPixPileup
+        getPileup
         reconstructFIMS
         reconstructBEAST
         reconstructMigdal
@@ -423,12 +422,12 @@ class Reconstruction:
         # Plot data in 2D and 3D
         sub3DRef = sub3D.scatter(
             plotData['x'], plotData['y'], plotData['z'],
-            s=.1, c=color, label=f'{title} Readout Data', cmap='viridis'
+            s=.2, c=color, label=f'{title} Readout Data', cmap='viridis'
         )
         
         sub2DRef = sub2D.scatter(
             plotData['x'], plotData['y'],
-            s=.3, c=color, label=f'{title} Readout Data', cmap='viridis'
+            s=1, c=color, label=f'{title} Readout Data', cmap='viridis'
         )
         
         # Add color bar    
@@ -588,8 +587,8 @@ class Reconstruction:
         # Apply Gaussian smear to approximate diffusion
         smearData = self.diffuseData(self.rawData, firstDifWidths)
 
-        # Discretize data to approximate falling into grid holes and being read by the readout.
-        bins = {'x': holePitch, 'y': holePitch, 'z': zRez}
+        # Discretize data to approximate falling into grid holes
+        bins = {'x': holePitch, 'y': holePitch, 'z': 0}
         discreteData = self.discretizeData(smearData, bins)
         
         # Approximate avalanches
@@ -599,7 +598,20 @@ class Reconstruction:
         belowID = np.random.choice(discreteData.index, size=numBelowThresh, replace=False)
         avalData = discreteData.drop(belowID).reset_index(drop=True)
         
-        plotData = avalData.groupby(['x', 'y', 'z']).size().reset_index(name='q')
+        # Discretize in z by removing pileup electrons
+        groupedData = avalData.groupby(['x','y']).agg(z=('z', list), q=('z', lambda z: len(z))).reset_index()
+        
+        # Loop through all pixels
+        for pixel in groupedData['z']:
+            elecID = 0
+            
+            # Loop through all electron IDs
+            while elecID+1 < len(pixel): 
+                if pixel[elecID+1] - pixel[elecID] < zRez:
+                    del(pixel[elecID+1])
+                    continue
+                elecID += 1
+        plotData = groupedData.explode(['z'], ignore_index=True)
 
         # Plot data
         FIMSfig = self._format3DPlot(plotData, title='FIMS')
