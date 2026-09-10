@@ -331,8 +331,8 @@ int main(int argc, char * argv[]) {
         detectEffErr = std::max(detectionEff.lowError, detectionEff.highError);
         netEffErr = std::max(netEfficiency.lowError, netEfficiency.highError);
         
-        //Run until eff and gain are known to within +/- 5 percent
-        if(netEffErr <= 0.05 && gainRelErr <= 0.05){
+        //Run until eff and gain are known to within criteria
+        if(netEffErr <= 0.02 && gainRelErr <= 0.05){
             runAvalanche = false;
         }
 

@@ -1091,8 +1091,45 @@ def getBreakdownField(gap_um):
     breakDownField = breakdownV / gap_cm
 
     return breakDownField/1000 #kV/cm
+
+#********************************************************************************#
+def plotAllEfficiencyScan(data, isGain=False):
+    xData = data['averageGain'] if isGain else data['fieldRatio']
+    xErr = data['averageGainErr'] if isGain else None
+    #xErr = [0.5*data['averageGain'], 2*data['averageGain']] if isGain else None
+
+    effConfigs = [
+        {'key':'netEff', 'label': 'Net', 'c': 'g', 'ls': '-'},
+        {'key':'collectionEff', 'label': 'Collection', 'c': 'r', 'ls': '--'},
+        {'key':'detectionEff', 'label': 'Detection', 'c': 'b', 'ls': ':'}
+    ]
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    for cfg in effConfigs:
+        yData = data[cfg['key']]
+        yErr = data[f'{cfg['key']}'+'Err']
+        
+        ax.errorbar(
+            xData, yData,
+            xerr=xErr, yerr=yErr,
+            ls=cfg['ls'], lw=2.5, c=cfg['c'],
+            label=cfg['label']
+        )
+
+    xLabel = r'Gas Gain: $\overline{n}$' if isGain else r'Field Ratio: $E_{\text{Amp}}~/~E_{\text{Drift}}$'
+    ax.set_xlabel(xLabel, fontsize=14)
+    ax.set_ylabel(r'Efficiency: $\epsilon$', fontsize=14)
+
+    if isGain:
+        ax.set_xscale('log')
+    ax.grid()
+    ax.legend(fontsize=14)
+    plt.tight_layout()
+
+    return fig
+
+"""Depreciated? keep for now in case it comes up anywhere
 def plotEfficiencies(dataFull=None, dataScan=None, vsGain=False):
-    '''TODO'''
     # TODO - Currently hardcoded for T2K and gridpix geometry
 
     if dataFull is not None:
@@ -1140,9 +1177,9 @@ def plotEfficiencies(dataFull=None, dataScan=None, vsGain=False):
     if vsGain:
         ax.axvline(10, ls='--', c='m', label='Threshold')
 
-    xLabel = r'Gas Gain: $\overline{n}$' if vsGain else r'Field Ratio: $E_{\text{Amp}}~/~E_{\text{Drift}}$'
+    #xLabel = r'Gas Gain: $overline{n}$' if vsGain else r'Field Ratio: $E_{text{Amp}}~/~E_{text{Drift}}$'
     ax.set_xlabel(xLabel, fontsize=14)
-    ax.set_ylabel(r'Efficiency: $\epsilon$', fontsize=14)
+    #ax.set_ylabel(r'Efficiency: $epsilon$', fontsize=14)
     ax.set_xscale('log' if vsGain else 'linear')
     
     ax.grid()
@@ -1151,3 +1188,4 @@ def plotEfficiencies(dataFull=None, dataScan=None, vsGain=False):
     plt.tight_layout()
 
     return fig
+"""
