@@ -1121,10 +1121,10 @@ class gmshClass:
         #=========================#
         #=== DEFINE MESH SIZES ===#
         #=========================#
-        fineMesh = gridThickness*(3./4.)
-        gridMesh = gridThickness/4.
-        refineMesh = gridThickness*(3./2.)
-        backgroundMesh = pitch/4.
+        fineMesh = gridThickness*(3./4.)*2
+        gridMesh = gridThickness/4.*8
+        refineMesh = gridThickness*(3./2.)*2
+        backgroundMesh = pitch/4./2
         #=========================#
         
         # Find distance from center line
