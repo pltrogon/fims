@@ -193,28 +193,29 @@ class Reconstruction:
     
     def _groupData(self, inputData):
         """
-        Takes the x,y,z coordinates and groups the amount of charge by location.
+        Takes the x,y,t coordinates and groups the amount of charge by location.
         
         Args:
-            coordinates (dataframe): list of x,y,z coordinates of each electron.
+            coordinates (dataframe): list of x,y,t coordinates of each electron.
         
         returns:
-            groupedData (dataframe): z-coordinates with their corresponding 
+            groupedData (dataframe): time coordinates with their corresponding 
             pixel location and amount of charge. 
         """
-        countedData = inputData.groupby(['x', 'y', 'z']).size().reset_index(name='q')
-        groupedData = countedData.groupby(['x','y']).agg(z=('z', list), q=('q',list)).reset_index()
+        countedData = inputData.groupby(['x', 'y', 't']).size().reset_index(name='q')
+        groupedData = countedData.groupby(['x','y']).agg(t=('t', list), q=('q',list)).reset_index()
 
         return groupedData
 
     #********************************************************************************#
         
-    def _convertToSignal(self, zLocs, charges):
+    def _convertToSignal(self, tLocs, charges):
         """
         Takes data of a single pixel and calculates ToT and threshold crossing time.
         
         args:
-            pixel (dataframe): coordinates and charges of a single pixel.
+            tLocs (list of floats): time of arrival of the charges
+            charges (list of ints): amount of charge
         
         returns:
             upCrossPoints (list): list of threshold crossing times
@@ -223,21 +224,21 @@ class Reconstruction:
         threshold = self.reconInfo['Signal Threshold']
         decayRate = self.reconInfo['Signal Decay Rate']
 
-        z = np.asarray(zLocs)
+        times = np.asarray(tLocs)
         charge = np.asarray(charges)
 
         chargeSum = charge.sum()
-        zMin= z.min()
-        zMax = z.max() - np.log(threshold/chargeSum)*decayRate
+        tMin= times.min()
+        tMax = times.max() - np.log(threshold/chargeSum)*decayRate
 
-        if zMin >= zMax:
+        if tMin >= tMax:
             return [], []
 
-        rangeList = np.linspace(zMin, zMax, 1000)
+        rangeList = np.linspace(tMin, tMax, 1000)
 
         #Matrix multiplication for signals
-        dz = rangeList[:, np.newaxis] - z[np.newaxis, :]
-        decay = np.where(dz >= 0, np.exp(-dz/decayRate), 0.0)
+        dt = rangeList[:, np.newaxis] - times[np.newaxis, :]
+        decay = np.where(dt >= 0, np.exp(-dt/decayRate), 0.0)
         netSignal = decay @ charge
 
         #Find crossing times
@@ -364,10 +365,13 @@ class Reconstruction:
             readoutData (dataframe): x,y,z coordinates of the charge bundles as well as the time over threshold.
         """
         threshold = self.reconInfo['Signal Threshold']
-
+        
+        # Convert the z position to arrival time
+        inputData['t'] = inputData['z']/self.driftVelocity
+        
         # Group data by pixel
         groupedData = self._groupData(inputData)
-
+        
         chargeSum = [sum(q) for q in groupedData['q']]
         chargeLen = [len(q) for q in groupedData['q']]
         chargeMask = [(s > threshold) and (s > l) for s, l in zip(chargeSum, chargeLen)]
@@ -379,15 +383,15 @@ class Reconstruction:
         # Calculate ToT by converting charge to voltage
         print('Calculating ToT...')
         signals = [
-            self._convertToSignal(z, q)
-            for z, q in zip(filteredData['z'], filteredData['q'])
+            self._convertToSignal(t, q)
+            for t, q in zip(filteredData['t'], filteredData['q'])
         ]
 
         # Unpack results and remove depreciated columns
         crossings, tots = zip(*signals)
         filteredData['crossing'] = crossings
         filteredData['ToT'] = tots
-        filteredData.drop(columns=['z', 'q'], inplace=True)
+        filteredData.drop(columns=['t', 'q'], inplace=True)
 
         readoutData = filteredData.explode(['crossing', 'ToT'], ignore_index=True)
         
@@ -792,9 +796,9 @@ class Reconstruction:
         avalData = self.avalancheData(discreteData, secondDifWidths)
 
         # Discretize data to approximate pixels readout
-        pixBins = {'x': pixPitch, 'y': pixPitch, 'z': zRez}
+        pixBins = {'x': pixPitch, 'y': pixPitch, 'z': 1}
         padData = self.discretizeData(avalData, pixBins)
-
+            
         # Approximate Signal Readout
         readoutData = self.approximateReadout(padData)
         readoutData.dropna(inplace = True)
@@ -802,9 +806,14 @@ class Reconstruction:
         # Format data for plotting
         plotData = readoutData.rename(columns={'crossing': 'z', 'ToT': 'q'})
         
+        # Convert the crossing time to z position and ToT to charge
+        plotData['z'] *= self.driftVelocity
+        chargeConvConst = .075 # ns/electron
+        plotData['q'] /= chargeConvConst
+        
         # Plot data
         gridPixFig = self._format3DPlot(plotData, title='GridPix')
-        
+
         return gridPixFig
 
     #********************************************************************************#
