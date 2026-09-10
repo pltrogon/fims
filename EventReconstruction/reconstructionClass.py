@@ -10,6 +10,8 @@ import uproot
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
+
 class Reconstruction:
     """
     Class enabling particle event reconstruction approximations.
@@ -717,19 +719,24 @@ class Reconstruction:
         numXBins = int(totalXWidth/pixPitch)
         numYBins = int(totalYWidth/pixPitch)
         
+        # Create color map
+        colors = ['b', 'c', 'y', 'orange', 'r']
+        colorMap = LinearSegmentedColormap.from_list('custom', colors, N=16)
+        
         # Create figure
         migdalFig = plt.figure()
         plt.hist2d(
             padData['x'],
             padData['y'],
-            bins=(numXBins, numYBins)
+            bins=(numXBins, numYBins),
+            cmap=colorMap
         )
         
         # Add plot elements
         plt.colorbar().set_label('Charge')
         plt.xlabel('x pixels')
         plt.ylabel('y pixels')
-        plt.title('Migdal Experiment Event Reconstruction')
+        plt.title('Migdal Experimental Layout with Recoil Reconstruction')
         
         return migdalFig
 
