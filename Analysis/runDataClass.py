@@ -1953,7 +1953,7 @@ class runData:
     def _calcPerAvalancheIBN(self):
         """
         Calculates the Ion Backflow Number (IBN) for each individual electron avalanche.
-            NOTE: This result INCLUDES the initial ion.
+            NOTE: This result EXCLUDES the initial ion. UPDATED 09/10/26 (Previously included)
 
         IBN - Number of ions that drift to the cathode.
         Assumes the following for any ions that exit the simulation volume:
@@ -1969,7 +1969,17 @@ class runData:
         posIons = allIons[allIons['Ion Charge'] == 1]
         cathIons = posIons[posIons['Final z'] > self.getRunParameter('Grid Thickness')]
 
-        IBN = cathIons.groupby('Avalanche ID').size()
+        allIDs = allIons['Avalanche ID'].unique()
+
+        IBN = cathIons.groupby('Avalanche ID').size().reindex(allIDs, fill_value=0)
+
+        zeroIBN = (IBN==0)
+        if zeroIBN.any():
+            badIDs = IBN[zeroIBN].index.tolist()
+            print(f'Warning - Found avalanche(s) {badIDs} with an IBN count of 0 prior to primary ion subtraction.')
+
+        # Subtract 1 from counts > 0, keeping 0 values unchanged
+        IBN = IBN.where(IBN == 0, IBN - 1)
 
         return IBN.sort_index()
 
@@ -1977,7 +1987,6 @@ class runData:
     def _calcIBN(self):
         """
         Calculates the IBN on a per-avalanche basis. Then calculates other statistics.
-            NOTE: This result INCLUDES the initial ion.
 
         Returns:
             dataIBN: A dictionary containing:
@@ -2026,20 +2035,29 @@ class runData:
         #Get positive ions
         allIons = self.getDataFrame('ionData')
         posIons = allIons[allIons['Ion Charge'] == 1]
+        allIDs = allIons['Avalanche ID'].unique()
 
         #separate based on final z location
         cathIons = posIons[posIons['Final z'] > self.getRunParameter('Grid Thickness')]
 
-        rawTotalIons = posIons.groupby('Avalanche ID').size()
-        rawNumAtCathode = cathIons.groupby('Avalanche ID').size()
+        rawTotalIons = posIons.groupby('Avalanche ID').size().reindex(allIDs, fill_value=0)
+        rawNumAtCathode = cathIons.groupby('Avalanche ID').size().reindex(allIDs, fill_value=0)
 
-        #Correct for the inital ion - It is not considered backflowing
-        avalancheIons = rawTotalIons.sub(1, fill_value=0)
-        avalancheIons[avalancheIons < 0] = 0
-        backflowIons = rawNumAtCathode.sub(1, fill_value=0)
-        backflowIons[backflowIons < 0] = 0
+        zeroIons = (rawTotalIons == 0)
+        if zeroIons.any():
+            badTotalIDs = rawTotalIons[zeroIons].index.tolist()
+            print(f'Warning - Found avalanche(s) {badTotalIDs} with 0 total positive ions.')
+        zeroCathode = (rawNumAtCathode==0)
+        if zeroCathode.any():
+            badCathIDs = rawNumAtCathode[zeroCathode].index.tolist()
+            print(f'Warning - Found avalanche(s) {badCathIDs} with 0 cathode ions prior to primary ion subtraction.')
 
-        IBF = backflowIons.div(avalancheIons, fill_value=0)
+        # Subtract primary ion (keeping 0-count edge cases at 0)
+        avalancheIons = rawTotalIons.where(zeroIons, rawTotalIons - 1)
+        backflowIons = rawNumAtCathode.where(zeroCathode, rawNumAtCathode - 1)
+
+        # Division: 0 / 0 automatically yields NaN when no gain occurred
+        IBF = backflowIons / avalancheIons
 
         return IBF.sort_index()
 
