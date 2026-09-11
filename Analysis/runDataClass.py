@@ -524,6 +524,9 @@ class runData:
             self._calculatedData['Polya Gain'] = polyaFitResults['gain']
             self._calculatedData['Polya Theta Error'] = polyaFitResults['thetaErr']
             self._calculatedData['Polya Gain Error'] = polyaFitResults['gainErr']
+            self._calculatedData['Polya Chi2'] = polyaFitResults['chi2']
+            self._calculatedData['Polya rChi2'] = polyaFitResults['rchi2']
+            self._calculatedData['Polya pVal'] = polyaFitResults['pVal']
 
             # Single-Electron avalanche info
             singleInfo = self._getSingleElectronAvalancheData()
@@ -1592,10 +1595,17 @@ class runData:
 
         
         fitDataToPolya = myPolya()
+        #Fit to polya distribution
         fitDataToPolya.fitLogPolya(
             rawData=histData['rawData'],
             nMin=2,
             nMax=avalancheLimit - 1
+        )
+        #Find chi2 results
+        fitDataToPolya.calcEquiprobableChi2(
+            rawData=histData["rawData"],
+            nMin=2,
+            nMax=avalancheLimit - 1,
         )
         '''
         fitDataToPolya.fitPolya(
@@ -1640,7 +1650,6 @@ class runData:
         fitResults = self._fitAvalancheSize(binWidth=1)
 
         polyaResults = fitResults['fitPolya'].calcPolya(fitResults['xVal'])
-        polyaChi2 = self._getChiSquared(fitResults['yVal'], polyaResults)
 
         histData = self._histAvalanche(trim=True, binWidth=binWidth)
         
@@ -1688,7 +1697,10 @@ class runData:
         )
 
 
-        polyaStats = f'Polya Fit Statistics\nChi2 = {polyaChi2['chi2']:.4f}\nrChi2 = {polyaChi2['rChi2']:.4f}'
+        chi2 = fitResults['fitPolya'].chi2
+        rchi2 = fitResults['fitPolya'].reducedChi2
+        pVal = fitResults['fitPolya'].pValue
+        polyaStats = f'Polya Fit Statistics\nChi2 = {chi2:.4f}\nrChi2 = {rchi2:.4f}\npVal = {pVal:.8f}'
         
         ax.text(
             0.8, 0.75, polyaStats, 
@@ -2160,26 +2172,6 @@ class runData:
 
         return isTransparent
 
-
-#********************************************************************************#
-    def _getChiSquared(self, data, fit):
-        """
-        """
-        if data is None or fit is None:
-            raise ValueError('Error getting chi-squared.')
-        
-        calc = (data - fit)**2 / fit
-        chi2 = calc.sum()
-        dof = len(data) - 2
-        reducedChi2 = chi2/dof
-
-        chi2Param = {
-            'chi2': chi2,
-            'rChi2': reducedChi2
-        }
-
-        return chi2Param
-
 #********************************************************************************#
     def _getEfficiency(self, threshold=0, trim=True):
         """
@@ -2248,10 +2240,6 @@ class runData:
     def _fitPolya(self):
         """
         Fits a polya to the avalanche size distribution.
-        
-        Returns:
-            theta (float): The Polya shape parameter
-            gain (float): The mean avalanche size.
         """
 
         try:
@@ -2262,13 +2250,16 @@ class runData:
         except:#TODO - there may be a better way to handle this within _fitAvalancheSize
             print('Warning - Error in Polya Fit.')
 
-            return {'theta': 0, 'thetaErr': 1, 'gain': 1, 'gainErr':1}
+            return {'theta': 0, 'thetaErr': 1, 'gain': 1, 'gainErr':1, 'chi2': 1, 'rchi2': 1, 'pVal': 1}
           
         polyaFitResults = {
             'theta': fitResults['fitPolya'].theta,
             'thetaErr': fitResults['fitPolya'].thetaErr,
             'gain': fitResults['fitPolya'].gain,
-            'gainErr': fitResults['fitPolya'].gainErr
+            'gainErr': fitResults['fitPolya'].gainErr,
+            'chi2': fitResults['fitPolya'].chi2,
+            'rchi2': fitResults['fitPolya'].reducedChi2,
+            'pVal': fitResults['fitPolya'].pValue
         }
 
         return polyaFitResults

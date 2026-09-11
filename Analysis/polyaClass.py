@@ -48,6 +48,10 @@ class myPolya:
         self.gainErr = None
         self.thetaErr = None
 
+        self.chi2 = None
+        self.reducedChi2 = None
+        self.pValue = None
+
         if gain is not None and theta is not None:
             try:
                 self._checkSelf()
@@ -429,3 +433,83 @@ class myPolya:
         return res
 
         
+#********************************************************************************#
+    def calcEquiprobableChi2(self, rawData, nMin=2, nMax=np.inf, numBins=None):
+        """
+        Calculates Pearson Chi-Square, reduced Chi-Square, and p-value using 
+        equiprobable (equal expected count) binning.
+
+        Args:
+            rawData (np.ndarray): Unbinned raw avalanche electron counts.
+            nMin (float): Lower truncation boundary.
+            nMax (float): Upper truncation boundary.
+            numBins (int): Number of equiprobable bins.
+
+        Returns:
+            dict: Dictionary containing chi2, reducedChi2, pValue, dof, and bin parameters.
+        """
+        trimmedData = rawData[(rawData >= nMin) & (rawData <= nMax)]
+        N = len(trimmedData)
+
+        # Dynamically select bin count via Mann-Wald rule if not explicitly set
+        if numBins is None:
+            numBins = int(np.clip(2.0 * (N ** 0.4), 20, 100))
+        # Ensure min expected count condition holds
+        if N / numBins < 5:
+            numBins = max(5, int(N / 5))
+
+        # Convert fitted Polya parameters to Gamma distribution
+        shape = 1.0 + self.theta
+        scale = self.gain / shape
+
+        # CDF bounds over the truncated domain
+        minCDF = stats.gamma.cdf(nMin, a=shape, scale=scale)
+        maxCDF = 1.0 if np.isinf(nMax) else stats.gamma.cdf(nMax, a=shape, scale=scale)
+
+        # Divide probability space into equal intervals
+        quantiles = np.linspace(minCDF, maxCDF, numBins + 1)
+
+        # Map CDF quantiles back to physical avalanche size bin edges using the Inverse CDF
+        binEdges = stats.gamma.ppf(quantiles, a=shape, scale=scale)
+        
+        # Enforce exact endpoints to prevent floating-point rounding edge-drops
+        binEdges[0] = nMin
+        if not np.isinf(nMax):
+            binEdges[-1] = nMax
+
+        # Bin observed data using the dynamic probability-spaced edges
+        observed, _ = np.histogram(trimmedData, bins=binEdges)
+
+        # Expected count per bin is strictly constant (N / numBins)
+        E = N / numBins
+
+        #pulls = (observed - E) / np.sqrt(E)
+        #for i, p in enumerate(pulls):
+        #    print(f"Bin {i+1:02d}: Pull = {p:+.2f}")
+
+        # Compute Chi-Squared statistics
+        chi2 = float(np.sum((observed - E) ** 2 / E))
+        dof = numBins - 2 - 1  # numBins - (2 fitted parameters: gain, theta) - 1
+
+        if dof > 0:
+            reducedChi2 = chi2 / dof
+            pValue = float(stats.chi2.sf(chi2, dof))
+        else:
+            reducedChi2, pValue = np.nan, np.nan
+
+        self.chi2 = chi2
+        self.reducedChi2 = reducedChi2
+        self.pValue = pValue
+
+        chi2Results = {
+            'chi2': chi2,
+            'reducedChi2': reducedChi2,
+            'pValue': pValue,
+            'dof': dof,
+            'numBins': numBins,
+            'expectedPerBin': E
+        }
+
+        return chi2Results
+
+    
