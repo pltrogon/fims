@@ -4,10 +4,10 @@
 import numpy as np
 import math
 import matplotlib.pyplot as plt
+import scipy.stats as stats
 
-from scipy.special import gamma
-from scipy.special import gammaincc
-from scipy.optimize import curve_fit, fsolve
+from scipy.special import gamma, gammaincc, gammaln
+from scipy.optimize import curve_fit, fsolve, minimize
 
 
 class myPolya:
@@ -353,10 +353,79 @@ class myPolya:
         
             
 
+#********************************************************************************#   
+    def calcLogPolya(self,n, gain=None, theta=None):
+        """Calculates log probability density of the Polya distribution."""
+        g = gain if gain is not None else self.gain
+        t = theta if theta is not None else self.theta
+        # log P(n) expanded to prevent underflow/overflow
+        logP = (
+            -np.log(g)
+            + (1 + t) * np.log(1 + t)
+            - gammaln(1 + t)
+            + t * (np.log(n) - np.log(g))
+            - (1 + t) * (n / g)
+        )
+        return logP
 
+#********************************************************************************#
+    def fitLogPolya(self, rawData, nMin=2, nMax=np.inf):
+        """
+        Fits a truncated Polya distribution directly to unbinned avalanche data.
+        
+        Args:
+            raw_data (np.ndarray): Raw 1D array of total electron counts per trial.
+            nMin (float): Lower truncation boundary (removes single electrons/losses).
+            nMax (float): Upper truncation boundary (removes overflow bin).
+        """
+        # Filter raw data within bounds
+        trimmedData = rawData[(rawData >= nMin) & (rawData <= nMax)]
+        
+        gain0 = np.mean(trimmedData)
+        theta0 = 0.5
+        
+        def neg_log_likelihood(params):
+            gain, theta = params
+            
+            if gain <= 0 or theta < 0:
+                return np.inf
+            
+            logProb = self.calcLogPolya(trimmedData, gain=gain, theta=theta)
+            
+            shape = 1.0 + theta
+            scale = gain / shape
+            cdfMax = stats.gamma.cdf(nMax, a=shape, scale=scale)
+            cdfMin = stats.gamma.cdf(nMin, a=shape, scale=scale)
+            norm =  cdfMax - cdfMin
+            
+            if norm <= 0:
+                return np.inf
+                
+            return -np.sum(logProb - np.log(norm))
 
+        bounds = [(1, 2 * gain0), (0, 5.0)]
+        
+        res = minimize(
+            neg_log_likelihood, 
+            x0=[gain0, theta0], 
+            bounds=bounds, 
+            method='L-BFGS-B'
+        )
 
+        if res.success:
+            self.gain = res.x[0]
+            self.theta = res.x[1]
+            
+            try:
+                hess_inv = res.hess_inv.todense()
+                perr = np.sqrt(np.diag(hess_inv))
+                self.gainErr = perr[0]
+                self.thetaErr = perr[1]
+            except Exception:
+                self.gainErr, self.thetaErr = np.nan, np.nan
+        else:
+            raise RuntimeError(f"Fit failed: {res.message}")
 
-
+        return res
 
         

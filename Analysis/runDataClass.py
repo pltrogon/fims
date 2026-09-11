@@ -1155,7 +1155,8 @@ class runData:
             'prob': prob,
             'probErr': probErr,
             'binWidth': binWidth,
-            'trim': trim
+            'trim': trim,
+            'rawData': data['Total Electrons'].to_numpy()#TODO-update docstring
         }
 
         return histData
@@ -1584,19 +1585,27 @@ class runData:
         histData = self._histAvalanche(trim=True, binWidth=binWidth)
 
         gain = histData['gain']
+        avalancheLimit = self.getRunParameter('Avalanche Limit')
 
         if gain < 5 or gain >= self.getRunParameter('Avalanche Limit'):
             raise ValueError(f'Unable to fit to data. Gain is {gain:.2f} ({self.runNumber}).')
 
         
         fitDataToPolya = myPolya()
+        fitDataToPolya.fitLogPolya(
+            rawData=histData['rawData'],
+            nMin=2,
+            nMax=avalancheLimit - 1
+        )
+        '''
         fitDataToPolya.fitPolya(
             histData['binCenters'],
             histData['prob'],
             histData['gain'],
             histData['probErr'] 
         )
-        
+        '''
+        '''
         fitDataToExpo = myPolya()
         fitDataToExpo.fitPolya(
             histData['binCenters'],
@@ -1605,13 +1614,13 @@ class runData:
             histData['probErr'], 
             expo = True
         )
-        
+        '''
         fitResults = {
             'xVal': histData['binCenters'],
             'yVal': histData['prob'],
             'dataGain': histData['gain'],
             'fitPolya': fitDataToPolya,
-            'fitExpo': fitDataToExpo,
+            #'fitExpo': fitDataToExpo,
         }
         
         return fitResults
