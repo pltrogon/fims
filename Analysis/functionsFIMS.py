@@ -730,6 +730,7 @@ def plotAllEfficiencies():
 
 #********************************************************************************#
 def getOT(hole, pitch):
+    #HEXAGON cell
     holeArea = math.pi*hole**2
     inRadius = pitch/2
     hexArea = 2*math.sqrt(3)*inRadius**2
@@ -922,15 +923,22 @@ def plotEfficiencyContours(allData=None, breakDownData=None, xData='', isGain=Fa
     if xData not in xMap.keys():
         raise KeyError('Invalid x')
     x = xMap[xData]
-
     y = allData['meanGain'] if isGain else allData['fieldRatio']
     z = np.array(allData['netEfficiency'])
+
+    xBreakdown = breakDownData['xBreakdown']
+    yBreakdown = breakDownData['gainBreakdown'] if isGain else breakDownData['fieldBreakdown']
+
+    xi = np.linspace(x.min(), x.max(), 101)
+    yi = np.linspace(y.min(), max(y.max(), yBreakdown.max() + 5), 101)
+    xiMesh, yiMesh = np.meshgrid(xi, yi)
+    zi = griddata((x, y), z, (xiMesh, yiMesh), method='linear', fill_value=1.0)
 
     fig = plt.figure(figsize=(10, 6))
 
     # Plot the net efficiency data
-    contour = plt.tricontourf(
-        x, y, z,
+    contour = plt.contourf(
+        xiMesh, yiMesh, zi,
         levels=np.linspace(0, 1, 101),
         cmap='viridis',
     )
@@ -954,10 +962,12 @@ def plotEfficiencyContours(allData=None, breakDownData=None, xData='', isGain=Fa
         lineStyles = ['-', '--', '-.', ':']
 
     for cfg in configs:
+        zRaw = np.array(allData[cfg['key']])
+        ziKey = griddata((x, y), zRaw, (xiMesh, yiMesh), method='linear', fill_value=1.0)
         for inLevel, inLine in zip(lineLevels, lineStyles):
             z = allData[cfg['key']]
-            contourLine = plt.tricontour(
-                x, y, z, 
+            contourLine = plt.contour(
+                xiMesh, yiMesh, ziKey,
                 levels=[inLevel], 
                 colors=cfg['c'], 
                 linestyles=inLine,
@@ -967,8 +977,6 @@ def plotEfficiencyContours(allData=None, breakDownData=None, xData='', isGain=Fa
             plt.plot([], [], c=cfg['c'], ls=inLine, lw=2.5, label=cfg['label']+ f' ({inLevel*100:.0f}%)')
 
     # Plot breakdown region
-    xBreakdown = breakDownData['xBreakdown']
-    yBreakdown = breakDownData['gainBreakdown'] if isGain else breakDownData['fieldBreakdown']
     plt.fill_between(
         xBreakdown, 
         yBreakdown, max(y.max(), yBreakdown.max()+5)*np.ones(len(yBreakdown)),
@@ -1128,7 +1136,7 @@ def plotAllEfficiencyScan(data, isGain=False):
 
     return fig
 
-"""Depreciated? keep for now in case it comes up anywhere
+
 def plotEfficiencies(dataFull=None, dataScan=None, vsGain=False):
     # TODO - Currently hardcoded for T2K and gridpix geometry
 
@@ -1177,9 +1185,9 @@ def plotEfficiencies(dataFull=None, dataScan=None, vsGain=False):
     if vsGain:
         ax.axvline(10, ls='--', c='m', label='Threshold')
 
-    #xLabel = r'Gas Gain: $overline{n}$' if vsGain else r'Field Ratio: $E_{text{Amp}}~/~E_{text{Drift}}$'
+    xLabel = r'Gas Gain: $\overline{n}$' if vsGain else r'Field Ratio: $E_{\text{Amp}}~/~E_{\text{Drift}}$'
     ax.set_xlabel(xLabel, fontsize=14)
-    #ax.set_ylabel(r'Efficiency: $epsilon$', fontsize=14)
+    ax.set_ylabel(r'Efficiency: $\epsilon$', fontsize=14)
     ax.set_xscale('log' if vsGain else 'linear')
     
     ax.grid()
@@ -1188,4 +1196,4 @@ def plotEfficiencies(dataFull=None, dataScan=None, vsGain=False):
     plt.tight_layout()
 
     return fig
-"""
+
