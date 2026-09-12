@@ -38,9 +38,9 @@ class Reconstruction:
             _checkInput
             _getData
             _getCoordinates
-            _groupData
+            _calcAverage
+            _approximateMIP
             _convertToSignal
-            _format3DPlot
         
         Public:
             diffuseData
@@ -49,7 +49,6 @@ class Reconstruction:
             approximateReadout
 
         ## Wrapper functions ##
-        plotRaw
         getPileup
         reconstructFIMS
         reconstructBEAST
@@ -188,25 +187,28 @@ class Reconstruction:
         rawData = pd.DataFrame(data, columns=['x', 'y', 'z'])
         
         return rawData
-    
+
     #********************************************************************************#
     
-    def _groupData(self, inputData):
+    def _calcAverage(self, values):
         """
-        Takes the x,y,t coordinates and groups the amount of charge by location.
+        Takes a list and calculates the average along with the error.
         
-        Args:
-            coordinates (dataframe): list of x,y,t coordinates of each electron.
+        args:
+            values (list): list of values.
         
         returns:
-            groupedData (dataframe): time coordinates with their corresponding 
-            pixel location and amount of charge. 
+            average (tuple): average value along with its uncertainty.
         """
-        countedData = inputData.groupby(['x', 'y', 't']).size().reset_index(name='q')
-        groupedData = countedData.groupby(['x','y']).agg(t=('t', list), q=('q',list)).reset_index()
-
-        return groupedData
-
+        total = len(values)
+        mean = sum(values)/total
+        variance = sum([(elem - mean)**2 for elem in values]) / (total - 1)
+        error = variance ** .5
+        
+        average = (mean, error)
+        
+        return average
+    
     #********************************************************************************#
         
     def _convertToSignal(self, tLocs, charges):
@@ -370,8 +372,9 @@ class Reconstruction:
         inputData['t'] = inputData['z']/self.driftVelocity
         
         # Group data by pixel
-        groupedData = self._groupData(inputData)
-        
+        countedData = inputData.groupby(['x', 'y', 't']).size().reset_index(name='q')
+        groupedData = countedData.groupby(['x','y']).agg(t=('t', list), q=('q',list)).reset_index()
+
         chargeSum = [sum(q) for q in groupedData['q']]
         chargeLen = [len(q) for q in groupedData['q']]
         chargeMask = [(s > threshold) and (s > l) for s, l in zip(chargeSum, chargeLen)]
@@ -396,102 +399,9 @@ class Reconstruction:
         readoutData = filteredData.explode(['crossing', 'ToT'], ignore_index=True)
         
         return readoutData
-    
-    #********************************************************************************#
-    
-    def _format3DPlot(self, plotData, title=''):
-        """
-        Creates a 3D and 2D plot of a given dataset.
-        
-        args:
-            plotData (pd.array): pandas array of data.
-            title (str): Name of the data set
-            charge (bool): boolean indicating if charge density is used as a color
-            map.
-        returns:
-            fig3D (figure): matplotlib figure
-        """
-        
-        # Create figures
-        fig3D = plt.figure(figsize=(10, 5), dpi=200)
-        sub3D = fig3D.add_subplot(121, projection='3d')
-        sub2D = fig3D.add_subplot(122)
-        
-        # Assign point color, if given
-        try:
-            color = plotData['q']
-        except:
-            color = 'g'
-        
-        # Plot data in 2D and 3D
-        sub3DRef = sub3D.scatter(
-            plotData['x'], plotData['y'], plotData['z'],
-            s=.2, c=color, label=f'{title} Readout Data', cmap='viridis'
-        )
-        
-        sub2DRef = sub2D.scatter(
-            plotData['x'], plotData['y'],
-            s=1, c=color, label=f'{title} Readout Data', cmap='viridis'
-        )
-        
-        # Add color bar    
-        colorBar = plt.colorbar(sub2DRef, pad=.2)
-        colorBar.set_label('Charge')
 
-        # Add labels and adjust formatting
-        sub3D.set_xlabel('x pixels')
-        sub3D.set_ylabel('y pixels')
-        sub3D.set_zlabel('Height')
-        sub3D.set_title(f'{title} 3D Event Reconstruction')
-        
-        sub2D.set_xlabel('x pixels')
-        sub2D.set_ylabel('y pixels')
-        sub2D.set_title(f'{title} 2D Event Reconstruction')
-        sub2D.yaxis.set_label_position("right")
-        sub2D.yaxis.tick_right()
-        sub2D.grid(True, alpha=.5)
-        
-        plt.tight_layout()
-        plt.subplots_adjust(wspace=0.2)
-        
-        return fig3D
-    #********************************************************************************#
-    
-    def _calcAverage(self, values):
-        """
-        Takes a list and calculates the average along with the error.
-        
-        args:
-            values (list): list of values.
-        
-        returns:
-            average (tuple): average value along with its uncertainty.
-        """
-        total = len(values)
-        mean = sum(values)/total
-        variance = sum([(elem - mean)**2 for elem in values]) / (total - 1)
-        error = variance ** .5
-        
-        average = (mean, error)
-        
-        return average
-    
     #********************************************************************************#
     ############## Reconstruction Wrapper Functions for Specific Setups ##############
-    #********************************************************************************#
-    
-    def plotRaw(self):
-        """
-        Plots the raw data from an event.
-        
-        returns:
-            rawFig: matplotlib figure
-        """
-        
-        rawFig = self._format3DPlot(self.rawData, title='Raw Data')
-        
-        return rawFig
-        
     #********************************************************************************#
     
     def getPileup(self, drift=10, reset=25, numTrials=100, MIP=False):
@@ -603,24 +513,25 @@ class Reconstruction:
         avalData = discreteData.drop(belowID).reset_index(drop=True)
         
         # Discretize in z by removing pileup electrons
-        groupedData = avalData.groupby(['x','y']).agg(z=('z', list), q=('z', lambda z: len(z))).reset_index()
+        avalData.sort_values(by='z', inplace=True)
+        groupedData = avalData.groupby(['x','y']).agg(z=('z', list)).reset_index()
+        groupedData.sort_values(by=['x','y'], inplace=True)
         
+        dropped = []
         # Loop through all pixels
-        for pixel in groupedData['z']:
+        for x, y, height in zip(groupedData['x'], groupedData['y'], groupedData['z']):
             elecID = 0
             
             # Loop through all electron IDs
-            while elecID+1 < len(pixel): 
-                if pixel[elecID+1] - pixel[elecID] < zRez:
-                    del(pixel[elecID+1])
+            while elecID+1 < len(height): 
+                if height[elecID+1] - height[elecID] < zRez:
+                    dropped.append([x,y, height.pop(elecID+1)])
                     continue
                 elecID += 1
         plotData = groupedData.explode(['z'], ignore_index=True)
-
-        # Plot data
-        FIMSfig = self._format3DPlot(plotData, title='FIMS')
+        droppedData = pd.DataFrame(dropped, columns = ['x','y','z'])
         
-        return FIMSfig
+        return plotData, droppedData
         
     #********************************************************************************#
     
@@ -674,18 +585,16 @@ class Reconstruction:
         readoutData = self.discretizeData(avalData2, pixBins)
         
         # Group Data by pixel
-        groupedData = self._groupData(readoutData)
-        
+        countedData = readoutData.groupby(['x', 'y', 't']).size().reset_index(name='q')
+        groupedData = countedData.groupby(['x','y']).agg(t=('t', list), q=('q',list)).reset_index()
+
         # Configure data for plotting
         plotData = pd.DataFrame()
         plotData[['x', 'y']] = groupedData[['x', 'y']]
         plotData['z'] = groupedData['z'].apply(min)
         plotData['q'] = groupedData['q'].apply(sum)
 
-        # Plot data
-        beastFig = self._format3DPlot(plotData, title='BEAST')
-        
-        return beastFig
+        return plotData
 
     #********************************************************************************#
     
@@ -728,33 +637,7 @@ class Reconstruction:
         pixBins = {'x': pixPitch, 'y': pixPitch, 'z': zRez}
         padData = self.discretizeData(avalData, pixBins)
         
-        # Plot data
-        # Extract Data
-        totalXWidth = max(padData['x']) - min(padData['x'])
-        totalYWidth = max(padData['y']) - min(padData['y'])
-        numXBins = int(totalXWidth/pixPitch)
-        numYBins = int(totalYWidth/pixPitch)
-        
-        # Create color map
-        colors = ['b', 'c', 'y', 'orange', 'r']
-        colorMap = LinearSegmentedColormap.from_list('custom', colors, N=16)
-        
-        # Create figure
-        migdalFig = plt.figure()
-        plt.hist2d(
-            padData['x'],
-            padData['y'],
-            bins=(numXBins, numYBins),
-            cmap=colorMap
-        )
-        
-        # Add plot elements
-        plt.colorbar().set_label('Charge')
-        plt.xlabel('x pixels')
-        plt.ylabel('y pixels')
-        plt.title('Migdal Experimental Layout with Recoil Reconstruction')
-        
-        return migdalFig
+        return padData
 
     #********************************************************************************#
     
@@ -803,18 +686,33 @@ class Reconstruction:
         readoutData = self.approximateReadout(padData)
         readoutData.dropna(inplace = True)
         
-        # Format data for plotting
-        plotData = readoutData.rename(columns={'crossing': 'z', 'ToT': 'q'})
-        
         # Convert the crossing time to z position and ToT to charge
-        plotData['z'] *= self.driftVelocity
         chargeConvConst = .075 # ns/electron
-        plotData['q'] /= chargeConvConst
+        readoutData['crossing'] *= self.driftVelocity
+        readoutData['ToT'] /= chargeConvConst
+        readoutData.rename(columns={'crossing': 'z', 'ToT': 'q'}, inplace=True)
+        readoutData.sort_values(by=['z'], inplace=True)
         
-        # Plot data
-        gridPixFig = self._format3DPlot(plotData, title='GridPix')
-
-        return gridPixFig
+        # Remove charge lost due to sensor dead time
+        filteredData = readoutData.groupby(['x','y']).agg(z=('z', list), q=('q', list)).reset_index()
+        filterZip = zip(filteredData['x'], filteredData['y'], filteredData['z'], filteredData['q'])
+        
+        dropped = []
+        # Loop through all pixels
+        for x, y, height, q in filterZip:
+            elecID = 0
+            
+            # Loop through all electron IDs
+            while elecID+1 < len(height): 
+                if height[elecID+1] - height[elecID] < zRez:
+                    dropped.append([x,y, height.pop(elecID+1), q.pop(elecID+1)])
+                    continue
+                elecID += 1
+        droppedData = pd.DataFrame(dropped, columns = ['x','y','z', 'q'])
+        
+        plotData = filteredData.explode(['z', 'q'], ignore_index=True)
+        
+        return plotData, droppedData
 
     #********************************************************************************#
 
