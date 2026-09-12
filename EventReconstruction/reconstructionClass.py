@@ -9,8 +9,6 @@ import random
 import uproot
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.colors import LinearSegmentedColormap
 
 class Reconstruction:
     """
@@ -584,16 +582,9 @@ class Reconstruction:
         pixBins = {'x': pixPitch, 'y': pixPitch, 'z': zRez}
         readoutData = self.discretizeData(avalData2, pixBins)
         
-        # Group Data by pixel
-        countedData = readoutData.groupby(['x', 'y', 't']).size().reset_index(name='q')
-        groupedData = countedData.groupby(['x','y']).agg(t=('t', list), q=('q',list)).reset_index()
-
         # Configure data for plotting
-        plotData = pd.DataFrame()
-        plotData[['x', 'y']] = groupedData[['x', 'y']]
-        plotData['z'] = groupedData['z'].apply(min)
-        plotData['q'] = groupedData['q'].apply(sum)
-
+        plotData = readoutData.groupby(['x','y']).agg(z=('z', 'min'), q=('q', 'sum')).reset_index()
+        
         return plotData
 
     #********************************************************************************#
