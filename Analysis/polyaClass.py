@@ -52,6 +52,10 @@ class myPolya:
         self.reducedChi2 = None
         self.pValue = None
 
+        self.ksStat = None
+        self.ksPValue = None
+        self.ksSigma = None
+
         if gain is not None and theta is not None:
             try:
                 self._checkSelf()
@@ -419,6 +423,7 @@ class myPolya:
         if res.success:
             self.gain = res.x[0]
             self.theta = res.x[1]
+            #self.twoNLL = 2.0 * res.fun
             
             try:
                 hess_inv = res.hess_inv.todense()
@@ -431,10 +436,9 @@ class myPolya:
             raise RuntimeError(f"Fit failed: {res.message}")
 
         return res
-
         
 #********************************************************************************#
-    def calcEquiprobableChi2(self, rawData, nMin=2, nMax=np.inf, numBins=None):
+    def calcEquiprobableChi2(self, rawData, nMin=2, nMax=np.inf, numBins=None):#Incorrect????
         """
         Calculates Pearson Chi-Square, reduced Chi-Square, and p-value using 
         equiprobable (equal expected count) binning.
@@ -511,5 +515,33 @@ class myPolya:
         }
 
         return chi2Results
+
+#********************************************************************************#
+    def calcKSTest(self, rawData, nMin=2, nMax=np.inf):
+        """TODO"""
+        trimmedData = rawData[(rawData >= nMin) & (rawData <= nMax)]
+        shape = 1.0 + self.theta
+        scale = self.gain / shape
+
+        cdfMin = stats.gamma.cdf(nMin, a=shape, scale=scale)
+        cdfMax = 1.0 if np.isinf(nMax) else stats.gamma.cdf(nMax, a=shape, scale=scale)
+        norm = cdfMax - cdfMin
+
+        def truncCDF(x):
+            return (stats.gamma.cdf(x, a=shape, scale=scale) - cdfMin) / norm
+
+        ksRes = stats.ks_1samp(trimmedData, truncCDF)
+
+        self.ksStat = float(ksRes.statistic)
+        self.ksPValue = float(ksRes.pvalue)
+        self.ksSigma = float(stats.norm.isf(self.ksPValue / 2.0)) if self.ksPValue > 0 else np.inf
+        
+        resultsKS = {
+            'ksStatD': self.ksStat, 
+            'pValue': self.ksPValue, 
+            'sigma': self.ksSigma
+        }
+
+        return resultsKS
 
     

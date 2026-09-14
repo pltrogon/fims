@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.cm as cm
 
-
 from polyaClass import myPolya
 import functionsFIMS
 
@@ -524,9 +523,15 @@ class runData:
             self._calculatedData['Polya Gain'] = polyaFitResults['gain']
             self._calculatedData['Polya Theta Error'] = polyaFitResults['thetaErr']
             self._calculatedData['Polya Gain Error'] = polyaFitResults['gainErr']
-            self._calculatedData['Polya Chi2'] = polyaFitResults['chi2']
-            self._calculatedData['Polya rChi2'] = polyaFitResults['rchi2']
-            self._calculatedData['Polya pVal'] = polyaFitResults['pVal']
+            if polyaFitResults['chi2'] is not None:
+                self._calculatedData['Polya Chi2'] = polyaFitResults['chi2']
+                self._calculatedData['Polya rChi2'] = polyaFitResults['rchi2']
+                self._calculatedData['Polya pVal'] = polyaFitResults['pVal']
+            if polyaFitResults['ksStatD'] is not None:
+                self._calculatedData['KS Stat D']: polyaFitResults['ksStatD']
+                self._calculatedData['KS pVal']: polyaFitResults['ksPValue']
+                self._calculatedData['KS Sigma']: polyaFitResults['ksSigma']
+            
 
             # Single-Electron avalanche info
             singleInfo = self._getSingleElectronAvalancheData()
@@ -1602,11 +1607,9 @@ class runData:
             nMax=avalancheLimit - 1
         )
         #Find chi2 results
-        fitDataToPolya.calcEquiprobableChi2(
-            rawData=histData["rawData"],
-            nMin=2,
-            nMax=avalancheLimit - 1,
-        )
+        #fitDataToPolya.calcEquiprobableChi2(rawData=histData['rawData'], nMin=2, nMax=avalancheLimit - 1)
+        fitDataToPolya.calcKSTest(rawData=histData['rawData'], nMin=2, nMax=avalancheLimit - 1)
+        
         '''
         fitDataToPolya.fitPolya(
             histData['binCenters'],
@@ -1696,15 +1699,21 @@ class runData:
             c='g', ls=':', label=f"Trimmed Gain = {fitResults['dataGain']:.0f}e"
         )
 
-
-        chi2 = fitResults['fitPolya'].chi2
-        rchi2 = fitResults['fitPolya'].reducedChi2
-        pVal = fitResults['fitPolya'].pValue
-        polyaStats = f'Polya Fit Statistics\nChi2 = {chi2:.4f}\nrChi2 = {rchi2:.4f}\npVal = {pVal:.8f}'
-        
+        polyaStats = 'No Goodness Fit'
+        if fitResults['fitPolya'].chi2 is not None:
+            chi2 = fitResults['fitPolya'].chi2
+            rchi2 = fitResults['fitPolya'].reducedChi2
+            pVal = fitResults['fitPolya'].pValue
+            polyaStats = f'Polya Fit Statistics\nChi2 = {chi2:.4f}\nrChi2 = {rchi2:.4f}\npVal = {pVal:.8f}'
+        if fitResults['fitPolya'].ksStat is not None:
+            ksStat = fitResults['fitPolya'].ksStat
+            ksPValue = fitResults['fitPolya'].ksPValue
+            ksSigma = fitResults['fitPolya'].ksSigma
+            polyaStats = f'Polya Fit Statistics\nKS D-Stat = {ksStat:.4f}\npVal = {ksPValue:.8f}\nSigma = {ksSigma:.4f}'
+            
         ax.text(
-            0.8, 0.75, polyaStats, 
-            fontsize=10, 
+            0.8, 0.5, polyaStats, 
+            fontsize=14, 
             horizontalalignment='center',
             verticalalignment='center', 
             transform=ax.transAxes,
@@ -2247,10 +2256,8 @@ class runData:
             theta = fitResults['fitPolya'].theta
             gain = fitResults['fitPolya'].gain
             
-        except:#TODO - there may be a better way to handle this within _fitAvalancheSize
-            print('Warning - Error in Polya Fit.')
-
-            return {'theta': 0, 'thetaErr': 1, 'gain': 1, 'gainErr':1, 'chi2': 1, 'rchi2': 1, 'pVal': 1}
+        except:
+            print('WARNING - Error in Polya Fit.')
           
         polyaFitResults = {
             'theta': fitResults['fitPolya'].theta,
@@ -2259,7 +2266,10 @@ class runData:
             'gainErr': fitResults['fitPolya'].gainErr,
             'chi2': fitResults['fitPolya'].chi2,
             'rchi2': fitResults['fitPolya'].reducedChi2,
-            'pVal': fitResults['fitPolya'].pValue
+            'pVal': fitResults['fitPolya'].pValue,
+            'ksStatD': fitResults['fitPolya'].ksStat, 
+            'pValue': fitResults['fitPolya'].ksPValue, 
+            'sigma': fitResults['fitPolya'].ksSigma
         }
 
         return polyaFitResults
