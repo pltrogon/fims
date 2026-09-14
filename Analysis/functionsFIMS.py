@@ -944,7 +944,7 @@ def plotEfficiencyContours(allData=None, breakDownData=None, xData='', isGain=Fa
     )
     cbar = plt.colorbar(contour)
     cbar.set_ticks(np.linspace(0, 1, 11))
-    cbar.set_label('Net Efficiency', rotation=270, labelpad=15, fontsize=fontsize)
+    cbar.set_label('Efficiency', rotation=270, labelpad=15, fontsize=fontsize)
 
     # Plot the contour lines
     if contourLevel > 0:
@@ -1107,9 +1107,9 @@ def plotAllEfficiencyScan(data, isGain=False):
     #xErr = [0.5*data['averageGain'], 2*data['averageGain']] if isGain else None
 
     effConfigs = [
-        {'key':'netEff', 'label': 'Net', 'c': 'g', 'ls': '-'},
-        {'key':'collectionEff', 'label': 'Collection', 'c': 'r', 'ls': '--'},
-        {'key':'detectionEff', 'label': 'Detection', 'c': 'b', 'ls': ':'}
+        {'key':'netEff', 'label': 'Net', 'c': 'm', 'ls': '-'},
+        {'key':'collectionEff', 'label': 'Collection', 'c': 'g', 'ls': '-'},
+        {'key':'detectionEff', 'label': 'Detection', 'c': 'b', 'ls': '-'}
     ]
 
     fig, ax = plt.subplots(figsize=(10, 6))

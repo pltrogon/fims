@@ -523,14 +523,17 @@ class runData:
             self._calculatedData['Polya Gain'] = polyaFitResults['gain']
             self._calculatedData['Polya Theta Error'] = polyaFitResults['thetaErr']
             self._calculatedData['Polya Gain Error'] = polyaFitResults['gainErr']
-            if polyaFitResults['chi2'] is not None:
-                self._calculatedData['Polya Chi2'] = polyaFitResults['chi2']
-                self._calculatedData['Polya rChi2'] = polyaFitResults['rchi2']
-                self._calculatedData['Polya pVal'] = polyaFitResults['pVal']
-            if polyaFitResults['ksStatD'] is not None:
-                self._calculatedData['KS Stat D']: polyaFitResults['ksStatD']
-                self._calculatedData['KS pVal']: polyaFitResults['ksPValue']
-                self._calculatedData['KS Sigma']: polyaFitResults['ksSigma']
+            fitMetrics = {
+                'Polya Chi2': 'chi2',
+                'Polya rChi2': 'rchi2',
+                'Polya pVal': 'pVal',
+                'KS Stat D': 'ksStatD',
+                'KS pVal': 'ksPValue',
+                'KS Sigma': 'ksSigma'
+            }
+            for key, result in fitMetrics.items():
+                val = polyaFitResults.get(result)
+                self._calculatedData[key] = val if val is not None else np.nan
             
 
             # Single-Electron avalanche info
@@ -2256,8 +2259,10 @@ class runData:
             theta = fitResults['fitPolya'].theta
             gain = fitResults['fitPolya'].gain
             
-        except:
-            print('WARNING - Error in Polya Fit.')
+        except:#TODO - there may be a better way to handle this within _fitAvalancheSize
+            print('Warning - Error in Polya Fit.')
+
+            return {'theta': 0, 'thetaErr': 1, 'gain': 1, 'gainErr': 1, 'chi2': None, 'ksStatD': None}
           
         polyaFitResults = {
             'theta': fitResults['fitPolya'].theta,
