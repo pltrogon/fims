@@ -238,6 +238,7 @@ class FIMSVisualizer(QMainWindow):
         self.animationTimer.timeout.connect(self._nextFrame)
         self.curFrameID = 0
         self.allFrames = []
+        self.particleHistoryCache = self._buildParticleHistoryCache()
 
         self._init_UI()
 
@@ -575,6 +576,8 @@ class FIMSVisualizer(QMainWindow):
 #**********************************************************************#
     def _reloadData(self):
         self.data.loadRootData()
+        self.data._netGain = self.data._getNetGainByFrame()
+        self.particleHistoryCache = self._buildParticleHistoryCache()
         self._onChange(self.viewSelector.currentIndex())
         return
 
@@ -893,7 +896,7 @@ class FIMSVisualizer(QMainWindow):
         
         self.allFrames = sorted(self.inAvData['FrameID'].unique())
         self.curFrameID = 0
-        self._buildParticleHistory()
+        self.particleHistory = self.particleHistoryCache.get(avID, [])
 
         # Route to the active view renderer
         self._renderAnimation()
@@ -965,17 +968,30 @@ class FIMSVisualizer(QMainWindow):
         return
 
 #**********************************************************************#
-    def _buildParticleHistory(self):
+    def _buildParticleHistoryCache(self):
+        """Build particle histories once for every loaded avalanche."""
+        if self.data.animationData is None or self.data.animationData.empty:
+            return {}
+
+        historyCache = {}
+        for avID, avalancheData in self.data.animationData.groupby('AvalancheID'):
+            allFrames = sorted(avalancheData['FrameID'].unique())
+            historyCache[avID] = self._buildParticleHistory(avalancheData, allFrames)
+        return historyCache
+
+#**********************************************************************#
+    @staticmethod
+    def _buildParticleHistory(inAvData, allFrames):
         """Track particles between frames using nearest one-to-one matches."""
-        self.particleHistory = []
-        if self.inAvData.empty:
-            return
+        particleHistory = []
+        if inAvData.empty:
+            return particleHistory
 
         previousTracks = {particleType: [] for particleType in (0, 1, -1)}
         colors = {0: 'b', 1: 'r', -1: 'g'}
 
-        for frameIndex, frameID in enumerate(self.allFrames):
-            frameData = self.inAvData[self.inAvData['FrameID'] == frameID]
+        for frameIndex, frameID in enumerate(allFrames):
+            frameData = inAvData[inAvData['FrameID'] == frameID]
             currentTracks = {particleType: [] for particleType in (0, 1, -1)}
 
             for particleType in currentTracks:
@@ -1023,19 +1039,19 @@ class FIMSVisualizer(QMainWindow):
                         'endFrameIndex': None,
                     })
 
-            self.particleHistory.extend(
+            particleHistory.extend(
                 track for tracks in currentTracks.values() for track in tracks
                 if track['startFrameIndex'] == frameIndex
             )
             previousTracks = currentTracks
 
-        finalFrameIndex = len(self.allFrames) - 1
+        finalFrameIndex = len(allFrames) - 1
         for tracks in previousTracks.values():
             for track in tracks:
                 track['endFrameIndex'] = finalFrameIndex
 
         # Keep only one reference to each track after the final frame.
-        self.particleHistory = list({id(track): track for track in self.particleHistory}.values())
+        return list({id(track): track for track in particleHistory}.values())
 
 #**********************************************************************#
     def _drawParticleHistory(self, axes, frameIndex):
@@ -1198,7 +1214,7 @@ class FIMSVisualizer(QMainWindow):
         sig.set_xlabel('Time (ns)')
         sig.set_ylabel('Signal (fC/ns)' if isSignal else 'Charge (fC)')
         sig.grid()
-        sig.legend(loc='lower left')
+        sig.legend(loc='center right')
 
         currentGain = self.data._netGain.loc[self.avalancheSpinBox.value(), frameID]
         timeLabel = f'{inTime:.2f} ns' if inTime <= 250 else rf'{inTime/1e3:.2f} $\mu$s'
