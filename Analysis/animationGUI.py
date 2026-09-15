@@ -425,6 +425,16 @@ class FIMSVisualizer(QMainWindow):
         self.chkAvSig.toggled.connect(self._onChange)
         layoutViewAvalanche.addWidget(self.chkAvSig)
 
+        self.chkDriftPaths = QCheckBox('Drift Paths')
+        self.chkDriftPaths.setChecked(False)
+        self.chkDriftPaths.toggled.connect(self._onChange)
+        layoutViewAvalanche.addWidget(self.chkDriftPaths)
+
+        self.chkEndpoints = QCheckBox('Endpoint Markers')
+        self.chkEndpoints.setChecked(False)
+        self.chkEndpoints.toggled.connect(self._onChange)
+        layoutViewAvalanche.addWidget(self.chkEndpoints)
+
         # Add spacer to keep controls pushed to the top
         layoutViewAvalanche.addStretch()
 
@@ -883,6 +893,7 @@ class FIMSVisualizer(QMainWindow):
         
         self.allFrames = sorted(self.inAvData['FrameID'].unique())
         self.curFrameID = 0
+        self._buildParticleHistory()
 
         # Route to the active view renderer
         self._renderAnimation()
@@ -954,6 +965,118 @@ class FIMSVisualizer(QMainWindow):
         return
 
 #**********************************************************************#
+    def _buildParticleHistory(self):
+        """Track particles between frames using nearest one-to-one matches."""
+        self.particleHistory = []
+        if self.inAvData.empty:
+            return
+
+        previousTracks = {particleType: [] for particleType in (0, 1, -1)}
+        colors = {0: 'b', 1: 'r', -1: 'g'}
+
+        for frameIndex, frameID in enumerate(self.allFrames):
+            frameData = self.inAvData[self.inAvData['FrameID'] == frameID]
+            currentTracks = {particleType: [] for particleType in (0, 1, -1)}
+
+            for particleType in currentTracks:
+                positions = frameData.loc[
+                    frameData['ParticleType'] == particleType,
+                    ['x', 'y', 'z']
+                ].to_numpy()
+                unmatchedTracks = list(previousTracks[particleType])
+                unmatchedPositions = list(range(len(positions)))
+
+                # Greedily pair the closest remaining particles. The ROOT
+                # format does not contain particle IDs, so this is the most
+                # stable identity available for the existing files.
+                while unmatchedTracks and unmatchedPositions:
+                    track, positionIndex = min(
+                        (
+                            (track, index)
+                            for track in unmatchedTracks
+                            for index in unmatchedPositions
+                        ),
+                        key=lambda pair: np.sum(
+                            (pair[0]['points'][-1] - positions[pair[1]]) ** 2
+                        )
+                    )
+                    track['points'].append(positions[positionIndex])
+                    track['lastFrameIndex'] = frameIndex
+                    currentTracks[particleType].append(track)
+                    matchedTrackIndex = next(
+                        index for index, candidate in enumerate(unmatchedTracks)
+                        if candidate is track
+                    )
+                    unmatchedTracks.pop(matchedTrackIndex)
+                    unmatchedPositions.remove(positionIndex)
+
+                for track in unmatchedTracks:
+                    track['endFrameIndex'] = frameIndex - 1
+
+                for positionIndex in unmatchedPositions:
+                    currentTracks[particleType].append({
+                        'particleType': particleType,
+                        'color': colors[particleType],
+                        'points': [positions[positionIndex]],
+                        'startFrameIndex': frameIndex,
+                        'lastFrameIndex': frameIndex,
+                        'endFrameIndex': None,
+                    })
+
+            self.particleHistory.extend(
+                track for tracks in currentTracks.values() for track in tracks
+                if track['startFrameIndex'] == frameIndex
+            )
+            previousTracks = currentTracks
+
+        finalFrameIndex = len(self.allFrames) - 1
+        for tracks in previousTracks.values():
+            for track in tracks:
+                track['endFrameIndex'] = finalFrameIndex
+
+        # Keep only one reference to each track after the final frame.
+        self.particleHistory = list({id(track): track for track in self.particleHistory}.values())
+
+#**********************************************************************#
+    def _drawParticleHistory(self, axes, frameIndex):
+        """Draw accumulated paths and terminal positions through a frame."""
+        alpha = .2
+        lw = .5
+        if not getattr(self, 'particleHistory', None):
+            return
+
+        is3D = not isinstance(axes, tuple)
+        for track in self.particleHistory:
+            if track['startFrameIndex'] > frameIndex:
+                continue
+
+            points = np.asarray(track['points'][:frameIndex - track['startFrameIndex'] + 1])
+            if len(points) > 1 and self.chkDriftPaths.isChecked():
+                if is3D:
+                    axes.plot(
+                        points[:, 0], points[:, 1], points[:, 2],
+                        color=track['color'], alpha=alpha, linewidth=lw
+                    )
+                else:
+                    xz, yz, *rest = axes
+                    xz.plot(points[:, 0], points[:, 2], color=track['color'], alpha=alpha, linewidth=lw)
+                    yz.plot(points[:, 1], points[:, 2], color=track['color'], alpha=alpha, linewidth=lw)
+                    if rest:
+                        rest[0].plot(points[:, 0], points[:, 1], color=track['color'], alpha=alpha, linewidth=lw)
+
+            endpointFrame = track['endFrameIndex']
+            if self.chkEndpoints.isChecked() and endpointFrame is not None and endpointFrame <= frameIndex:
+                endpoint = track['points'][-1]
+                if is3D:
+                    axes.scatter(*endpoint, color=track['color'], marker='x', s=15)
+                else:
+                    xz, yz, *rest = axes
+                    xz.scatter(endpoint[0], endpoint[2], color=track['color'], marker='x', s=15)
+                    yz.scatter(endpoint[1], endpoint[2], color=track['color'], marker='x', s=15)
+                    if rest:
+                        rest[0].scatter(endpoint[0], endpoint[1], color=track['color'], marker='x', s=15)
+
+#**********************************************************************#
     def _renderParticleFrame(self):
         if not self.allFrames:
             return
@@ -992,6 +1115,8 @@ class FIMSVisualizer(QMainWindow):
                 subData = inFrameData[inFrameData['ParticleType'] == p['ID']]
                 coords = [subData[col] for col in cols]
                 inAx.scatter(*coords, c=p['c'], s=p['s'], label=p['label'])
+
+        self._drawParticleHistory(allAxs, self.curFrameID)
 
         if self.chkGeometry.isChecked():
             self._drawGeometry(allAxs)
@@ -1032,6 +1157,8 @@ class FIMSVisualizer(QMainWindow):
                 subData = inFrameData[inFrameData['ParticleType'] == p['ID']]
                 label = p['label'] if ax == xz else None
                 ax.scatter(subData[x], subData[y], c=p['c'], s=p['s'], label=label)
+
+            self._drawParticleHistory((xz, yz), self.curFrameID)
 
         if self.chkGeometry.isChecked():
             self._drawGeometry((xz, yz))
