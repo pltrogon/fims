@@ -1058,8 +1058,8 @@ class FIMSVisualizer(QMainWindow):
             xlim=[-xScale, xScale],
             ylim=[-amplificationGap - zBuffer, highZ]
         )
-        axis.axvline(0, c='k', ls=':', alpha=.75)
-        axis.axhline(0, c='k', ls=':', alpha=.75)
+        #axis.axvline(0, c='k', ls=':', alpha=.75)
+        #axis.axhline(0, c='k', ls=':', alpha=.75)
         axis.grid(alpha=.25, ls=':')
 
         currentGain = self.data._netGain.loc[self.avalancheSpinBox.value(), frameID]
@@ -1115,10 +1115,10 @@ class FIMSVisualizer(QMainWindow):
             axis.plot(xLocs, padHeight * np.ones(len(xLocs)), c='m', ls=line)
 
         xLocs, _ = hexXY(pitch / sqrt3, 0, 0)
-        axis.axvline(xLocs[0], c='c', ls='--')
-        axis.axvline(-xLocs[0], c='c', ls='--')
-        axis.axvline(xLocs[1], c='c', ls=':')
-        axis.axvline(-xLocs[1], c='c', ls=':')
+        #axis.axvline(xLocs[0], c='c', ls='--')
+        #axis.axvline(-xLocs[0], c='c', ls='--')
+        #axis.axvline(xLocs[1], c='c', ls=':')
+        #axis.axvline(-xLocs[1], c='c', ls=':')
 
 #**********************************************************************#
     def _buildParticleHistoryCache(self):
