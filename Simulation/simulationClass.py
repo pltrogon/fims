@@ -1734,8 +1734,8 @@ class FIMS_Simulation:
             self._generateGeometry()
             saveParam = self.getAllParam()
             self.setParameters({
-                'initialZFraction': 0.2,
-                'numAvalanche': 10,
+                'initialZFraction': 0.25,
+                'numAvalanche': 5,
                 'numFieldLine': 21
             })
 
