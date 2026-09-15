@@ -48,6 +48,8 @@ class AnimationData:
         
         self.loadRootData()
 
+        self._netGain = self._getNetGainByFrame()
+
         return
 
 #**********************************************************************#
@@ -150,6 +152,31 @@ class AnimationData:
             'z': ak.to_numpy(ak.flatten(pData['z']))
         }
         return pd.DataFrame(allData)
+
+#**********************************************************************#
+    def _getNetGainByFrame(self):
+        if self.animationData is None or self.animationData.empty:
+            return pd.DataFrame()
+
+        # Filter out ions and preserve frames where no electrons are present.
+        onlyElectronData = self.animationData[self.animationData['ParticleType']==0]
+
+        allAvalancheIDs = sorted(self.animationData['AvalancheID'].unique())
+        allFrameIDs = sorted(self.animationData['FrameID'].unique())
+
+        # Get the number of electrons in each frame.
+        gainByFrame = (
+            onlyElectronData.groupby(['AvalancheID', 'FrameID'])
+                .size()
+                .unstack(level='FrameID', fill_value=0)
+                .reindex(index=allAvalancheIDs, columns=allFrameIDs, fill_value=0)
+        )
+
+        # Carry the largest observed electron count through empty frames.
+        runningMaxGain = gainByFrame.cummax(axis=1)
+
+        return runningMaxGain
+
 
 
 # ==========================================
@@ -970,9 +997,12 @@ class FIMSVisualizer(QMainWindow):
             self._drawGeometry(allAxs)
         self._formatAxes(allAxs)
 
+        currentGain = self.data._netGain.loc[self.avalancheSpinBox.value(), frameID]
+
         inTime = inFrameData['Time'].iloc[0] if not inFrameData.empty else -1
         timeLabel = f'{inTime:.2f} ns' if inTime <= 250 else rf'{inTime/1e3:.2f} $\mu$s'
-        labelAx.set_title(f'Time = ({timeLabel}) (Frame ID: {frameID})')
+        #labelAx.set_title(f'Time = {timeLabel}, Gain = {currentGain} (Frame ID: {frameID})')
+        labelAx.set_title(f'Time = {timeLabel}, Gain = {currentGain}')
         labelAx.legend()
 
         self.canvas.fig.tight_layout()
@@ -1041,11 +1071,12 @@ class FIMSVisualizer(QMainWindow):
         sig.set_xlabel('Time (ns)')
         sig.set_ylabel('Signal (fC/ns)' if isSignal else 'Charge (fC)')
         sig.grid()
-        sig.legend()
+        sig.legend(loc='lower left')
 
+        currentGain = self.data._netGain.loc[self.avalancheSpinBox.value(), frameID]
         timeLabel = f'{inTime:.2f} ns' if inTime <= 250 else rf'{inTime/1e3:.2f} $\mu$s'
-        xz.set_title(f'Time = ({timeLabel}) (Frame ID: {frameID})')
-        xz.legend()
+        xz.set_title(f'Time = {timeLabel}, Gain = {currentGain}')
+        xz.legend(loc='upper right')
 
         self.canvas.fig.tight_layout()
         self.canvas.draw()
