@@ -748,7 +748,7 @@ class runData:
                 )
                 axis.plot(
                     cellX, cellY, 
-                    label='Cell', c='b', ls='--', lw=1
+                    label='Cell', c='c', ls='--', lw=1
                 )
                 axis.add_patch(hole)
 
@@ -766,12 +766,12 @@ class runData:
                 axis.plot(
                     [cellX[3], cellX[0], cellX[0], cellX[3], cellX[3]], 
                     [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight],
-                    label='Cell', c='b', ls='--', lw=1
+                    label='Cell', c='c', ls='--', lw=1
                 )
                 axis.plot(
                     [cellX[2], cellX[1], cellX[1], cellX[2], cellX[2]], 
                     [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight], 
-                    c='b', ls='--', lw=1
+                    c='c', ls='--', lw=1
                 )
                 axis.plot(
                     holeXY1, holeZ, 
@@ -795,12 +795,12 @@ class runData:
                 axis.plot(
                     [cellY[4], cellY[1], cellY[1], cellY[4], cellY[4]], 
                     [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight],
-                    label='Cell', c='b', ls='--', lw=1
+                    label='Cell', c='c', ls='--', lw=1
                 )
                 axis.plot(
                     [0, 0], 
                     [padHeight, cathodeHeight],
-                    label='Cell', c='b', ls='--', lw=1
+                    label='Cell', c='c', ls='--', lw=1
                 )
                 axis.plot(
                     holeXY1, holeZ, 

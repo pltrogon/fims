@@ -911,7 +911,7 @@ def plotPolyaData(datasets, absField=False, vsGain=False):
     plt.show()
     
 #********************************************************************************#
-def plotEfficiencyContours(allData=None, breakDownData=None, xData='', isGain=False, contourLevel=0, vLine=0):
+def plotEfficiencyContours(allData=None, breakDownData=None, xData='', isGain=False, contourLevel=0, vLine=0, showGain=False):
     """
     Plot the efficiency data across 2D scans wiht contours indicated.
     """
@@ -974,7 +974,25 @@ def plotEfficiencyContours(allData=None, breakDownData=None, xData='', isGain=Fa
                 linewidths=2.5
             )
             plt.clabel(contourLine, inline=True, fontsize=fontsize, fmt=f"{inLevel*100:.0f} %%")
-            plt.plot([], [], c=cfg['c'], ls=inLine, lw=2.5, label=cfg['label']+ f' ({inLevel*100:.0f}%)')
+            plt.plot([], [], c=cfg['c'], ls=inLine, lw=2.5, label=cfg['label']+ f' = {inLevel*100:.0f}%')
+
+    if showGain:
+        gain = allData['meanGain']
+        gainKey = griddata((x, y), gain, (xiMesh, yiMesh), method='linear')
+        gainLevels = [100, 1000]
+        gainStyles = ['-', '--']
+        for inLevel, inLine in zip(gainLevels, gainStyles):
+
+            gainLine = plt.contour(
+                xiMesh, yiMesh, gainKey,
+                levels=[inLevel], 
+                colors='c', 
+                linestyles=inLine,
+                linewidths=2.5
+            )
+            plt.clabel(gainLine, inline=True, fontsize=fontsize, fmt=f'{inLevel:.0e}')
+            plt.plot([], [], c='c', ls=inLine, lw=2.5, label=r'$\overline{n}$'+f' = {inLevel}')
+
 
     # Plot breakdown region
     plt.fill_between(
@@ -988,7 +1006,7 @@ def plotEfficiencyContours(allData=None, breakDownData=None, xData='', isGain=Fa
     if vLine>0:
         plt.axvline(
             vLine,
-            c='c'
+            c='k'
         )
 
     labelMap = {
