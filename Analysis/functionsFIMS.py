@@ -1015,7 +1015,7 @@ def plotEfficiencyContours(allData=None, breakDownData=None, xData='', isGain=Fa
     }
     plt.xlabel(labelMap[xData], fontsize=fontsize)
     plt.ylabel(r'Gas Gain: $\overline{n}$' if isGain else 'Field Ratio', fontsize=fontsize)
-    plt.legend(fontsize=fontsize)
+    plt.legend(loc='upper right', fontsize=fontsize)
 
     if isGain:
         plt.yscale('log')
