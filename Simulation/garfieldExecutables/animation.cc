@@ -367,7 +367,7 @@ int main(int argc, char * argv[]) {
     const double fieldLineStep = static_cast<double>(numLines - 1);
 
     dx = 2.*xScale/fieldLineStep;
-    dy = 2.*xScale/fieldLineStep;
+    dy = 2.*yScale/fieldLineStep;
 
     DriftLineRKF driftLines(sensorFIMS);
     driftLines.SetMaximumStepSize(MICRONTOCM);
