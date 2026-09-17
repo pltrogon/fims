@@ -271,7 +271,7 @@ class gmshClass:
             'hexagon': lambda: self._createHexagon(length, height, thickness),
             'octagon': lambda: self._createOctagon(length, height, thickness),
             'triangle': lambda: self._createTriangle(length, height, thickness),
-            'kiki': lambda: self._createStar(length, length/3, height, thickness),
+            'kiki': lambda: self._createStar(length, length/3., height, thickness),
         }
 
         shapeList = []
@@ -298,7 +298,6 @@ class gmshClass:
                 for i, (mx, my) in enumerate(offsets):
                     curShape = self._occ.copy([baseShape])[0]
                     self._occ.translate([curShape], mx*xCenter, my*yCenter, 0)
-                    print('Hole Centers: ', i, mx*xCenter, my*yCenter)
                     shapeList.append(curShape)
                 self._occ.remove([baseShape], recursive=True)
         
