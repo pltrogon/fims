@@ -696,9 +696,9 @@ class FIMSVisualizer(QMainWindow):
                     if self.chkContours.isChecked():
                         self._plotContours((xz, yz))
                     if self.chkAdjacent.isChecked():
-                        self._plotContours((xz, yz), pad='RightBottomPad', color='m')
-                        self._plotContours((xz, yz), pad='LeftTopPad', color='m')
-
+                        self._plotContours((xz, yz), pad='TopPad', color='m')
+                        self._plotContours((xz, yz), pad='BottomPad', color='m')
+                        
             if self.chkGeometry.isChecked():
                 self._drawGeometry((xz, yz))
             self._formatAxes((xz, yz))
@@ -738,7 +738,7 @@ class FIMSVisualizer(QMainWindow):
         return
 
 #**********************************************************************#
-    def _plotContours(self, axes, pad='TopPad', color='c'):
+    def _plotContours(self, axes, pad='CentralPad', color='c'):
         """
         Plots contour lines with inline labels on 2D spatial axes (xz and yz).
         """
