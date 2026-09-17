@@ -10,6 +10,7 @@ import uproot
 import pandas as pd
 import numpy as np
 
+# TODO: can this be remade using a GUI like analysis?
 class Reconstruction:
     """
     Class enabling particle event reconstruction approximations.
@@ -200,17 +201,21 @@ class Reconstruction:
     
     #********************************************************************************#
 
-    def _getMultipleTrials(self, numTrials=1, random=True):
+    def _getMultipleTrials(self, numTrials=1, randomize=True):
         """
         Gets the recoil data from a series of trials and returns them as a single set.
         
         args:
             numTrials (int): the number of trials to overlay.
-            random (bool): whether the randomly orient the trials.
+            randomize (bool): whether the randomly orient the trials.
         
         returns:
             rawData (dataframe): dataframe of the x,y, and z coordinates of each electron.
         """
+        if numTrials == 1:
+            rawData = self.getCoordinates()
+            return rawData
+        
         eventNums = np.arange(numTrials)
         for num in eventNums:
             self.trialID = num
@@ -220,7 +225,7 @@ class Reconstruction:
                 rawData = trialData
                 continue
             
-            if random:
+            if randomize:
                 angle = random.random()*2*math.pi
                 height = random.random()*10000
                 
@@ -230,7 +235,7 @@ class Reconstruction:
                 rawData = pd.concat([rawData, pd.concat([newX,newY,newZ], axis=1, keys=['x','y','z'])])
             
             else:
-                rawData = pd.concat([rawData, trialData])
+                rawData = pd.concat([rawData, trialData], ignore_index=True)
             
         return rawData
     
@@ -251,20 +256,21 @@ class Reconstruction:
             seenData (dataframe): the coordinates of the electrons seen by the readout.
             lostData (dataframe): the coordinates of the electrons not seen by the readout.
         """
+        # TODO: improve efficiency
+        zippedData = zip(allData['x'], allData['y'], allData[name])
         dropped = []
-        
         # Loop through every pixel group
-        for pixel in allData[name]:
+        for x, y, pixel in zippedData:
             elecID = 0
             
             # Loop through all electron IDs
             while elecID+1 < len(pixel): 
-                if pixel[elecID+1] - pixel[elecID] < deadTime:
-                    dropped.append(pixel.pop(elecID+1))
+                if abs(pixel[elecID+1] - pixel[elecID]) < deadTime:
+                    dropped.append((x,y, pixel.pop(elecID+1)))
                     continue
                 elecID += 1
         seenData = allData.explode([name], ignore_index=True)
-        lostData = pd.DataFrame(dropped, columns = ['x','y',name])
+        lostData = pd.DataFrame([*dropped], columns = ['x','y', name])
         
         return seenData, lostData
     
@@ -541,7 +547,7 @@ class Reconstruction:
     
     #********************************************************************************#
     
-    def reconstructFIMS(self, numEvents = 1, random=True):
+    def reconstructFIMS(self, numEvents = 1, randomize=True):
         """
         Approximates an event reconstruction using a FIMS readout.
         
@@ -562,7 +568,7 @@ class Reconstruction:
         firstDifWidths = (transDif, transDif, lonDif)
         
         # Setup event data
-        rawData = self._getMultipleTrials(numEvents, random)
+        rawData = self._getMultipleTrials(numEvents, randomize)
             
         # Apply Gaussian smear to approximate diffusion
         smearData = self.diffuseData(rawData, firstDifWidths)
@@ -583,13 +589,13 @@ class Reconstruction:
         groupedData = avalData.groupby(['x','y']).agg(z=('z', list)).reset_index()
         groupedData.sort_values(by=['x','y'], inplace=True)
         
-        plotData, lostData = self._removeLostElectrons(groupedData, self.zRez, name='z')
+        plotData, lostData = self._removeLostData(groupedData, self.zRez, name='z')
         
         return plotData, lostData
         
     #********************************************************************************#
     
-    def reconstructBEAST(self, numEvents=1, random=True):
+    def reconstructBEAST(self, numEvents=1, randomize=True):
         """
         Approximates an event reconstruction using a BEAST readout.
         
@@ -619,7 +625,7 @@ class Reconstruction:
         self.reconInfo['Avalanche Sigma'] = int(math.sqrt(self.reconInfo['Avalanche Sigma']))
         
         # Setup event data
-        rawData = self._getMultipleTrials(numEvents, random)
+        rawData = self._getMultipleTrials(numEvents, randomize)
         
         # Apply Gaussian smear to approximate diffusion
         smearData = self.diffuseData(rawData, firstDifWidths)
@@ -648,7 +654,7 @@ class Reconstruction:
 
     #********************************************************************************#
     
-    def reconstructMigdal(self, numEvents=1, random=True):
+    def reconstructMigdal(self, numEvents=1, randomize=True):
         """
         Approximates an event reconstruction using the Migdal experiment readout.
         
@@ -674,7 +680,7 @@ class Reconstruction:
         secondDifWidths = (secondTransDif, secondTransDif, secondLonDif)
         
         # Setup event data
-        rawData = self._getMultipleTrials(numEvents, random)
+        rawData = self._getMultipleTrials(numEvents, randomize)
         
         # Apply Gaussian smear to approximate initial drift diffusion
         smearData = self.diffuseData(rawData, firstDifWidths)
@@ -694,7 +700,7 @@ class Reconstruction:
 
     #********************************************************************************#
     
-    def reconstructGridPix(self, numEvents=1):
+    def reconstructGridPix(self, numEvents=1, randomize=True):
         """
         Approximates an event reconstruction using the GridPix readout.
         
@@ -724,7 +730,7 @@ class Reconstruction:
         secondDifWidths = (secondTransDif, secondTransDif, secondLonDif)
         
         # Setup event data
-        rawData = self._getMultipleTrials(numEvents, random)
+        rawData = self._getMultipleTrials(numEvents, randomize)
         
         # Apply Gaussian smear to approximate initial drift diffusion
         smearData = self.diffuseData(rawData, firstDifWidths)
@@ -779,7 +785,7 @@ class Reconstruction:
 
     #********************************************************************************#
     
-    def reconstructGridPixSimple(self, numEvents = 1, random=True):
+    def reconstructGridPixSimple(self, numEvents = 1, randomize=True):
         """
         Approximates an event reconstruction using a GridPix readout.
         
@@ -806,7 +812,7 @@ class Reconstruction:
         ToTRez = 300*self.driftVelocity
         
         # Setup event data
-        rawData = self._getMultipleTrials(numEvents, random)
+        rawData = self._getMultipleTrials(numEvents, randomize)
         
         # Apply Gaussian smear to approximate diffusion
         smearData = self.diffuseData(rawData, firstDifWidths)
