@@ -258,7 +258,6 @@ int main(int argc, char * argv[]) {
                 //Only check where electron ends if there is only 1 (Any larger is assumed to be collected)
                 if(numAvalancheElectrons == 1){
                     switch(exitStatus){
-
                         // Electron attached to gas molecule - Restart with initial electron
                         case -7: {
                             numAttached++;
@@ -269,8 +268,12 @@ int main(int argc, char * argv[]) {
                                 curTime = t0;
                                 curEnergy = e0;
                                 curDx = 0., curDy = 0., curDz = 0.;
-                                repeatedElec = 0;
+                                repeatedElec++;
                                 break;
+                            }
+                            if(repeatedElec > 2 * maxRepeats){
+                                std::cerr << "Error: Electron attachment too high to determine efficiency." << std::endl;
+                                return -1
                             }
                             else{
                                 curX = sampleX, curY = sampleY, curZ = z0;
