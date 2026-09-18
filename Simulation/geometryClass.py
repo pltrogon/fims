@@ -271,7 +271,7 @@ class gmshClass:
             'hexagon': lambda: self._createHexagon(length, height, thickness),
             'octagon': lambda: self._createOctagon(length, height, thickness),
             'triangle': lambda: self._createTriangle(length, height, thickness),
-            'kiki': lambda: self._createStar(length, length/3., height, thickness),
+            'kiki': lambda: self._createStar(length, length/2., height, thickness),
         }
 
         shapeList = []

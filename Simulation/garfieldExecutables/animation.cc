@@ -66,35 +66,8 @@ int main(int argc, char * argv[]) {
     std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
     // Get sensor list
-    std::vector<std::string> sensorList;
-    sensorList.push_back("CentralPad");
-    switch(geometryMode){
-        case GeometryMode::SquareSurrounding:{
-            sensorList.push_back("TopPad");
-            sensorList.push_back("RightTopPad");
-            sensorList.push_back("RightPad");
-            sensorList.push_back("RightBottomPad");
-            sensorList.push_back("BottomPad");
-            sensorList.push_back("LeftBottomPad");
-            sensorList.push_back("LeftPad");
-            sensorList.push_back("LeftTopPad");
-            break;
-        }
-
-        case GeometryMode::HexagonalSurrounding:{
-            sensorList.push_back("TopPad");
-            sensorList.push_back("BottomPad");
-            sensorList.push_back("RightTopPad");
-            sensorList.push_back("RightBottomPad");
-            sensorList.push_back("LeftTopPad");
-            sensorList.push_back("LeftBottomPad");
-            break;
-        }
-
-        default:
-            return -1;
-    }
-    
+    std::vector<std::string> sensorList = getSensorList(geometryMode);
+  
     //***** Simulation Parameters *****//
     auto simParams = readSimulationParameters();
     if(!simParams){
