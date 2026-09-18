@@ -109,6 +109,14 @@ EfficiencyMode stringToEfficiencyMode(std::string str);
 std::string getGitVersion();
 
 /**
+ * @brief Determines the correct list of pad names and returns them as a list.
+ * @param geometryMode the current geometry mode.
+ * 
+ * @return A list of pad names.
+ */
+std::vector<std::string>  getSensorList(GeometryMode geometryMode);
+
+/**
  * @brief Generates a random (x,y) point uniformly distributed within a hexagon centered at the origin with the specified side length.
  * @param sideLength The length of each side of the hexagon.
  * 
