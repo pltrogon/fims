@@ -113,7 +113,7 @@ class FIMS_Simulation:
         self._runMode = 'hexagoncorner'
         
         self._iterationNumberLimit = 100
-        self._fieldLimit = 350
+        self._fieldLimit = 300
 
         return
 

@@ -353,9 +353,6 @@ int main(int argc, char * argv[]) {
 
                     }//End of electron endpoint switch
                 }
-                if(numAvalancheElectrons < 1){
-                    std::cerr << "Error: Number of electrons in avalanche is less than 1." << std::endl;
-                }
                 viewElectronDrift->Clear();
             }//End of single avalanche trial
 
