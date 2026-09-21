@@ -327,7 +327,7 @@ class FIMS_Optimizer:
         except Exception as e:
             print(f'Simulation failed for params {paramDict}: {e}')
             # Failure penalty: high mean IBN, large variance
-            resultIBN, resultIBNError = 100.0, 0.1
+            resultIBN, resultIBNError = None, None
         
         # Get time stamps
         runEnd = time.perf_counter()
@@ -380,6 +380,18 @@ class FIMS_Optimizer:
         stepSize = self._precisionLimit
         roundedValues = np.round(geoValues/stepSize)*stepSize
         return roundedValues
+        
+#**********************************************************************#
+    def _checkConstraintsMet(self, candidate, constraints):
+        """Verifies if a snapped candidate still meets BoTorch linear constraints."""
+        if constraints is None:
+            return True
+        candTensor = torch.tensor(candidate, dtype=dtype)
+        for indices, coefficients, rhs in constraints:
+            # BoTorch constraint format: sum(coefficients * x[indices]) >= rhs
+            if torch.sum(coefficients * candTensor[indices]) < rhs:
+                return False
+        return True
 
 #**********************************************************************#
     def optimizeForIBN(self, initialGuess={}):
@@ -420,6 +432,8 @@ class FIMS_Optimizer:
         numInit = max(5, len(inputList)*3)
         rawValues = lower + (upper - lower) * torch.rand(numInit, len(inputList), dtype=dtype)
         snapValues = self._snapToPrecision(rawValues)
+
+        #TODO - Can implement lookinng up previous state in 'log/optimizerState.pt' as initial
         
         inValues = snapValues.detach().clone()
 
@@ -450,28 +464,55 @@ class FIMS_Optimizer:
                     prune_baseline=True
                 )
 
-                # Optimize continuous surrogate acquisition function
+                # Get a batch of 5 candidates in case the best one is a duplicate or invalid after snapping
                 candidateContinuous, _ = optimize_acqf(
                     acq_function=aqcFunction,
                     bounds=boundsTensor,
                     inequality_constraints=inequalityConstraints,
-                    q=1,
+                    q=5,
                     num_restarts=10,
                     raw_samples=512,
                 )
 
-                # Snap candidate point to precision
-                candidates = candidateContinuous[0].detach().cpu().numpy()
-                snapCandidates = self._snapToPrecision(candidates)
+                validCandidate = None
+                for cand in candidateContinuous:
+                    snapCand = self._snapToPrecision(cand.detach().cpu().numpy())
+                    
+                    # Check if already evaluated this exact point
+                    isDuplicate = any(np.allclose(snapCand, v.numpy()) for v in inValues)
+                    if isDuplicate:
+                        continue  
+                    # Check if snapping broke the constraints
+                    if not self._checkConstraintsMet(snapCand, inequalityConstraints):
+                        continue
+                        
+                    validCandidate = snapCand
+                    break
+                
+                if validCandidate is None:
+                    print('Warning: Could not find unique/valid candidate. Ending optimization early.')
+                    break # Exhausted the grid precision at this optimum
 
                 #Get new IBN values
-                newIBN, newIBNErr = self._IBNObjective(snapCandidates, inputList)
+                newIBN, newIBNErr = self._IBNObjective(validCandidate, inputList)
+
+                # Only append to dataset if the simulation actually succeeded
+                if newIBN is None or newIBNErr is None:
+                    print(f"Skipping failed candidate: {validCandidate}")
+                    continue
 
                 # Append grid tensor back into dataset
-                candidateTensor = torch.tensor([snapCandidates], dtype=dtype)
+                candidateTensor = torch.tensor([validCandidate], dtype=dtype)
                 inValues = torch.cat([inValues, candidateTensor], dim=0)
                 inResults = torch.cat([inResults, torch.tensor([[-newIBN]], dtype=dtype)], dim=0) #BoTorch tries to maximize, so invert
                 inResultsVar = torch.cat([inResultsVar, torch.tensor([[newIBNErr**2]], dtype=dtype)], dim=0)
+
+                torch.save({
+                    'inValues': inValues,
+                    'inResults': inResults,
+                    'inResultsVar': inResultsVar,
+                    'iteration': inIter
+                }, 'log/optimizerState.pt')
 
             bestIDx = torch.argmax(inResults)
             finalParams = dict(zip(inputList, inValues[bestIDx].numpy()))
