@@ -2,7 +2,7 @@
  * checkEfficiency.cc
  *
  * 
- * TODO
+ * TODO Replace with checkEfficiency and gain?
  * 
  */
 
@@ -261,8 +261,11 @@ int main(int argc, char * argv[]) {
                         // Electron attached to gas molecule - Restart with initial electron
                         case -7: {
                             numAttached++;
-                            if(repeatedElec > maxRepeats){
-                                double newX, newY;
+                            if(repeatedElec > 2 * maxRepeats){
+                                std::cerr << "Error: Electron attachment too high to determine efficiency." << std::endl;
+                                return -1;
+                            }
+                            else if(repeatedElec > maxRepeats){
                                 auto [randX, randY] = randomXYinGeometry(geometryMode, cellLength);
                                 curX = randX, curY = randY, curZ = z0;
                                 curTime = t0;
@@ -270,10 +273,6 @@ int main(int argc, char * argv[]) {
                                 curDx = 0., curDy = 0., curDz = 0.;
                                 repeatedElec++;
                                 break;
-                            }
-                            if(repeatedElec > 2 * maxRepeats){
-                                std::cerr << "Error: Electron attachment too high to determine efficiency." << std::endl;
-                                return -1
                             }
                             else{
                                 curX = sampleX, curY = sampleY, curZ = z0;
