@@ -411,6 +411,18 @@ class FIMS_Simulation:
         )
 
         return
+#**********************************************************************#
+
+    def createCustomShape(self):
+        """
+        Creates a custom shape object for use in geometryClass.
+        
+        Note: intended to be used by AI agent.
+        """
+        
+        #TODO: implement custom shape creation
+        
+        return
 
 #**********************************************************************#
     def resetParam(self, verbose=True):
