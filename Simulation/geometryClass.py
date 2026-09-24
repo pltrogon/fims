@@ -100,6 +100,9 @@ class geometryClass:
             
             case HoleShape.TRIVIALPURSUIT:
                 holeScale = 2.2
+            
+            case HoleShape.CIS:
+                holeScale = 2.2
 
             case HoleShape.NESTEGGS:
                 holeScale = 3.55
@@ -272,6 +275,7 @@ class gmshClass:
             'octagon': lambda: self._createPolygon(length, height, thickness, 8, 22.5),
             'triangle': lambda: self._createPolygon(length, height, thickness, 3, 30),
             'kiki': lambda: self._createStar(length, length/2., height, thickness),
+            'custom': lambda: self._customGeometry()
         }
 
         shapeList = []
@@ -323,7 +327,42 @@ class gmshClass:
                     curShape = (3, inHole)
                     self._occ.translate([curShape], dx, dy, 0)
                     shapeList.append(curShape)
+                            
+            case 'cis':
+                xCenter = pitch*math.sqrt(3)/8
+                yCenter = pitch/4
+                angles = [30, 210, 30, 210, 30, 210]
+                offsets = [
+                    (xCenter, yCenter/2),
+                    (0, yCenter),
+                    (-xCenter, yCenter/2),
+                    (-xCenter, -yCenter/2),
+                    (0, -yCenter),
+                    (xCenter, -yCenter/2)
+                ]
                 
+                # Add center block
+                blockLength = length
+                block = self._createPolygon(blockLength, height, thickness, 6)
+                
+                # Create all holes:
+                for angle, (dx, dy) in zip(angles, offsets):
+                    inHole = self._createPolygon(
+                        length, height, thickness,
+                        numPoints=3, offset=angle
+                    )
+                    curShape = (3, inHole)
+                    self._occ.translate([curShape], dx, dy, 0)
+                    shapeList.append(curShape)
+                
+                    self._occ.cut(
+                        [curShape],
+                        [(3, block)],
+                        removeObject=True,
+                        removeTool=False
+                    )
+                self._occ.remove([(3, block)], recursive=True)
+            
             case _:
                 raise ValueError(f"Unsupported shape: '{inShape}'")
         
@@ -754,7 +793,22 @@ class gmshClass:
             return hexagon[1][1]
         else:
             return surface
+
+#**********************************************************************#
+
+    def _customGeometry(self):
+        """
+        Imports a custom geometry shape.
         
+        Note: intended to be used by ai agent for hole optimization.
+        
+        returns:
+            shape: custom shape object.
+        """
+        #TODO: implement shape importing
+        shape = None
+        return shape
+
 #**********************************************************************#
 
     def _assignPhysicalGroups(self, entityMap):

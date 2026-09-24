@@ -15,6 +15,8 @@ class HoleShape(str, Enum):
   KIKI = 'kiki'
   NESTEGGS = 'nesteggs'
   TRIVIALPURSUIT = 'trivialpursuit'
+  CIS = 'cis'
+  CUSTOM = 'custom'
 
 class PadShape(str, Enum):
   SQUARE = 'square'
