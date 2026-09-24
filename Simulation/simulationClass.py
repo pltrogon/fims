@@ -3,6 +3,7 @@
 ###################################
 from __future__ import annotations
 
+import time
 import numpy as np
 import pandas as pd
 import uproot
@@ -13,7 +14,6 @@ import sys
 import math
 import json
 import subprocess
-import time
 import itertools
 import re
 import copy
@@ -22,6 +22,7 @@ from scipy.optimize import curve_fit
 from scipy.special import expit, logit
 
 from configs import GeometryConfiguration, UnitCell, HoleShape, PadShape, ScaleOption
+from geometryClass import geometryClass
 
 #Include the analysis object        
 sys.path.insert(1, '../Analysis')
@@ -37,8 +38,6 @@ class NumPyEncoder(json.JSONEncoder):
         if isinstance(obj, np.ndarray):
             return obj.tolist()
         return super(NumPyEncoder, self).default(obj)
-
-from geometryClass import geometryClass
 
 class FIMS_Simulation:
     """
@@ -90,12 +89,11 @@ class FIMS_Simulation:
         """
         Initializes a FIMS_Simulation object.
         """
-        
         self._GARFIELDPATH = self._getGarfieldPath()
         if self._GARFIELDPATH is None:
             raise RuntimeError('Error getting Garfield++ path.')
+        
         self._setupSimulation()
-
         try:
             self._param = self._defaultParam()
             self._param['runNumber'] = self._getRunNumber()
@@ -114,7 +112,7 @@ class FIMS_Simulation:
         
         self._iterationNumberLimit = 100
         self._fieldLimit = 300
-
+        
         return
 
 #**********************************************************************#
@@ -301,7 +299,7 @@ class FIMS_Simulation:
         handles cross-platform dynamic linking environments safely.
         """
         import shutil
-
+        
         # Check for necessary pathways and create if not present
         paths = [
             'log', 
@@ -315,7 +313,7 @@ class FIMS_Simulation:
         # Get garfield path variables directly into active environment
         newEnv = self._getGarfieldEnvironment()
         os.environ.update(newEnv)
-
+        
         # Clean up local project build directory to force fresh discovery
         originalCWD = os.getcwd()
         os.chdir('build')
@@ -330,6 +328,7 @@ class FIMS_Simulation:
         # Use CMake to configure and build the executables
         makeBuild = 'cmake .. && make'
         
+        # TODO: CMake takes upwards of 30 s to build. Surely this can be improved
         try:
             subprocess.run(
                 makeBuild,
@@ -339,7 +338,7 @@ class FIMS_Simulation:
                 capture_output=True,
                 text=True
             )
-
+            
             # Extract the exact ROOT path found by CMake for the runtime linker
             if os.path.exists('ROOT_LIB_PATH.txt'):
                 with open('ROOT_LIB_PATH.txt', 'r') as f:

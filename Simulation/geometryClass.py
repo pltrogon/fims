@@ -268,9 +268,9 @@ class gmshClass:
         singleShape = {
             'circle': lambda: self._occ.addCylinder(0, 0, height, 0, 0, thickness, length),
             'square': lambda: self._occ.addBox(-length/2, -length/2, height, length, length, thickness),
-            'hexagon': lambda: self._createHexagon(length, height, thickness),
-            'octagon': lambda: self._createOctagon(length, height, thickness),
-            'triangle': lambda: self._createTriangle(length, height, thickness),
+            'hexagon': lambda: self._createPolygon(length, height, thickness, 6),
+            'octagon': lambda: self._createPolygon(length, height, thickness, 8, 22.5),
+            'triangle': lambda: self._createPolygon(length, height, thickness, 3, 30),
             'kiki': lambda: self._createStar(length, length/2., height, thickness),
         }
 
@@ -316,9 +316,9 @@ class gmshClass:
                 
                 # Create all holes:
                 for angle, (dx, dy) in zip(angles, offsets):
-                    inHole = self._createTriangle(
+                    inHole = self._createPolygon(
                         length, height, thickness,
-                        angle=angle
+                        numPoints=3, offset=angle
                     )
                     curShape = (3, inHole)
                     self._occ.translate([curShape], dx, dy, 0)
@@ -332,7 +332,7 @@ class gmshClass:
     def _createBaseShape(self, xLength, yLength, height, thickness):
         """TODO"""
         if self._geoConfig.unitCell == UnitCell.HEXAGON:
-            return self._createHexagon(xLength/3, height, thickness)
+            return self._createPolygon(xLength/3, height, thickness, 6)
         if thickness:
             return self._occ.addBox(-xLength/2, -yLength/2, height, xLength, yLength, thickness)
         return self._occ.addRectangle(-xLength/2, -yLength/2, height, xLength, yLength)
@@ -663,71 +663,36 @@ class gmshClass:
         
 #**********************************************************************#
 
-    def _createHexagon(self, outRadius, z, zDist=None):
+    def _createPolygon(self, radius, z, zDist=None, numPoints=6, offset=0.0):
         """
-        Makes a hexagon in the xy-plane with the center at the origin.
-        Extrudes it in the z-direction if zDist is provided.
+        Makes a polygon with a given number of points in the xy-plane with 
+        the center at the origin. Extrudes it in the z-direction if zDist
+        is provided.
 
         Args:
-            outRadius: The distance from the hexagon center to each vertex.
-            z: The z-coordinate of the hexagon.
-            zDist: The distance to extrude the hexagon in the z-direction. 
-                   If None, the hexagon will remain a 2D surface.
-        """
-        
-        points = []
-        for i in range(6):
-            angle = math.radians(i*60)
-            x = outRadius*math.cos(angle)
-            y = outRadius*math.sin(angle)
-
-            inPoint = self._occ.addPoint(x, y, z)
-            points.append(inPoint)
-
-        lines = []
-        for i in range(6):
-            inLine = self._occ.addLine(points[i], points[(i+1)%6])
-            lines.append(inLine)
-
-        loop = self._occ.addCurveLoop(lines)
-        surface = self._occ.addPlaneSurface([loop])
-        if zDist is not None:
-            hexagon = self._occ.extrude(
-                [(2, surface)],
-                0, 0, zDist
-            )
-            return hexagon[1][1]
-        else:
-            return surface
-#**********************************************************************#
-
-    def _createTriangle(self, outRadius, z, zDist=None, angle=30):
-        """
-        Makes an equilateral triangle in the xy-plane with the center at the origin.
-        Extrudes it in the z-direction if zDist is provided.
-
-        Args:
-            outRadius (float): The side length of the triangle.
-            z (float): The z-coordinate of the triangle.
-            zDist (float): The distance to extrude the triangle in the z-direction. 
-        If None, the triangle will remain a 2D surface.
-            angle (float): Rotation angle of the triangle. Defaults to point in the positive z-direction.
+            radius (float): The distance from the center to each point.
+            z (float): The z-coordinate of the polygon.
+            zDist (float): The distance to extrude the polygon in the z-direction. 
+        If None, the polygon will remain a 2D surface.
+            numPoints (int): Number of points the polygon has.
+            offset (float): the angular offset of the first point, in degrees.
         
         returns:
             surface: geometry object
         """
         points = []
-        for i in range(3):
-            netAngle = math.radians(i*120 - angle)
-            x = outRadius*math.cos(netAngle)
-            y = outRadius*math.sin(netAngle)
-            
+        angleBetween = 360/numPoints
+        for i in range(numPoints):
+            netAngle = math.radians(i*angleBetween-offset)
+            x = radius*math.cos(netAngle)
+            y = radius*math.sin(netAngle)
+
             inPoint = self._occ.addPoint(x, y, z)
             points.append(inPoint)
 
         lines = []
-        for i in range(3):
-            inLine = self._occ.addLine(points[i], points[(i+1)%3])
+        for i in range(numPoints):
+            inLine = self._occ.addLine(points[i], points[(i+1)%numPoints])
             lines.append(inLine)
 
         loop = self._occ.addCurveLoop(lines)
@@ -742,6 +707,7 @@ class gmshClass:
             return surface
         
 #**********************************************************************#
+
     def _createStar(self, outRadius, inRadius, z, zDist=None, numPoints=6):
         """
         Makes an equilateral triangle in the xy-plane with the center at the origin.
@@ -789,45 +755,6 @@ class gmshClass:
         else:
             return surface
         
-#**********************************************************************#
-
-    def _createOctagon(self, outRadius, z, zDist=None):
-        """
-        Makes an octagon in the xy-plane with the center at the origin.
-        Extrudes it in the z-direction if zDist is provided.
-
-        Args:
-            outRadius: The distance from the octagon center to each vertex.
-            z: The z-coordinate of the octagon.
-            zDist: The distance to extrude the octagon in the z-direction. 
-                   If None, the octagon will remain a 2D surface.
-        """
-        
-        points = []
-        for i in range(8):
-            angle = math.radians(i*45+22.5) # Rotate by 15 degrees to align flat sides with axes
-            x = outRadius*math.cos(angle)
-            y = outRadius*math.sin(angle)
-
-            inPoint = self._occ.addPoint(x, y, z)
-            points.append(inPoint)
-
-        lines = []
-        for i in range(8):
-            inLine = self._occ.addLine(points[i], points[(i+1)%8])
-            lines.append(inLine)
-
-        loop = self._occ.addCurveLoop(lines)
-        surface = self._occ.addPlaneSurface([loop])
-        if zDist is not None:
-            octagon = self._occ.extrude(
-                [(2, surface)],
-                0, 0, zDist
-            )
-            return octagon[1][1]
-        else:
-            return surface
-            
 #**********************************************************************#
 
     def _assignPhysicalGroups(self, entityMap):
@@ -1119,10 +1046,10 @@ class gmshClass:
         
         #=========================#
         #=== DEFINE MESH SIZES ===#
-        #=========================#
-        fineMesh = gridThickness*(3./4.)
-        gridMesh = gridThickness/4.
-        refineMesh = gridThickness*(3./2.)
+        #=========================# #TODO: revert
+        fineMesh = 3#gridThickness*(3./4.)
+        gridMesh = 1#gridThickness/4.
+        refineMesh = 6#gridThickness*(3./2.)
         backgroundMesh = pitch/4.
         #=========================#
         
