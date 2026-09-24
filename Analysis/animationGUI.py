@@ -735,7 +735,7 @@ class FIMSVisualizer(QMainWindow):
 
                 contour = ax.tricontourf(
                     xData, yData, zData, 
-                    levels=101, cmap='viridis', vmin=vmin, vmax=vmax
+                    levels=np.linspace(vmin, vmax, 101), cmap='viridis', extend='both'
                 )
                 if not isEField:
                     if self.chkContours.isChecked():
@@ -775,7 +775,9 @@ class FIMSVisualizer(QMainWindow):
 
         if self.cbar is not None:
             label = 'Field Strength (kV/cm)' if isEField else 'Weighting Potential'
-            self.cbar.set_label(label)
+            self.cbar.set_ticks(np.linspace(vmin, vmax, 11))
+
+            self.cbar.set_label(label, rotation=270, labelpad=15)
 
         self.canvas.fig.tight_layout()
         self.canvas.draw()
@@ -1052,7 +1054,7 @@ class FIMSVisualizer(QMainWindow):
         amplificationGap = self.data.simData['amplificationGap']
         driftLength = self.data.simData['driftLength']
         zBuffer = 2
-        highZ = 6 * zBuffer if self.zoomAmp.isChecked() else driftLength + zBuffer
+        highZ = amplificationGap + zBuffer if self.zoomAmp.isChecked() else driftLength + zBuffer
         axis.set(
             xlabel=r'x ($\mu$m)', ylabel=r'z ($\mu$m)',
             xlim=[-xScale, xScale],
@@ -1562,7 +1564,7 @@ class FIMSVisualizer(QMainWindow):
         isZoom = self.zoomAmp.isChecked()
         zBuffer = 2
         lowZ = -amplificationGap-zBuffer
-        highZ = 6*zBuffer if isZoom else driftLength+zBuffer
+        highZ = amplificationGap+zBuffer if isZoom else driftLength+zBuffer
         zLim = [lowZ, highZ]
         
         if isinstance(axes, tuple):
