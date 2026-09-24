@@ -154,7 +154,6 @@ class FIMS_Simulation:
             'numAvalanche': 5000,
             'avalancheLimit': 600,
             'initialZFraction': .50,
-            'avalancheLimit': 500,
             'gasCompAr': 0.95,
             'gasCompCO2': 0.00,
             'gasCompCF4': 0.03,
