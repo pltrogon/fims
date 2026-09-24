@@ -123,7 +123,7 @@ int main(int argc, char * argv[]) {
         avalancheE.EnablePlotting(viewElectronDrift, 10);//For velocity vector
     }
 
-    //Deafult initial electron parameters
+    //Default initial electron parameters
     double x0 = 0., y0 = 0., z0 = simParams->initialZFraction * simParams->driftLength;
     double t0 = 0.;//ns
     double e0 = 0.1;//eV (Garfield is weird when this is 0.)
@@ -156,7 +156,10 @@ int main(int argc, char * argv[]) {
     // Avalanche Controls
     const int numInBunch = 500;//Bunches of 500 at a time
     bool runAvalanche = true;
-
+    
+    // Electron Attachment safety net
+    int maxRepeats = 10, repeatedElec = 0;
+    
     //Parameters to initialize electrons
     double curX, curY, curZ;
     double curTime, curEnergy;
@@ -166,7 +169,8 @@ int main(int argc, char * argv[]) {
     double xi, yi, zi, ti, Ei;
     double xf, yf, zf, tf, Ef;
     int exitStatus;    
-
+    
+    //Run avalanches in bunches
     while(runAvalanche && numInitialElectrons < simParams->numAvalanche){
         for(int inAvalanche=0; inAvalanche<numInBunch; inAvalanche++){
             numInitialElectrons++;
@@ -212,17 +216,38 @@ int main(int argc, char * argv[]) {
 
                     switch(exitStatus){
 
-                        //Electron attatched. Restart with same initial electron
-                        // WARNING - Can inifinite loop here.
+                        //Electron attached. Restart with same initial electron
                         case -7: {
-                            numAttached++;
-                            break;
+                            // Check repetition count. If repetition count is low,
+                            // then repeat. If it is high, try a new location.
+                            // If different locations still result in high repetition,
+                            // then return -1.
+                            if(repeatedElec > 2 * maxRepeats){
+                                std::cerr << "Error: Electron attachment too high. Terminating..." << std::endl;
+                                return -1;
+                            }
+                            else if(repeatedElec > maxRepeats){
+                                auto [randX, randY] = randomXYinGeometry(geometryMode, cellLength);
+                                curX = randX, curY = randY, curZ = z0;
+                                curTime = t0;
+                                curEnergy = e0;
+                                curDx = 0., curDy = 0., curDz = 0.;
+                                repeatedElec++;
+                            }
+                            else{
+                                curX = sampleX, curY = sampleY, curZ = z0;
+                                curTime = t0;
+                                curEnergy = e0;
+                                curDx = 0., curDy = 0., curDz = 0.;
+                                repeatedElec++;
+                            }break;
                         }
 
                         //Electron leave drift medium (Hits grid/Pad/Dielectric)
                         case -5: {
                             repopulate = false;
-                            gains.push_back(static_cast<uint16_t>(numAvalancheElectrons));
+                            repeatedElec = 0;
+                             gains.push_back(static_cast<uint16_t>(numAvalancheElectrons));
                             if(zf < -1.*simParams->gridThickness){
                                 numCollected++;
                             }
@@ -234,7 +259,7 @@ int main(int argc, char * argv[]) {
 
                         // Electron leaves simulation volume - Shift it back
                         // Region is 4x wide, but shift to central
-                        // Example: x range is -2cell, if x>|cell|, move into cell
+                        // Example: x range is -2*cell, if x>|cell|, move into cell
                         case -1: {
                             constexpr double eps = 1e-7; // 1 nm nudge to keep inside boundary
                             //Shift x by cellLength if necessary
@@ -284,6 +309,8 @@ int main(int argc, char * argv[]) {
                 // More than 1 electron
                 else{
                     repopulate = false;
+                    repeatedElec = 0;
+                    
                     gains.push_back(static_cast<uint16_t>(numAvalancheElectrons));
                     numCollected++;
                     if(numAvalancheElectrons > minimumThreshold){
@@ -317,7 +344,7 @@ int main(int argc, char * argv[]) {
 
         //Efficiencies
         collectionEff = calculateEfficiencyStats(numCollected, numInitialElectrons);
-        detectionEff = calculateEfficiencyStats(numAboveThreshold, numCollected);        
+        detectionEff = calculateEfficiencyStats(numAboveThreshold, numCollected);
 
         //Net efficiency
         netEfficiency.meanValue = collectionEff.meanValue*detectionEff.meanValue;

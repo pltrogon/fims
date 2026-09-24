@@ -9,7 +9,8 @@ import random
 import uproot
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
+
+# TODO: can this be remade using a GUI like analysis?
 class Reconstruction:
     """
     Class enabling particle event reconstruction approximations.
@@ -17,6 +18,8 @@ class Reconstruction:
     Notes: All reconstruction plots assume the following
     
     -25 cm drift distance before amplification.
+    
+    -25 ns deadtime after each readout hit.
     
     -320 micron/sqrt(cm) and 200 micron/sqrt(cm) transverse and longitudinal 
     diffusion coefficients in the drift region, respectively.
@@ -26,33 +29,33 @@ class Reconstruction:
     based readouts do not use this value as they have functionally zero 
     amplification region length).
     
-    -25 micron vertical spatial resolution (based on time resolution of readout converted
-    into distance). This is different from the integration time of the readout, which is
-    an input parameter.
+    -80 micron/ns drift velocity.
     
     Functions:
         ## Base functions ##
         Private:
             _checkInput
-            _getDataFrames
-            _getCoordinates
-            _groupData
+            _getData
+            _calcAverage
+            _approximateMIP
+            _getMultipleTrials
+            _removeLostData
             _convertToSignal
-            _format3DPlot
         
         Public:
+            getCoordinates
             diffuseData
             discretizeData
             avalancheData
             approximateReadout
 
         ## Wrapper functions ##
-        TODO: add z-distribution wrapper to quantify typical spacing between hits
-        plotRaw
-        reconstructFIMS
-        reconstructBEAST
-        reconstructMigdal
-        reconstructGridPix
+            getPileup
+            reconstructFIMS
+            reconstructBEAST
+            reconstructMigdal
+            reconstructGridPixSimple
+            reconstructGridPix
     """
     
     #********************************************************************************#
@@ -64,24 +67,23 @@ class Reconstruction:
         self._checkInput()
         
         # Get Data
-        dataFrame = self._getDataFrames()
-        self.rawData = self._getCoordinates(dataFrame)
+        self.trialID = 0
+        self.allTrials = self._getData()
+        self.rawData = self.getCoordinates()
+
+        # Values for T2K gas assuming 0.28 KV/cm drift field and ~140 KV/cm amplification field
+        self.driftVelocity = 80 # microns/ns 
         
-        # Set constant values
-        self.timeRez = 25 # microns TODO: convert to time
-        self.initialDriftDistance = 10 # cm
-        
-        # Values from Tanner sim
         self.transDriftDifCoef = 320 # microns/sqrt(cm)
         self.lonDriftDifCoef = 200 # microns/sqrt(cm)
         
         self.transAmpDifCoef = 190 # microns/sqrt(cm)
         self.lonAmpDifCoef = 150 # microns/sqrt(cm)
         
-        # Values from Majd paper
-        #self.transDriftDifCoef = 136 # microns/sqrt(cm)
-        #self.lonDriftDifCoef = 114 # microns/sqrt(cm)
-        
+        # Set constant values
+        self.timeRez = 25 # ns
+        self.zRez = self.timeRez*self.driftVelocity # microns
+        self.initialDriftDistance = 10 # cm
         
         return
     
@@ -113,14 +115,18 @@ class Reconstruction:
     
     #********************************************************************************#
 
-    def _getDataFrames(self):
+    def _getData(self):
         """
-        Unpacks a root file from a given filename
+        Unpacks a root file from a given filename and tree name.
+        
+        Note: Assumes coordinates are given in cm and converts them to microns.
         
         returns:
-            dataframes (pandas dataframe): unpacked root file
+            allTrials (pandas dataframe): unpacked root file
         """
         filePath = self.reconInfo['File Location']
+        treeName = self.reconInfo['Tree Name']
+        
         with uproot.open(filePath) as rootFile:
             dataframes = {}
             for treeKey in rootFile.keys():
@@ -135,85 +141,171 @@ class Reconstruction:
                     except Exception as e:
                         print(f"Error reading tree '{treeKey}': {e}")
         
-        return dataframes
+        # Get data of a single trial
+        fileData = dataframes[treeName][['x', 'y', 'z']]
+        
+        # convert units to microns
+        allTrials = fileData*10000
+        
+        # Coordinates are relative, so the minimum z value is set to zero and 
+        # the the recoil is centered on 0 in x and y for simplicity.
+        allTrials['z'] = allTrials['z'].apply(lambda row: np.array(row) - min(row))
+        allTrials['x'] = allTrials['x'].apply(lambda row: np.array(row) - min(row)/2.)
+        allTrials['y'] = allTrials['y'].apply(lambda row: np.array(row) - min(row)/2.)
+        
+        return allTrials
 
     #********************************************************************************#
     
-    def _getCoordinates(self, dataframes):
+    def _approximateMIP(self):
         """
-        Takes a given dataframe and extracts the x,y,z coordinates from a specified branch.
+        Creates a line of approximate MIP interaction electrons.
         
-        Note: Assumes coordinates are given in cm and converts them to microns.
-        
-        Args:
-            dataframes: pandas dataframe
-        
-        Returns:
+        Returns: 
             rawData (dataframe): the x,y,z coordinates of every electron
         """
-        treeName = self.reconInfo['Tree Name']
+        dEdX = .2525 # eV/micron
+        dx = 10400 # microns
+        minE = 26.0 # eV
+        numElec = int(dEdX * dx / minE)
         
-        # Get data of a single trial
-        trialData = dataframes[treeName][['x', 'y', 'z']].iloc[0]
-        # convert to proper formating
-        rawData = pd.DataFrame(
-            zip(trialData['x']*10000, trialData['y']*10000, trialData['z']),
-            columns=['x','y','z']
-        )
-        # TODO: convert z-data to time
+        # Randomly assign a location for each point along the line.
+        start = np.array([-5700, -5200, 0], dtype=float)
+        end = np.array([0, 0, 7000], dtype=float)
+        points = np.random.rand(numElec)
+        data = start + np.outer(points, (end - start))
+        rawData = pd.DataFrame(data, columns=['x', 'y', 'z'])
+        
+        return rawData
+
+    #********************************************************************************#
+    
+    def _calcAverage(self, values):
+        """
+        Takes a list and calculates the average along with the error.
+        
+        args:
+            values (list): list of values.
+        
+        returns:
+            average (tuple): average value along with its uncertainty.
+        """
+        total = len(values)
+        mean = sum(values)/total
+        variance = sum([(elem - mean)**2 for elem in values]) / (total - 1)
+        error = variance ** .5
+        
+        average = (mean, error)
+        
+        return average
+    
+    #********************************************************************************#
+
+    def _getMultipleTrials(self, numTrials=1, randomize=True):
+        """
+        Gets the recoil data from a series of trials and returns them as a single set.
+        
+        args:
+            numTrials (int): the number of trials to overlay.
+            randomize (bool): whether the randomly orient the trials.
+        
+        returns:
+            rawData (dataframe): dataframe of the x,y, and z coordinates of each electron.
+        """
+        if numTrials == 1:
+            rawData = self.getCoordinates()
+            return rawData
+        
+        eventNums = np.arange(numTrials)
+        for num in eventNums:
+            self.trialID = num
+            trialData = self.getCoordinates()
+            
+            if num == 0:
+                rawData = trialData
+                continue
+            
+            if randomize:
+                angle = random.random()*2*math.pi
+                height = random.random()*10000
+                
+                newX = trialData['x']*math.cos(angle) - trialData['y']*math.sin(angle)
+                newY = trialData['y']*math.sin(angle) + trialData['x']*math.cos(angle)
+                newZ = trialData['z'] + height
+                rawData = pd.concat([rawData, pd.concat([newX,newY,newZ], axis=1, keys=['x','y','z'])])
+            
+            else:
+                rawData = pd.concat([rawData, trialData], ignore_index=True)
+            
         return rawData
     
     #********************************************************************************#
-
-    def _groupData(self, inputData):
+    
+    def _removeLostData(self, allData, deadTime, name='z'):
         """
-        Takes the x,y,z coordinates and groups the amount of charge by location.
+        Identifies and removes data lost due to deadtime between pixel hits.
         
-        Args:
-            coordinates (dataframe): list of x,y,z coordinates of each electron.
+        Note: assumes data is already sorted by arrival time/height.
+        
+        args:
+            allData (dataframe): all the data that reaches the readout.
+            deadTime (float): the amount of time or distance following a hit where new hits are not seen.
+            name (str): name of the column to be filtered.
         
         returns:
-            groupedData (dataframe): z-coordinates with their corresponding 
-            pixel location and amount of charge. 
+            seenData (dataframe): the coordinates of the electrons seen by the readout.
+            lostData (dataframe): the coordinates of the electrons not seen by the readout.
         """
-        countedData = inputData.groupby(['x', 'y', 'z']).size().reset_index(name='q')
-        groupedData = countedData.groupby(['x','y']).agg(z=('z', list), q=('q',list)).reset_index()
-
-        return groupedData
-
+        # TODO: improve efficiency
+        zippedData = zip(allData['x'], allData['y'], allData[name])
+        dropped = []
+        # Loop through every pixel group
+        for x, y, pixel in zippedData:
+            elecID = 0
+            
+            # Loop through all electron IDs
+            while elecID+1 < len(pixel): 
+                if abs(pixel[elecID+1] - pixel[elecID]) < deadTime:
+                    dropped.append((x,y, pixel.pop(elecID+1)))
+                    continue
+                elecID += 1
+        seenData = allData.explode([name], ignore_index=True)
+        lostData = pd.DataFrame([*dropped], columns = ['x','y', name])
+        
+        return seenData, lostData
+    
     #********************************************************************************#
         
-    def _convertToSignal(self, zLocs, charges):
+    def _convertToSignal(self, tLocs, charges):
         """
         Takes data of a single pixel and calculates ToT and threshold crossing time.
         
         args:
-            pixel (dataframe): coordinates and charges of a single pixel.
+            tLocs (list of floats): time of arrival of the charges
+            charges (list of ints): amount of charge
         
         returns:
             upCrossPoints (list): list of threshold crossing times
             ToTList (list): list of ToT times
         """
-
-        ## TODO verify
         threshold = self.reconInfo['Signal Threshold']
         decayRate = self.reconInfo['Signal Decay Rate']
 
-        z = np.asarray(zLocs)
+        times = np.asarray(tLocs)
         charge = np.asarray(charges)
 
         chargeSum = charge.sum()
-        zMin= z.min()
-        zMax = z.max() - np.log(threshold/chargeSum)*decayRate
+        tMin= times.min()
+        tMax = times.max() - np.log(threshold/chargeSum)*decayRate
 
-        if zMin >= zMax:
+        if tMin >= tMax:
             return [], []
 
-        rangeList = np.linspace(zMin, zMax, 1000)
+        rangeList = np.linspace(tMin, tMax, 1000)
 
         #Matrix multiplication for signals
-        dz = rangeList[:, np.newaxis] - z[np.newaxis, :]
-        decay = np.where(dz >= 0, np.exp(-dz/decayRate), 0.0)
+        dt = rangeList[:, np.newaxis] - times[np.newaxis, :]
+        decay = np.where(dt >= 0, np.exp(-dt/decayRate), 0.0)
         netSignal = decay @ charge
 
         #Find crossing times
@@ -240,6 +332,21 @@ class Reconstruction:
         return upCrossPoints, ToTList
     
     #********************************************************************************#
+    
+    def getCoordinates(self):
+        """
+        Takes a given dataframe and extracts the x,y,z coordinates from a single trial
+        
+        
+        returns:
+            rawData (dataframe): the x,y,z coordinates of every electron
+        """
+        singleTrial = self.allTrials.iloc[self.trialID]
+        rawData = pd.DataFrame(zip(*singleTrial), columns=['x', 'y', 'z'])
+        
+        return rawData
+    
+    #********************************************************************************#
 
     def diffuseData(self, coordinates, diffusionWidths):
         """
@@ -264,7 +371,7 @@ class Reconstruction:
         diffusedData = coordinates.add(diffusionAmount, fill_value=0)
 
         return diffusedData
-        
+    
     #********************************************************************************#
 
     def discretizeData(self, inputArray, binSize):
@@ -339,116 +446,108 @@ class Reconstruction:
         returns:
             readoutData (dataframe): x,y,z coordinates of the charge bundles as well as the time over threshold.
         """
-
-        ## TODO: Verify
         threshold = self.reconInfo['Signal Threshold']
-
+        
+        # Convert the z position to arrival time
+        inputData['t'] = inputData['z']/self.driftVelocity
+        
         # Group data by pixel
-        groupedData = self._groupData(inputData)
+        countedData = inputData.groupby(['x', 'y', 't']).size().reset_index(name='q')
+        groupedData = countedData.groupby(['x','y']).agg(t=('t', list), q=('q',list)).reset_index()
 
-        chargeSum = [sum(q) for q in groupdedData['q']]
-        chargeLen = [len(q) for q in groupdedData['q']]
+        chargeSum = [sum(q) for q in groupedData['q']]
+        chargeLen = [len(q) for q in groupedData['q']]
         chargeMask = [(s > threshold) and (s > l) for s, l in zip(chargeSum, chargeLen)]
 
         filteredData = groupedData[chargeMask].copy()
         if filteredData.empty:
             raise ValueError('Empty Dataframe.')
-
+        
         # Calculate ToT by converting charge to voltage
         print('Calculating ToT...')
         signals = [
-            self._convertToSignal(z, q)
-            for z, q in zip(filteredData['z'], filteredData['q'])
+            self._convertToSignal(t, q)
+            for t, q in zip(filteredData['t'], filteredData['q'])
         ]
 
         # Unpack results and remove depreciated columns
         crossings, tots = zip(*signals)
         filteredData['crossing'] = crossings
         filteredData['ToT'] = tots
-        filteredData.drop(columns=['z', 'q'], inplace=True)
+        filteredData.drop(columns=['t', 'q'], inplace=True)
 
         readoutData = filteredData.explode(['crossing', 'ToT'], ignore_index=True)
- 
+        
         return readoutData
-    
-    #********************************************************************************#
-    
-    def _format3DPlot(self, plotData, title='', charge=False):
-        """
-        Creates a 3D and 2D plot of a given dataset.
-        
-        args:
-            plotData (pd.array): pandas array of data.
-            title (str): Name of the data set
-            charge (bool): boolean indicating if charge density is used as a color
-            map.
-        returns:
-            fig3D (figure): matplotlib figure
-        """
-        
-        # Create figures
-        fig3D = plt.figure(figsize=(10, 5), dpi=200)
-        sub3D = fig3D.add_subplot(121, projection='3d')
-        sub2D = fig3D.add_subplot(122)
-        
-        # Assign point color, if given
-        if charge:
-            color = plotData['q']
-        else:
-            color = 'g'
-        
-        # Plot data in 2D and 3D
-        sub3DRef = sub3D.scatter(
-            plotData['x'], plotData['y'], plotData['z'],
-            s=.1, c=color, label=f'{title} Readout Data', cmap='viridis'
-        )
-        
-        sub2DRef = sub2D.scatter(
-            plotData['x'], plotData['y'],
-            s=.3, c=color, label=f'{title} Readout Data', cmap='viridis'
-        )
-        # TODO: 2D plot should always be density
-        # Add color bar
-        if charge:
-            colorBar = plt.colorbar(sub2DRef, pad=.2)
-            colorBar.set_label('Charge')
-
-        # Add labels and adjust formatting
-        sub3D.set_xlabel('x pixels')
-        sub3D.set_ylabel('y pixels')
-        sub3D.set_zlabel('Height')
-        sub3D.set_title(f'{title} 3D Event Reconstruction')
-        
-        sub2D.set_xlabel('x pixels')
-        sub2D.set_ylabel('y pixels')
-        sub2D.set_title(f'{title} 2D Event Reconstruction')
-        sub2D.yaxis.set_label_position("right")
-        sub2D.yaxis.tick_right()
-        sub2D.grid(True, alpha=.5)
-        
-        plt.tight_layout()
-        plt.subplots_adjust(wspace=0.2)
-        
-        return fig3D
 
     #********************************************************************************#
     ############## Reconstruction Wrapper Functions for Specific Setups ##############
     #********************************************************************************#
     
-    def plotRaw(self):
+    def getPileup(self, drift=10, reset=25, numTrials=100, MIP=False):
         """
-        Plots the raw data from an event.
+        Determines the efficiency for a readout based on given input parameters.
         
+        args:
+            drift (float): initial drift distance of the electron in centimeters.
+            reset (float): the time for the reset signal in nanoseconds.
+            numTrials (int): number of data sets to sample.
+            
         returns:
-            rawFig: matplotlib figure
+            efficiency (float): detection efficiency, measured as # initial/# counted.
         """
-        rawFig = self._format3DPlot(self.rawData, title='Raw Data')
+        # Extract relevant data from dictionary and set constant values
+        holePitch = self.reconInfo['Hole Pitch']
+        pixPitch = self.reconInfo['Pixel Pitch']
+        zRez = reset*self.driftVelocity
         
-        return rawFig
+        transDif = self.transDriftDifCoef*math.sqrt(drift)
+        lonDif = self.lonDriftDifCoef*math.sqrt(drift)
+        firstDifWidths = (transDif, transDif, lonDif)
+        efficiencies = []
+
+        trialNum = 0
+        while trialNum < numTrials:
+            # Get new set of coordinates
+            if MIP:
+                trialData = self._approximateMIP()
+            else:
+                self.trialID = trialNum
+                trialData = self.getCoordinates()
+            totalElecNum = len(trialData['z'])
+            
+            # Apply Gaussian smear to approximate diffusion
+            smearData = self.diffuseData(trialData, firstDifWidths)
+            
+            # Discretize data to approximate falling into grid holes.
+            bins = {'x': holePitch, 'y': holePitch, 'z': 0}
+            discreteData = self.discretizeData(smearData, bins)
+            
+            # Convert the z position to arrival time and sort by that time
+            discreteData['t'] = discreteData['z']/self.driftVelocity
+            discreteData.sort_values(by='t', inplace=True)
+            
+            # Group data by pixel
+            groupedData = discreteData.groupby(['x','y']).agg(t=('t', list), q=('t', lambda z: len(z))).reset_index()
+            filteredData = groupedData[groupedData['q'] > 1] # remove pixels with only 1 electron
+            
+            # Determine how many electrons are NOT seen by the readout.
+            seenElec, droppedElec = self._removeLostData(filteredData, reset, name='t')
+            numDrop = len(droppedElec['t'])
+            
+            # Calculate the efficiency of this trial
+            singleEff = (totalElecNum - numDrop)/totalElecNum
+            efficiencies.append(singleEff)
+
+            trialNum += 1
         
+        efficiency = self._calcAverage(efficiencies)
+        
+        return efficiency
+    
     #********************************************************************************#
     
-    def reconstructFIMS(self):
+    def reconstructFIMS(self, numEvents = 1, randomize=True):
         """
         Approximates an event reconstruction using a FIMS readout.
         
@@ -457,22 +556,25 @@ class Reconstruction:
         distinction of electrons in the vertical direction.
         
         returns:
-            FIMSfig: matplotlib figure
+            plotData (dateframe): the coordinates of each electron seen by the readout.
+            lostData (dataframe): the coordinates of each electron not seen by the readout.
         """
         # Extract relevant data from dictionary and set constant values
         holePitch = self.reconInfo['Hole Pitch']
         pixPitch = self.reconInfo['Pixel Pitch']
-        timeRez = self.timeRez
         
         transDif = self.transDriftDifCoef*math.sqrt(self.initialDriftDistance)
         lonDif = self.lonDriftDifCoef*math.sqrt(self.initialDriftDistance)
         firstDifWidths = (transDif, transDif, lonDif)
         
+        # Setup event data
+        rawData = self._getMultipleTrials(numEvents, randomize)
+            
         # Apply Gaussian smear to approximate diffusion
-        smearData = self.diffuseData(self.rawData, firstDifWidths)
+        smearData = self.diffuseData(rawData, firstDifWidths)
 
-        # Discretize data to approximate falling into grid holes and being read by the readout.
-        bins = {'x': holePitch, 'y': holePitch, 'z': timeRez}
+        # Discretize data to approximate falling into grid holes
+        bins = {'x': holePitch, 'y': holePitch, 'z': 0}
         discreteData = self.discretizeData(smearData, bins)
         
         # Approximate avalanches
@@ -482,14 +584,18 @@ class Reconstruction:
         belowID = np.random.choice(discreteData.index, size=numBelowThresh, replace=False)
         avalData = discreteData.drop(belowID).reset_index(drop=True)
         
-        # Plot data
-        FIMSfig = self._format3DPlot(avalData, title='FIMS')
+        # Remove electrons lost due to pileup
+        avalData.sort_values(by='z', inplace=True)
+        groupedData = avalData.groupby(['x','y']).agg(z=('z', list)).reset_index()
+        groupedData.sort_values(by=['x','y'], inplace=True)
         
-        return FIMSfig
+        plotData, lostData = self._removeLostData(groupedData, self.zRez, name='z')
+        
+        return plotData, lostData
         
     #********************************************************************************#
     
-    def reconstructBEAST(self):
+    def reconstructBEAST(self, numEvents=1, randomize=True):
         """
         Approximates an event reconstruction using a BEAST readout.
         
@@ -498,13 +604,13 @@ class Reconstruction:
         so final readout is purely 2D (x,y).
         
         returns:
-            beastFig: matplotlib figure
+            plotData (dateframe): the coordinates of each electron seen by the readout.
         """
         # Extract relevant data from dictionary
         holePitch = self.reconInfo['Hole Pitch']
         pixPitch = self.reconInfo['Pixel Pitch']
         standoff = self.reconInfo['Standoff']
-        timeRez = self.timeRez
+        zRez = self.zRez
         
         transDif = self.transDriftDifCoef*math.sqrt(self.initialDriftDistance)
         lonDif = self.lonDriftDifCoef*math.sqrt(self.initialDriftDistance)
@@ -518,8 +624,11 @@ class Reconstruction:
         self.reconInfo['Gain'] = int(math.sqrt(self.reconInfo['Gain']))
         self.reconInfo['Avalanche Sigma'] = int(math.sqrt(self.reconInfo['Avalanche Sigma']))
         
+        # Setup event data
+        rawData = self._getMultipleTrials(numEvents, randomize)
+        
         # Apply Gaussian smear to approximate diffusion
-        smearData = self.diffuseData(self.rawData, firstDifWidths)
+        smearData = self.diffuseData(rawData, firstDifWidths)
 
         # Discretize data to approximate falling into first GEM holes
         holeBins = {'x': holePitch, 'y': holePitch, 'z': 0}
@@ -535,26 +644,17 @@ class Reconstruction:
         avalData2 = self.avalancheData(discreteData2, secondDifWidths)
         
         # Discretize data to approximate pixels readout
-        pixBins = {'x': pixPitch, 'y': pixPitch, 'z': timeRez}
+        pixBins = {'x': pixPitch, 'y': pixPitch, 'z': zRez}
         readoutData = self.discretizeData(avalData2, pixBins)
         
-        # Group Data by pixel
-        groupedData = self._groupData(readoutData)
-        
         # Configure data for plotting
-        plotData = pd.DataFrame()
-        plotData[['x', 'y']] = groupedData[['x', 'y']]
-        plotData['z'] = groupedData['z'].apply(min)
-        plotData['q'] = groupedData['q'].apply(sum)
-
-        # Plot data
-        beastFig = self._format3DPlot(plotData, title='BEAST', charge=True)
+        plotData = readoutData.groupby(['x','y']).agg(z=('z', 'min'), q=('q', 'sum')).reset_index()
         
-        return beastFig
+        return plotData
 
     #********************************************************************************#
     
-    def reconstructMigdal(self):
+    def reconstructMigdal(self, numEvents=1, randomize=True):
         """
         Approximates an event reconstruction using the Migdal experiment readout.
         
@@ -563,13 +663,13 @@ class Reconstruction:
         time, so final readout is functionally 2D (x,y).
         
         returns:
-            migdalfig: matplotlib figure
+            padData (dateframe): the coordinates of each electron seen by the readout.
         """
         # Extract and calculate relevant data
         holePitch = self.reconInfo['Hole Pitch']
         pixPitch = self.reconInfo['Pixel Pitch']
         standoff = self.reconInfo['Standoff']
-        timeRez = self.timeRez
+        zRez = self.zRez
         
         transDif = self.transDriftDifCoef*math.sqrt(self.initialDriftDistance)
         lonDif = self.lonDriftDifCoef*math.sqrt(self.initialDriftDistance)
@@ -579,8 +679,11 @@ class Reconstruction:
         secondLonDif = self.lonDriftDifCoef*math.sqrt(standoff/10000.)
         secondDifWidths = (secondTransDif, secondTransDif, secondLonDif)
         
+        # Setup event data
+        rawData = self._getMultipleTrials(numEvents, randomize)
+        
         # Apply Gaussian smear to approximate initial drift diffusion
-        smearData = self.diffuseData(self.rawData, firstDifWidths)
+        smearData = self.diffuseData(rawData, firstDifWidths)
 
         # Discretize data to approximate falling into grid holes
         holeBins = {'x': holePitch, 'y': holePitch, 'z': 0}
@@ -590,39 +693,14 @@ class Reconstruction:
         avalData = self.avalancheData(discreteData, secondDifWidths)
         
         # Discretize data to approximate pixels readout
-        pixBins = {'x': pixPitch, 'y': pixPitch, 'z': timeRez}
+        pixBins = {'x': pixPitch, 'y': pixPitch, 'z': zRez}
         padData = self.discretizeData(avalData, pixBins)
-
-        # Approximate Signal Readout
-        #readoutData = self.approximateReadout(padData)
-        readoutData = padData.copy()
         
-        # Plot data
-        # Extract Data
-        totalXWidth = max(readoutData['x']) - min(readoutData['x'])
-        totalYWidth = max(readoutData['y']) - min(readoutData['y'])
-        numXBins = int(totalXWidth/pixPitch)
-        numYBins = int(totalYWidth/pixPitch)
-        
-        # Create figure
-        migdalFig = plt.figure()
-        plt.hist2d(
-            readoutData['x'],
-            readoutData['y'],
-            bins=(numXBins, numYBins)
-        )
-        
-        # Add plot elements
-        plt.colorbar().set_label('Charge')
-        plt.xlabel('x pixels')
-        plt.ylabel('y pixels')
-        plt.title('Migdal Experiment Event Reconstruction')
-        
-        return migdalFig
+        return padData
 
     #********************************************************************************#
     
-    def reconstructGridPix(self):
+    def reconstructGridPix(self, numEvents=1, randomize=True):
         """
         Approximates an event reconstruction using the GridPix readout.
         
@@ -633,13 +711,15 @@ class Reconstruction:
         for a full 3D reconstruction.
         
         returns:
-            gridpixFig: matplotlib figure
+            plotData (dateframe): the coordinates of each electron seen by the readout.
+            lostData (dataframe): the coordinates of each electron not seen by the readout.
         """
         # Extract and calculate relevant data
         holePitch = self.reconInfo['Hole Pitch']
         pixPitch = self.reconInfo['Pixel Pitch']
         standoff = self.reconInfo['Standoff']
-        timeRez = self.timeRez
+        zRez = self.zRez
+        chargeConvConst = .075 # ns/electron
         
         transDif = self.transDriftDifCoef*math.sqrt(self.initialDriftDistance)
         lonDif = self.lonDriftDifCoef*math.sqrt(self.initialDriftDistance)
@@ -649,8 +729,11 @@ class Reconstruction:
         secondLonDif = self.lonAmpDifCoef*math.sqrt(standoff/10000.)
         secondDifWidths = (secondTransDif, secondTransDif, secondLonDif)
         
+        # Setup event data
+        rawData = self._getMultipleTrials(numEvents, randomize)
+        
         # Apply Gaussian smear to approximate initial drift diffusion
-        smearData = self.diffuseData(self.rawData, firstDifWidths)
+        smearData = self.diffuseData(rawData, firstDifWidths)
 
         # Discretize data to approximate falling into grid holes
         holeBins = {'x': holePitch, 'y': holePitch, 'z': 0}
@@ -660,19 +743,99 @@ class Reconstruction:
         avalData = self.avalancheData(discreteData, secondDifWidths)
 
         # Discretize data to approximate pixels readout
-        pixBins = {'x': pixPitch, 'y': pixPitch, 'z': timeRez}
+        pixBins = {'x': pixPitch, 'y': pixPitch, 'z': 1}
         padData = self.discretizeData(avalData, pixBins)
-
+            
         # Approximate Signal Readout
         readoutData = self.approximateReadout(padData)
+        readoutData.dropna(inplace = True)
+        
+        # Remove charge lost due to sensor dead time
+        filteredData = readoutData.groupby(['x','y']).agg(crossing=('crossing', list), ToT=('ToT', list)).reset_index()
+        filteredData.sort_values(by=['crossing'], inplace=True)
+        filterZip = zip(filteredData['x'], filteredData['y'], filteredData['crossing'], filteredData['ToT'])
+        
+        dropped = []
+        # Loop through all pixels
+        for x, y, height, q in filterZip:
+            elecID = 0
+            
+            # Loop through all electron IDs
+            while elecID+1 < len(height): 
+                if height[elecID+1] - (q[elecID] + height[elecID]) < self.timeRez:
+                    dropped.append([x,y, height.pop(elecID+1), q.pop(elecID+1)])
+                    continue
+                elecID += 1
+        droppedData = pd.DataFrame(dropped, columns = ['x','y','crossing', 'ToT'])
         
         # Format data for plotting
-        plotData = readoutData.rename(columns={'crossing': 'z', 'ToT': 'q'})
+        plotData = filteredData.explode(['crossing', 'ToT'], ignore_index=True)
+        lostData = droppedData.explode(['crossing', 'ToT'], ignore_index=True)
         
-        # Plot data
-        gridPixFig = self._format3DPlot(plotData, title='GridPix', charge=True)
+        # Convert the crossing time to z position and ToT to charge
+        plotData['crossing'] *= self.driftVelocity
+        plotData['ToT'] /= chargeConvConst
+        plotData.rename(columns={'crossing': 'z', 'ToT': 'q'}, inplace=True)
         
-        return gridPixFig
+        lostData['crossing'] *= self.driftVelocity
+        lostData['ToT'] /= chargeConvConst
+        lostData.rename(columns={'crossing': 'z', 'ToT': 'q'}, inplace=True)
+        
+        return plotData, lostData
 
     #********************************************************************************#
+    
+    def reconstructGridPixSimple(self, numEvents = 1, randomize=True):
+        """
+        Approximates an event reconstruction using a GridPix readout.
+        
+        Drifted electrons are amplified by a single, thin, aluminum mesh. The full
+        amplification occurs below the mesh. Avalanched electrons are read out by a
+        pixel readout. The pixel ID gives the x,y position, the threshold crossing
+        time gives z, and the time over threshold gives the total charge. This allows
+        for a full 3D reconstruction.
+        
+        returns:
+            plotData (dateframe): the coordinates of each electron seen by the readout.
+            ToTData (dataframe): the coordinates of each electron absorbed by the ToT of another electron.
+            droppedData (dataframe): the coordinates of each electron not seen by the readout.
+        """
+        # Extract relevant data from dictionary and set constant values
+        holePitch = self.reconInfo['Hole Pitch']
+        pixPitch = self.reconInfo['Pixel Pitch']
+        
+        transDif = self.transDriftDifCoef*math.sqrt(self.initialDriftDistance)
+        lonDif = self.lonDriftDifCoef*math.sqrt(self.initialDriftDistance)
+        firstDifWidths = (transDif, transDif, lonDif)
+        
+        zRez = self.zRez
+        ToTRez = 300*self.driftVelocity
+        
+        # Setup event data
+        rawData = self._getMultipleTrials(numEvents, randomize)
+        
+        # Apply Gaussian smear to approximate diffusion
+        smearData = self.diffuseData(rawData, firstDifWidths)
 
+        # Discretize data to approximate falling into grid holes
+        bins = {'x': holePitch, 'y': holePitch, 'z': 0}
+        discreteData = self.discretizeData(smearData, bins)
+        
+        # Approximate avalanches
+        numBelowThresh = int(len(discreteData)*0.05)
+        belowID = np.random.choice(discreteData.index, size=numBelowThresh, replace=False)
+        avalData = discreteData.drop(belowID).reset_index(drop=True)
+        
+        # Discretize in z by removing pileup electrons
+        avalData.sort_values(by='z', inplace=True)
+        groupedData = avalData.groupby(['x','y']).agg(z=('z', list)).reset_index()
+        filteredData, ToTData = self._removeLostData(groupedData, ToTRez)
+        
+        filteredData.sort_values(by='z', inplace=True)
+        sortedData = filteredData.groupby(['x','y']).agg(z=('z', list)).reset_index()
+        plotData, lostData = self._removeLostData(sortedData, zRez+ToTRez)
+        
+        return plotData, ToTData, lostData
+        
+    #********************************************************************************#
+    

@@ -2,7 +2,7 @@
  * checkEfficiency.cc
  *
  * 
- * TODO
+ * TODO replace with checkGainAndEfficiency
  * 
  */
 
@@ -34,7 +34,7 @@
 
 using namespace Garfield;
 
-//Randon seed
+//Random seed
 inline std::mt19937& getRNG(){
     thread_local std::mt19937 gen(std::random_device{}());
     return gen;
@@ -147,21 +147,21 @@ int main(int argc, char * argv[]) {
         avalancheE.EnablePlotting(viewElectronDrift, 10);//For velocity vector
     }
 
-    //Deafult initial electron parameters
+    //Default initial electron parameters
     double x0 = 0., y0 = 0., z0 = simParams->initialZFraction*simParams->driftLength;
+    double minHeight = 25.0; // Minimum initial height in case of large diffusion.
     double t0 = 0.;//ns
     double e0 = 0.1;//eV (Garfield is weird when this is 0.)
     double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
-
+    
     //Set up some data variables
     int numInitialElectrons = 0;//Number of initial electrons generated 
     int numTotalTrials = 0;//Number of electrons populated
-    int numAboveThreshold = 0;
-    int numCollected = 0;
-    int numHitGrid = 0;
-    int numFailure = 0;
-    int numAttached = 0;
-
+    int numAboveThreshold = 0, numCollected = 0, numHitGrid = 0;
+    int numFailure = 0, numAttached = 0;
+    int maxRepeats = 10, repeatedElec = 0, numSinceReset = 0;
+    double maxLeaveVol = .5, leftVol = 0.;
+    
     //Statistics variables
     EfficiencyResults collectionEff;
     EfficiencyResults detectionEff;
@@ -170,17 +170,15 @@ int main(int argc, char * argv[]) {
     //Initial loop control
     int numInBunch = 500;//Always do at least 500 avalanches first
     bool runAvalanche = true, isEfficienct = false;
-
+    
     std::cout << "Beginning avalanches..." << std::endl;
     //Run avalanches in bunches
     while(runAvalanche && numInitialElectrons < simParams->numAvalanche){
         for(int inAvalanche=0; inAvalanche < numInBunch; inAvalanche++){
             numInitialElectrons++;
+            numSinceReset++;
             
-            double sampleX, sampleY;
-            auto [randX, randY] = randomXYinGeometry(geometryMode, cellLength);
-            sampleX = randX, sampleY = randY;
-            
+            auto [sampleX, sampleY] = randomXYinGeometry(geometryMode, cellLength);
             double curX = sampleX, curY = sampleY, curZ = z0;
             double curTime = t0;
             double curEnergy = e0;
@@ -190,14 +188,13 @@ int main(int argc, char * argv[]) {
             double xi, yi, zi, ti, Ei;
             double xf, yf, zf, tf, Ef;
             int exitStatus;
-
+            
             bool repopulate = true;
             while(repopulate){
                 //Populate with an electron
                 numTotalTrials++;
                 {
                     SilenceCerr guard;
-                
                     avalancheE.AvalancheElectron(
                         curX, curY, curZ, 
                         curTime, curEnergy, 
@@ -244,6 +241,7 @@ int main(int argc, char * argv[]) {
                 //Assume that if there is more than 1 electron, it is collected.
                 if(numAvalancheElectrons > 1){
                     numCollected++;
+                    repeatedElec = 0;
 
                     //Check if it is above threshold for detection
                     if(numAvalancheElectrons >= electronThreshold){
@@ -258,15 +256,28 @@ int main(int argc, char * argv[]) {
                 //Only check where electron ends if there is only 1 (Any larger is assumed to be collected)
                 if(numAvalancheElectrons == 1){
                     switch(exitStatus){
-
                         // Electron attached to gas molecule - Restart with initial electron
-                        //WARNING - This may cause an infinite loop. Consider max attempts if becomes an issue
                         case -7: {
                             numAttached++;
-                            curX = sampleX, curY = sampleY, curZ = z0;
-                            curTime = t0;
-                            curEnergy = e0;
-                            curDx = 0., curDy = 0., curDz = 0.;
+                            if(repeatedElec > 2 * maxRepeats){
+                                std::cerr << "Error: Electron attachment too high to determine efficiency." << std::endl;
+                                return -1;
+                            }
+                            else if(repeatedElec > maxRepeats){
+                                auto [randX, randY] = randomXYinGeometry(geometryMode, cellLength);
+                                curX = randX, curY = randY, curZ = z0;
+                                curTime = t0;
+                                curEnergy = e0;
+                                curDx = 0., curDy = 0., curDz = 0.;
+                                repeatedElec++;
+                            }
+                            else{
+                                curX = sampleX, curY = sampleY, curZ = z0;
+                                curTime = t0;
+                                curEnergy = e0;
+                                curDx = 0., curDy = 0., curDz = 0.;
+                                repeatedElec++;
+                            }
                             break;
                         }
 
@@ -279,12 +290,21 @@ int main(int argc, char * argv[]) {
                                 numHitGrid++;
                             }
                             repopulate = false;
+                            repeatedElec = 0;
                             break;
                         }
 
                         // Electron leaves the simulation volume - Shift it back
                         //Determine which boundary was hit and shift by pitch to opposite side
                         case -1: {
+                            leftVol++;
+                            if(leftVol/(numSinceReset*1.0) > maxLeaveVol && leftVol > 50 && z0 > minHeight){
+                                std::cerr << "Warning: electron frequently leaves volume. Lowering initial height." << std::endl;
+                                z0 = simParams->initialZFraction*simParams->driftLength * 0.75;
+                                leftVol = 0.;
+                                numSinceReset = 0;
+                            }
+
                             //Shift x or y
                             constexpr double eps = 1e-7; // 1 nm nudge to keep inside boundary
                             curX = std::abs(xf) >= cellLength ? -1.*std::copysign(cellLength-eps, xf) : xf;
@@ -332,7 +352,6 @@ int main(int argc, char * argv[]) {
 
                     }//End of electron endpoint switch
                 }
-
                 viewElectronDrift->Clear();
             }//End of single avalanche trial
 
