@@ -2,7 +2,7 @@
  * checkEfficiency.cc
  *
  * 
- * TODO Replace with checkEfficiency and gain?
+ * TODO replace with checkGainAndEfficiency
  * 
  */
 
@@ -34,7 +34,7 @@
 
 using namespace Garfield;
 
-//Randon seed
+//Random seed
 inline std::mt19937& getRNG(){
     thread_local std::mt19937 gen(std::random_device{}());
     return gen;
@@ -177,10 +177,8 @@ int main(int argc, char * argv[]) {
         for(int inAvalanche=0; inAvalanche < numInBunch; inAvalanche++){
             numInitialElectrons++;
             numSinceReset++;
-            double sampleX, sampleY;
-            auto [randX, randY] = randomXYinGeometry(geometryMode, cellLength);
-            sampleX = randX, sampleY = randY;
             
+            auto [sampleX, sampleY] = randomXYinGeometry(geometryMode, cellLength);
             double curX = sampleX, curY = sampleY, curZ = z0;
             double curTime = t0;
             double curEnergy = e0;
@@ -272,7 +270,6 @@ int main(int argc, char * argv[]) {
                                 curEnergy = e0;
                                 curDx = 0., curDy = 0., curDz = 0.;
                                 repeatedElec++;
-                                break;
                             }
                             else{
                                 curX = sampleX, curY = sampleY, curZ = z0;
@@ -280,8 +277,8 @@ int main(int argc, char * argv[]) {
                                 curEnergy = e0;
                                 curDx = 0., curDy = 0., curDz = 0.;
                                 repeatedElec++;
-                                break;
                             }
+                            break;
                         }
 
                         // Electron leaves drift medium (Hits Grid/Pad/Dielectric)

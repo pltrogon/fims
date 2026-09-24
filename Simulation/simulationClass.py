@@ -547,10 +547,10 @@ class FIMS_Simulation:
 
         executables = [
             'runAvalanche',
-            'runEfficiency',
+            'runEfficiency', #TODO: depreciated
             'runFullField',
             'runBreakdown',
-            'runGainEfficiency',#Todo - add to docstring
+            'runGainEfficiency', #TODO - add to docstring
             'runAnimation'
         ]
 
