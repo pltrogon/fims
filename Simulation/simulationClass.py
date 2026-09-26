@@ -89,6 +89,7 @@ class FIMS_Simulation:
         """
         Initializes a FIMS_Simulation object.
         """
+        self._customShapePath = os.path.join('Geometry', 'customShape.json')
         self._GARFIELDPATH = self._getGarfieldPath()
         if self._GARFIELDPATH is None:
             raise RuntimeError('Error getting Garfield++ path.')
@@ -413,18 +414,315 @@ class FIMS_Simulation:
         return
 #**********************************************************************#
 
-    def createCustomShape(self):
+    def createCustomShape(self, shapeSummary):
         """
-        Creates a custom shape object for use in geometryClass.
+        Creates a custom shape object and writes it to a given file path.
         
         Note: intended to be used by AI agent.
+        
+        args:
+            shapeSummary (dict): details of the custom shape.
+                'polygon'
+                'polar'
+                'fourier'
+        
+        returns:
+            validSummary (dict): the shape details after being validated.
+                'numVertices'
+                'maxRadius'
+                'minRadius'
+                'area'
+                'perimeter'
+                'openAreaFraction'
+                'shapeHash'
         """
+        shapePath = self._customShapePath
         
-        #TODO: implement custom shape creation
+        vertices = self._resolveShapeSpec(shapeSummary)
+        validSummary = self._validateShapePolygon(vertices)
         
-        return
+        # Create hash of x,y points
+        canonicalForm = json.dumps(
+            [[round(x, 6), round(y, 6)] for x, y in vertices]
+        )
+        validSummary['shapeHash'] = hashlib.sha1(
+            canonicalForm.encode()
+        ).hexdigest()[:12]
+
+        payload = {
+            'spec': shapeSummary,
+            'vertices': [[float(x), float(y)] for x, y in vertices],
+            'summary': validSummary,
+            'pitch': float(self._param['pitch']),
+            'unitCell': self._geoConfiguration.unitCell.value,
+        }
+
+        directory = os.path.dirname(shapePath)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+
+        with open(shapePath, 'w') as outFile:
+            json.dump(payload, outFile, indent=2, cls=NumPyEncoder)
+
+        # Use maximum radial position for geometry checks
+        self._param['holeRadius'] = validSummary['maxRadius']
+
+        return validSummary
 
 #**********************************************************************#
+
+    def _resolveShapeSpec(self, shapeSpec):
+        """
+        Converts a hole shape into a list of (x, y) vertices.
+        
+        Note: list is closed and counter-clockwise.
+        
+        args:
+            shapeSpec (dict): See createCustomShape() for the accepted forms.
+
+        returns:
+            shapeList (list): List of (x, y) tuples describing the hole outline.
+        """
+        shapeType = str(shapeSpec.get('type', '')).strip().lower()
+
+        match shapeType:
+            case 'polygon':
+                rawVertices = shapeSpec.get('vertices')
+                if not rawVertices:
+                    raise ValueError("Error - 'polygon' requires 'vertices'.")
+
+                points = [
+                    (float(vertex[0]), float(vertex[1]))
+                    for vertex in rawVertices
+                ]
+
+            case 'polar':
+                rawPoints = shapeSpec.get('points')
+                if not rawPoints:
+                    raise ValueError("Error - 'polar' requires 'points'.")
+
+                polarPoints = sorted(
+                    (float(theta) % 360., float(radius))
+                    for radius, theta in rawPoints
+                )
+
+                allAngles = [theta for theta, _ in polarPoints]
+                if len(set(allAngles)) != len(allAngles):
+                    raise ValueError('Error - Repeated angle in polar outline.')
+                if any(radius <= 0. for _, radius in polarPoints):
+                    raise ValueError('Error - Polar radii must be positive.')
+
+                points = [
+                    (
+                        radius*math.cos(math.radians(theta)),
+                        radius*math.sin(math.radians(theta))
+                    )
+                    for theta, radius in polarPoints
+                ]
+
+            case 'fourier':
+                meanRadius = float(shapeSpec.get('meanRadius', 0.))
+                harmonics = shapeSpec.get('harmonics', [])
+                numSamples = int(shapeSpec.get('numSamples', 120))
+
+                if meanRadius <= 0.:
+                    raise ValueError("Error - 'meanRadius' must be positive.")
+                if not 12 <= numSamples <= 360:
+                    raise ValueError("Error - 'numSamples' must be 12 to 360.")
+
+                points = []
+                for i in range(numSamples):
+                    theta = 2.*math.pi*i/numSamples
+                    radius = meanRadius
+
+                    for term in harmonics:
+                        order = int(term['n'])
+                        amplitude = float(term['amplitude'])
+                        phase = math.radians(float(term.get('phaseDeg', 0.)))
+                        radius += amplitude*math.cos(order*theta + phase)
+
+                    if radius <= 0.:
+                        raise ValueError(
+                            'Error - Harmonics drive the radius to or below '
+                            f'zero at {math.degrees(theta):.1f} deg. Reduce '
+                            'the amplitudes or raise the mean radius.'
+                        )
+
+                    points.append(
+                        (radius*math.cos(theta), radius*math.sin(theta))
+                    )
+
+            case _:
+                raise ValueError(
+                    f"Error - Unsupported hole shape type: '{shapeType}'."
+                )
+
+        rotation = math.radians(float(shapeSpec.get('rotationDeg', 0.)))
+        if rotation:
+            cosAngle = math.cos(rotation)
+            sinAngle = math.sin(rotation)
+            points = [
+                (x*cosAngle - y*sinAngle, x*sinAngle + y*cosAngle)
+                for x, y in points
+            ]
+
+        # Ensure points are arranged counter-clockwise
+        if self._signedArea(points) < 0.:
+            points.reverse()
+
+        return points
+
+#**********************************************************************#
+
+    def _validateShapePolygon(self, vertices, wallFraction=0.05, minEdge=0.15):
+        """
+        Verifies that a given custom shape fits within the unit cell.
+
+        args:
+            vertices (list): List of (x, y) vertex tuples in microns.
+            wallFraction (float): Fraction of the cell inradius that must
+                remain as grid material between neighboring holes.
+            minEdge (float): Shortest permitted outline edge, in microns.
+                This only rejects degenerate edges; it is not a
+                resolution limit.
+
+        returns:
+            validSummary (dict): Summary of the validated outline.
+        """
+        numVertices = len(vertices)
+        if numVertices < 3:
+            raise ValueError('Error - Hole outline needs at least 3 vertices.')
+        if numVertices > 360:
+            raise ValueError('Error - Hole outline exceeds 360 vertices.')
+
+        allRadii = [math.hypot(x, y) for x, y in vertices]
+        maxRadius = max(allRadii)
+        minRadius = min(allRadii)
+        
+        # Ensure the edge of the hole does not touch the central axis.
+        if minRadius <= 1e-6: # TODO: consider if we actually want this restriction.
+            raise ValueError('Error - Hole outline touches its own axis.') 
+        
+        # Ensure the entire hole fits within the unit cell.
+        pitch = self._param['pitch']
+        cellInRadius = pitch/2.
+        radiusLimit = cellInRadius*(1. - wallFraction)
+        if maxRadius >= radiusLimit:
+            raise ValueError(f'Error - Part of hole exceeds cell bounds: {maxRadius:.2f} um')
+        
+        # Ensure all edges are above the minimum size threshold.
+        allEdges = [
+            math.dist(vertices[i], vertices[(i + 1) % numVertices])
+            for i in range(numVertices)
+        ]
+        shortestEdge = min(allEdges)
+        if shortestEdge < minEdge:
+            raise ValueError(f'Error - Part of hole edge is too small: {shortestEdge:.3f} um; ')
+        
+        # Ensure hole doesn't cross itself.
+        if self._hasSelfIntersection(vertices):
+            raise ValueError('Error - Hole outline crosses itself.')
+        
+        # Ensure hole exists
+        area = abs(self._signedArea(vertices))
+        if area <= 0.:
+            raise ValueError('Error - Hole outline encloses no area.')
+
+        # Area of the unit cell this hole sits in
+        if self._geoConfiguration.unitCell == UnitCell.HEXAGON:
+            cellArea = math.sqrt(3)/2.*pitch**2
+        else:
+            cellArea = pitch**2
+
+        validSummary = {
+            'numVertices': numVertices,
+            'maxRadius': maxRadius,
+            'minRadius': minRadius,
+            'area': area,
+            'perimeter': sum(allEdges),
+            'openAreaFraction': area/cellArea,
+        }
+
+        return validSummary
+
+#**********************************************************************#
+
+    @staticmethod
+    def _signedArea(points):
+        """
+        Computes the signed area of a closed polygon (shoelace formula).
+
+        args:
+            points (list): List of (x, y) vertex tuples.
+
+        returns:
+            area (float): Signed area. Positive for counter-clockwise ordering.
+        """
+        total = 0.
+        numPoints = len(points)
+
+        for i in range(numPoints):
+            x1, y1 = points[i]
+            x2, y2 = points[(i + 1) % numPoints]
+            total += x1*y2 - x2*y1
+        area = total/2.
+        
+        return area
+
+#**********************************************************************#
+
+    @staticmethod
+    def _hasSelfIntersection(vertices):
+        """
+        Tests a closed polygon for crossing edges.
+
+        Edges that share a vertex are skipped. This is a strict crossing
+        test and does not flag co-linear overlap.
+
+        args:
+            vertices (list): List of (x, y) vertex tuples.
+
+        returns:
+            bool: True if any two non-adjacent edges cross.
+        """
+        numVertices = len(vertices)
+        crosses = False
+
+        def orientation(pointA, pointB, pointC):
+            value = (
+                (pointB[0] - pointA[0])*(pointC[1] - pointA[1])
+                - (pointB[1] - pointA[1])*(pointC[0] - pointA[0])
+            )
+            if abs(value) < 1e-12:
+                return 0
+
+            return 1 if value > 0 else -1
+        
+        for i in range(numVertices):
+            firstStart = vertices[i]
+            firstEnd = vertices[(i + 1) % numVertices]
+
+            for j in range(i + 1, numVertices):
+                # Skip edges sharing a vertex with edge i
+                if j == (i + 1) % numVertices or (j + 1) % numVertices == i:
+                    continue
+
+                secondStart = vertices[j]
+                secondEnd = vertices[(j + 1) % numVertices]
+
+                d1 = orientation(secondStart, secondEnd, firstStart)
+                d2 = orientation(secondStart, secondEnd, firstEnd)
+                d3 = orientation(firstStart, firstEnd, secondStart)
+                d4 = orientation(firstStart, firstEnd, secondEnd)
+
+                if d1 != d2 and d3 != d4:
+                    crosses = True
+                    return crosses
+
+        return crosses
+
+#**********************************************************************#
+
     def resetParam(self, verbose=True):
         """
         Resets the simulation to the default parameters and removes any geometry links.

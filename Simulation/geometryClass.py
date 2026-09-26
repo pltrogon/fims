@@ -11,6 +11,7 @@ import numpy as np
 import os
 import math
 import gmsh
+import json
 
 from configs import GeometryConfiguration, UnitCell, HoleShape, PadShape, ScaleOption
 
@@ -99,10 +100,10 @@ class geometryClass:
                 holeScale = math.sqrt(3) / 2 if hexCell else 1.0
             
             case HoleShape.TRIVIALPURSUIT:
-                holeScale = 2.2
+                holeScale = 1.5 if hexCell else 1.0
             
             case HoleShape.CIS:
-                holeScale = 2.2
+                holeScale = 1.5 if hexCell else 1.0
 
             case HoleShape.NESTEGGS:
                 holeScale = 3.55
@@ -262,9 +263,19 @@ class gmshClass:
 
     def _getShape(self, shape, length, height, thickness):
         """
-        TODO:
+        Creates a specified shape object.
+        
+        args:
+            shape (str): the shape of the object.
+            length (float): the primary length measurement of the object (usually radius).
+            height (float): the z-coordinate for the base of the shape.
+            thickness (float): the thickness of the shape.
+        
+        returns:
+            shapeList (list): a list of all the hole shapes.
         """
         pitch = self._param['pitch']
+        
         #convert shape enum to string
         inShape = (shape.value if isinstance(shape, Enum) else str(shape)).lower()
 
@@ -275,7 +286,7 @@ class gmshClass:
             'octagon': lambda: self._createPolygon(length, height, thickness, 8, 22.5),
             'triangle': lambda: self._createPolygon(length, height, thickness, 3, 30),
             'kiki': lambda: self._createStar(length, length/2., height, thickness),
-            'custom': lambda: self._customGeometry()
+            'custom': lambda: self._customGeometry(height, thickness)
         }
 
         shapeList = []
@@ -306,8 +317,8 @@ class gmshClass:
                 self._occ.remove([baseShape], recursive=True)
         
             case 'trivialpursuit':
-                xCenter = pitch*math.sqrt(3)/8
-                yCenter = pitch/4
+                xCenter = pitch*math.sqrt(3)/6
+                yCenter = pitch/3
                 angles = [30, 210, 30, 210, 30, 210]
                 offsets = [
                     (xCenter, yCenter/2),
@@ -329,8 +340,8 @@ class gmshClass:
                     shapeList.append(curShape)
                             
             case 'cis':
-                xCenter = pitch*math.sqrt(3)/8
-                yCenter = pitch/4
+                xCenter = pitch*math.sqrt(3)/6
+                yCenter = pitch/3
                 angles = [30, 210, 30, 210, 30, 210]
                 offsets = [
                     (xCenter, yCenter/2),
@@ -342,7 +353,7 @@ class gmshClass:
                 ]
                 
                 # Add center block
-                blockLength = length
+                blockLength = 15
                 block = self._createPolygon(blockLength, height, thickness, 6)
                 
                 # Create all holes:
@@ -796,18 +807,57 @@ class gmshClass:
 
 #**********************************************************************#
 
-    def _customGeometry(self):
+    def _customGeometry(self, z, zDist=None):
         """
         Imports a custom geometry shape.
         
         Note: intended to be used by ai agent for hole optimization.
         
+        Reads the resolved outline written by
+        FIMS_Simulation.createCustomShape() and extrudes it.
+        
+        args:
+            z (float): z-coordinate for the grid.
+            zDist (float): the thickness of the grid.
+        
         returns:
             shape: custom shape object.
         """
-        #TODO: implement shape importing
-        shape = None
-        return shape
+        # Get custom shape file
+        shapePath = os.path.join('Geometry', 'customShape.json')
+        try:
+            with open(shapePath, 'r') as file:
+                shapeFile = json.load(file)
+
+        except FileNotFoundError:
+            raise RuntimeError(
+                f"Error - Custom hole file '{shapePath}' not found. Call "
+                'FIMS_Simulation.createCustomShape() before building.'
+            )
+        
+        # Unpack shape
+        vertices = shapeFile.get('vertices', [])
+        if len(vertices) < 3:
+            raise RuntimeError('Error - Custom hole outline is degenerate.')
+        
+        points = [self._occ.addPoint(float(x), float(y), z) for x, y in vertices]
+        numPoints = len(points)
+        
+        # Connect points and create surface
+        lines = [
+            self._occ.addLine(points[i], points[(i + 1) % numPoints])
+            for i in range(numPoints)
+        ]
+
+        loop = self._occ.addCurveLoop(lines)
+        surface = self._occ.addPlaneSurface([loop])
+
+        if thickness is None:
+            return surface
+        
+        customShape = self._occ.extrude([(2, surface)], 0, 0, thickness)
+        
+        return customShape[1][1]
 
 #**********************************************************************#
 
@@ -1100,10 +1150,10 @@ class gmshClass:
         
         #=========================#
         #=== DEFINE MESH SIZES ===#
-        #=========================# #TODO: revert
-        fineMesh = 3#gridThickness*(3./4.)
-        gridMesh = 1#gridThickness/4.
-        refineMesh = 6#gridThickness*(3./2.)
+        #=========================#
+        fineMesh = gridThickness*(3./4.)
+        gridMesh = gridThickness/4.
+        refineMesh = gridThickness*(3./2.)
         backgroundMesh = pitch/4.
         #=========================#
         
