@@ -852,10 +852,10 @@ class gmshClass:
         loop = self._occ.addCurveLoop(lines)
         surface = self._occ.addPlaneSurface([loop])
 
-        if thickness is None:
+        if zDist is None:
             return surface
         
-        customShape = self._occ.extrude([(2, surface)], 0, 0, thickness)
+        customShape = self._occ.extrude([(2, surface)], 0, 0, zDist)
         
         return customShape[1][1]
 

@@ -17,6 +17,7 @@ import subprocess
 import itertools
 import re
 import copy
+import hashlib
 
 from scipy.optimize import curve_fit
 from scipy.special import expit, logit

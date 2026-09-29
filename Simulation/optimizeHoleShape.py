@@ -537,7 +537,7 @@ def runOneShape(FIMS, spec, args):
     Raises:
         ValueError: If the shape is rejected (cheap, before any simulation).
     """
-    summary = FIMS.createCustomShape(spec, specPath=curShapePath)
+    summary = FIMS.createCustomShape(spec)
 
     runNumber = FIMS.runForEfficiency()
 
@@ -568,22 +568,35 @@ def runHoleShapeOptimizer():
     constraints = describeConstraints(FIMS)
     
     # Setup history files
-    historyJSONL = os.path.join('..', 'Data', 'ai/holeShapeHistory.jsonl')
-    historyCSV = os.path.join('..', 'Data', 'ai/holeShapeHistory.csv')
-    idealShapePath = os.path.join('..', 'Data', 'ai/bestHoleShape.json')
-    curShapePath = os.path.join('Geometry', 'customShape.json')
+    aiPath = os.path.join('..', 'Data', 'AI')
+    os.makedirs(aiPath, exist_ok=True)
+    
+    historyJSONL = os.path.join(aiPath, 'holeShapeHistory.jsonl')
+    if not os.path.exists(historyJSONL):
+        with open(historyJSONL, 'w') as f:
+            pass
+    historyCSV = os.path.join(aiPath, 'holeShapeHistory.csv')
+    if not os.path.exists(historyCSV):
+        with open(historyCSV, 'w') as f:
+            pass
+    idealShapePath = os.path.join(aiPath, 'bestHoleShape.json')
+    if not os.path.exists(idealShapePath):
+        with open(idealShapePath, 'w') as f:
+            pass
 
     if args.resume:
         history = loadHistory(historyJSONL)
         print(f'Resuming from {len(history)} recorded trials.')
+    
     elif os.path.exists(historyJSONL):
         print(
             f'Warning: {historyJSONL} exists and will be appended to. '
             'Pass --resume to let the agent see those trials.'
         )
-         history = []
+        history = []
+    
     else:
-          history = []
+        history = []
     
     # Get current iteration and final number
     startIteration = 1 + max(
@@ -615,7 +628,6 @@ def runHoleShapeOptimizer():
                     'hypothesis': 'Baseline circular hole, seeded by the script.',
                     'rationale': 'Reference point for every later design.'
                 }
-                break
             
             # Create a hole shape
             else:
@@ -626,7 +638,7 @@ def runHoleShapeOptimizer():
             shapeProposed = proposal['shape']
 
             try:
-                shapeSummary = FIMS.createCustomShape(shapeProposed, specPath=curShapePath)
+                shapeSummary = FIMS.createCustomShape(shapeProposed)
                 
                 # Ensure shape is new
                 priorHashes = {e.get('shapeHash') for e in history if e.get('shapeHash')}
@@ -638,15 +650,15 @@ def runHoleShapeOptimizer():
             
             except (ValueError, KeyError, TypeError) as error:
                 message = str(error)
-            
+            shapeProposed = None
             print(f'\t Rejected proposal: {message}')
-            rejected.append(f'\t - {json.dumps(spec)}\n \t{message}')
+            rejected.append(f'\t - {json.dumps(shapeProposed)}\n \t{message}')
             feedback = (
                 'Your previous proposals this turn were rejected before '
                 'reaching the simulator. Fix the problem and try again:\n'
                 + '\n'.join(rejected)
             )
-            shapeProposed = None
+        ## end proposal loop ##    
         
         # Record shape details
         if shapeProposed is None:
@@ -661,14 +673,13 @@ def runHoleShapeOptimizer():
             }
             history.append(record)
             appendHistory(historyJSONL, record)
-            writeHistoryCsv(history, historyCSV)
+            writeHistoryCsv(historyCSV, history)
             print('Giving up on this iteration.')
             continue
         
-        spec = shapeProposed['shape']
-        print(f'\tHypothesis: {shapeProposed["hypothesis"]}')
+        print(f'\tHypothesis: {proposal["hypothesis"]}')
         print(
-            f'\tShape: {spec["type"]}, ',
+            f'\tShape: {shapeProposed["type"]}, ',
             f'maxR = {shapeSummary["maxRadius"]:.2f} um, ',
             f'area = {shapeSummary["area"]:.1f} um^2, ',
             f'open = {shapeSummary["openAreaFraction"]:.3f}'
@@ -677,18 +688,18 @@ def runHoleShapeOptimizer():
         # Run the simulation
         record = {
             'iteration': iteration,
-            'shapeType': spec['type'],
+            'shapeType': shapeProposed['type'],
             'shapeHash': shapeSummary['shapeHash'],
             'summary': shapeSummary,
-            'spec': spec,
-            'hypothesis': shapeProposed['hypothesis'],
-            'rationale': shapeProposed['rationale'],
+            'spec': shapeProposed,
+            'hypothesis': proposal['hypothesis'],
+            'rationale': proposal['rationale'],
         }
 
         iterationStart = time.perf_counter()
         try:
             _, ibn, ibnError, runNumber, fieldRatio = runOneShape(
-                FIMS, spec, args
+                FIMS, shapeProposed, args
             )
             record.update({
                 'status': 'ok',
