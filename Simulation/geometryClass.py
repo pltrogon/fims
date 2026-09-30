@@ -107,6 +107,9 @@ class geometryClass:
 
             case HoleShape.NESTEGGS:
                 holeScale = 3.55
+            
+            case HoleShape.CUSTOM:
+                holeScale = 0.0  # Custom shape has prior self check.
 
             case _:
                 holeScale = 1.0
@@ -286,7 +289,6 @@ class gmshClass:
             'octagon': lambda: self._createPolygon(length, height, thickness, 8, 22.5),
             'triangle': lambda: self._createPolygon(length, height, thickness, 3, 30),
             'kiki': lambda: self._createStar(length, length/2., height, thickness),
-            'custom': lambda: self._customGeometry(height, thickness)
         }
 
         shapeList = []
@@ -294,6 +296,9 @@ class gmshClass:
             return [(3, singleShape[inShape]())]
             
         match inShape:
+            case 'custom':
+                shapeList = self._customGeometry(height, thickness)
+            
             case 'nesteggs':
                 xCenter = pitch/math.sqrt(3)/4
                 yCenter = pitch/4
@@ -378,13 +383,29 @@ class gmshClass:
                 raise ValueError(f"Unsupported shape: '{inShape}'")
         
         return shapeList
+
 #**********************************************************************#
+
     def _createBaseShape(self, xLength, yLength, height, thickness):
-        """TODO"""
+        """
+        Creates a basic shape based on the unit cell.
+        
+        args:
+            xLength (float): distance in x-direction
+            yLength (float): distance in y-direction
+            height (float): height of the base of the shape
+            thickness (float): thickness of the shape
+        
+        returns:
+            shape object
+        """
+        
         if self._geoConfig.unitCell == UnitCell.HEXAGON:
             return self._createPolygon(xLength/3, height, thickness, 6)
+        
         if thickness:
             return self._occ.addBox(-xLength/2, -yLength/2, height, xLength, yLength, thickness)
+        
         return self._occ.addRectangle(-xLength/2, -yLength/2, height, xLength, yLength)
 
 #**********************************************************************#
@@ -809,19 +830,16 @@ class gmshClass:
 
     def _customGeometry(self, z, zDist=None):
         """
-        Imports a custom geometry shape.
-        
+        Imports a custom geometry hole pattern.
+
         Note: intended to be used by ai agent for hole optimization.
-        
-        Reads the resolved outline written by
-        FIMS_Simulation.createCustomShape() and extrudes it.
-        
+
         args:
             z (float): z-coordinate for the grid.
             zDist (float): the thickness of the grid.
-        
+
         returns:
-            shape: custom shape object.
+            shapeList (list): (dim, tag) for every hole in the pattern.
         """
         # Get custom shape file
         shapePath = os.path.join('Geometry', 'customShape.json')
@@ -831,33 +849,46 @@ class gmshClass:
 
         except FileNotFoundError:
             raise RuntimeError(
-                f"Error - Custom hole file '{shapePath}' not found. Call "
+                f"Error: Custom hole file '{shapePath}' not found. Call "
                 'FIMS_Simulation.createCustomShape() before building.'
             )
-        
-        # Unpack shape
-        vertices = shapeFile.get('vertices', [])
-        if len(vertices) < 3:
-            raise RuntimeError('Error - Custom hole outline is degenerate.')
-        
-        points = [self._occ.addPoint(float(x), float(y), z) for x, y in vertices]
-        numPoints = len(points)
-        
-        # Connect points and create surface
-        lines = [
-            self._occ.addLine(points[i], points[(i + 1) % numPoints])
-            for i in range(numPoints)
-        ]
 
-        loop = self._occ.addCurveLoop(lines)
-        surface = self._occ.addPlaneSurface([loop])
+        # Unpack pattern. Fall back to the single-hole format if needed.
+        allHoles = shapeFile.get('holes')
+        if not allHoles:
+            allHoles = [{'vertices': shapeFile.get('vertices', [])}]
 
-        if zDist is None:
-            return surface
-        
-        customShape = self._occ.extrude([(2, surface)], 0, 0, zDist)
-        
-        return customShape[1][1]
+        shapeList = []
+        for index, hole in enumerate(allHoles):
+
+            vertices = hole.get('vertices', [])
+            if len(vertices) < 3:
+                raise RuntimeError(
+                    f'Error: Custom hole {index} outline is degenerate.'
+                )
+
+            points = [
+                self._occ.addPoint(float(x), float(y), z) for x, y in vertices
+            ]
+            numPoints = len(points)
+
+            # Connect points and create surface
+            lines = [
+                self._occ.addLine(points[i], points[(i + 1) % numPoints])
+                for i in range(numPoints)
+            ]
+
+            loop = self._occ.addCurveLoop(lines)
+            surface = self._occ.addPlaneSurface([loop])
+
+            if zDist is None:
+                shapeList.append((2, surface))
+                continue
+
+            customShape = self._occ.extrude([(2, surface)], 0, 0, zDist)
+            shapeList.append((3, customShape[1][1]))
+
+        return shapeList
 
 #**********************************************************************#
 

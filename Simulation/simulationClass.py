@@ -413,49 +413,73 @@ class FIMS_Simulation:
         )
 
         return
+
 #**********************************************************************#
 
     def createCustomShape(self, shapeSummary):
         """
-        Creates a custom shape object and writes it to a given file path.
-        
+        Creates a custom hole pattern and writes it to a given file path.
+
+        A bare outline with no 'holes' entry is read as a single hole at
+        the cell center.
+
         Note: intended to be used by AI agent.
-        
+
         args:
             shapeSummary (dict): details of the custom shape.
-                'polygon'
-                'polar'
-                'fourier'
-        
+                {'holes': [holeSpec, holeSpec, ...]}
+                Each holeSpec is an independent outline:
+                    'type'
+                    'vertices'
+                    'points'
+                    'meanRadius'
+                    'harmonics'
+                    'numSamples'
+                    'rotationDeg'
+                    'offset'
+                Optional: 'numHoles' (int), cross-checked against len(holes).
+
         returns:
             validSummary (dict): the shape details after being validated.
+                'numHoles'
                 'numVertices'
                 'maxRadius'
                 'minRadius'
                 'area'
+                'areaIsExact'
                 'perimeter'
                 'openAreaFraction'
                 'shapeHash'
+                'holes'
         """
         shapePath = self._customShapePath
-        
-        vertices = self._resolveShapeSpec(shapeSummary)
-        validSummary = self._validateShapePolygon(vertices)
-        
-        # Create hash of x,y points
-        canonicalForm = json.dumps(
-            [[round(x, 6), round(y, 6)] for x, y in vertices]
-        )
+
+        allHoles = self._resolveHolePattern(shapeSummary)
+        validSummary = self._validateHolePattern(allHoles)
+
+        # Create hash of every x,y point in the pattern
+        canonicalForm = json.dumps([
+            [[round(x, 6), round(y, 6)] for x, y in hole['vertices']]
+            for hole in allHoles
+        ])
         validSummary['shapeHash'] = hashlib.sha1(
             canonicalForm.encode()
         ).hexdigest()[:12]
 
         payload = {
             'spec': shapeSummary,
-            'vertices': [[float(x), float(y)] for x, y in vertices],
+            'vertices': [[float(x), float(y)] for x, y in allHoles[0]['vertices']],
             'summary': validSummary,
             'pitch': float(self._param['pitch']),
             'unitCell': self._geoConfiguration.unitCell.value,
+            'holes': [
+                {
+                    'type': hole['type'],
+                    'offset': hole['offset'],
+                    'vertices': [[float(x), float(y)] for x, y in hole['vertices']],
+                } 
+                for hole in allHoles
+            ],
         }
 
         directory = os.path.dirname(shapePath)
@@ -465,7 +489,7 @@ class FIMS_Simulation:
         with open(shapePath, 'w') as outFile:
             json.dump(payload, outFile, indent=2, cls=NumPyEncoder)
 
-        # Use maximum radial position for geometry checks
+        # Use maximum radial position for future radius checks.
         self._param['holeRadius'] = validSummary['maxRadius']
 
         return validSummary
@@ -490,7 +514,7 @@ class FIMS_Simulation:
             case 'polygon':
                 rawVertices = shapeSpec.get('vertices')
                 if not rawVertices:
-                    raise ValueError("Error - 'polygon' requires 'vertices'.")
+                    raise ValueError("Error: 'polygon' requires 'vertices'.")
 
                 points = [
                     (float(vertex[0]), float(vertex[1]))
@@ -500,7 +524,7 @@ class FIMS_Simulation:
             case 'polar':
                 rawPoints = shapeSpec.get('points')
                 if not rawPoints:
-                    raise ValueError("Error - 'polar' requires 'points'.")
+                    raise ValueError("Error: 'polar' requires 'points'.")
 
                 polarPoints = sorted(
                     (float(theta) % 360., float(radius))
@@ -509,9 +533,9 @@ class FIMS_Simulation:
 
                 allAngles = [theta for theta, _ in polarPoints]
                 if len(set(allAngles)) != len(allAngles):
-                    raise ValueError('Error - Repeated angle in polar outline.')
+                    raise ValueError('Error: repeated angle in polar outline.')
                 if any(radius <= 0. for _, radius in polarPoints):
-                    raise ValueError('Error - Polar radii must be positive.')
+                    raise ValueError('Error: polar radii must be positive.')
 
                 points = [
                     (
@@ -527,9 +551,9 @@ class FIMS_Simulation:
                 numSamples = int(shapeSpec.get('numSamples', 120))
 
                 if meanRadius <= 0.:
-                    raise ValueError("Error - 'meanRadius' must be positive.")
+                    raise ValueError("Error: 'meanRadius' must be positive.")
                 if not 12 <= numSamples <= 360:
-                    raise ValueError("Error - 'numSamples' must be 12 to 360.")
+                    raise ValueError("Error: 'numSamples' must be between 12 and 360.")
 
                 points = []
                 for i in range(numSamples):
@@ -544,7 +568,7 @@ class FIMS_Simulation:
 
                     if radius <= 0.:
                         raise ValueError(
-                            'Error - Harmonics drive the radius to or below '
+                            'Error: Harmonics drive the radius to or below '
                             f'zero at {math.degrees(theta):.1f} deg. Reduce '
                             'the amplitudes or raise the mean radius.'
                         )
@@ -555,7 +579,7 @@ class FIMS_Simulation:
 
             case _:
                 raise ValueError(
-                    f"Error - Unsupported hole shape type: '{shapeType}'."
+                    f"Error: Unsupported hole shape type: '{shapeType}'."
                 )
 
         rotation = math.radians(float(shapeSpec.get('rotationDeg', 0.)))
@@ -575,76 +599,385 @@ class FIMS_Simulation:
 
 #**********************************************************************#
 
-    def _validateShapePolygon(self, vertices, wallFraction=0.05, minEdge=0.15):
+    def _resolveHolePattern(self, shapeSpec, maxHoles=12):
         """
-        Verifies that a given custom shape fits within the unit cell.
+        Expands a pattern specification into a list of placed holes.
 
         args:
-            vertices (list): List of (x, y) vertex tuples in microns.
-            wallFraction (float): Fraction of the cell inradius that must
-                remain as grid material between neighboring holes.
+            shapeSpec (dict): details of the hole pattern.
+
+        returns:
+            allHoles (list): one dict per hole containing 'type', 'offset',
+                'vertices', 'edges', 'boundRadius', 'minLocalRadius', 'area'
+                and 'perimeter'.
+        """
+
+        allSpecs = shapeSpec.get('holes')
+        if allSpecs is None:
+            # A bare outline is read as one hole at the cell center
+            allSpecs = [shapeSpec]
+
+        if not isinstance(allSpecs, list) or not allSpecs:
+            raise ValueError("Error: 'holes' must be a non-empty list.")
+
+        declaredCount = shapeSpec.get('numHoles')
+        if declaredCount is not None and int(declaredCount) != len(allSpecs):
+            raise ValueError(
+                'Error: Number of holes given does not match the number of holes declared:\n'
+                f'\tDeclared: {declaredCount} =/= Actual: {len(allSpecs)}'
+            )
+
+        allHoles = []
+        for index, holeSpec in enumerate(allSpecs):
+
+            # Resolve the outline of the hole
+            try:
+                outline = self._resolveShapeSpec(holeSpec)
+            except ValueError as error:
+                detail = str(error).replace('Error: ', '', 1)
+                raise ValueError(f'Error: Hole {index}: {detail}') from None
+            
+            # Offset the hole from the center
+            rawOffset = holeSpec.get('offset', [0., 0.])
+            if len(rawOffset) != 2:
+                raise ValueError(
+                    f'Error: Hole {index} offset must be [dx, dy].'
+                )
+            offsetX = float(rawOffset[0])
+            offsetY = float(rawOffset[1])
+
+            vertices = [(x + offsetX, y + offsetY) for x, y in outline]
+
+            numVertices = len(vertices)
+            allEdges = [
+                math.dist(vertices[i], vertices[(i + 1) % numVertices])
+                for i in range(numVertices)
+            ]
+            localRadii = [math.hypot(x, y) for x, y in outline]
+
+            allHoles.append({
+                'type': str(holeSpec.get('type', '')).strip().lower(),
+                'offset': [offsetX, offsetY],
+                'vertices': vertices,
+                'edges': allEdges,
+                'boundRadius': max(localRadii),
+                'minLocalRadius': min(localRadii),
+                'area': abs(self._signedArea(vertices)),
+                'perimeter': sum(allEdges),
+            })
+
+        return allHoles
+
+#**********************************************************************#
+
+    def _validateHolePattern(self, allHoles, minEdge=0.15,
+                             minHoleGap=0.5, maxPatternVertices=1440):
+        """
+        Verifies that a hole pattern fits the unit cell and can be meshed.
+
+            Checks each hole individually, and then verifies that the full
+        pattern fits within the unit cell. Also verifies that the gap
+        between adjacent (but not overlapping) holes isn't too small.
+
+        args:
+            allHoles (list): List of all holes.
             minEdge (float): Shortest permitted outline edge, in microns.
                 This only rejects degenerate edges; it is not a
                 resolution limit.
+            minHoleGap (float): Smallest permitted gap between holes
+                that do not overlap, in microns.
+            maxPatternVertices (int): Vertex budget across the whole pattern.
 
         returns:
-            validSummary (dict): Summary of the validated outline.
+            validSummary (dict): Summary of the validated pattern.
         """
-        numVertices = len(vertices)
-        if numVertices < 3:
-            raise ValueError('Error - Hole outline needs at least 3 vertices.')
-        if numVertices > 360:
-            raise ValueError('Error - Hole outline exceeds 360 vertices.')
+        safetyBuffer = .05
+        
+        totalVertices = sum(len(hole['vertices']) for hole in allHoles)
+        if totalVertices > maxPatternVertices:
+            raise ValueError(
+                f'Error - Pattern uses {totalVertices} vertices across '
+                f'{len(allHoles)} holes; the budget is {maxPatternVertices}. '
+                'Lower numSamples or use fewer holes.'
+            )
 
-        allRadii = [math.hypot(x, y) for x, y in vertices]
-        maxRadius = max(allRadii)
-        minRadius = min(allRadii)
-        
-        # Ensure the edge of the hole does not touch the central axis.
-        if minRadius <= 1e-6: # TODO: consider if we actually want this restriction.
-            raise ValueError('Error - Hole outline touches its own axis.') 
-        
-        # Ensure the entire hole fits within the unit cell.
-        pitch = self._param['pitch']
-        cellInRadius = pitch/2.
-        radiusLimit = cellInRadius*(1. - wallFraction)
-        if maxRadius >= radiusLimit:
-            raise ValueError(f'Error - Part of hole exceeds cell bounds: {maxRadius:.2f} um')
-        
-        # Ensure all edges are above the minimum size threshold.
-        allEdges = [
-            math.dist(vertices[i], vertices[(i + 1) % numVertices])
-            for i in range(numVertices)
+        # Check each individual hole for self consistency
+        for index, hole in enumerate(allHoles):
+            label = f'Hole {index} ({hole["type"]})'
+            numVertices = len(hole['vertices'])
+
+            if numVertices < 3:
+                raise ValueError(f'Error: {label} needs at least 3 vertices.')
+            if numVertices > 360:
+                raise ValueError(f'Error: {label} exceeds 360 vertices.')
+
+            # Ensure the edge of the hole does not touch its own center.
+            if hole['minLocalRadius'] <= 1e-6:
+                raise ValueError(f'Error: {label} touches its own axis.')
+
+            # Ensure all edges are above the minimum size threshold.
+            shortestEdge = min(hole['edges'])
+            if shortestEdge < minEdge:
+                raise ValueError(
+                    f'Error: {label} has an edge of {shortestEdge:.3f} um; '
+                    f'the minimum is {minEdge:.2f} um.'
+                )
+
+            # Ensure hole doesn't cross itself.
+            if self._hasSelfIntersection(hole['vertices']):
+                raise ValueError(f'Error - {label} outline crosses itself.')
+
+            # Ensure hole exists
+            if hole['area'] <= 0.:
+                raise ValueError(f'Error - {label} encloses no area.')
+
+        # Check all holes vs the unit cell
+        pitch = float(self._param['pitch'])
+        cellLimit = (pitch/2.)*(1. - safetyBuffer)
+
+        for index, hole in enumerate(allHoles):
+            for normalX, normalY, angleDeg in self._cellEdges():
+                reach = max(
+                    x*normalX + y*normalY for x, y in hole['vertices']
+                )
+                if reach >= cellLimit:
+                    raise ValueError(
+                        f'Error: Hole {index} at offset '
+                        f'({hole["offset"][0]:.2f}, {hole["offset"][1]:.2f}) '
+                        f'reaches {reach:.2f} um toward the cell edge at '
+                        f'{angleDeg:.0f} deg; the limit is {cellLimit:.2f} um. '
+                        'Move it inward or make it smaller.'
+                    )
+
+        # Ensure holes have a minimum gap between them
+        for i in range(len(allHoles)):
+            for j in range(i + 1, len(allHoles)):
+                first = allHoles[i]
+                second = allHoles[j]
+
+                centerGap = math.dist(first['offset'], second['offset'])
+                boundSum = first['boundRadius'] + second['boundRadius']
+
+                # Far enough apart that only the bounding circles matter
+                if centerGap > boundSum:
+                    separation = centerGap - boundSum
+                    if separation < minHoleGap:
+                        raise ValueError(
+                            f'Error: Holes {i} and {j} are separated by only '
+                            f'{separation:.3f} um. Either overlap them or '
+                            f'leave at least {minHoleGap:.2f} um between them.'
+                        )
+                    continue
+
+                if self._holesOverlap(first, second):
+                    continue
+
+                gap = self._outlineGap(first['vertices'], second['vertices'])
+                if gap < minHoleGap:
+                    raise ValueError(
+                        f'Error: Holes {i} and {j} come within {gap:.3f} um '
+                        'without overlapping. Either overlap them or leave '
+                        f'at least {minHoleGap:.2f} um between them.'
+                    )
+
+        # Calculate optical transparency and return full pattern
+        allRadii = [
+            math.hypot(x, y) for hole in allHoles for x, y in hole['vertices']
         ]
-        shortestEdge = min(allEdges)
-        if shortestEdge < minEdge:
-            raise ValueError(f'Error - Part of hole edge is too small: {shortestEdge:.3f} um; ')
-        
-        # Ensure hole doesn't cross itself.
-        if self._hasSelfIntersection(vertices):
-            raise ValueError('Error - Hole outline crosses itself.')
-        
-        # Ensure hole exists
-        area = abs(self._signedArea(vertices))
-        if area <= 0.:
-            raise ValueError('Error - Hole outline encloses no area.')
+        area, areaIsExact = self._getCustomArea(allHoles)
 
-        # Area of the unit cell this hole sits in
+        # Area of the unit cell this pattern sits in
         if self._geoConfiguration.unitCell == UnitCell.HEXAGON:
             cellArea = math.sqrt(3)/2.*pitch**2
         else:
             cellArea = pitch**2
 
         validSummary = {
-            'numVertices': numVertices,
-            'maxRadius': maxRadius,
-            'minRadius': minRadius,
+            'numHoles': len(allHoles),
+            'numVertices': totalVertices,
+            'maxRadius': max(allRadii),
+            'minRadius': min(hole['minLocalRadius'] for hole in allHoles),
             'area': area,
-            'perimeter': sum(allEdges),
+            'areaIsExact': areaIsExact,
+            'perimeter': sum(hole['perimeter'] for hole in allHoles),
             'openAreaFraction': area/cellArea,
+            'holes': [
+                {
+                    'type': hole['type'],
+                    'offset': hole['offset'],
+                    'area': hole['area'],
+                    'perimeter': hole['perimeter'],
+                    'boundRadius': hole['boundRadius'],
+                }
+                for hole in allHoles
+            ],
         }
 
         return validSummary
+
+#**********************************************************************#
+
+    def _cellEdges(self):
+        """
+        Gets the distances for the center of each edge of the unit cell.
+
+        returns:
+            edges (list): (normalX, normalY, angleDegrees) per cell edge.
+        """
+        match self._geoConfiguration.unitCell:
+            case UnitCell.HEXAGON:
+                allAngles = [30., 90., 150., 210., 270., 330.]
+
+            case UnitCell.SQUARE:
+                allAngles = [0., 90., 180., 270.]
+
+            case _:
+                raise ValueError(
+                    f'Error - Unsupported unit cell: '
+                    f'{self._geoConfiguration.unitCell}'
+                )
+
+        edges = [
+            (
+                math.cos(math.radians(angle)),
+                math.sin(math.radians(angle)),
+                angle
+            )
+            for angle in allAngles
+        ]
+
+        return edges
+
+#**********************************************************************#
+
+    @staticmethod
+    def _holesOverlap(firstHole, secondHole):
+        """
+        Tests whether two placed holes share any area.
+
+        Outlines are densely sampled, so testing whether either vertex set
+        falls inside the other polygon is sufficient in practice.
+
+        args:
+            firstHole, secondHole (dict): Placed holes.
+
+        returns:
+            bool: True if the two holes overlap.
+        """
+        from matplotlib.path import Path
+
+        firstPath = Path(firstHole['vertices'])
+        secondPath = Path(secondHole['vertices'])
+
+        if firstPath.contains_points(secondHole['vertices']).any():
+            return True
+        if secondPath.contains_points(firstHole['vertices']).any():
+            return True
+
+        return False
+
+#**********************************************************************#
+
+    @staticmethod
+    def _outlineGap(firstVertices, secondVertices):
+        """
+        Finds the smallest distance between two outlines.
+
+        Measures every vertex of each outline against the edge of an
+        adjacent hole.
+
+        args:
+            firstVertices, secondVertices (list): (x, y) vertex tuples.
+
+        returns:
+            gap (float): Closest approach in microns.
+        """
+        def pointsToEdges(rawPoints, rawPolygon):
+            points = np.asarray(rawPoints, dtype=float)
+            starts = np.asarray(rawPolygon, dtype=float)
+            edges = np.roll(starts, -1, axis=0) - starts
+
+            lengthSq = (edges**2).sum(axis=1)
+            lengthSq[lengthSq == 0.] = 1e-30
+
+            offsets = points[:, None, :] - starts[None, :, :]
+            along = (offsets*edges[None, :, :]).sum(axis=2)/lengthSq[None, :]
+            along = np.clip(along, 0., 1.)
+
+            closest = starts[None, :, :] + along[:, :, None]*edges[None, :, :]
+            gaps = np.sqrt(((points[:, None, :] - closest)**2).sum(axis=2))
+
+            return gaps.min()
+
+        gap = float(min(
+            pointsToEdges(firstVertices, secondVertices),
+            pointsToEdges(secondVertices, firstVertices),
+        ))
+
+        return gap
+
+#**********************************************************************#
+
+    @staticmethod
+    def _getCustomArea(allHoles, numSamples=800):
+        """
+        Open area of the union of every hole in the pattern.
+
+        Note: when two or more holes overlap, the union is estimated
+        on a regular grid. Otherwise, the area is exact.
+
+        args:
+            allHoles (list): Placed holes from _resolveHolePattern().
+            numSamples (int): Grid resolution per axis for the estimate.
+
+        returns:
+            tuple: (area, areaIsExact)
+        """
+        if len(allHoles) == 1:
+            return allHoles[0]['area'], True
+
+        # Check if holes overlap
+        canTouch = False
+        for i in range(len(allHoles)):
+            for j in range(i + 1, len(allHoles)):
+                centerGap = math.dist(
+                    allHoles[i]['offset'], allHoles[j]['offset']
+                )
+                boundSum = (
+                    allHoles[i]['boundRadius'] + allHoles[j]['boundRadius']
+                )
+                if centerGap <= boundSum:
+                    canTouch = True
+                    break
+            if canTouch:
+                break
+
+        if not canTouch:
+            return sum(hole['area'] for hole in allHoles), True
+
+        from matplotlib.path import Path
+
+        allPoints = np.asarray(
+            [vertex for hole in allHoles for vertex in hole['vertices']],
+            dtype=float
+        )
+        xMin, yMin = allPoints.min(axis=0)
+        xMax, yMax = allPoints.max(axis=0)
+
+        xGrid = np.linspace(xMin, xMax, numSamples)
+        yGrid = np.linspace(yMin, yMax, numSamples)
+        meshX, meshY = np.meshgrid(xGrid, yGrid)
+        samplePoints = np.column_stack([meshX.ravel(), meshY.ravel()])
+
+        inside = np.zeros(samplePoints.shape[0], dtype=bool)
+        for hole in allHoles:
+            inside |= Path(hole['vertices']).contains_points(samplePoints)
+
+        sampleArea = (
+            (xMax - xMin)/(numSamples - 1)*(yMax - yMin)/(numSamples - 1)
+        )
+
+        return float(inside.sum()*sampleArea), False
 
 #**********************************************************************#
 

@@ -86,12 +86,136 @@ RULES
 
 #**********************************************************************#
 
+holeSpec = {
+    'type': 'object',
+    'description': (
+        'One hole. Every hole is described on its own: its own outline '
+        'type, its own parameters, and its own position. Holes in the same '
+        'cell need not resemble each other in any way.'
+    ),
+    'properties': {
+        'type': {
+            'type': 'string',
+            'enum': ['polygon', 'polar', 'fourier'],
+            'description': (
+                'polygon: explicit x,y vertices. '
+                'polar: radius/angle pairs, auto-sorted by angle, which '
+                'cannot self-intersect. '
+                'fourier: a smooth closed curve '
+                'r(theta) = meanRadius + sum a_n cos(n*theta + phase_n); '
+                'the most compact way to describe lobed or rounded '
+                'outlines.'
+            ),
+        },
+        'offset': {
+            'type': 'array',
+            'items': {'type': 'number'},
+            'minItems': 2,
+            'maxItems': 2,
+            'description': (
+                '[dx, dy] of this hole center from the cell center, in '
+                'microns. Use [0, 0] to put it at the center.'
+            ),
+        },
+        'vertices': {
+            'type': 'array',
+            'minItems': 3,
+            'maxItems': 360,
+            'items': {
+                'type': 'array',
+                'items': {'type': 'number'},
+                'minItems': 2,
+                'maxItems': 2,
+            },
+            'description': (
+                'For type "polygon" only: [[x, y], ...] in microns, ordered '
+                'around the outline and measured from THIS hole center, not '
+                'the cell center.'
+            ),
+        },
+        'points': {
+            'type': 'array',
+            'minItems': 3,
+            'maxItems': 360,
+            'items': {
+                'type': 'array',
+                'items': {'type': 'number'},
+                'minItems': 2,
+                'maxItems': 2,
+            },
+            'description': (
+                'For type "polar" only: [[radius, angleDegrees], ...] about '
+                'this hole center. Radii must be positive; angles must be '
+                'distinct.'
+            ),
+        },
+        'meanRadius': {
+            'type': 'number',
+            'description': (
+                'For type "fourier" only: the mean radius of this hole in '
+                'microns.'
+            ),
+        },
+        'harmonics': {
+            'type': 'array',
+            'maxItems': 8,
+            'items': {
+                'type': 'object',
+                'properties': {
+                    'n': {
+                        'type': 'integer',
+                        'minimum': 1,
+                        'maximum': 24,
+                        'description': 'Number of lobes.',
+                    },
+                    'amplitude': {
+                        'type': 'number',
+                        'description': (
+                            'Lobe depth in microns. The sum of the absolute '
+                            'amplitudes must stay below meanRadius.'
+                        ),
+                    },
+                    'phaseDeg': {
+                        'type': 'number',
+                        'description': 'Phase offset in degrees.',
+                    },
+                },
+                'required': ['n', 'amplitude'],
+            },
+            'description': (
+                'For type "fourier" only. An empty list gives a circle.'
+            ),
+        },
+        'numSamples': {
+            'type': 'integer',
+            'minimum': 12,
+            'maximum': 360,
+            'description': (
+                'For type "fourier" only: how many points to sample this '
+                'curve at. 120 is a good default; use more only for high '
+                'lobe counts.'
+            ),
+        },
+        'rotationDeg': {
+            'type': 'number',
+            'description': (
+                'Optional rotation of this outline about its own center, in '
+                'degrees.'
+            ),
+        },
+    },
+    'required': ['type', 'offset'],
+}
+ 
+#**********************************************************************#
+
 shapeTool = {
     'name': 'propose_hole_shape',
     'description': (
-        'Propose the next grid hole outline to simulate. This is your only '
-        'available action. The outline is a closed curve in the plane of the '
-        'grid, centered on the hole axis. All lengths are in microns.'
+        'Propose the next grid hole pattern to simulate. This is your only '
+        'available action. A pattern is a list of holes in one unit cell. '
+        'Each hole is specified independently, so you may mix shapes, sizes '
+        'and types freely within a cell. All lengths are in microns.'
     ),
     'input_schema': {
         'type': 'object',
@@ -99,10 +223,10 @@ shapeTool = {
             'hypothesis': {
                 'type': 'string',
                 'description': (
-                    'What you expect this outline to do to the IBN relative to '
-                    'the current best, and the mechanism you think is '
-                    'responsible. One or two sentences. Must be falsifiable by '
-                    'the result.'
+                    'What you expect this pattern to do to the IBN relative '
+                    'to the current best, and the mechanism you think is '
+                    'responsible. One or two sentences. Must be falsifiable '
+                    'by the result.'
                 ),
             },
             'rationale': {
@@ -114,146 +238,84 @@ shapeTool = {
             },
             'shape': {
                 'type': 'object',
-                'description': 'The outline itself.',
+                'description': 'The hole pattern for one unit cell.',
                 'properties': {
-                    'type': {
-                        'type': 'string',
-                        'enum': ['polygon', 'polar', 'fourier'],
-                        'description': (
-                            'polygon: explicit x,y vertices. '
-                            'polar: radius/angle pairs, auto-sorted by angle, '
-                            'which cannot self-intersect. '
-                            'fourier: a smooth closed curve '
-                            'r(theta) = meanRadius + sum a_n cos(n*theta + '
-                            'phase_n); the most compact way to describe lobed '
-                            'or rounded outlines.'
-                        ),
-                    },
-                    'vertices': {
+                    'holes': {
                         'type': 'array',
-                        'minItems': 3,
-                        'maxItems': 360,
-                        'items': {
-                            'type': 'array',
-                            'items': {'type': 'number'},
-                            'minItems': 2,
-                            'maxItems': 2,
-                        },
+                        'minItems': 1,
+                        'maxItems': 12,
+                        'items': holeSpec,
                         'description': (
-                            'For type "polygon" only: [[x, y], ...] in microns, '
-                            'ordered around the outline.'
+                            'Every hole in the cell. One entry gives a single '
+                            'hole; several entries give several fully '
+                            'independent holes, which may overlap.'
                         ),
                     },
-                    'points': {
-                        'type': 'array',
-                        'minItems': 3,
-                        'maxItems': 360,
-                        'items': {
-                            'type': 'array',
-                            'items': {'type': 'number'},
-                            'minItems': 2,
-                            'maxItems': 2,
-                        },
-                        'description': (
-                            'For type "polar" only: [[radius, angleDegrees], '
-                            '...]. Radii must be positive; angles must be '
-                            'distinct.'
-                        ),
-                    },
-                    'meanRadius': {
-                        'type': 'number',
-                        'description': (
-                            'For type "fourier" only: the mean radius in '
-                            'microns.'
-                        ),
-                    },
-                    'harmonics': {
-                        'type': 'array',
-                        'maxItems': 8,
-                        'items': {
-                            'type': 'object',
-                            'properties': {
-                                'n': {
-                                    'type': 'integer',
-                                    'minimum': 1,
-                                    'maximum': 24,
-                                    'description': 'Number of lobes.',
-                                },
-                                'amplitude': {
-                                    'type': 'number',
-                                    'description': (
-                                        'Lobe depth in microns. The sum of the '
-                                        'absolute amplitudes must stay below '
-                                        'meanRadius.'
-                                    ),
-                                },
-                                'phaseDeg': {
-                                    'type': 'number',
-                                    'description': 'Phase offset in degrees.',
-                                },
-                            },
-                            'required': ['n', 'amplitude'],
-                        },
-                        'description': (
-                            'For type "fourier" only. An empty list gives a '
-                            'circle.'
-                        ),
-                    },
-                    'numSamples': {
+                    'numHoles': {
                         'type': 'integer',
-                        'minimum': 12,
-                        'maximum': 360,
+                        'minimum': 1,
+                        'maximum': 12,
                         'description': (
-                            'For type "fourier" only: how many points to sample '
-                            'the curve at. 120 is a good default; use more only '
-                            'for high lobe counts.'
-                        ),
-                    },
-                    'rotationDeg': {
-                        'type': 'number',
-                        'description': (
-                            'Optional rigid rotation of the finished outline, '
-                            'in degrees.'
+                            'Optional cross-check: must equal the length of '
+                            '"holes" if both are given.'
                         ),
                     },
                 },
-                'required': ['type'],
+                'required': ['holes'],
             },
         },
         'required': ['hypothesis', 'rationale', 'shape'],
     },
 }
-
+ 
 #**********************************************************************#
 
 def describeConstraints(simObject):
     """
     Builds the geometric constraint block from the live parameters.
-
+ 
     args:
         simObject: The configured simulation object.
-
+ 
     returns:
         constraints (str): The rendered constraints.
     """
     pitch = float(simObject.getParam('pitch'))
     padLength = float(simObject.getParam('padLength'))
-    radiusLimit = (pitch/2.)*0.95
-
+ 
+    cornerRadius = pitch/math.sqrt(3.)
+    edgeRadius = pitch/2.
+    cellLimit = edgeRadius*0.95
+ 
     constraints = (
-        f'  Unit cell: hexagonal, pitch = {pitch:.1f} um (unit cell-to-unit cell '
-        f'center spacing).\n'
+        f'  Unit cell: regular hexagon, pitch = {pitch:.1f} um (cell center to '
+        f'cell center).\n'
+        f'    Corners sit at radius {cornerRadius:.2f} um, at 0, 60, 120, 180, '
+        f'240 and 300 deg.\n'
+        f'    Edge midpoints sit at radius {edgeRadius:.2f} um, at 30, 90, 150, '
+        f'210, 270 and 330 deg.\n'
         f'  Pad length: {padLength:.1f} um.\n'
-        f'  The outline is centered on the origin and tiled onto every '
-        f'neighboring cell.\n'
-        f'  Maximum radial extent: strictly less than {radiusLimit:.2f} um, '
-        f'so grid material remains between neighboring unit cells.\n'
-        f'  Minimum radial extent: greater than 0; the outline may not reach '
-        f'its own axis.\n'
-        f'  At most 360 vertices. No edge shorter than 0.15 um. The outline '
-        f'must not cross itself.'
+        f'  The whole pattern is tiled onto every neighboring cell.\n'
+        f'  Each hole outline is measured from ITS OWN center, then moved to '
+        f'its offset.\n'
+        f'  CONTAINMENT: every vertex of every hole, after its offset is '
+        f'applied, must satisfy\n'
+        f'    x*cos(a) + y*sin(a) < {cellLimit:.2f} um   for a = 30, 90, 150, '
+        f'210, 270, 330 deg.\n'
+        f'    That is the hexagon shrunk by a 5% wall of grid material. Note '
+        f'a vertex aimed at a\n'
+        f'    corner may sit further from the center than one aimed at an '
+        f'edge.\n'
+        f'  Holes may overlap each other freely. Two holes that come within '
+        f'0.5 um WITHOUT\n'
+        f'    overlapping are rejected, because the sliver of grid metal '
+        f'between them cannot be meshed.\n'
+        f'  At most 12 holes, 360 vertices per hole and 1440 vertices in the '
+        f'whole pattern.\n'
+        f'  No edge shorter than 0.15 um. No outline may cross itself or pass '
+        f'through its own center.'
     )
-
+ 
     return constraints
 
 #**********************## History handling ##**************************#
@@ -326,6 +388,10 @@ def writeHistoryCsv(path, history):
             'area': summary.get('area'),
             'perimeter': summary.get('perimeter'),
             'openAreaFraction': summary.get('openAreaFraction'),
+            'numHoles': summary.get('numHoles'),
+            'maxRadius': summary.get('maxRadius'),
+            'minRadius': summary.get('minRadius'),
+            'areaIsExact': summary.get('areaIsExact'),
             'duration': entry.get('duration'),
             'hypothesis': entry.get('hypothesis'),
             'rationale': entry.get('rationale'),
@@ -379,8 +445,8 @@ def renderHistory(history, numDetailed=3):
         )
 
     header = (
-        f"{'it':>3}  {'status':<8} {'IBN':>10} {'+/-':>8} {'maxR':>6} "
-        f"{'minR':>6} {'area':>8} {'perim':>7} {'open':>6}  type"
+        f"{'it':>3}  {'status':<8} {'IBN':>10} {'+/-':>8} {'N':>2} "
+        f"{'maxR':>6} {'minR':>6} {'area':>8} {'perim':>7} {'open':>6}  types"
     )
     allRows = [header, '-'*len(header)]
 
@@ -397,6 +463,7 @@ def renderHistory(history, numDetailed=3):
         allRows.append(
             f"{entry.get('iteration', -1):>3}  "
             f"{entry.get('status', '?'):<8} {ibnText:>10} {errText:>8} "
+            f"{summary.get('numHoles', 0):>2d} "
             f"{summary.get('maxRadius', nan):>6.2f} "
             f"{summary.get('minRadius', nan):>6.2f} "
             f"{summary.get('area', nan):>8.1f} "
@@ -620,10 +687,13 @@ def runHoleShapeOptimizer():
             if (iteration == startIteration and not history and attempt == 0):
                 proposal = {
                     'shape': {
-                        'type': 'fourier',
-                        'meanRadius': float(FIMS.getParam('holeRadius')),
-                        'harmonics': [],
-                        'numSamples': 120,
+                        'holes': [{
+                            'type': 'fourier',
+                            'meanRadius': float(FIMS.getParam('holeRadius')),
+                            'harmonics': [],
+                            'numSamples': 120,
+                            'offset': [0., 0.],
+                        }],
                     },
                     'hypothesis': 'Baseline circular hole, seeded by the script.',
                     'rationale': 'Reference point for every later design.'
@@ -650,7 +720,7 @@ def runHoleShapeOptimizer():
             
             except (ValueError, KeyError, TypeError) as error:
                 message = str(error)
-            shapeProposed = None
+
             print(f'\t Rejected proposal: {message}')
             rejected.append(f'\t - {json.dumps(shapeProposed)}\n \t{message}')
             feedback = (
@@ -658,6 +728,7 @@ def runHoleShapeOptimizer():
                 'reaching the simulator. Fix the problem and try again:\n'
                 + '\n'.join(rejected)
             )
+            shapeProposed = None
         ## end proposal loop ##    
         
         # Record shape details
@@ -679,16 +750,23 @@ def runHoleShapeOptimizer():
         
         print(f'\tHypothesis: {proposal["hypothesis"]}')
         print(
-            f'\tShape: {shapeProposed["type"]}, ',
-            f'maxR = {shapeSummary["maxRadius"]:.2f} um, ',
-            f'area = {shapeSummary["area"]:.1f} um^2, ',
+            f'\tPattern: {shapeSummary["numHoles"]} hole(s), '
+            f'maxR = {shapeSummary["maxRadius"]:.2f} um, '
+            f'area = {shapeSummary["area"]:.1f} um^2, '
             f'open = {shapeSummary["openAreaFraction"]:.3f}'
         )
+        for index, hole in enumerate(shapeSummary['holes']):
+            print(
+                f'\t  hole {index}: {hole["type"]:<8} offset '
+                f'({hole["offset"][0]:+.2f}, {hole["offset"][1]:+.2f}) um, '
+                f'area {hole["area"]:.1f} um^2, '
+                f'perimeter {hole["perimeter"]:.1f} um'
+            )
 
         # Run the simulation
         record = {
             'iteration': iteration,
-            'shapeType': shapeProposed['type'],
+            'shapeType': '+'.join(sorted({hole['type'] for hole in shapeSummary['holes']})),
             'shapeHash': shapeSummary['shapeHash'],
             'summary': shapeSummary,
             'spec': shapeProposed,
@@ -726,7 +804,7 @@ def runHoleShapeOptimizer():
         # Update history files
         history.append(record)
         appendHistory(historyJSONL, record)
-        writeHistoryCsv(history, historyCSV)
+        writeHistoryCsv(historyCSV, history)
 
         best = bestEntry(history)
         if best is not None:
