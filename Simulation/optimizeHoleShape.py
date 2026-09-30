@@ -243,7 +243,7 @@ shapeTool = {
                     'holes': {
                         'type': 'array',
                         'minItems': 1,
-                        'maxItems': 12,
+                        'maxItems': 24,
                         'items': holeSpec,
                         'description': (
                             'Every hole in the cell. One entry gives a single '
@@ -254,7 +254,7 @@ shapeTool = {
                     'numHoles': {
                         'type': 'integer',
                         'minimum': 1,
-                        'maximum': 12,
+                        'maximum': 24,
                         'description': (
                             'Optional cross-check: must equal the length of '
                             '"holes" if both are given.'
@@ -310,7 +310,7 @@ def describeConstraints(simObject):
         f'0.5 um WITHOUT\n'
         f'    overlapping are rejected, because the sliver of grid metal '
         f'between them cannot be meshed.\n'
-        f'  At most 12 holes, 360 vertices per hole and 1440 vertices in the '
+        f'  At most 24 holes, 360 vertices per hole and 1440 vertices in the '
         f'whole pattern.\n'
         f'  No edge shorter than 0.15 um. No outline may cross itself or pass '
         f'through its own center.'
@@ -585,34 +585,7 @@ def proposeShape(client, model, history, iteration, maxIterations,
         if block.type == 'tool_use' and block.name == shapeTool['name']:
             return dict(block.input)
 
-    raise RuntimeError('Error - Model returned no hole shape proposal.')
-
-#**********************************************************************#
-
-def runOneShape(FIMS, spec, args):
-    """
-    Builds the proposed geometry and runs one full simulation.
-
-    Args:
-        FIMS (FIMS_Simulation): The configured simulation object.
-        spec (dict): The hole shape specification.
-        args (argparse.Namespace): Parsed command line options.
-
-    Returns:
-        tuple: (summary, ibn, ibnError, runNumber, fieldRatio)
-
-    Raises:
-        ValueError: If the shape is rejected (cheap, before any simulation).
-    """
-    summary = FIMS.createCustomShape(spec)
-
-    runNumber = FIMS.runForEfficiency()
-
-    simData = runData(runNumber)
-    ibn = float(simData.getCalcParameter('Average IBN'))
-    ibnError = float(simData.getCalcParameter('IBN Error'))
-
-    return summary, ibn, ibnError, runNumber, float(FIMS.getParam('fieldRatio'))
+    raise RuntimeError('Error: Model returned no hole shape proposal.')
 
 #**********************************************************************#
 
@@ -627,7 +600,7 @@ def runHoleShapeOptimizer():
         unitCell=UnitCell.HEXAGON,
         holeShape=HoleShape.CUSTOM,
         padShape=PadShape.HEXAGON,
-        scale=ScaleOption.CORNER,
+        scale=ScaleOption.HALF,
     )
     
     FIMS = FIMS_Simulation()
@@ -639,17 +612,8 @@ def runHoleShapeOptimizer():
     os.makedirs(aiPath, exist_ok=True)
     
     historyJSONL = os.path.join(aiPath, 'holeShapeHistory.jsonl')
-    if not os.path.exists(historyJSONL):
-        with open(historyJSONL, 'w') as f:
-            pass
     historyCSV = os.path.join(aiPath, 'holeShapeHistory.csv')
-    if not os.path.exists(historyCSV):
-        with open(historyCSV, 'w') as f:
-            pass
     idealShapePath = os.path.join(aiPath, 'bestHoleShape.json')
-    if not os.path.exists(idealShapePath):
-        with open(idealShapePath, 'w') as f:
-            pass
 
     if args.resume:
         history = loadHistory(historyJSONL)
@@ -718,7 +682,7 @@ def runHoleShapeOptimizer():
                 else:
                     message = 'This outline is already in the history.'
             
-            except (ValueError, KeyError, TypeError) as error:
+            except (ValueError, KeyError, TypeError, IndexError, AttributeError) as error:
                 message = str(error)
 
             print(f'\t Rejected proposal: {message}')
@@ -776,9 +740,13 @@ def runHoleShapeOptimizer():
 
         iterationStart = time.perf_counter()
         try:
-            _, ibn, ibnError, runNumber, fieldRatio = runOneShape(
-                FIMS, shapeProposed, args
-            )
+            runNumber = FIMS.runForEfficiency()
+            
+            simData = runData(runNumber)
+            ibn = float(simData.getCalcParameter('Average IBN'))
+            ibnError = float(simData.getCalcParameter('IBN Error'))
+            fieldRatio = float(simData.getRunParameter('fieldRatio'))
+            
             record.update({
                 'status': 'ok',
                 'ibn': ibn,

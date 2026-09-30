@@ -90,7 +90,7 @@ class FIMS_Simulation:
         """
         Initializes a FIMS_Simulation object.
         """
-        self._customShapePath = os.path.join('Geometry', 'customShape.json')
+        self._customShapePath = os.path.join('Geometry', 'AI', 'customShape.json')
         self._GARFIELDPATH = self._getGarfieldPath()
         if self._GARFIELDPATH is None:
             raise RuntimeError('Error getting Garfield++ path.')
@@ -197,9 +197,9 @@ class FIMS_Simulation:
 
         for inParam, inValue in paramDict.items():
             if inParam not in self._param:
-                raise KeyError(f"Error - Invalid parameter: {inParam}.")
+                raise KeyError(f"Error: Invalid parameter: {inParam}.")
             if inValue < 0:
-                raise ValueError(f'Error - {inParam} cannot be negative.')
+                raise ValueError(f'Error: {inParam} cannot be negative.')
             
             self._param[inParam] = inValue
 
@@ -232,9 +232,9 @@ class FIMS_Simulation:
         runNumber = self._getRunNumber()
 
         if runNumber != self.getParam('runNumber'):
-            raise RuntimeError('Error - Run number mismatch.')
+            raise RuntimeError('Error: Run number mismatch.')
         if runNumber < 1:
-            raise ValueError(f'Error - Invalid run number: {runNumber}.')
+            raise ValueError(f'Error: Invalid run number: {runNumber}.')
         
         return
     
@@ -250,7 +250,7 @@ class FIMS_Simulation:
             A copy of the requested parameter.
         """
         if parameter not in self._param:
-            raise KeyError(f'Error - Invalid parameter: {parameter}.')
+            raise KeyError(f'Error: Invalid parameter: {parameter}.')
             
         return copy.copy(self._param[parameter])
     
@@ -353,7 +353,7 @@ class FIMS_Simulation:
 
         except subprocess.CalledProcessError as e:
             # If our CMake FATAL_ERROR trips, it will bubble up here 
-            raise RuntimeError(f'ERROR - Failed to build project:\n{e.stderr}')
+            raise RuntimeError(f'Error: Failed to build project:\n{e.stderr}')
         finally:
             os.chdir(originalCWD)
 
@@ -389,7 +389,7 @@ class FIMS_Simulation:
         
         except subprocess.CalledProcessError as e:
             raise RuntimeError(
-                f'ERROR - Failed to source Garfield++: {e.output}'
+                f'Error: Failed to source Garfield++: {e.output}'
             )
 
         return garfieldEnv
@@ -599,7 +599,7 @@ class FIMS_Simulation:
 
 #**********************************************************************#
 
-    def _resolveHolePattern(self, shapeSpec, maxHoles=12):
+    def _resolveHolePattern(self, shapeSpec):
         """
         Expands a pattern specification into a list of placed holes.
 
@@ -611,6 +611,8 @@ class FIMS_Simulation:
                 'vertices', 'edges', 'boundRadius', 'minLocalRadius', 'area'
                 and 'perimeter'.
         """
+        if not isinstance(shapeSpec, dict):
+            raise ValueError('Error: Shape specification must be a dictionary.')
 
         allSpecs = shapeSpec.get('holes')
         if allSpecs is None:
@@ -628,12 +630,14 @@ class FIMS_Simulation:
             )
 
         allHoles = []
-        for index, holeSpec in enumerate(allSpecs):
-
+        for index, holeSpec in enumerate(allSpecs): 
+            if not isinstance(holeSpec, dict):
+                raise ValueError(f'Error: Hole {index} is not a dictionary.')
+            
             # Resolve the outline of the hole
             try:
                 outline = self._resolveShapeSpec(holeSpec)
-            except ValueError as error:
+            except (ValueError, TypeError, KeyError, IndexError) as error:
                 detail = str(error).replace('Error: ', '', 1)
                 raise ValueError(f'Error: Hole {index}: {detail}') from None
             
@@ -696,7 +700,7 @@ class FIMS_Simulation:
         totalVertices = sum(len(hole['vertices']) for hole in allHoles)
         if totalVertices > maxPatternVertices:
             raise ValueError(
-                f'Error - Pattern uses {totalVertices} vertices across '
+                f'Error: Pattern uses {totalVertices} vertices across '
                 f'{len(allHoles)} holes; the budget is {maxPatternVertices}. '
                 'Lower numSamples or use fewer holes.'
             )
@@ -725,11 +729,11 @@ class FIMS_Simulation:
 
             # Ensure hole doesn't cross itself.
             if self._hasSelfIntersection(hole['vertices']):
-                raise ValueError(f'Error - {label} outline crosses itself.')
+                raise ValueError(f'Error: {label} outline crosses itself.')
 
             # Ensure hole exists
             if hole['area'] <= 0.:
-                raise ValueError(f'Error - {label} encloses no area.')
+                raise ValueError(f'Error: {label} encloses no area.')
 
         # Check all holes vs the unit cell
         pitch = float(self._param['pitch'])
@@ -833,7 +837,7 @@ class FIMS_Simulation:
 
             case _:
                 raise ValueError(
-                    f'Error - Unsupported unit cell: '
+                    f'Error: Unsupported unit cell: '
                     f'{self._geoConfiguration.unitCell}'
                 )
 
@@ -1828,7 +1832,7 @@ class FIMS_Simulation:
             'collection'
         ]
         if targetEfficiency not in efficiencyOptions:
-            raise ValueError('Error - Invalid target efficiency.')
+            raise ValueError('Error: Invalid target efficiency.')
         
         #Ensure all parameters exist
         self._checkParam()

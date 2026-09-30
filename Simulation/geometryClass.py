@@ -75,13 +75,13 @@ class geometryClass:
         ]
 
         if self._param is None:
-            raise ValueError('Error - Invalid parameters.')
+            raise ValueError('Error: Invalid parameters.')
 
         for key in neededParameters:
             if key not in self._param:
-                raise ValueError(f"Error - Missing '{key}'")
+                raise ValueError(f"Error: Missing '{key}'")
             if self._param[key] <= 0:
-                raise ValueError(f"Error - '{key}' must be positive.")
+                raise ValueError(f"Error: '{key}' must be positive.")
 
         # Find bounds of the unit cell
         inRadius = self._param['pitch'] / 2
@@ -134,10 +134,10 @@ class geometryClass:
 
         # Grid hole must be smaller than the pitch
         if self._param['holeRadius'] * holeScale >= inRadius:
-            raise ValueError('Error - Hole size too large relative to cell.')
+            raise ValueError('Error: Hole size too large relative to cell.')
 
         if self._param['padLength'] * padScale >= inRadius:
-            raise ValueError('Error - Pad larger than cell.')
+            raise ValueError('Error: Pad larger than cell.')
 
         return
 
@@ -248,6 +248,7 @@ class gmshClass:
     """
 
 #**********************************************************************#
+
     def __init__(self, inputParams=None, geoConfig=None):
         """
         Initializes the gmshClass instance with the given parameters.
@@ -260,8 +261,10 @@ class gmshClass:
         self._occ = gmsh.model.occ
         self._param = inputParams
         self._geoConfig = geoConfig
-
+        self._customPath = os.path.join('Geometry', 'AI', 'customShape.json')
+        
         return
+
 #**********************************************************************#
 
     def _getShape(self, shape, length, height, thickness):
@@ -842,7 +845,7 @@ class gmshClass:
             shapeList (list): (dim, tag) for every hole in the pattern.
         """
         # Get custom shape file
-        shapePath = os.path.join('Geometry', 'customShape.json')
+        shapePath = self._customPath
         try:
             with open(shapePath, 'r') as file:
                 shapeFile = json.load(file)
