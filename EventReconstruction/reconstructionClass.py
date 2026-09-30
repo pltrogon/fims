@@ -201,22 +201,22 @@ class Reconstruction:
     
     #********************************************************************************#
 
-    def _getMultipleTrials(self, numTrials=1, randomize=True):
+    def _getMultipleTrials(self, numEvents=1, randomize=True):
         """
         Gets the recoil data from a series of trials and returns them as a single set.
         
         args:
-            numTrials (int): the number of trials to overlay.
+            numEvents (int): the number of trials to overlay.
             randomize (bool): whether the randomly orient the trials.
         
         returns:
             rawData (dataframe): dataframe of the x,y, and z coordinates of each electron.
         """
-        if numTrials == 1:
+        if numEvents == 1:
             rawData = self.getCoordinates()
             return rawData
         
-        eventNums = np.arange(numTrials)
+        eventNums = np.arange(numEvents)
         for num in eventNums:
             self.trialID = num
             trialData = self.getCoordinates()
