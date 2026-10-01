@@ -1,6 +1,20 @@
+import json
+import numpy as np
+
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict
+
+# Class to handle numpy data types in JSON serialization
+class NumPyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super(NumPyEncoder, self).default(obj)
 
 ######################################################################
 class UnitCell(str, Enum):

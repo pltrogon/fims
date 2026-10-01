@@ -261,7 +261,7 @@ class gmshClass:
         self._occ = gmsh.model.occ
         self._param = inputParams
         self._geoConfig = geoConfig
-        self._customPath = os.path.join('Geometry', 'AI', 'customShape.json')
+        self._customPath = os.path.join('Geometry', 'customShape.json')
         
         return
 
