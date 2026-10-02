@@ -155,6 +155,11 @@ class AnimationData:
 
 #**********************************************************************#
     def _getNetGainByFrame(self):
+        """
+        Get the running gain from each frame of an avalanche
+
+        Minor issue - Currently unphased by electron attachments. 
+        """
         if self.animationData is None or self.animationData.empty:
             return pd.DataFrame()
 
@@ -180,7 +185,7 @@ class AnimationData:
 
 
 # ==========================================
-# MATPLOTLIB CANVAS CANVAS WIDGET
+# MATPLOTLIB CANVAS WIDGET
 # ==========================================
 class MplCanvas(FigureCanvas):
     def __init__(self, parent=None, is3D=True):
@@ -192,32 +197,32 @@ class MplCanvas(FigureCanvas):
         return
 
     def setupAxes(self, is3D=True, numPlots=3):
-            """Clears the figure and prepares 3D or dual 2D subplot axes."""
-            self.fig.clear()
-            if hasattr(self, 'cbar') and self.cbar is not None:
-                self.cbar.remove()
-                self.cbar = None
-    
-            if is3D:
-                self.ax = self.fig.add_subplot(1, 1, 1, projection='3d')
-                return self.ax
+        """Clears the figure and prepares 3D or dual 2D subplot axes."""
+        self.fig.clear()
+        if hasattr(self, 'cbar') and self.cbar is not None:
+            self.cbar.remove()
+            self.cbar = None
+
+        if is3D:
+            self.ax = self.fig.add_subplot(1, 1, 1, projection='3d')
+            return self.ax
+
+        else:
+            if numPlots == 3:
+                gs = self.fig.add_gridspec(2, 2)
+                xz = self.fig.add_subplot(gs[0, 0])
+                yz = self.fig.add_subplot(gs[1, 0])
+                xy = self.fig.add_subplot(gs[:, 1])
+                return xz, yz, xy
+            
+            elif numPlots == 2:
+                xz = self.fig.add_subplot(1, 2, 1)
+                yz = self.fig.add_subplot(1, 2, 2)
+                return xz, yz
 
             else:
-                if numPlots == 3:
-                    gs = self.fig.add_gridspec(2, 2)
-                    xz = self.fig.add_subplot(gs[0, 0])
-                    yz = self.fig.add_subplot(gs[1, 0])
-                    xy = self.fig.add_subplot(gs[:, 1])
-                    return xz, yz, xy
-                
-                elif numPlots == 2:
-                    xz = self.fig.add_subplot(1, 2, 1)
-                    yz = self.fig.add_subplot(1, 2, 2)
-                    return xz, yz
-
-                else:
-                    self.ax = self.fig.add_subplot(1, 1, 1)
-                    return self.ax
+                self.ax = self.fig.add_subplot(1, 1, 1)
+                return self.ax
 
 
 # ==========================================
@@ -524,13 +529,15 @@ class FIMSVisualizer(QMainWindow):
 
         return
 
-    # ==========================================
-    # SLOTS AND RENDER METHODS
-    # ==========================================
+# ==========================================
+# SLOTS AND RENDER METHODS
+# ==========================================
     
 # **********************************************************************#
     def _onChange(self, *args):
-        """Unified handler for view selection, projection, geometry, field, and signal changes."""
+        """
+        Unified handler for view selection, projection, geometry, field, and signal changes.
+        """
         idx = self.viewSelector.currentIndex()
         controlsIdx = 4 if idx == 6 else idx
         self.controlsStack.setCurrentIndex(controlsIdx)
@@ -612,7 +619,7 @@ class FIMSVisualizer(QMainWindow):
 
 #**********************************************************************#
     def _plotAvalancheInfo(self):
-        """Populates the main display table with avalannche info."""
+        """Populates the main display table with avalanche info."""
         self.simParamTable.setRowCount(0)
         
         if self.data.avalancheData is None or self.data.avalancheData.empty:
