@@ -1244,20 +1244,47 @@ class FIMS_AI_Agent:
                     'rationale': 'Reference point for every later design.'
                 }
             
-            # Second iteration is 6 equilateral triangles evenly spaced around the center.
+            # Second iteration is 6 equilateral triangles in a hexagonal pattern.
             elif (len(self.history) == 1 and attempt == 0):
+                patternScale = 0.94
+                holeGap = 0.75
+
+                ringRadius = patternScale*pitch/3.
+                triRadius = ringRadius - holeGap
+
+                allHoles = []
+                for index in range(6):
+                    ringAngle = math.radians(30. + 60.*index)
+                    allHoles.append({
+                        'type': 'polar',
+                        'points': [
+                            [triRadius, 90.],
+                            [triRadius, 210.],
+                            [triRadius, 330.],
+                        ],
+                        # Every other triangle is flipped
+                        'rotationDeg': 180.*(index % 2),
+                        'offset': [
+                            ringRadius*math.cos(ringAngle),
+                            ringRadius*math.sin(ringAngle),
+                        ],
+                    })
+                
                 proposal = {
                     'shape': {
-                        'holes': [{
-                            'type': 'fourier',
-                            'meanRadius': float(self._geoParams['holeRadius']), # TODO: replace this proposal with TRIVIALPURSUIT
-                            'harmonics': [],
-                            'numSamples': 120,
-                            'offset': [0., 0.],
-                        }],
+                        'holes': allHoles,
+                        'numHoles': 6,
                     },
-                    'hypothesis': 'Series of equilateral triangles evenly spaced around the center. Seeded by the script.',
-                    'rationale': 'Reference point for every later design.'
+                    'hypothesis': (
+                        'Six triangles tiled into a hexagon hold roughly the '
+                        'same open area as the circle but add six thin grid '
+                        'spokes running from the cell center outward. If ion '
+                        'collection is driven by grid material sitting above '
+                        'the avalanche, IBN should fall below iteration 1. If '
+                        'it does not, open area rather than grid topology is '
+                        'what sets IBN.'
+                    ),
+                    'rationale': 'Seeded by the script as a second reference point.'
                 }
             
             else:
