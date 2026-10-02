@@ -2301,15 +2301,17 @@ class runData:
     def _getEfficiencyThreshold(self, targetEfficiency=0.95):
         """TODO"""
 
-        threshold = 0
+        threshold = 1
         isEfficient = True
-
-        while isEfficient:
-            threshold += 1
+        avalancheLimit = self.getRunParameter('Avalanche Limit')
+        
+        while isEfficient and threshold < AvalancheLimit:
             efficiency = self._getEfficiency(threshold=threshold)
-
+            
             if efficiency['efficiency'] < targetEfficiency: #TODO - add error margins
                 isEfficient = False
+            
+            threshold += 1
 
         #Subtract 1.5 to get the threshold where efficiency is just above target
         targetThreshold = threshold - 1.5
