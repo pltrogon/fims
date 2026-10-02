@@ -159,8 +159,7 @@ int main(int argc, char * argv[]) {
     int numTotalTrials = 0;//Number of electrons populated
     int numAboveThreshold = 0, numCollected = 0, numHitGrid = 0;
     int numFailure = 0, numAttached = 0;
-    int maxRepeats = 10, repeatedElec = 0, numSinceReset = 0;
-    double maxLeaveVol = .5, leftVol = 0.;
+    int maxRepeats = 10, repeatedElec = 0;
     
     //Statistics variables
     EfficiencyResults collectionEff;
@@ -176,7 +175,6 @@ int main(int argc, char * argv[]) {
     while(runAvalanche && numInitialElectrons < simParams->numAvalanche){
         for(int inAvalanche=0; inAvalanche < numInBunch; inAvalanche++){
             numInitialElectrons++;
-            numSinceReset++;
             
             auto [sampleX, sampleY] = randomXYinGeometry(geometryMode, cellLength);
             double curX = sampleX, curY = sampleY, curZ = z0;
@@ -297,14 +295,6 @@ int main(int argc, char * argv[]) {
                         // Electron leaves the simulation volume - Shift it back
                         //Determine which boundary was hit and shift by pitch to opposite side
                         case -1: {
-                            leftVol++;
-                            if(leftVol/(numSinceReset*1.0) > maxLeaveVol && leftVol > 50 && z0 > minHeight){
-                                std::cerr << "Warning: electron frequently leaves volume. Lowering initial height." << std::endl;
-                                z0 = simParams->initialZFraction*simParams->driftLength * 0.75;
-                                leftVol = 0.;
-                                numSinceReset = 0;
-                            }
-
                             //Shift x or y
                             constexpr double eps = 1e-7; // 1 nm nudge to keep inside boundary
                             curX = std::abs(xf) >= cellLength ? -1.*std::copysign(cellLength-eps, xf) : xf;
