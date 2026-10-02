@@ -535,23 +535,17 @@ class FIMS_Simulation:
         Runs a Garfield++ simulation with the specified executable.
 
         Args:
-            executable (str): The name of the Garfield++ executable to run. Options are:
-                - 'runAvalanche': Simulates electron avalanches for the central pad.
-                - 'runFullField': Generates field lines that populate the full unit cell.
-                - 'runEfficiency': Simulates the efficiency for a given field strength. Requires additional arguments:
-                    - targetEfficiency (str): Name of efficiency to consider (net, detection, collection).
-                    - targetValue (float): The target efficiency to achieve (default: 0.95).
-                    - threshold (int): The number of electrons to consider an avalanche successful (default: 10).
-                - 'runBreakdown': Computes the Paschen breakdown fields for a given gas.
+            executable (str): The name of the Garfield++ executable to run. 
+            Options listed below. Some require additional arguments.
         """
 
         executables = [
-            'runAvalanche',
-            'runEfficiency',
-            'runFullField',
-            'runBreakdown',
-            'runGainEfficiency',#Todo - add to docstring
-            'runAnimation'
+            'runAvalanche', #The full-avalanche simulation
+            'runEfficiency', #Expidited simulation that only measures efficiencies
+            'runFullField', #Populate the geometry with many field lines. (TODO - Is this correct?)
+            'runBreakdown', #Calculates breakdown fields
+            'runGainEfficiency', #Expidited simulation that efficiencies and gains
+            'runAnimation' #Frame-by-frame simulation for animation purposes.
         ]
 
         if executable not in executables:
@@ -652,45 +646,6 @@ class FIMS_Simulation:
         #Solve fields and run Garfield
         self._solveEFields()
         self._runGarfield()
-        
-        return runNo
-    
-#**********************************************************************#
-    def runSurrounding(self):
-        """
-        Executes a simulation with the surrounding geometry.
-
-        Determines the induced signal in each adjacent pad.
-
-        Returns:
-            int: The run number for this simulation.
-
-        TODO - THIS SHOULD GET DEPRECIATED
-        """
-
-        # Get the run number for this simulation
-        runNo = self._param['runNumber']
-        print('Running Surrounding simulation...')
-        print(f'Running simulation - Run number: {runNo}')
-
-        self._checkParam()
-
-        #Generate geometry for surrounding cells
-        saveGeo = self._geoConfiguration
-        newGeo = GeometryConfiguration(
-            unitCell=saveGeo.unitCell,
-            holeShape=saveGeo.holeShape,
-            padShape=saveGeo.padShape,
-            scale=ScaleOption.HALF,
-        )
-        self.setGeometry(newGeo)
-        self._generateGeometry()
-
-        #Solve fields and run Garfield
-        self._solveEFields(solveWeighting=True)
-        self._runGarfield()
-
-        self.setGeometry(newGeo)
         
         return runNo
     
@@ -816,7 +771,11 @@ class FIMS_Simulation:
 
 #**********************************************************************#
     def _readEffGainResults(self):
-        """TODO"""
+        """
+        Reads the output file of the checkGainAndEfficiency executable.
+
+        Contains efficiencies and individual avalanche gain results.
+        """
 
         dataPath = '../Data/'
         dataFilename = 'effGainResults.dat'
@@ -1136,7 +1095,6 @@ class FIMS_Simulation:
             resultsAtField (dict): Dictionary containing lists of:
                 - field ratios, values, and errors for each iteration. 
         """
-        #TODO - Consider if this is better than just printing the raw values (easier to copy + paste)
         dataLabel = list(resultsAtField.keys())[1]
 
         header = '| #     Efield     Efficiency     Low Error     High Error |'
@@ -1202,7 +1160,7 @@ class FIMS_Simulation:
         if initialField is not None:
             minFieldGuess = initialField
         else:
-            minFieldGuess = 10 #TODO - better guess?
+            minFieldGuess = 10
 
         print(f'\tInitial field ratio guess: {minFieldGuess}')
         self.setParameters({'fieldRatio': minFieldGuess})
@@ -1706,7 +1664,7 @@ class FIMS_Simulation:
 
 #**********************************************************************#
     def getBreakdown(self):
-        '''TODO'''
+        """Gets the breakdown fields for a gas composition."""
 
         self._checkGasComp()
         self._runGarfield('runBreakdown')
@@ -1716,7 +1674,8 @@ class FIMS_Simulation:
 #**********************************************************************#
     def runAnimation(self):
         """
-        TODO
+        Runs several avalanches formatted for visualization as an animation.
+        See: Analysis/animationGUI.py
         """
             
         self._checkParam()
@@ -1748,3 +1707,4 @@ class FIMS_Simulation:
             self.setParameters(saveParam)
         
         return 
+    
