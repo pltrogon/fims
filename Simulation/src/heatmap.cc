@@ -189,7 +189,7 @@ int main(int argc, char* argv[]) {
   // Microscopic Electron Transport Setup
   AvalancheMicroscopic aval;
   aval.SetSensor(&sensorFIMS);
-  aval.EnableAvalanche(false); // Disables secondary ionization/gain
+  aval.EnableAvalancheSizeLimit(1);// Limit secondary ionization/gain
 
   ViewDrift viewDrift;
   aval.EnablePlotting(&viewDrift);
