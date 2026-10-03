@@ -19,7 +19,8 @@ class NumPyEncoder(json.JSONEncoder):
 ######################################################################
 
 class aiModel:
-    def getAIModel(self):
+    @staticmethod
+    def getAIModel():
         """Returns the name of the ai model in use as a string."""
         
         aiModelFIMS = 'claude-opus-4-5' # TODO: make this a data class like geometry configuration?

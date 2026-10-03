@@ -1296,7 +1296,7 @@ class FIMS_AI_Agent:
                 patternScale = 0.94
                 holeGap = 0.75
 
-                ringRadius = patternScale*pitch/3.
+                ringRadius = patternScale*self._geoParams['pitch']/3.
                 triRadius = ringRadius - holeGap
 
                 allHoles = []

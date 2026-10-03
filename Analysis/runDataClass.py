@@ -2305,7 +2305,7 @@ class runData:
         isEfficient = True
         avalancheLimit = self.getRunParameter('Avalanche Limit')
         
-        while isEfficient and threshold < AvalancheLimit:
+        while isEfficient and threshold < avalancheLimit:
             efficiency = self._getEfficiency(threshold=threshold)
             
             if efficiency['efficiency'] < targetEfficiency: #TODO - add error margins
