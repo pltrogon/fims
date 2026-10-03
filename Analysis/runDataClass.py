@@ -2384,10 +2384,11 @@ class runData:
         isExitMedium = singleElectronData['Exit Status'] == -5
 
         gridLength = 1.01*self.getRunParameter('Grid Thickness')/2
+        # Side exits have unresolved outcomes, so exclude them from grid-hit classification.
         isHitGrid = (
             ~isAttached &
             ~isExitArea &
-            singleElectronData['Final z'].abs() <= gridLength
+            (singleElectronData['Final z'].abs() <= gridLength)
         )
 
         # Slice and extract data
@@ -2898,5 +2899,3 @@ class runData:
         allSignals.to_parquet(filename)
 
         return
-
-
