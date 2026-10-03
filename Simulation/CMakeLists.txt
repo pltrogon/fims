@@ -39,6 +39,7 @@ set(EXECUTABLES
     runBreakdown                gasBreakdown.cc
     runGainEfficiency           checkGainAndEfficiency.cc
     runAnimation                animation.cc
+    runHeatmap                  heatmap.cc
 )
 
 # --- Loop to create and link everything ---

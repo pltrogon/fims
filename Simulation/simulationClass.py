@@ -545,7 +545,8 @@ class FIMS_Simulation:
             'runFullField', #Populate the geometry with many field lines. (TODO - Is this correct?)
             'runBreakdown', #Calculates breakdown fields
             'runGainEfficiency', #Expidited simulation that efficiencies and gains
-            'runAnimation' #Frame-by-frame simulation for animation purposes.
+            'runAnimation', #Frame-by-frame simulation for animation purposes .
+            'runHeatmap' #Track electron endpoints for collection efficiency wrt field lines
         ]
 
         if executable not in executables:
@@ -1707,4 +1708,16 @@ class FIMS_Simulation:
             self.setParameters(saveParam)
         
         return 
+    
+#**********************************************************************#
+    def runCollectionHeatmap(self):
+        """TODO"""
+
+        self._checkParam()
+        self._generateGeometry()
+        self._solveEFields(solveWeighting=True)
+        self._runGarfield('runHeatmap')
+
+        return
+
     
