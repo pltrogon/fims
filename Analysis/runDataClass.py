@@ -474,7 +474,8 @@ class runData:
             self._calculatedData['Bundle z'] = nominalBundleZ
             
             #TODO: nest eggs and trivial pursuit don't play well with this
-            #self._calculatedData['Field Bundle Radius'] = self.calcBundleRadius(nominalBundleZ) 
+            #self._calculatedData['Field Bundle Radius'] = self.calcBundleRadius(nominalBundleZ)
+            self._calculatedData['Field Bundle Radius'] = self.getRunParameter('Hole Radius')
 
         if numAvalanche > 0:
             # Gains
