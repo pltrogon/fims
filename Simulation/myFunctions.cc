@@ -90,6 +90,12 @@ std::vector<std::string>  getSensorList(GeometryMode geometryMode){
       sensorList.push_back("LeftTopPad");
       return sensorList;
     }
+
+    case GeometryMode::Unknown:
+    default: {
+      std::cerr << "Warning: Unknown or unhandled GeometryMode encountered in getSensorList\n";
+      return sensorList;
+    }
   }
 }
 
