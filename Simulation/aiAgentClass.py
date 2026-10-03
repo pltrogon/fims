@@ -5,11 +5,18 @@ import math
 import os
 import time
 import hashlib
-import anthropic
+import asyncio
 
 import pandas as pd
 import numpy as np
-from configs import UnitCell, NumPyEncoder
+from configs import UnitCell, NumPyEncoder, aiModel
+from claude_agent_sdk import (
+    ClaudeAgentOptions,
+    ResultMessage,
+    create_sdk_mcp_server,
+    query,
+    tool
+)
 
 class FIMS_AI_Agent:
     """
@@ -43,8 +50,7 @@ class FIMS_AI_Agent:
         self._geoParams = geoParams
 
         # Setup Ai agent
-        self.aiClient = anthropic.Anthropic()
-        self.aiModel = os.environ.get('FIMS_AGENT_MODEL', 'claude-opus-4-5') # TODO: get model number
+        self.aiModel = aiModel.getAIModel()
         self._setupAiInfo()
         
         # Setup files
@@ -112,8 +118,9 @@ class FIMS_AI_Agent:
 
             RULES
              - You have exactly one action: propose_hole_shape. You cannot read files, run
-               code, or change any other parameter. Pitch, grid thickness, gas mixture and
-               field ratio are set outside your control.
+               code, or change any other parameter.
+              - Call propose_hole_shape exactly once, and then stop. Do not perform any other
+                actions or attempt any other tasks.
              - IBN is reported with a Monte Carlo uncertainty. Two designs whose IBN differ
                by less than the quadrature sum of their errors are NOT distinguishable. Do
                not build a conclusion on such a gap; if you need to resolve one, say so in
@@ -1164,17 +1171,14 @@ class FIMS_AI_Agent:
         conversation. The history is re-rendered compactly every time, so the
         prompt stays the same size whether this is iteration 3 or 300.
 
-        Args:
+        args:
             iteration (int): The iteration about to be run.
             maxIterations (int): Total iteration budget.
             constraints (str): Rendered geometric constraints.
             feedback (str): Text describing rejected attempts this iteration.
             
-        Returns:
-            dict: The tool input, containing 'shape', 'hypothesis', 'rationale'.
-
-        Raises:
-            RuntimeError: If the model returns no proposal.
+        returns:
+            proposal (dict): The tool input, containing 'shape', 'hypothesis', 'rationale'.
         """
         bestText = (
             f'Best so far: iteration {self.bestEntry["iteration"]} at '
@@ -1191,27 +1195,70 @@ class FIMS_AI_Agent:
             feedback,
             'Propose the next outline.',
         ]))
+        
+        proposal = asyncio.run(self._runAgentTurn(userBlock))
+        
+        return proposal
 
-        requestArgs = {
-            'model': self.aiModel,
-            'max_tokens': 8000,
-            'system': self.aiPrompt,
-            'tools': [self.shapeTool],
-            'messages': [{'role': 'user', 'content': userBlock}],
-        }
+    #**********************************************************************#
 
-        requestArgs['tool_choice'] = {
-            'type': 'tool', 'name': self.shapeTool['name']
-        }
+    async def _runAgentTurn(self, userBlock):
+        """
+        Runs one single-turn agent query and returns the proposal.
 
-        response = self.aiClient.messages.create(**requestArgs)
+        Args:
+            userBlock (str): The rendered user turn.
 
-        for block in response.content:
-            if block.type == 'tool_use' and block.name == self.shapeTool['name']:
-                return dict(block.input)
+        Returns:
+            dict: The tool input, containing 'shape', 'hypothesis', 'rationale'.
+        """
+        proposal = {}
 
-        raise RuntimeError('Error: Model returned no hole shape proposal.')
+        @tool(
+            self.shapeTool['name'],
+            self.shapeTool['description'],
+            self.shapeTool['input_schema'],
+        )
+        async def proposeHoleShape(args):
+            proposal.update(args)
+            return {
+                'content': [
+                    {'type': 'text', 'text': 'Proposal recorded. Stop here.'}
+                ]
+            }
 
+        shapeServer = create_sdk_mcp_server(
+            name='fims',
+            version='1.0.0',
+            tools=[proposeHoleShape],
+        )
+
+        options = ClaudeAgentOptions(
+            model=self.aiModel,
+            system_prompt=self.aiPrompt,
+            mcp_servers={'fims': shapeServer},
+            allowed_tools=[f'mcp__fims__{self.shapeTool["name"]}'],
+            disallowed_tools=[
+                'Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep',
+                'WebFetch', 'WebSearch', 'Task', 'TodoWrite',
+            ],
+            permission_mode='dontAsk',
+            setting_sources=[],
+            max_turns=2,
+        )
+
+        lastResult = None
+        async for message in query(prompt=userBlock, options=options):
+            if isinstance(message, ResultMessage):
+                lastResult = message
+
+        if not proposal:
+            detail = f' ({lastResult.subtype})' if lastResult is not None else ''
+            raise RuntimeError(
+                f'Error: Model returned no hole shape proposal{detail}.'
+            )
+
+        return dict(proposal)
     #**********************************************************************#
 
     def getCustomShape(self, iteration, finalIteration):

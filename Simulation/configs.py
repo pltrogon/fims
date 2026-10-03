@@ -17,6 +17,17 @@ class NumPyEncoder(json.JSONEncoder):
         return super(NumPyEncoder, self).default(obj)
 
 ######################################################################
+
+class aiModel:
+    def getAIModel(self):
+        """Returns the name of the ai model in use as a string."""
+        
+        aiModelFIMS = 'claude-opus-4-5' # TODO: make this a data class like geometry configuration?
+        
+        return aiModelFIMS
+
+######################################################################
+
 class UnitCell(str, Enum):
   SQUARE = 'square'
   HEXAGON = 'hexagon'
