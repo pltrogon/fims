@@ -113,7 +113,7 @@ class FIMS_Simulation:
         self._runMode = 'hexagoncorner'
         
         self._iterationNumberLimit = 100
-        self._fieldLimit = 250
+        self._fieldLimit = 300
 
         return
 
@@ -152,8 +152,8 @@ class FIMS_Simulation:
             'fieldRatio': 150.,
             'numFieldLine': 25,
             'numAvalanche': 5000,
-            'initialZFraction': .75,
-            'avalancheLimit': 500,
+            'avalancheLimit': 600,
+            'initialZFraction': .50,
             'gasCompAr': 0.95,
             'gasCompCO2': 0.00,
             'gasCompCF4': 0.03,

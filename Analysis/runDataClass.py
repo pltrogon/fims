@@ -471,7 +471,10 @@ class runData:
             ampGap = self.getRunParameter('Amplification Gap')
             nominalBundleZ = -0.9*ampGap
             self._calculatedData['Bundle z'] = nominalBundleZ
-            self._calculatedData['Field Bundle Radius'] = self.calcBundleRadius(nominalBundleZ)
+            
+            #TODO: nest eggs and trivial pursuit don't play well with this
+            #self._calculatedData['Field Bundle Radius'] = self.calcBundleRadius(nominalBundleZ)
+            self._calculatedData['Field Bundle Radius'] = self.getRunParameter('Hole Radius')
 
         if numAvalanche > 0:
             # Gains
