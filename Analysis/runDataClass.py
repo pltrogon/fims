@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.cm as cm
 
-
 from polyaClass import myPolya
 import functionsFIMS
 
@@ -503,7 +502,7 @@ class runData:
             self._calculatedData['IBF * Trimmed Gain'] = dataIBF['meanIBF']*trimmedGain
 
             # Efficiencies
-            rawEfficiency = self._getRawEfficiency(threshold=10)
+            rawEfficiency = self._getEfficiency(threshold=10, trim=False)
             self._calculatedData['Raw Efficiency (10e)'] = rawEfficiency['efficiency']
             self._calculatedData['Raw Efficiency Error (Low)'] = rawEfficiency['efficiencyErrLow']
             self._calculatedData['Raw Efficiency Error (High)'] = rawEfficiency['efficiencyErrHigh']
@@ -527,12 +526,24 @@ class runData:
             self._calculatedData['Polya Gain'] = polyaFitResults['gain']
             self._calculatedData['Polya Theta Error'] = polyaFitResults['thetaErr']
             self._calculatedData['Polya Gain Error'] = polyaFitResults['gainErr']
+            fitMetrics = {
+                'Polya Chi2': 'chi2',
+                'Polya rChi2': 'rchi2',
+                'Polya pVal': 'pVal',
+                'KS Stat D': 'ksStatD',
+                'KS pVal': 'ksPValue',
+                'KS Sigma': 'ksSigma'
+            }
+            for key, result in fitMetrics.items():
+                val = polyaFitResults.get(result)
+                self._calculatedData[key] = val if val is not None else np.nan
+            
 
             # Single-Electron avalanche info
             singleInfo = self._getSingleElectronAvalancheData()
             self._calculatedData['Num Avalanche'] = singleInfo['numTotal']
             self._calculatedData['Num 1e'] = singleInfo['numSingle']
-            self._calculatedData['Num Lost - Attached'] = singleInfo['numAttatched']
+            self._calculatedData['Num Lost - Attached'] = singleInfo['numAttached']
             self._calculatedData['Num Lost - Hit Grid'] = singleInfo['numHitGrid']
             self._calculatedData['Num Lost - Drift'] = singleInfo['numExitArea']
             self._calculatedData['Num No Avalanche'] = singleInfo['numExitMedium']
@@ -740,7 +751,7 @@ class runData:
                 )
                 axis.plot(
                     cellX, cellY, 
-                    label='Cell', c='b', ls='--', lw=1
+                    label='Cell', c='c', ls='--', lw=1
                 )
                 axis.add_patch(hole)
 
@@ -758,12 +769,12 @@ class runData:
                 axis.plot(
                     [cellX[3], cellX[0], cellX[0], cellX[3], cellX[3]], 
                     [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight],
-                    label='Cell', c='b', ls='--', lw=1
+                    label='Cell', c='c', ls='--', lw=1
                 )
                 axis.plot(
                     [cellX[2], cellX[1], cellX[1], cellX[2], cellX[2]], 
                     [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight], 
-                    c='b', ls='--', lw=1
+                    c='c', ls='--', lw=1
                 )
                 axis.plot(
                     holeXY1, holeZ, 
@@ -787,12 +798,12 @@ class runData:
                 axis.plot(
                     [cellY[4], cellY[1], cellY[1], cellY[4], cellY[4]], 
                     [padHeight, padHeight, cathodeHeight, cathodeHeight, padHeight],
-                    label='Cell', c='b', ls='--', lw=1
+                    label='Cell', c='c', ls='--', lw=1
                 )
                 axis.plot(
                     [0, 0], 
                     [padHeight, cathodeHeight],
-                    label='Cell', c='b', ls='--', lw=1
+                    label='Cell', c='c', ls='--', lw=1
                 )
                 axis.plot(
                     holeXY1, holeZ, 
@@ -1158,7 +1169,8 @@ class runData:
             'prob': prob,
             'probErr': probErr,
             'binWidth': binWidth,
-            'trim': trim
+            'trim': trim,
+            'rawData': data['Total Electrons'].to_numpy()#TODO-update docstring
         }
 
         return histData
@@ -1587,19 +1599,32 @@ class runData:
         histData = self._histAvalanche(trim=True, binWidth=binWidth)
 
         gain = histData['gain']
+        avalancheLimit = self.getRunParameter('Avalanche Limit')
 
         if gain < 5 or gain >= self.getRunParameter('Avalanche Limit'):
             raise ValueError(f'Unable to fit to data. Gain is {gain:.2f} ({self.runNumber}).')
 
         
         fitDataToPolya = myPolya()
+        #Fit to polya distribution
+        fitDataToPolya.fitLogPolya(
+            rawData=histData['rawData'],
+            nMin=2,
+            nMax=avalancheLimit - 1
+        )
+        #Find chi2 results
+        #fitDataToPolya.calcEquiprobableChi2(rawData=histData['rawData'], nMin=2, nMax=avalancheLimit - 1)
+        fitDataToPolya.calcKSTest(rawData=histData['rawData'], nMin=2, nMax=avalancheLimit - 1)
+        
+        '''
         fitDataToPolya.fitPolya(
             histData['binCenters'],
             histData['prob'],
             histData['gain'],
             histData['probErr'] 
         )
-        
+        '''
+        '''
         fitDataToExpo = myPolya()
         fitDataToExpo.fitPolya(
             histData['binCenters'],
@@ -1608,13 +1633,13 @@ class runData:
             histData['probErr'], 
             expo = True
         )
-        
+        '''
         fitResults = {
             'xVal': histData['binCenters'],
             'yVal': histData['prob'],
             'dataGain': histData['gain'],
             'fitPolya': fitDataToPolya,
-            'fitExpo': fitDataToExpo,
+            #'fitExpo': fitDataToExpo,
         }
         
         return fitResults
@@ -1634,7 +1659,6 @@ class runData:
         fitResults = self._fitAvalancheSize(binWidth=1)
 
         polyaResults = fitResults['fitPolya'].calcPolya(fitResults['xVal'])
-        polyaChi2 = self._getChiSquared(fitResults['yVal'], polyaResults)
 
         histData = self._histAvalanche(trim=True, binWidth=binWidth)
         
@@ -1681,12 +1705,21 @@ class runData:
             c='g', ls=':', label=f"Trimmed Gain = {fitResults['dataGain']:.0f}e"
         )
 
-
-        polyaStats = f'Polya Fit Statistics\nChi2 = {polyaChi2['chi2']:.4f}\nrChi2 = {polyaChi2['rChi2']:.4f}'
-        
+        polyaStats = 'No Goodness Fit'
+        if fitResults['fitPolya'].chi2 is not None:
+            chi2 = fitResults['fitPolya'].chi2
+            rchi2 = fitResults['fitPolya'].reducedChi2
+            pVal = fitResults['fitPolya'].pValue
+            polyaStats = f'Polya Fit Statistics\nChi2 = {chi2:.4f}\nrChi2 = {rchi2:.4f}\npVal = {pVal:.8f}'
+        if fitResults['fitPolya'].ksStat is not None:
+            ksStat = fitResults['fitPolya'].ksStat
+            ksPValue = fitResults['fitPolya'].ksPValue
+            ksSigma = fitResults['fitPolya'].ksSigma
+            polyaStats = f'Polya Fit Statistics\nKS D-Stat = {ksStat:.4f}\npVal = {ksPValue:.8f}\nSigma = {ksSigma:.4f}'
+            
         ax.text(
-            0.8, 0.75, polyaStats, 
-            fontsize=10, 
+            0.8, 0.5, polyaStats, 
+            fontsize=14, 
             horizontalalignment='center',
             verticalalignment='center', 
             transform=ax.transAxes,
@@ -1956,7 +1989,7 @@ class runData:
     def _calcPerAvalancheIBN(self):
         """
         Calculates the Ion Backflow Number (IBN) for each individual electron avalanche.
-            NOTE: This result INCLUDES the initial ion.
+            NOTE: This result EXCLUDES the initial ion. UPDATED 09/10/26 (Previously included)
 
         IBN - Number of ions that drift to the cathode.
         Assumes the following for any ions that exit the simulation volume:
@@ -1972,7 +2005,17 @@ class runData:
         posIons = allIons[allIons['Ion Charge'] == 1]
         cathIons = posIons[posIons['Final z'] > self.getRunParameter('Grid Thickness')]
 
-        IBN = cathIons.groupby('Avalanche ID').size()
+        allIDs = allIons['Avalanche ID'].unique()
+
+        IBN = cathIons.groupby('Avalanche ID').size().reindex(allIDs, fill_value=0)
+
+        zeroIBN = (IBN==0)
+        if zeroIBN.any():
+            badIDs = IBN[zeroIBN].index.tolist()
+            print(f'Warning - Found avalanche(s) {badIDs} with an IBN count of 0 prior to primary ion subtraction.')
+
+        # Subtract 1 from counts > 0, keeping 0 values unchanged
+        IBN = IBN.where(IBN == 0, IBN - 1)
 
         return IBN.sort_index()
 
@@ -1980,7 +2023,6 @@ class runData:
     def _calcIBN(self):
         """
         Calculates the IBN on a per-avalanche basis. Then calculates other statistics.
-            NOTE: This result INCLUDES the initial ion.
 
         Returns:
             dataIBN: A dictionary containing:
@@ -2029,20 +2071,29 @@ class runData:
         #Get positive ions
         allIons = self.getDataFrame('ionData')
         posIons = allIons[allIons['Ion Charge'] == 1]
+        allIDs = allIons['Avalanche ID'].unique()
 
         #separate based on final z location
         cathIons = posIons[posIons['Final z'] > self.getRunParameter('Grid Thickness')]
 
-        rawTotalIons = posIons.groupby('Avalanche ID').size()
-        rawNumAtCathode = cathIons.groupby('Avalanche ID').size()
+        rawTotalIons = posIons.groupby('Avalanche ID').size().reindex(allIDs, fill_value=0)
+        rawNumAtCathode = cathIons.groupby('Avalanche ID').size().reindex(allIDs, fill_value=0)
 
-        #Correct for the inital ion - It is not considered backflowing
-        avalancheIons = rawTotalIons.sub(1, fill_value=0)
-        avalancheIons[avalancheIons < 0] = 0
-        backflowIons = rawNumAtCathode.sub(1, fill_value=0)
-        backflowIons[backflowIons < 0] = 0
+        zeroIons = (rawTotalIons == 0)
+        if zeroIons.any():
+            badTotalIDs = rawTotalIons[zeroIons].index.tolist()
+            print(f'Warning - Found avalanche(s) {badTotalIDs} with 0 total positive ions.')
+        zeroCathode = (rawNumAtCathode==0)
+        if zeroCathode.any():
+            badCathIDs = rawNumAtCathode[zeroCathode].index.tolist()
+            print(f'Warning - Found avalanche(s) {badCathIDs} with 0 cathode ions prior to primary ion subtraction.')
 
-        IBF = backflowIons.div(avalancheIons, fill_value=0)
+        # Subtract primary ion (keeping 0-count edge cases at 0)
+        avalancheIons = rawTotalIons.where(zeroIons, rawTotalIons - 1)
+        backflowIons = rawNumAtCathode.where(zeroCathode, rawNumAtCathode - 1)
+
+        # Division: 0 / 0 automatically yields NaN when no gain occurred
+        IBF = backflowIons / avalancheIons
 
         return IBF.sort_index()
 
@@ -2136,102 +2187,30 @@ class runData:
 
         return isTransparent
 
-
 #********************************************************************************#
-    def _getChiSquared(self, data, fit):
-        """
-        """
-        if data is None or fit is None:
-            raise ValueError('Error getting chi-squared.')
-        
-        calc = (data - fit)**2 / fit
-        chi2 = calc.sum()
-        dof = len(data) - 2
-        reducedChi2 = chi2/dof
-
-        chi2Param = {
-            'chi2': chi2,
-            'rChi2': reducedChi2
-        }
-
-        return chi2Param
-    
-
-#********************************************************************************#
-    def _getRawEfficiency(self, threshold=0):
-        """
-        Calculates the raw efficiency of all simulated avalanches based on the
-        fraction of total sizes that exceed the given threshold.
-
-        Utilizes baysian statistics to determine the efficiency.
-
-        Args:
-            threshold (int): The minimum avalanche size to be considered a 'success'.
-
-        Returns:
-            tuple: A tuple containing the calculated efficiency and its uncertainty:
-                   - simEff (float): The estimated raw efficiency.
-                   - simEffErr (float): The standard error of the estimated efficiency.
-        """
-
-        allAvalancheData = self.getDataFrame('avalancheData')
-
-        avalancheLimit = self.getRunParameter('Avalanche Limit')
-
-        if threshold > avalancheLimit:
-            print('Error - Threshold higher than simulation limit.')
-            threshold = avalancheLimit-1
-        
-        numSimulated = self.getRunParameter('Number of Avalanches')
-        numAvalanches = len(allAvalancheData)
-
-        if numAvalanches != numSimulated:
-            raise ValueError('Error - Avalanche numbers disagree.')
-        
-        aboveThresh = allAvalancheData['Total Electrons'] > threshold
-        numAboveThresh = aboveThresh.sum()
-
-        #For Binomial statistics:
-        #simEff = numAboveThresh / numAvalanches
-        #varience = simEff*(1-simEff)/numAvalanches
-
-        #For Bayesian Statistics:
-        simEff = (numAboveThresh+1)/(numAvalanches+2)
-        varience = ((numAboveThresh+1)*(numAboveThresh+2))/((numAvalanches+2)*(numAvalanches+3)) - simEff*simEff
-
-        simEffErr = math.sqrt(max(0, varience))
-
-        simEffErrLow, simEffErrHigh = functionsFIMS.getAsymErrs(simEff, simEffErr)
-
-        efficiency = {
-            'efficiency': simEff,
-            'efficiencyErr': simEffErr,
-            'efficiencyErrLow': simEffErrLow,
-            'efficiencyErrHigh': simEffErrHigh
-        }
-
-        return efficiency
-
-#********************************************************************************#
-    def _getEfficiency(self, threshold=0):
+    def _getEfficiency(self, threshold=0, trim=True):
         """
         Calculates the efficiency of the simulated avalanches based on the
         fraction of total sizes that exceed the given threshold. 
-        Excludes any avalanches where the intial electron does not generate an avalanche.
+
+        Can exclude any avalanches where the intial electron does not generate an avalanche.
 
         Utilizes baysian statistics to determine the efficiency. 
 
         Args:
-            threshold (int): The minimum avalanche size to be considered a 'success'.
+            threshold (int): Minimum avalanche size ('Total Electrons') required to be considered a 'success'.
+            trim (bool): If True, excludes events where no avalanche occurred (Total Electrons == 1). 
+                         If False, computes raw efficiency across all simulated events.
 
         Returns:
-            tuple: A tuple containing the calculated efficiency and its uncertainty:
-                   - simEff (float): The estimated efficiency.
-                   - simEffErr (float): The standard error of the estimated efficiency.
+            dict: Dictionary containing:
+                - 'efficiency': Bayesian point estimate of efficiency.
+                - 'efficiencyErr': Standard error derived from Bayesian variance.
+                - 'efficiencyErrLow': Lower asymmetric error bound.
+                - 'efficiencyErrHigh': Upper asymmetric error bound.
         """
 
         allAvalancheData = self.getDataFrame('avalancheData')
-
         avalancheLimit = self.getRunParameter('Avalanche Limit')
 
         if threshold > avalancheLimit:
@@ -2244,21 +2223,24 @@ class runData:
         if totalAvalanches != numSimulated:
             raise ValueError('Error - Avalanche numbers disagree.')
         
-        aboveThresh = allAvalancheData['Total Electrons'] > threshold
-        numAboveThresh = aboveThresh.sum()
+        numAboveThresh = (allAvalancheData['Total Electrons'] > threshold).sum()
 
-        noAvalanche = allAvalancheData['Total Electrons'] == 1
-        numNoAvalanche = noAvalanche.sum()
+        if trim:
+            numNoAvalanche = (allAvalancheData['Total Electrons'] == 1).sum()
+            numAvalanches = totalAvalanches - numNoAvalanche
+        else:
+            numAvalanches = totalAvalanches
 
-        numAvalanches = totalAvalanches - numNoAvalanche
+        if numAvalanches == 0:
+            raise ValueError('Error - No avalanches')
 
         #Efficiency Statistics:
-        simEff = (numAboveThresh+1)/(numAvalanches+2)
+        simEff = (numAboveThresh+1) / (numAvalanches+2)
         varience = ((numAboveThresh+1)*(numAboveThresh+2))/((numAvalanches+2)*(numAvalanches+3)) - simEff*simEff
 
         simEffErr = math.sqrt(max(0, varience))
 
-        errorLow, errorHigh = functionsFIMS.getAsymErrs(simEff, simEffErr)
+        errorLow, errorHigh = functionsFIMS.getAsymErrs(numAboveThresh, numAvalanches)
 
         efficiency = {
             'efficiency': simEff,
@@ -2273,10 +2255,6 @@ class runData:
     def _fitPolya(self):
         """
         Fits a polya to the avalanche size distribution.
-        
-        Returns:
-            theta (float): The Polya shape parameter
-            gain (float): The mean avalanche size.
         """
 
         try:
@@ -2287,13 +2265,19 @@ class runData:
         except:#TODO - there may be a better way to handle this within _fitAvalancheSize
             print('Warning - Error in Polya Fit.')
 
-            return {'theta': 0, 'thetaErr': 1, 'gain': 1, 'gainErr':1}
+            return {'theta': 0, 'thetaErr': 1, 'gain': 1, 'gainErr': 1, 'chi2': None, 'ksStatD': None}
           
         polyaFitResults = {
             'theta': fitResults['fitPolya'].theta,
             'thetaErr': fitResults['fitPolya'].thetaErr,
             'gain': fitResults['fitPolya'].gain,
-            'gainErr': fitResults['fitPolya'].gainErr
+            'gainErr': fitResults['fitPolya'].gainErr,
+            'chi2': fitResults['fitPolya'].chi2,
+            'rchi2': fitResults['fitPolya'].reducedChi2,
+            'pVal': fitResults['fitPolya'].pValue,
+            'ksStatD': fitResults['fitPolya'].ksStat, 
+            'pValue': fitResults['fitPolya'].ksPValue, 
+            'sigma': fitResults['fitPolya'].ksSigma
         }
 
         return polyaFitResults
@@ -2375,61 +2359,58 @@ class runData:
 
 #********************************************************************************#
     def _getSingleElectronAvalancheData(self):
-        """TODO"""
+        """
+        Get information for avalanches with only 1 electron.
 
-        #Get avalanche IDs for those with only 1 electron
+        Returns:
+            dict: Dictionary containing number of particular events.
+        """
+
+        #Get all avalanches
         allAvalancheData = self.getDataFrame('avalancheData')
-        singleElectron = allAvalancheData[allAvalancheData['Total Electrons'] == 1]
-        singleElectronID = singleElectron['Avalanche ID'].tolist()
         numTotal = len(allAvalancheData)
+
+        #Get avalanche IDs for those with only 1 electron - Must check end status
+        singleElectron = allAvalancheData[allAvalancheData['Total Electrons'] == 1]
         numSingle = len(singleElectron)
+        singleIDS = set(singleElectron['Avalanche ID'])
 
         allElectronData = self.getDataFrame('electronData')
-        singleElectronData = allElectronData[allElectronData['Avalanche ID'].isin(singleElectronID)]
+        singleElectronData = allElectronData[allElectronData['Avalanche ID'].isin(singleIDS)]
 
-        attachedElectrons = singleElectronData[singleElectronData['Exit Status'] == -7]
-        numAttatched = len(attachedElectrons)
-        attatchedIDs = attachedElectrons['Avalanche ID'].tolist()
+        # Create masks for signle-electron data
+        isAttached = singleElectronData['Exit Status'] == -7
+        isExitArea = singleElectronData['Exit Status'] == -1
+        isExitMedium = singleElectronData['Exit Status'] == -5
 
-        noAttachment = singleElectronData[singleElectronData['Exit Status'] != -7]
-
-        # Count as hit git if within 1% of the grid plane
         gridLength = 1.01*self.getRunParameter('Grid Thickness')/2
-        hitGrid = noAttachment[(noAttachment['Final z'] <= gridLength) & (noAttachment['Final z'] >= -gridLength)]
-        numHitGrid = len(hitGrid)
-        hitGridIDs = hitGrid['Avalanche ID'].tolist()
+        # Side exits have unresolved outcomes, so exclude them from grid-hit classification.
+        isHitGrid = (
+            ~isAttached &
+            ~isExitArea &
+            (singleElectronData['Final z'].abs() <= gridLength)
+        )
 
-        exitNoAvalanche = noAttachment[~noAttachment['Avalanche ID'].isin(hitGridIDs)]
+        # Slice and extract data
+        numAttached = isAttached.sum()
+        numExitArea = isExitArea.sum()
+        numExitMedium = isExitMedium.sum()
+        numHitGrid = isHitGrid.sum()
 
-        # Exit status = -1: Leaves drift area
-        ## Note: These are electrons that exit the sides of the simulation volume.
-        ## They could still hit attach, hit the grid, or cause an avalanche
-        exitArea = exitNoAvalanche[exitNoAvalanche['Exit Status'] == -1]
-        numExitArea = len(exitArea)
-        exitAreaIDs = exitArea['Avalanche ID'].tolist()
-
-
-        # Exit status = -5: Leave drift medium
-        ## Note: These are electrons that leave the drift medium.
-        ## By inspection, these all reach the pad/dielectric without avalanching.
-        exitMedium = exitNoAvalanche[exitNoAvalanche['Exit Status'] == -5]
-        numExitMedium = len(exitMedium)
-        exitMediumIDs = exitMedium['Avalanche ID'].tolist()
-
-        singleAvalancheInfo = {
+        singleElectronInfo = {
             'numTotal': numTotal,
             'numSingle': numSingle,
-            'numAttatched': numAttatched,
-            'numHitGrid': numHitGrid,
+            'numAttached': numAttached,
             'numExitArea': numExitArea,
+            'numHitGrid': numHitGrid,
             'numExitMedium': numExitMedium,
-            'attatchedIDs': attatchedIDs,
-            'hitGridIDs': hitGridIDs,
-            'exitAreaIDs': exitAreaIDs,
-            'exitMediumIDs': exitMediumIDs
+            'attachedIDs': singleElectronData.loc[isAttached, 'Avalanche ID'].tolist(),
+            'exitAreaIDs': singleElectronData.loc[isExitArea, 'Avalanche ID'].tolist(),
+            'hitGridIDs': singleElectronData.loc[isHitGrid, 'Avalanche ID'].tolist(),
+            'exitMediumIDs': singleElectronData.loc[isExitMedium, 'Avalanche ID'].tolist(),
         }
 
-        return singleAvalancheInfo
+        return singleElectronInfo
     
 #********************************************************************************#
     def _getChargeCollectionEfficiency(self):
@@ -2439,32 +2420,32 @@ class runData:
 
         numTotal = singleAvalancheInfo['numTotal']
 
-        numAttached = singleAvalancheInfo['numAttatched']
+        numAttached = singleAvalancheInfo['numAttached']
         numHitGrid = singleAvalancheInfo['numHitGrid']
         numExitArea = singleAvalancheInfo['numExitArea']
         numExitMedium = singleAvalancheInfo['numExitMedium']
 
-        # Do not count the following:
+        # Ignore the following:
         # Num exit area -> Drifted out of region without avalanching
         # Num attached -> Electron attached without avalanching
         numValid = numTotal - numExitArea - numAttached
 
-        # Undetected are those that hit the grid (a no-avalanche outcome is still detected)
-        numCount = numValid - numHitGrid
-
         if numValid == 0:
             raise ValueError('Error: No valid avalanches to calculate efficiency.')
-        
-        chargeEff = numCount / numValid
-        chargeEffErr = math.sqrt(chargeEff*(1-chargeEff)/numValid)
 
-        chargeErrLow, chargeErrHigh = functionsFIMS.getAsymErrs(chargeEff, chargeEffErr)
+        # Collected are those that do not hit the grid
+        numCollect = numValid - numHitGrid
+
+        collEff = numCollect / numValid
+        collEffErr = math.sqrt(collEff*(1-collEff)/numValid)
+
+        collErrLow, collErrHigh = functionsFIMS.getAsymErrs(numCollect, numValid)
 
         chargeCollectionEff = {
-            'efficiency': chargeEff,
-            'efficiencyErr': chargeEffErr,
-            'efficiencyErrLow': chargeErrLow,
-            'efficiencyErrHigh': chargeErrHigh
+            'efficiency': collEff,
+            'efficiencyErr': collEffErr,
+            'efficiencyErrLow': collErrLow,
+            'efficiencyErrHigh': collErrHigh
         }
 
         return chargeCollectionEff
@@ -2918,5 +2899,3 @@ class runData:
         allSignals.to_parquet(filename)
 
         return
-
-

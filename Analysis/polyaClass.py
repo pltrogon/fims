@@ -4,10 +4,10 @@
 import numpy as np
 import math
 import matplotlib.pyplot as plt
+import scipy.stats as stats
 
-from scipy.special import gamma
-from scipy.special import gammaincc
-from scipy.optimize import curve_fit, fsolve
+from scipy.special import gamma, gammaincc, gammaln
+from scipy.optimize import curve_fit, fsolve, minimize
 
 
 class myPolya:
@@ -47,6 +47,14 @@ class myPolya:
 
         self.gainErr = None
         self.thetaErr = None
+
+        self.chi2 = None
+        self.reducedChi2 = None
+        self.pValue = None
+
+        self.ksStat = None
+        self.ksPValue = None
+        self.ksSigma = None
 
         if gain is not None and theta is not None:
             try:
@@ -353,10 +361,187 @@ class myPolya:
         
             
 
+#********************************************************************************#   
+    def calcLogPolya(self,n, gain=None, theta=None):
+        """Calculates log probability density of the Polya distribution."""
+        g = gain if gain is not None else self.gain
+        t = theta if theta is not None else self.theta
+        # log P(n) expanded to prevent underflow/overflow
+        logP = (
+            -np.log(g)
+            + (1 + t) * np.log(1 + t)
+            - gammaln(1 + t)
+            + t * (np.log(n) - np.log(g))
+            - (1 + t) * (n / g)
+        )
+        return logP
 
-
-
-
-
-
+#********************************************************************************#
+    def fitLogPolya(self, rawData, nMin=2, nMax=np.inf):
+        """
+        Fits a truncated Polya distribution directly to unbinned avalanche data.
         
+        Args:
+            raw_data (np.ndarray): Raw 1D array of total electron counts per trial.
+            nMin (float): Lower truncation boundary (removes single electrons/losses).
+            nMax (float): Upper truncation boundary (removes overflow bin).
+        """
+        # Filter raw data within bounds
+        trimmedData = rawData[(rawData >= nMin) & (rawData <= nMax)]
+        
+        gain0 = np.mean(trimmedData)
+        theta0 = 0.5
+        
+        def neg_log_likelihood(params):
+            gain, theta = params
+            
+            if gain <= 0 or theta < 0:
+                return np.inf
+            
+            logProb = self.calcLogPolya(trimmedData, gain=gain, theta=theta)
+            
+            shape = 1.0 + theta
+            scale = gain / shape
+            cdfMax = stats.gamma.cdf(nMax, a=shape, scale=scale)
+            cdfMin = stats.gamma.cdf(nMin, a=shape, scale=scale)
+            norm =  cdfMax - cdfMin
+            
+            if norm <= 0:
+                return np.inf
+                
+            return -np.sum(logProb - np.log(norm))
+
+        bounds = [(1, 2 * gain0), (0, 5.0)]
+        
+        res = minimize(
+            neg_log_likelihood, 
+            x0=[gain0, theta0], 
+            bounds=bounds, 
+            method='L-BFGS-B'
+        )
+
+        if res.success:
+            self.gain = res.x[0]
+            self.theta = res.x[1]
+            #self.twoNLL = 2.0 * res.fun
+            
+            try:
+                hess_inv = res.hess_inv.todense()
+                perr = np.sqrt(np.diag(hess_inv))
+                self.gainErr = perr[0]
+                self.thetaErr = perr[1]
+            except Exception:
+                self.gainErr, self.thetaErr = np.nan, np.nan
+        else:
+            raise RuntimeError(f"Fit failed: {res.message}")
+
+        return res
+        
+#********************************************************************************#
+    def calcEquiprobableChi2(self, rawData, nMin=2, nMax=np.inf, numBins=None):#Incorrect????
+        """
+        Calculates Pearson Chi-Square, reduced Chi-Square, and p-value using 
+        equiprobable (equal expected count) binning.
+
+        Args:
+            rawData (np.ndarray): Unbinned raw avalanche electron counts.
+            nMin (float): Lower truncation boundary.
+            nMax (float): Upper truncation boundary.
+            numBins (int): Number of equiprobable bins.
+
+        Returns:
+            dict: Dictionary containing chi2, reducedChi2, pValue, dof, and bin parameters.
+        """
+        trimmedData = rawData[(rawData >= nMin) & (rawData <= nMax)]
+        N = len(trimmedData)
+
+        # Dynamically select bin count via Mann-Wald rule if not explicitly set
+        if numBins is None:
+            numBins = int(np.clip(2.0 * (N ** 0.4), 20, 100))
+        # Ensure min expected count condition holds
+        if N / numBins < 5:
+            numBins = max(5, int(N / 5))
+
+        # Convert fitted Polya parameters to Gamma distribution
+        shape = 1.0 + self.theta
+        scale = self.gain / shape
+
+        # CDF bounds over the truncated domain
+        minCDF = stats.gamma.cdf(nMin, a=shape, scale=scale)
+        maxCDF = 1.0 if np.isinf(nMax) else stats.gamma.cdf(nMax, a=shape, scale=scale)
+
+        # Divide probability space into equal intervals
+        quantiles = np.linspace(minCDF, maxCDF, numBins + 1)
+
+        # Map CDF quantiles back to physical avalanche size bin edges using the Inverse CDF
+        binEdges = stats.gamma.ppf(quantiles, a=shape, scale=scale)
+        
+        # Enforce exact endpoints to prevent floating-point rounding edge-drops
+        binEdges[0] = nMin
+        if not np.isinf(nMax):
+            binEdges[-1] = nMax
+
+        # Bin observed data using the dynamic probability-spaced edges
+        observed, _ = np.histogram(trimmedData, bins=binEdges)
+
+        # Expected count per bin is strictly constant (N / numBins)
+        E = N / numBins
+
+        #pulls = (observed - E) / np.sqrt(E)
+        #for i, p in enumerate(pulls):
+        #    print(f"Bin {i+1:02d}: Pull = {p:+.2f}")
+
+        # Compute Chi-Squared statistics
+        chi2 = float(np.sum((observed - E) ** 2 / E))
+        dof = numBins - 2 - 1  # numBins - (2 fitted parameters: gain, theta) - 1
+
+        if dof > 0:
+            reducedChi2 = chi2 / dof
+            pValue = float(stats.chi2.sf(chi2, dof))
+        else:
+            reducedChi2, pValue = np.nan, np.nan
+
+        self.chi2 = chi2
+        self.reducedChi2 = reducedChi2
+        self.pValue = pValue
+
+        chi2Results = {
+            'chi2': chi2,
+            'reducedChi2': reducedChi2,
+            'pValue': pValue,
+            'dof': dof,
+            'numBins': numBins,
+            'expectedPerBin': E
+        }
+
+        return chi2Results
+
+#********************************************************************************#
+    def calcKSTest(self, rawData, nMin=2, nMax=np.inf):
+        """TODO"""
+        trimmedData = rawData[(rawData >= nMin) & (rawData <= nMax)]
+        shape = 1.0 + self.theta
+        scale = self.gain / shape
+
+        cdfMin = stats.gamma.cdf(nMin, a=shape, scale=scale)
+        cdfMax = 1.0 if np.isinf(nMax) else stats.gamma.cdf(nMax, a=shape, scale=scale)
+        norm = cdfMax - cdfMin
+
+        def truncCDF(x):
+            return (stats.gamma.cdf(x, a=shape, scale=scale) - cdfMin) / norm
+
+        ksRes = stats.ks_1samp(trimmedData, truncCDF)
+
+        self.ksStat = float(ksRes.statistic)
+        self.ksPValue = float(ksRes.pvalue)
+        self.ksSigma = float(stats.norm.isf(self.ksPValue / 2.0)) if self.ksPValue > 0 else np.inf
+        
+        resultsKS = {
+            'ksStatD': self.ksStat, 
+            'pValue': self.ksPValue, 
+            'sigma': self.ksSigma
+        }
+
+        return resultsKS
+
+    

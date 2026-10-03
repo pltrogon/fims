@@ -20,13 +20,14 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QComboBox, QLabel, QSpinBox, QPushButton, QStackedWidget, QGroupBox,
     QTableWidget, QTableWidgetItem, QHeaderView, QCheckBox, QButtonGroup,
-    QRadioButton, QLineEdit
+    QRadioButton, QLineEdit, QFileDialog, QMessageBox
 )
 from PyQt6.QtCore import Qt, QTimer
 
 CMTOMICRON = 1e4
 VCMTOkVCM = 1e-3
-
+plt.rcParams.update({'font.size': 14})
+plt.rcParams['lines.linewidth'] = 2
 
 
 # ==========================================
@@ -46,6 +47,8 @@ class AnimationData:
         self.signalData = None
         
         self.loadRootData()
+
+        self._netGain = self._getNetGainByFrame()
 
         return
 
@@ -150,9 +153,39 @@ class AnimationData:
         }
         return pd.DataFrame(allData)
 
+#**********************************************************************#
+    def _getNetGainByFrame(self):
+        """
+        Get the running gain from each frame of an avalanche
+
+        Minor issue - Currently unphased by electron attachments. 
+        """
+        if self.animationData is None or self.animationData.empty:
+            return pd.DataFrame()
+
+        # Filter out ions and preserve frames where no electrons are present.
+        onlyElectronData = self.animationData[self.animationData['ParticleType']==0]
+
+        allAvalancheIDs = sorted(self.animationData['AvalancheID'].unique())
+        allFrameIDs = sorted(self.animationData['FrameID'].unique())
+
+        # Get the number of electrons in each frame.
+        gainByFrame = (
+            onlyElectronData.groupby(['AvalancheID', 'FrameID'])
+                .size()
+                .unstack(level='FrameID', fill_value=0)
+                .reindex(index=allAvalancheIDs, columns=allFrameIDs, fill_value=0)
+        )
+
+        # Carry the largest observed electron count through empty frames.
+        runningMaxGain = gainByFrame.cummax(axis=1)
+
+        return runningMaxGain
+
+
 
 # ==========================================
-# MATPLOTLIB CANVAS CANVAS WIDGET
+# MATPLOTLIB CANVAS WIDGET
 # ==========================================
 class MplCanvas(FigureCanvas):
     def __init__(self, parent=None, is3D=True):
@@ -164,32 +197,32 @@ class MplCanvas(FigureCanvas):
         return
 
     def setupAxes(self, is3D=True, numPlots=3):
-            """Clears the figure and prepares 3D or dual 2D subplot axes."""
-            self.fig.clear()
-            if hasattr(self, 'cbar') and self.cbar is not None:
-                self.cbar.remove()
-                self.cbar = None
-    
-            if is3D:
-                self.ax = self.fig.add_subplot(1, 1, 1, projection='3d')
-                return self.ax
+        """Clears the figure and prepares 3D or dual 2D subplot axes."""
+        self.fig.clear()
+        if hasattr(self, 'cbar') and self.cbar is not None:
+            self.cbar.remove()
+            self.cbar = None
+
+        if is3D:
+            self.ax = self.fig.add_subplot(1, 1, 1, projection='3d')
+            return self.ax
+
+        else:
+            if numPlots == 3:
+                gs = self.fig.add_gridspec(2, 2)
+                xz = self.fig.add_subplot(gs[0, 0])
+                yz = self.fig.add_subplot(gs[1, 0])
+                xy = self.fig.add_subplot(gs[:, 1])
+                return xz, yz, xy
+            
+            elif numPlots == 2:
+                xz = self.fig.add_subplot(1, 2, 1)
+                yz = self.fig.add_subplot(1, 2, 2)
+                return xz, yz
 
             else:
-                if numPlots == 3:
-                    gs = self.fig.add_gridspec(2, 2)
-                    xz = self.fig.add_subplot(gs[0, 0])
-                    yz = self.fig.add_subplot(gs[1, 0])
-                    xy = self.fig.add_subplot(gs[:, 1])
-                    return xz, yz, xy
-                
-                elif numPlots == 2:
-                    xz = self.fig.add_subplot(1, 2, 1)
-                    yz = self.fig.add_subplot(1, 2, 2)
-                    return xz, yz
-
-                else:
-                    self.ax = self.fig.add_subplot(1, 1, 1)
-                    return self.ax
+                self.ax = self.fig.add_subplot(1, 1, 1)
+                return self.ax
 
 
 # ==========================================
@@ -210,6 +243,7 @@ class FIMSVisualizer(QMainWindow):
         self.animationTimer.timeout.connect(self._nextFrame)
         self.curFrameID = 0
         self.allFrames = []
+        self.particleHistoryCache = self._buildParticleHistoryCache()
 
         self._init_UI()
 
@@ -397,6 +431,20 @@ class FIMSVisualizer(QMainWindow):
         self.chkAvSig.toggled.connect(self._onChange)
         layoutViewAvalanche.addWidget(self.chkAvSig)
 
+        self.chkDriftPaths = QCheckBox('Drift Paths')
+        self.chkDriftPaths.setChecked(False)
+        self.chkDriftPaths.toggled.connect(self._onChange)
+        layoutViewAvalanche.addWidget(self.chkDriftPaths)
+
+        self.chkEndpoints = QCheckBox('Endpoint Markers')
+        self.chkEndpoints.setChecked(False)
+        self.chkEndpoints.toggled.connect(self._onChange)
+        layoutViewAvalanche.addWidget(self.chkEndpoints)
+
+        self.saveGifButton = QPushButton('Save Animation GIF')
+        self.saveGifButton.clicked.connect(self._saveAnimationGif)
+        layoutViewAvalanche.addWidget(self.saveGifButton)
+
         # Add spacer to keep controls pushed to the top
         layoutViewAvalanche.addStretch()
 
@@ -481,13 +529,15 @@ class FIMSVisualizer(QMainWindow):
 
         return
 
-    # ==========================================
-    # SLOTS AND RENDER METHODS
-    # ==========================================
+# ==========================================
+# SLOTS AND RENDER METHODS
+# ==========================================
     
 # **********************************************************************#
     def _onChange(self, *args):
-        """Unified handler for view selection, projection, geometry, field, and signal changes."""
+        """
+        Unified handler for view selection, projection, geometry, field, and signal changes.
+        """
         idx = self.viewSelector.currentIndex()
         controlsIdx = 4 if idx == 6 else idx
         self.controlsStack.setCurrentIndex(controlsIdx)
@@ -537,6 +587,8 @@ class FIMSVisualizer(QMainWindow):
 #**********************************************************************#
     def _reloadData(self):
         self.data.loadRootData()
+        self.data._netGain = self.data._getNetGainByFrame()
+        self.particleHistoryCache = self._buildParticleHistoryCache()
         self._onChange(self.viewSelector.currentIndex())
         return
 
@@ -567,7 +619,7 @@ class FIMSVisualizer(QMainWindow):
 
 #**********************************************************************#
     def _plotAvalancheInfo(self):
-        """Populates the main display table with avalannche info."""
+        """Populates the main display table with avalanche info."""
         self.simParamTable.setRowCount(0)
         
         if self.data.avalancheData is None or self.data.avalancheData.empty:
@@ -628,9 +680,9 @@ class FIMSVisualizer(QMainWindow):
                 setting = lineSettings.get(startVal)
                 if not setting or not setting['plot']:
                     continue
-                xz.plot(lineData['x'], lineData['z'], c=setting['c'])
-                yz.plot(lineData['y'], lineData['z'], c=setting['c'])
-                xy.plot(lineData['x'], lineData['y'], c=setting['c'])            
+                xz.plot(lineData['x'], lineData['z'], c=setting['c'], lw=1)
+                yz.plot(lineData['y'], lineData['z'], c=setting['c'], lw=1)
+                xy.plot(lineData['x'], lineData['y'], c=setting['c'], lw=1)            
 
             if self.chkGeometry.isChecked():
                 self._drawGeometry((xz, yz, xy))
@@ -645,7 +697,7 @@ class FIMSVisualizer(QMainWindow):
                     continue
                 ax.plot(
                     lineData['x'], lineData['y'], lineData['z'], 
-                    c=setting['c']
+                    c=setting['c'], lw=1
                 )
 
             if self.chkGeometry.isChecked():
@@ -690,7 +742,7 @@ class FIMSVisualizer(QMainWindow):
 
                 contour = ax.tricontourf(
                     xData, yData, zData, 
-                    levels=101, cmap='viridis', vmin=vmin, vmax=vmax
+                    levels=np.linspace(vmin, vmax, 101), cmap='viridis', extend='both'
                 )
                 if not isEField:
                     if self.chkContours.isChecked():
@@ -730,7 +782,9 @@ class FIMSVisualizer(QMainWindow):
 
         if self.cbar is not None:
             label = 'Field Strength (kV/cm)' if isEField else 'Weighting Potential'
-            self.cbar.set_label(label)
+            self.cbar.set_ticks(np.linspace(vmin, vmax, 11))
+
+            self.cbar.set_label(label, rotation=270, labelpad=15)
 
         self.canvas.fig.tight_layout()
         self.canvas.draw()
@@ -855,6 +909,7 @@ class FIMSVisualizer(QMainWindow):
         
         self.allFrames = sorted(self.inAvData['FrameID'].unique())
         self.curFrameID = 0
+        self.particleHistory = self.particleHistoryCache.get(avID, [])
 
         # Route to the active view renderer
         self._renderAnimation()
@@ -926,6 +981,282 @@ class FIMSVisualizer(QMainWindow):
         return
 
 #**********************************************************************#
+    def _saveAnimationGif(self):
+        """Save the current avalanche as an XZ-projection GIF."""
+        if not self.allFrames:
+            QMessageBox.warning(self, 'Save Animation', 'No animation frames are available.')
+            return
+
+        filePath, _ = QFileDialog.getSaveFileName(
+            self,
+            'Save Animation GIF',
+            f'avalanche_{self.avalancheSpinBox.value()}.gif',
+            'GIF files (*.gif)'
+        )
+        if not filePath:
+            return
+        if not filePath.lower().endswith('.gif'):
+            filePath += '.gif'
+
+        wasPlaying = self.animationTimer.isActive()
+        self.animationTimer.stop()
+        self.playButton.setChecked(False)
+        self.playButton.setText('Play Animation')
+
+        exportFigure = Figure(figsize=(7, 5))
+        exportAxis = exportFigure.add_subplot(1, 1, 1)
+
+        def drawFrame(frameIndex):
+            exportAxis.clear()
+            self._drawXZAnimationFrame(exportAxis, frameIndex)
+            exportFigure.tight_layout()
+
+        animation = FuncAnimation(
+            exportFigure,
+            drawFrame,
+            frames=range(len(self.allFrames)),
+            interval=80,
+            repeat=False,
+        )
+
+        try:
+            animation.save(filePath, writer='pillow', fps=12)
+        except Exception as error:
+            QMessageBox.critical(self, 'Save Animation', f'Could not save GIF:\n{error}')
+        else:
+            QMessageBox.information(self, 'Save Animation', f'Saved animation to:\n{filePath}')
+        finally:
+            plt.close(exportFigure)
+            if wasPlaying:
+                self.playButton.setChecked(True)
+                self.playButton.setText('Pause')
+                self.animationTimer.start(80)
+
+#**********************************************************************#
+    def _drawXZAnimationFrame(self, axis, frameIndex):
+        """Draw one XZ animation frame using the active animation settings."""
+        frameID = self.allFrames[frameIndex]
+        frameData = self.inAvData[self.inAvData['FrameID'] == frameID]
+
+        particleConfig = [
+            {'ID': 0, 'c': 'b', 's': 10, 'label': 'Electrons'},
+            {'ID': 1, 'c': 'r', 's': 15, 'label': 'Positive Ions'},
+            {'ID': -1, 'c': 'g', 's': 15, 'label': 'Negative Ions'},
+        ]
+        for particle in particleConfig:
+            particleData = frameData[frameData['ParticleType'] == particle['ID']]
+            axis.scatter(
+                particleData['x'], particleData['z'],
+                c=particle['c'], s=particle['s'], label=particle['label']
+            )
+
+        if self.chkWeighing.isChecked():
+            self._plotContoursXZ(axis)
+        self._drawParticleHistory((axis,), frameIndex)
+        if self.chkGeometry.isChecked():
+            self._drawGeometryXZ(axis)
+
+        pitch = self.data.simData['pitch']
+        xScale = pitch * math.sqrt(3) / 2
+        amplificationGap = self.data.simData['amplificationGap']
+        driftLength = self.data.simData['driftLength']
+        zBuffer = 2
+        highZ = amplificationGap + zBuffer if self.zoomAmp.isChecked() else driftLength + zBuffer
+        axis.set(
+            xlabel=r'x ($\mu$m)', ylabel=r'z ($\mu$m)',
+            xlim=[-xScale, xScale],
+            ylim=[-amplificationGap - zBuffer, highZ]
+        )
+        #axis.axvline(0, c='k', ls=':', alpha=.75)
+        #axis.axhline(0, c='k', ls=':', alpha=.75)
+        axis.grid(alpha=.25, ls=':')
+
+        currentGain = self.data._netGain.loc[self.avalancheSpinBox.value(), frameID]
+        inTime = frameData['Time'].iloc[0] if not frameData.empty else -1
+        timeLabel = f'{inTime:.2f} ns' if inTime <= 250 else rf'{inTime / 1e3:.2f} $\mu$s'
+        axis.set_title(f'Time = {timeLabel}, Gain = {currentGain}')
+        axis.legend(loc='upper right')
+
+#**********************************************************************#
+    def _plotContoursXZ(self, axis, pad='TopPad', color='c'):
+        """Plot weighting contours on the XZ export axis."""
+        fieldData = self.data.fieldStrengths
+        mask = np.isclose(fieldData['y'], 0, atol=1e-6)
+        lines = axis.tricontour(
+            fieldData['x'][mask], fieldData['z'][mask],
+            fieldData[f'Weight_{pad}'][mask],
+            levels=[.01, .05, .1, .25, .5, .75, .9, .99],
+            colors=color, linewidths=.5, vmin=0, vmax=1
+        )
+        axis.clabel(lines, inline=True, fontsize=8, fmt='%.2f')
+
+#**********************************************************************#
+    def _drawGeometryXZ(self, axis):
+        """Draw the geometry components needed by the XZ export."""
+        if self.data.simData is None:
+            return
+
+        pitch = self.data.simData['pitch']
+        holeRadius = self.data.simData['holeRadius']
+        gridThickness = self.data.simData['gridThickness']
+        gridSize = gridThickness / 2
+        sqrt3 = math.sqrt(3)
+        centers = pitch * np.array([
+            (0, 0), (0, 1), (0, -1),
+            (sqrt3 / 2, .5), (sqrt3 / 2, -.5),
+            (-sqrt3 / 2, .5), (-sqrt3 / 2, -.5),
+        ])
+        xScale = pitch * sqrt3 / 2
+        x = np.linspace(-xScale, xScale, 501)
+        inHole = np.zeros(x.shape, dtype=bool)
+        for centerX, centerY in centers:
+            inHole |= (x - centerX) ** 2 + centerY ** 2 < holeRadius ** 2
+        axis.fill_between(
+            x, np.where(inHole, np.nan, -gridSize),
+            np.where(inHole, np.nan, gridSize), color='grey'
+        )
+
+        padLength = self.data.simData['padLength']
+        padHeight = -self.data.simData['amplificationGap']
+        for centerX, centerY in centers:
+            xLocs, _ = hexXY(padLength, centerX, centerY)
+            line = '-' if centerX == 0 and centerY == 0 else ':'
+            axis.plot(xLocs, padHeight * np.ones(len(xLocs)), c='m', ls=line)
+
+        xLocs, _ = hexXY(pitch / sqrt3, 0, 0)
+        #axis.axvline(xLocs[0], c='c', ls='--')
+        #axis.axvline(-xLocs[0], c='c', ls='--')
+        #axis.axvline(xLocs[1], c='c', ls=':')
+        #axis.axvline(-xLocs[1], c='c', ls=':')
+
+#**********************************************************************#
+    def _buildParticleHistoryCache(self):
+        """Build particle histories once for every loaded avalanche."""
+        if self.data.animationData is None or self.data.animationData.empty:
+            return {}
+
+        historyCache = {}
+        for avID, avalancheData in self.data.animationData.groupby('AvalancheID'):
+            allFrames = sorted(avalancheData['FrameID'].unique())
+            historyCache[avID] = self._buildParticleHistory(avalancheData, allFrames)
+        return historyCache
+
+#**********************************************************************#
+    @staticmethod
+    def _buildParticleHistory(inAvData, allFrames):
+        """Track particles between frames using nearest one-to-one matches."""
+        particleHistory = []
+        if inAvData.empty:
+            return particleHistory
+
+        previousTracks = {particleType: [] for particleType in (0, 1, -1)}
+        colors = {0: 'b', 1: 'r', -1: 'g'}
+
+        for frameIndex, frameID in enumerate(allFrames):
+            frameData = inAvData[inAvData['FrameID'] == frameID]
+            currentTracks = {particleType: [] for particleType in (0, 1, -1)}
+
+            for particleType in currentTracks:
+                positions = frameData.loc[
+                    frameData['ParticleType'] == particleType,
+                    ['x', 'y', 'z']
+                ].to_numpy()
+                unmatchedTracks = list(previousTracks[particleType])
+                unmatchedPositions = list(range(len(positions)))
+
+                # Greedily pair the closest remaining particles. The ROOT
+                # format does not contain particle IDs, so this is the most
+                # stable identity available for the existing files.
+                while unmatchedTracks and unmatchedPositions:
+                    track, positionIndex = min(
+                        (
+                            (track, index)
+                            for track in unmatchedTracks
+                            for index in unmatchedPositions
+                        ),
+                        key=lambda pair: np.sum(
+                            (pair[0]['points'][-1] - positions[pair[1]]) ** 2
+                        )
+                    )
+                    track['points'].append(positions[positionIndex])
+                    track['lastFrameIndex'] = frameIndex
+                    currentTracks[particleType].append(track)
+                    matchedTrackIndex = next(
+                        index for index, candidate in enumerate(unmatchedTracks)
+                        if candidate is track
+                    )
+                    unmatchedTracks.pop(matchedTrackIndex)
+                    unmatchedPositions.remove(positionIndex)
+
+                for track in unmatchedTracks:
+                    track['endFrameIndex'] = frameIndex - 1
+
+                for positionIndex in unmatchedPositions:
+                    currentTracks[particleType].append({
+                        'particleType': particleType,
+                        'color': colors[particleType],
+                        'points': [positions[positionIndex]],
+                        'startFrameIndex': frameIndex,
+                        'lastFrameIndex': frameIndex,
+                        'endFrameIndex': None,
+                    })
+
+            particleHistory.extend(
+                track for tracks in currentTracks.values() for track in tracks
+                if track['startFrameIndex'] == frameIndex
+            )
+            previousTracks = currentTracks
+
+        finalFrameIndex = len(allFrames) - 1
+        for tracks in previousTracks.values():
+            for track in tracks:
+                track['endFrameIndex'] = finalFrameIndex
+
+        # Keep only one reference to each track after the final frame.
+        return list({id(track): track for track in particleHistory}.values())
+
+#**********************************************************************#
+    def _drawParticleHistory(self, axes, frameIndex):
+        """Draw accumulated paths and terminal positions through a frame."""
+        alpha = .2
+        lw = .5
+        if not getattr(self, 'particleHistory', None):
+            return
+
+        is3D = not isinstance(axes, tuple)
+        for track in self.particleHistory:
+            if track['startFrameIndex'] > frameIndex:
+                continue
+
+            points = np.asarray(track['points'][:frameIndex - track['startFrameIndex'] + 1])
+            if len(points) > 1 and self.chkDriftPaths.isChecked():
+                if is3D:
+                    axes.plot(
+                        points[:, 0], points[:, 1], points[:, 2],
+                        color=track['color'], alpha=alpha, linewidth=lw
+                    )
+                else:
+                    xz, *restAxes = axes
+                    xz.plot(points[:, 0], points[:, 2], color=track['color'], alpha=alpha, linewidth=lw)
+                    if len(restAxes) > 0:
+                        restAxes[0].plot(points[:, 1], points[:, 2], color=track['color'], alpha=alpha, linewidth=lw)
+                    if len(restAxes) > 1:
+                        restAxes[1].plot(points[:, 0], points[:, 1], color=track['color'], alpha=alpha, linewidth=lw)
+
+            endpointFrame = track['endFrameIndex']
+            if self.chkEndpoints.isChecked() and endpointFrame is not None and endpointFrame <= frameIndex:
+                endpoint = track['points'][-1]
+                if is3D:
+                    axes.scatter(*endpoint, color=track['color'], marker='x', s=15)
+                else:
+                    xz, *restAxes = axes
+                    xz.scatter(endpoint[0], endpoint[2], color=track['color'], marker='x', s=15)
+                    if len(restAxes) > 0:
+                        restAxes[0].scatter(endpoint[1], endpoint[2], color=track['color'], marker='x', s=15)
+                    if len(restAxes) > 1:
+                        restAxes[1].scatter(endpoint[0], endpoint[1], color=track['color'], marker='x', s=15)
+
+#**********************************************************************#
     def _renderParticleFrame(self):
         if not self.allFrames:
             return
@@ -965,13 +1296,18 @@ class FIMSVisualizer(QMainWindow):
                 coords = [subData[col] for col in cols]
                 inAx.scatter(*coords, c=p['c'], s=p['s'], label=p['label'])
 
+        self._drawParticleHistory(allAxs, self.curFrameID)
+
         if self.chkGeometry.isChecked():
             self._drawGeometry(allAxs)
         self._formatAxes(allAxs)
 
+        currentGain = self.data._netGain.loc[self.avalancheSpinBox.value(), frameID]
+
         inTime = inFrameData['Time'].iloc[0] if not inFrameData.empty else -1
         timeLabel = f'{inTime:.2f} ns' if inTime <= 250 else rf'{inTime/1e3:.2f} $\mu$s'
-        labelAx.set_title(f'Time = ({timeLabel}) (Frame ID: {frameID})')
+        #labelAx.set_title(f'Time = {timeLabel}, Gain = {currentGain} (Frame ID: {frameID})')
+        labelAx.set_title(f'Time = {timeLabel}, Gain = {currentGain}')
         labelAx.legend()
 
         self.canvas.fig.tight_layout()
@@ -1001,6 +1337,8 @@ class FIMSVisualizer(QMainWindow):
                 subData = inFrameData[inFrameData['ParticleType'] == p['ID']]
                 label = p['label'] if ax == xz else None
                 ax.scatter(subData[x], subData[y], c=p['c'], s=p['s'], label=label)
+
+            self._drawParticleHistory((xz, yz), self.curFrameID)
 
         if self.chkGeometry.isChecked():
             self._drawGeometry((xz, yz))
@@ -1040,11 +1378,12 @@ class FIMSVisualizer(QMainWindow):
         sig.set_xlabel('Time (ns)')
         sig.set_ylabel('Signal (fC/ns)' if isSignal else 'Charge (fC)')
         sig.grid()
-        sig.legend()
+        sig.legend(loc='center right')
 
+        currentGain = self.data._netGain.loc[self.avalancheSpinBox.value(), frameID]
         timeLabel = f'{inTime:.2f} ns' if inTime <= 250 else rf'{inTime/1e3:.2f} $\mu$s'
-        xz.set_title(f'Time = ({timeLabel}) (Frame ID: {frameID})')
-        xz.legend()
+        xz.set_title(f'Time = {timeLabel}, Gain = {currentGain}')
+        xz.legend(loc='upper right')
 
         self.canvas.fig.tight_layout()
         self.canvas.draw()
@@ -1232,7 +1571,7 @@ class FIMSVisualizer(QMainWindow):
         isZoom = self.zoomAmp.isChecked()
         zBuffer = 2
         lowZ = -amplificationGap-zBuffer
-        highZ = 6*zBuffer if isZoom else driftLength+zBuffer
+        highZ = amplificationGap+zBuffer if isZoom else driftLength+zBuffer
         zLim = [lowZ, highZ]
         
         if isinstance(axes, tuple):
