@@ -1694,7 +1694,7 @@ class FIMS_Simulation:
             saveParam = self.getAllParam()
             self.setParameters({
                 'initialZFraction': 0.25,
-                'numAvalanche': 5,
+                'numAvalanche': 10,
                 'numFieldLine': 21
             })
 
