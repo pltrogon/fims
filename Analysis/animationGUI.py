@@ -441,9 +441,13 @@ class FIMSVisualizer(QMainWindow):
         self.chkEndpoints.toggled.connect(self._onChange)
         layoutViewAvalanche.addWidget(self.chkEndpoints)
 
-        self.saveGifButton = QPushButton('Save Animation GIF')
+        self.saveGifButton = QPushButton('Save 2D Animation GIF')
         self.saveGifButton.clicked.connect(self._saveAnimationGif)
         layoutViewAvalanche.addWidget(self.saveGifButton)
+
+        self.save3DGifButton = QPushButton('Save 3D Animation GIF')
+        self.save3DGifButton.clicked.connect(self._save3DAnimationGif)
+        layoutViewAvalanche.addWidget(self.save3DGifButton)
 
         # Add spacer to keep controls pushed to the top
         layoutViewAvalanche.addStretch()
@@ -983,13 +987,30 @@ class FIMSVisualizer(QMainWindow):
 #**********************************************************************#
     def _saveAnimationGif(self):
         """Save the current avalanche as an XZ-projection GIF."""
+        self._saveAnimationGifWithRenderer(
+            self._drawXZAnimationFrame,
+            'Save 2D Animation GIF',
+        )
+
+#**********************************************************************#
+    def _save3DAnimationGif(self):
+        """Save the current avalanche as a 3D GIF."""
+        self._saveAnimationGifWithRenderer(
+            self._draw3DAnimationFrame,
+            'Save 3D Animation GIF',
+            projection='3d'
+        )
+
+#**********************************************************************#
+    def _saveAnimationGifWithRenderer(self, frameRenderer, dialogTitle, projection=None):
+        """Save the current avalanche GIF using the requested frame renderer."""
         if not self.allFrames:
             QMessageBox.warning(self, 'Save Animation', 'No animation frames are available.')
             return
 
         filePath, _ = QFileDialog.getSaveFileName(
             self,
-            'Save Animation GIF',
+            dialogTitle,
             f'avalanche_{self.avalancheSpinBox.value()}.gif',
             'GIF files (*.gif)'
         )
@@ -1004,11 +1025,22 @@ class FIMSVisualizer(QMainWindow):
         self.playButton.setText('Play Animation')
 
         exportFigure = Figure(figsize=(7, 5))
-        exportAxis = exportFigure.add_subplot(1, 1, 1)
+        exportAxis = exportFigure.add_subplot(1, 1, 1, projection=projection)
+        if projection == '3d':
+            exportFigure.patch.set_alpha(0)
 
         def drawFrame(frameIndex):
             exportAxis.clear()
-            self._drawXZAnimationFrame(exportAxis, frameIndex)
+            if projection == '3d':
+                exportAxis.set_facecolor('none')
+                for pane in (
+                    exportAxis.xaxis.pane,
+                    exportAxis.yaxis.pane,
+                    exportAxis.zaxis.pane,
+                ):
+                    pane.fill = False
+                    pane.set_alpha(0)
+            frameRenderer(exportAxis, frameIndex)
             exportFigure.tight_layout()
 
         animation = FuncAnimation(
@@ -1020,7 +1052,13 @@ class FIMSVisualizer(QMainWindow):
         )
 
         try:
-            animation.save(filePath, writer='pillow', fps=12)
+            savefigKwargs = {'transparent': True} if projection == '3d' else {}
+            animation.save(
+                filePath,
+                writer='pillow',
+                fps=12,
+                savefig_kwargs=savefigKwargs,
+            )
         except Exception as error:
             QMessageBox.critical(self, 'Save Animation', f'Could not save GIF:\n{error}')
         else:
@@ -1031,6 +1069,35 @@ class FIMSVisualizer(QMainWindow):
                 self.playButton.setChecked(True)
                 self.playButton.setText('Pause')
                 self.animationTimer.start(80)
+
+#**********************************************************************#
+    def _draw3DAnimationFrame(self, axis, frameIndex):
+        """Draw one 3D animation frame using the active animation settings."""
+        frameID = self.allFrames[frameIndex]
+        frameData = self.inAvData[self.inAvData['FrameID'] == frameID]
+
+        particleConfig = [
+            {'ID': 0, 'c': 'b', 's': 10, 'label': 'Electrons'},
+            {'ID': 1, 'c': 'r', 's': 15, 'label': 'Positive Ions'},
+            {'ID': -1, 'c': 'g', 's': 15, 'label': 'Negative Ions'},
+        ]
+        for particle in particleConfig:
+            particleData = frameData[frameData['ParticleType'] == particle['ID']]
+            axis.scatter(
+                particleData['x'], particleData['y'], particleData['z'],
+                c=particle['c'], s=particle['s'], label=particle['label']
+            )
+
+        self._drawParticleHistory(axis, frameIndex)
+        if self.chkGeometry.isChecked():
+            self._drawGeometry(axis)
+        self._formatAxes(axis)
+
+        currentGain = self.data._netGain.loc[self.avalancheSpinBox.value(), frameID]
+        inTime = frameData['Time'].iloc[0] if not frameData.empty else -1
+        timeLabel = f'{inTime:.2f} ns' if inTime <= 250 else rf'{inTime / 1e3:.2f} $\mu$s'
+        axis.set_title(f'Time = {timeLabel}, Gain = {currentGain}')
+        axis.legend(loc='upper right')
 
 #**********************************************************************#
     def _drawXZAnimationFrame(self, axis, frameIndex):
