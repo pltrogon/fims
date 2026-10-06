@@ -19,6 +19,7 @@
 #include <string>
 #include <ctime>
 #include <cstdlib>
+#include <cmath>
 #include <array>
 
 using namespace Garfield;
@@ -182,23 +183,23 @@ int main(int argc, char* argv[]) {
   Sensor sensorFIMS;
   sensorFIMS.AddComponent(&fieldFIMS);
   sensorFIMS.SetArea(
-    -2. * simParams->pitch, -2. * simParams->pitch, zmin,
-     2. * simParams->pitch,  2. * simParams->pitch, zmax
+    -1. * simParams->pitch, -.5 * simParams->pitch, zmin,
+     1. * simParams->pitch,  .5 * simParams->pitch, zmax
   );
 
   // Microscopic Electron Transport Setup
   AvalancheMicroscopic aval;
   aval.SetSensor(&sensorFIMS);
-  aval.EnableAvalancheSizeLimit(1);// Limit secondary ionization/gain
+  aval.EnableAvalancheSizeLimit(1); // Limit secondary ionization/gain
 
   ViewDrift viewDrift;
-  aval.EnablePlotting(&viewDrift);
+  // Record trajectory points every 5 collisions to capture realistic diffusion paths
+  aval.EnablePlotting(&viewDrift, 5); 
 
   // Drift Parameters
   double z0 = simParams->initialZFraction * simParams->driftLength;
   double t0 = 0.0;
   double e0 = 0.1; // Initial energy [eV]
-  double dx0 = 0.0, dy0 = 0.0, dz0 = 0.0;
   bool distOnPlane = true;
   double cellLength = simParams->pitch * cellXScale;
 
@@ -208,36 +209,104 @@ int main(int argc, char* argv[]) {
   for (int i = 0; i < numElectrons; ++i) {
     electronID = i;
 
-    // Sample initial XY coordinate over unit cell
+    // Sample original initial XY coordinate over unit cell
     auto [x0, y0] = distOnPlane 
       ? randomXYinGeometry(geometryMode, cellLength)
       : std::pair{0.0, 0.0};
 
-    // Drift single primary electron
-    aval.DriftElectron(x0, y0, z0, t0, e0, dx0, dy0, dz0);
+    // Store original initial state for tree
+    double initialX = x0, initialY = y0, initialZ = z0;
+    double initialT = t0, initialE = e0;
 
-    // Record Endpoint
-    if (aval.GetNumberOfElectronEndpoints() > 0) {
-      aval.GetElectronEndpoint(0, xi, yi, zi, ti, Ei, xf, yf, zf, tf, Ef, stat);
-      electronDataTree->Fill();
-    }
+    // Track current state across periodic boundary shifts
+    double curX = x0, curY = y0, curZ = z0;
+    double curTime = t0, curEnergy = e0;
+    double curDx = 0.0, curDy = 0.0, curDz = 0.0;
 
-    // Record full trajectory path points
-    int nDriftLines = viewDrift.GetNumberOfDriftLines();
-    for (int iLine = 0; iLine < nDriftLines; ++iLine) {
-      bool isElectron;
-      std::vector<std::array<float, 3>> driftPts;
-      viewDrift.GetDriftLine(iLine, driftPts, isElectron);
+    int bounceCount = 0;
+    const int maxBounces = 100; // Safeguard against infinite loops
 
-      for (const auto& pt : driftPts) {
-        driftX = pt[0];
-        driftY = pt[1];
-        driftZ = pt[2];
-        electronTrackTree->Fill();
+    while (bounceCount < maxBounces) {
+      // Drift single primary electron
+      aval.DriftElectron(curX, curY, curZ, curTime, curEnergy, curDx, curDy, curDz);
+
+      // Record trajectory path points for this segment
+      int nDriftLines = viewDrift.GetNumberOfDriftLines();
+      for (int iLine = 0; iLine < nDriftLines; ++iLine) {
+        bool isElectron;
+        std::vector<std::array<float, 3>> driftPts;
+        viewDrift.GetDriftLine(iLine, driftPts, isElectron);
+
+        for (const auto& pt : driftPts) {
+          driftX = pt[0];
+          driftY = pt[1];
+          driftZ = pt[2];
+          electronTrackTree->Fill();
+        }
       }
-    }
 
-    viewDrift.Clear(); // Clear recorded points for next drift iteration
+      // Check endpoint status
+      if (aval.GetNumberOfElectronEndpoints() > 0) {
+        aval.GetElectronEndpoint(0, xi, yi, zi, ti, Ei, xf, yf, zf, tf, Ef, stat);
+
+        // Case -1: Electron hit periodic boundary -> Shift back into unit cell
+        if (stat == -1) {
+          constexpr double eps = 1e-7; // 1 nm nudge inside boundary
+
+          // Shift x and y coordinates into central unit cell if outside
+          curX = std::abs(xf) >= cellLength ? -1.0 * std::copysign(cellLength - eps, xf) : xf;
+          curY = std::abs(yf) >= simParams->pitch ? -1.0 * std::copysign(simParams->pitch - eps, yf) : yf;
+          curZ = zf;
+
+          // Compute normalized velocity direction vector from last 2 trajectory points
+          if (nDriftLines > 0) {
+            bool isElectron;
+            std::vector<std::array<float, 3>> driftPts;
+            viewDrift.GetDriftLine(nDriftLines - 1, driftPts, isElectron);
+
+            size_t nPts = driftPts.size();
+            if (nPts >= 2) {
+              double dx = driftPts[nPts - 1][0] - driftPts[nPts - 2][0];
+              double dy = driftPts[nPts - 1][1] - driftPts[nPts - 2][1];
+              double dz = driftPts[nPts - 1][2] - driftPts[nPts - 2][2];
+              double vMag = std::sqrt(dx * dx + dy * dy + dz * dz);
+
+              if (vMag > 0.0) {
+                curDx = dx / vMag;
+                curDy = dy / vMag;
+                curDz = dz / vMag;
+              } else {
+                curDx = 0.0; curDy = 0.0; curDz = 0.0;
+              }
+            } else {
+              curDx = 0.0; curDy = 0.0; curDz = 0.0;
+            }
+          }
+
+          curTime = tf;
+          curEnergy = Ef;
+
+          viewDrift.Clear();
+          bounceCount++;
+          continue; // Continue drifting from shifted position
+        } else {
+          // Final termination (grid collision, aperture exit, attachment, etc.)
+          // Restore true original initial values for the tree record
+          xi = initialX;
+          yi = initialY;
+          zi = initialZ;
+          ti = initialT;
+          Ei = initialE;
+
+          electronDataTree->Fill();
+          viewDrift.Clear();
+          break; // Exit while loop
+        }
+      } else {
+        viewDrift.Clear();
+        break;
+      }
+    } // End re-injection loop
 
     if ((i + 1) % (numElectrons / 10 + 1) == 0) {
       std::cout << "Progress: " << (100 * (i + 1)) / numElectrons << " %" << std::endl;
@@ -254,5 +323,7 @@ int main(int argc, char* argv[]) {
   delete dataFile;
   delete gasFIMS;
 
+  std::cout << "Simulation completed. Saved to: " << dataPath << std::endl;
   return 0;
 }
+

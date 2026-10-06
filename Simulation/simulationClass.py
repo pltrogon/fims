@@ -1714,9 +1714,12 @@ class FIMS_Simulation:
         """TODO"""
 
         self._checkParam()
+        saveParam = self.getAllParam()
+        self.setParameters({'numAvalanche': 5000, 'initialZFraction': .50})
         self._generateGeometry()
-        self._solveEFields(solveWeighting=True)
+        self._solveEFields(solveWeighting=False)
         self._runGarfield('runHeatmap')
+        self.setParameters(saveParam)
 
         return
 
