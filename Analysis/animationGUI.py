@@ -13,7 +13,7 @@ matplotlib.use('QtAgg')
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
-from matplotlib.animation import FuncAnimation
+from matplotlib.animation import FuncAnimation, PillowWriter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from PyQt6.QtWidgets import (
@@ -23,6 +23,19 @@ from PyQt6.QtWidgets import (
     QRadioButton, QLineEdit, QFileDialog, QMessageBox
 )
 from PyQt6.QtCore import Qt, QTimer
+
+
+class TransparentPillowWriter(PillowWriter):
+    def finish(self):
+        self._frames[0].save(
+            self.outfile,
+            save_all=True,
+            append_images=self._frames[1:],
+            duration=int(1000 / self.fps),
+            loop=0,
+            disposal=2,
+        )
+
 
 CMTOMICRON = 1e4
 VCMTOkVCM = 1e-3
@@ -1053,9 +1066,10 @@ class FIMSVisualizer(QMainWindow):
 
         try:
             savefigKwargs = {'transparent': True} if projection == '3d' else {}
+            writer = TransparentPillowWriter(fps=12) if projection == '3d' else 'pillow'
             animation.save(
                 filePath,
-                writer='pillow',
+                writer=writer,
                 fps=12,
                 savefig_kwargs=savefigKwargs,
             )
@@ -1097,7 +1111,11 @@ class FIMSVisualizer(QMainWindow):
         inTime = frameData['Time'].iloc[0] if not frameData.empty else -1
         timeLabel = f'{inTime:.2f} ns' if inTime <= 250 else rf'{inTime / 1e3:.2f} $\mu$s'
         axis.set_title(f'Time = {timeLabel}, Gain = {currentGain}')
-        axis.legend(loc='upper right')
+        axis.legend(
+            loc='upper right',
+            bbox_to_anchor=(1, 1),
+            bbox_transform=axis.transAxes
+        )
 
 #**********************************************************************#
     def _drawXZAnimationFrame(self, axis, frameIndex):
@@ -1468,7 +1486,7 @@ class FIMSVisualizer(QMainWindow):
         
         self._addGrid(axes)
         self._addPads(axes)
-        self._addUnitCell(axes)
+        #self._addUnitCell(axes)
 
         return
 
