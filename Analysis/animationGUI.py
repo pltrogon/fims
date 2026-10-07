@@ -1037,7 +1037,7 @@ class FIMSVisualizer(QMainWindow):
         self.playButton.setChecked(False)
         self.playButton.setText('Play Animation')
 
-        exportFigure = Figure(figsize=(7, 5))
+        exportFigure = Figure(figsize=(7, 5), dpi=200 if projection == '3d' else 100)
         exportAxis = exportFigure.add_subplot(1, 1, 1, projection=projection)
         if projection == '3d':
             exportFigure.patch.set_alpha(0)
@@ -1065,14 +1065,14 @@ class FIMSVisualizer(QMainWindow):
         )
 
         try:
-            savefigKwargs = {'transparent': True} if projection == '3d' else {}
-            writer = TransparentPillowWriter(fps=12) if projection == '3d' else 'pillow'
-            animation.save(
-                filePath,
-                writer=writer,
-                fps=12,
-                savefig_kwargs=savefigKwargs,
-            )
+            if projection == '3d':
+                animation.save(
+                    filePath,
+                    writer=TransparentPillowWriter(fps=12),
+                    savefig_kwargs={'transparent': True},
+                )
+            else:
+                animation.save(filePath, writer='pillow', fps=12)
         except Exception as error:
             QMessageBox.critical(self, 'Save Animation', f'Could not save GIF:\n{error}')
         else:
@@ -1106,6 +1106,7 @@ class FIMSVisualizer(QMainWindow):
         if self.chkGeometry.isChecked():
             self._drawGeometry(axis)
         self._formatAxes(axis)
+        axis.grid(False)
 
         currentGain = self.data._netGain.loc[self.avalancheSpinBox.value(), frameID]
         inTime = frameData['Time'].iloc[0] if not frameData.empty else -1
@@ -1549,11 +1550,11 @@ class FIMSVisualizer(QMainWindow):
 
             ax.plot_surface(
                 xGrid, yGrid, zTop,
-                color='grey', alpha=0.5, edgecolor='none', shade=True
+                color='grey', alpha=0.25, edgecolor='none', shade=True
             )
             ax.plot_surface(
                 xGrid, yGrid, zBot,
-                color='grey', alpha=0.5, edgecolor='none', shade=True
+                color='grey', alpha=0.25, edgecolor='none', shade=True
             )
 
         return
@@ -1594,7 +1595,8 @@ class FIMSVisualizer(QMainWindow):
 
             for (i, j) in centers:
                 xLocs, yLocs = hexXY(padLength, i, j)
-                line = '-' if i==0 and j==0 else ':'
+                #line = '-' if i==0 and j==0 else ':'
+                line = '-' if i==0 and j==0 else ''
                 ax.plot(
                     xLocs, yLocs, zHeight*np.ones(len(xLocs)),
                     c='m', ls=line
