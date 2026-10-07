@@ -473,7 +473,7 @@ class FIMS_Simulation:
                 simData = runData(runNumber)
                 ibn = float(simData.getCalcParameter('Average IBN'))
                 ibnError = float(simData.getCalcParameter('IBN Error'))
-                fieldRatio = float(simData.getRunParameter('fieldRatio'))
+                fieldRatio = float(simData.getRunParameter('Electric Field Ratio'))
                 
                 record.update({
                     'status': 'ok',
