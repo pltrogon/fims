@@ -87,52 +87,55 @@ class FIMS_AI_Agent:
             shapeTool (str): formatting of the hole shape the agent should use.
         """
         self.aiPrompt = """
-            You are designing the hole outline in the amplification grid of a FIMS
-            micro-pattern gaseous detector. Your objective is to MINIMIZE the ion backflow
-            number (IBN). Lower is better.
+            You are designing the hole pattern in the amplification grid of an integrated
+            grid type micro-pattern gaseous detector. Your objective is to MINIMIZE the ion 
+            backflow number (IBN) while maintaining 95% efficiency.
 
             PHYSICS
-
             The amplification grid is a thin conducting sheet perforated by a lattice of
             holes. Electrons drifting down from the drift region are funneled through a
-            hole into the amplification gap below, where they avalanche. The positive ions
-            created in that avalanche drift back up. Any ion that makes it through the hole
-            and into the drift region is backflow; any ion that lands on grid material is
-            not. IBN is the mean number of backflowing ions per avalanche, so lower is
-            better.
+            hole into the amplification gap below, where they undergo a Townsend avalanche.
+            The positive ions created in that avalanche drift back up. Any ion that does not
+            terminate on the grid is backflow. IBN is the mean number of backflowing ions per
+            avalanche, so lower is better.
 
-            The grid is arranged in a hexagonal pattern, so the holes must be able to be repeated
-            in that pattern. Generally speaking, larger holes have an easier time collecting 
-            electrons above the grid, which enables a lower field and smaller avalanches. 
-            Smaller avalanches mean less ions are created which therefore lowers the IBN. However,
-            larger holes also make it easier for ions created to backflow, so larger isn't 
-            universally better. 
-
-            You may also assume that ions are created with a 2D Gaussian distribution, with
-            the majority created at the center of the hexagonal unit cell. This may mean
-            that multiple holes per unit cell offset from the center could be ideal, but
-            don't assume that.
+            The grid is arranged in a hexagonal pattern, so the full pattern must fit within
+            a single hexagon. The thickness of the grid, the size of the anode pad, the pitch
+            between unit cells, and the length of the amplification gap are all fixed parameters.
+            The only input variable is the hole pattern. The field ratio, collection efficiency, 
+            and IBN are all determined by the simulation based on the hole pattern.
+            
+            Generally speaking, larger holes (that is, hole patterns with a larger total open area)
+            have an easier time enabling electrons to transfer from the drift region to the
+            amplification region. This is represented by collection efficiency. The hole pattern 
+            must have at least 0.95 collection efficiency in order to be considered viable. 
+            HIGHER collection efficiency is better.
+            
+            The electric field is the primary factor that determines the size of the Townsend
+            avalanche. Higher fields correspond to larger avalanches. Since every electron
+            created also creates an ion, larger fields generally result in higher IBN. SMALLER
+            field ratios are generally better.
 
             Treat all of the above as a starting intuition only. The simulation is the
-            authority. If the measured history contradicts it, follow the history.
+            authority. If the simulation contradicts the above physics, follow the simulation.
 
             RULES
-             - You have exactly one action: propose_hole_shape. You cannot read files, run
-               code, or change any other parameter.
-              - Call propose_hole_shape exactly once, and then stop. Do not perform any other
+            -   You have exactly one action: propose_hole_shape. You cannot read files, run
+                code, or change any other parameter.
+            -   Call propose_hole_shape exactly once, and then stop. Do not perform any other
                 actions or attempt any other tasks.
-             - IBN is reported with a Monte Carlo uncertainty. Two designs whose IBN differ
-               by less than the quadrature sum of their errors are NOT distinguishable. Do
-               not build a conclusion on such a gap; if you need to resolve one, say so in
-               your hypothesis.
-             - Each simulation costs between 3 minutes and 2 hours. Every proposal must
-               earn its place. State a hypothesis that could turn out to be wrong.
-             - While the history is short, spread out: change the shape family, not one
-               number. Once a family clearly wins, perturb it deliberately along one axis
-               at a time so you can attribute the change.
-             - Never repeat an outline already in the history.
-             - Respect the geometric constraints exactly. A violated constraint is caught
-               before the simulator runs and simply wastes a turn.
+            -   IBN is reported with a Monte Carlo uncertainty. Two designs whose IBN differ
+                by less than the quadrature sum of their errors are NOT distinguishable. Do
+                not build a conclusion on such a gap; if you need to resolve one, say so in
+                your hypothesis.
+            -   Each simulation costs between 10 minutes and 2 hours. Every proposal must
+                earn its place. State a hypothesis that could turn out to be wrong.
+            -   While the history is short, spread out: change the shape family, not one
+                number. Once a family clearly wins, perturb it deliberately along one axis
+                at a time so you can attribute the change.
+            -   Never repeat an outline already in the history.
+            -   Respect the geometric constraints exactly. A violated constraint is caught
+                before the simulator runs and simply wastes a turn.
             """
 
         holeSpec = {
