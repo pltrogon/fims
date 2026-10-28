@@ -46,7 +46,7 @@ while(EXECUTABLES)
     list(POP_FRONT EXECUTABLES EXE_NAME EXE_SRC)
     
     add_executable(${EXE_NAME} 
-        "${CMAKE_CURRENT_SOURCE_DIR}/garfieldExecutables/${EXE_SRC}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/${EXE_SRC}"
         "${CMAKE_CURRENT_SOURCE_DIR}/myFunctions.cc"
     )
     

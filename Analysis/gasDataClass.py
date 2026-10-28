@@ -690,10 +690,10 @@ class magboltzSimulation:
 
         if newPlot:
             for inax in axes:
-                inax.axvline(
-                    x=50, 
-                    c='m', ls='--', label='Minimum field for T2K gain of 10'
-                )
+                #inax.axvline(
+                #    x=50, 
+                #    c='m', ls='--', label='Minimum field for T2K gain of 10'
+                #)
                 inax.set_xlabel('Electric Field Strength (kV/cm)')
                 inax.set_xscale('log')
                 inax.grid()

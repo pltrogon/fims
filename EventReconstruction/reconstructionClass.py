@@ -217,6 +217,7 @@ class Reconstruction:
             return rawData
         
         eventNums = np.arange(numEvents)
+
         for num in eventNums:
             self.trialID = num
             trialData = self.getCoordinates()
