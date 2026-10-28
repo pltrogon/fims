@@ -103,7 +103,7 @@ class geometryClass:
                 holeScale = 1.5 if hexCell else 1.0
             
             case HoleShape.CIS:
-                holeScale = 1.5 if hexCell else 1.0
+                holeScale = math.sqrt(3) / 2 if hexCell else 1.0
 
             case HoleShape.NESTEGGS:
                 holeScale = 3.55
@@ -303,8 +303,8 @@ class gmshClass:
                 shapeList = self._customGeometry(height, thickness)
             
             case 'nesteggs':
-                xCenter = pitch/math.sqrt(3)/4
-                yCenter = pitch/4
+                xCenter = pitch*0.315/math.sqrt(3)
+                yCenter = pitch*0.315
                 offsets = [
                     (-2, 0), (2, 0), 
                     (-1, -1), (-1, 1), 
@@ -361,13 +361,12 @@ class gmshClass:
                 ]
                 
                 # Add center block
-                blockLength = 15
-                block = self._createPolygon(blockLength, height, thickness, 6)
+                block = self._createPolygon(length, height, thickness, 6)
                 
                 # Create all holes:
                 for angle, (dx, dy) in zip(angles, offsets):
                     inHole = self._createPolygon(
-                        length, height, thickness,
+                        17, height, thickness, # TODO: replace 17 with pitch/math.sqrt(3)/2
                         numPoints=3, offset=angle
                     )
                     curShape = (3, inHole)
@@ -689,7 +688,7 @@ class gmshClass:
 
         unitCell = self._geoConfig.unitCell
         scale = self._geoConfig.scale
-
+        
         # Dynamic pad assignment based on unit cell geometry and scale
         if scale == ScaleOption.SURROUNDING or scale == ScaleOption.HALF:
             if unitCell == UnitCell.SQUARE:
@@ -712,7 +711,7 @@ class gmshClass:
 
         elif unitCell == UnitCell.HEXAGON and scale == ScaleOption.CORNER:
             cellParts['RightTopPad'] = padVolumes[1]
-
+        
         # Cathode must be listed last for Elmer FEM unpacking order
         cellParts['Cathode'] = cathodeSurface[0]
 
