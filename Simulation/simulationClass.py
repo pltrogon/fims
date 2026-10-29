@@ -299,21 +299,39 @@ class FIMS_Simulation:
         newEnv = self._getGarfieldEnvironment()
         os.environ.update(newEnv)
         
-        # Clean up local project build directory to force fresh discovery
+        # TODO: why are we deleting all the files every time we initialize?
+        # Clean up local project build directory if the Garfield install changed
         originalCWD = os.getcwd()
         os.chdir('build')
 
+        stampFile = 'GARFIELDPATH.stamp'
+        lastPath = None
+        if os.path.exists(stampFile):
+            with open(stampFile, 'r') as f:
+                lastPath = f.read().strip()
+
+        if lastPath != self._GARFIELDPATH:
+            for item in ['CMakeCache.txt', 'CMakeFiles']:
+                if os.path.exists(item):
+                    if os.path.isdir(item):
+                        shutil.rmtree(item)
+                    else:
+                        os.remove(item)
+            with open(stampFile, 'w') as f:
+                f.write(self._GARFIELDPATH)
+        
+        """
         for item in ['CMakeCache.txt', 'CMakeFiles']:
             if os.path.exists(item):
                 if os.path.isdir(item):
                     shutil.rmtree(item)
                 else:
                     os.remove(item)
+        """
         
         # Use CMake to configure and build the executables
-        makeBuild = 'cmake .. && make'
+        makeBuild = f'cmake .. && make -j{os.cpu_count() or 1}'
         
-        # TODO: CMake takes upwards of 30 s to build. Surely this can be improved
         try:
             subprocess.run(
                 makeBuild,
