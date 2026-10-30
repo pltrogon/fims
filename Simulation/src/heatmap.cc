@@ -194,7 +194,7 @@ int main(int argc, char* argv[]) {
 
   ViewDrift viewDrift;
   // Record trajectory points every 5 collisions to capture realistic diffusion paths
-  aval.EnablePlotting(&viewDrift, 5); 
+  aval.EnablePlotting(&viewDrift, 2); 
 
   // Drift Parameters
   double z0 = simParams->initialZFraction * simParams->driftLength;

@@ -1106,17 +1106,11 @@ class FIMSVisualizer(QMainWindow):
         if self.chkGeometry.isChecked():
             self._drawGeometry(axis)
         self._formatAxes(axis)
+        pitch = self.data.simData['pitch']
+        axis.set_xlim(-pitch / 2, pitch / 2)
+        axis.set_ylim(-pitch / 2, pitch / 2)
         axis.grid(False)
-
-        currentGain = self.data._netGain.loc[self.avalancheSpinBox.value(), frameID]
-        inTime = frameData['Time'].iloc[0] if not frameData.empty else -1
-        timeLabel = f'{inTime:.2f} ns' if inTime <= 250 else rf'{inTime / 1e3:.2f} $\mu$s'
-        axis.set_title(f'Time = {timeLabel}, Gain = {currentGain}')
-        axis.legend(
-            loc='upper right',
-            bbox_to_anchor=(1, 1),
-            bbox_transform=axis.transAxes
-        )
+        axis.set_axis_off()
 
 #**********************************************************************#
     def _drawXZAnimationFrame(self, axis, frameIndex):
@@ -1542,7 +1536,7 @@ class FIMSVisualizer(QMainWindow):
             if rest:
                 rest[0].pcolormesh(
                     xGrid, yGrid, gridMask, 
-                    cmap='Greys', vmin=0, vmax=2, alpha=0.5, shading='auto'
+                    cmap='Greys', vmin=0, vmax=2, alpha=0.25, shading='auto'
                 )
 
         else:
@@ -1550,11 +1544,11 @@ class FIMSVisualizer(QMainWindow):
 
             ax.plot_surface(
                 xGrid, yGrid, zTop,
-                color='grey', alpha=0.25, edgecolor='none', shade=True
+                color='grey', alpha=0.1, edgecolor='none', shade=True
             )
             ax.plot_surface(
                 xGrid, yGrid, zBot,
-                color='grey', alpha=0.25, edgecolor='none', shade=True
+                color='grey', alpha=0.1, edgecolor='none', shade=True
             )
 
         return
