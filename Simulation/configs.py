@@ -23,7 +23,7 @@ class aiModel:
     def getAIModel():
         """Returns the name of the ai model in use as a string."""
         
-        aiModelFIMS = 'claude-opus-4-5' # TODO: make this a data class like geometry configuration?
+        aiModelFIMS = 'claude-opus-5-5' # TODO: make this a data class like geometry configuration?
         
         return aiModelFIMS
 

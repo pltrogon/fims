@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import math
 import os
 import time
@@ -45,14 +46,6 @@ class FIMS_AI_Agent:
         self.maxProposals = 5
         self.history = []
         
-        # Setup geometry
-        self._geoConfig = geoConfig
-        self._geoParams = geoParams
-
-        # Setup Ai agent
-        self.aiModel = aiModel.getAIModel()
-        self._setupAiInfo()
-        
         # Setup files
         aiPath = os.path.join('..', 'Data', 'AI')
         os.makedirs(aiPath, exist_ok=True)
@@ -61,6 +54,17 @@ class FIMS_AI_Agent:
         self.historyCSV = os.path.join(aiPath, 'holeShapeHistory.csv')
         self.idealShapePath = os.path.join(aiPath, 'bestHoleShape.json')
         self._customShapePath = os.path.join('Geometry', 'customShape.json')
+        self._promptPath = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), 'aiAgentPrompt.md'
+        )
+        
+        # Setup geometry
+        self._geoConfig = geoConfig
+        self._geoParams = geoParams
+
+        # Setup Ai agent
+        self.aiModel = aiModel.getAIModel()
+        self._setupAiInfo()
         
         if resume:
             self._loadHistory()
@@ -84,239 +88,32 @@ class FIMS_AI_Agent:
         
         returns:
             aiPrompt (str): text description of what the agent should do.
-            shapeTool (str): formatting of the hole shape the agent should use.
+            shapeTool (dict): formatting of the hole shape the agent should use.
         """
-        self.aiPrompt = """
-            You are designing the hole pattern in the amplification grid of an integrated
-            grid type micro-pattern gaseous detector. Your objective is to MINIMIZE the ion 
-            backflow number (IBN) while maintaining 95% efficiency.
-
-            PHYSICS
-            The amplification grid is a thin conducting sheet perforated by a lattice of
-            holes. Electrons drifting down from the drift region are funneled through a
-            hole into the amplification gap below, where they undergo a Townsend avalanche.
-            The positive ions created in that avalanche drift back up. Any ion that does not
-            terminate on the grid is backflow. IBN is the mean number of backflowing ions per
-            avalanche, so lower is better.
-
-            The grid is arranged in a hexagonal pattern, so the full pattern must fit within
-            a single hexagon. The thickness of the grid, the size of the anode pad, the pitch
-            between unit cells, and the length of the amplification gap are all fixed parameters.
-            The only input variable is the hole pattern. The field ratio, collection efficiency, 
-            and IBN are all determined by the simulation based on the hole pattern.
-            
-            Generally speaking, larger holes (that is, hole patterns with a larger total open area)
-            have an easier time enabling electrons to transfer from the drift region to the
-            amplification region. This is represented by collection efficiency. The hole pattern 
-            must have at least 0.95 collection efficiency in order to be considered viable. 
-            HIGHER collection efficiency is better.
-            
-            The electric field is the primary factor that determines the size of the Townsend
-            avalanche. Higher fields correspond to larger avalanches. Since every electron
-            created also creates an ion, larger fields generally result in higher IBN. SMALLER
-            field ratios are generally better.
-
-            Treat all of the above as a starting intuition only. The simulation is the
-            authority. If the simulation contradicts the above physics, follow the simulation.
-
-            RULES
-            -   You have exactly one action: propose_hole_shape. You cannot read files, run
-                code, or change any other parameter.
-            -   Call propose_hole_shape exactly once, and then stop. Do not perform any other
-                actions or attempt any other tasks.
-            -   IBN is reported with a Monte Carlo uncertainty. Two designs whose IBN differ
-                by less than the quadrature sum of their errors are NOT distinguishable. Do
-                not build a conclusion on such a gap; if you need to resolve one, say so in
-                your hypothesis.
-            -   Each simulation costs between 10 minutes and 2 hours. Every proposal must
-                earn its place. State a hypothesis that could turn out to be wrong.
-            -   While the history is short, spread out: change the shape family, not one
-                number. Once a family clearly wins, perturb it deliberately along one axis
-                at a time so you can attribute the change.
-            -   Never repeat an outline already in the history.
-            -   Respect the geometric constraints exactly. A violated constraint is caught
-                before the simulator runs and simply wastes a turn.
-            """
-
-        holeSpec = {
-            'type': 'object',
-            'description': (
-                'One hole. Every hole is described on its own: its own outline '
-                'type, its own parameters, and its own position. Holes in the same '
-                'cell need not resemble each other in any way.'
-            ),
-            'properties': {
-                'type': {
-                    'type': 'string',
-                    'enum': ['polygon', 'polar', 'fourier'],
-                    'description': (
-                        'polygon: explicit x,y vertices. '
-                        'polar: radius/angle pairs, auto-sorted by angle, which '
-                        'cannot self-intersect. '
-                        'fourier: a smooth closed curve '
-                        'r(theta) = meanRadius + sum a_n cos(n*theta + phase_n); '
-                        'the most compact way to describe lobed or rounded '
-                        'outlines.'
-                    ),
-                },
-                'offset': {
-                    'type': 'array',
-                    'items': {'type': 'number'},
-                    'minItems': 2,
-                    'maxItems': 2,
-                    'description': (
-                        '[dx, dy] of this hole center from the cell center, in '
-                        'microns. Use [0, 0] to put it at the center.'
-                    ),
-                },
-                'vertices': {
-                    'type': 'array',
-                    'minItems': 3,
-                    'maxItems': 360,
-                    'items': {
-                        'type': 'array',
-                        'items': {'type': 'number'},
-                        'minItems': 2,
-                        'maxItems': 2,
-                    },
-                    'description': (
-                        'For type "polygon" only: [[x, y], ...] in microns, ordered '
-                        'around the outline and measured from THIS hole center, not '
-                        'the cell center.'
-                    ),
-                },
-                'points': {
-                    'type': 'array',
-                    'minItems': 3,
-                    'maxItems': 360,
-                    'items': {
-                        'type': 'array',
-                        'items': {'type': 'number'},
-                        'minItems': 2,
-                        'maxItems': 2,
-                    },
-                    'description': (
-                        'For type "polar" only: [[radius, angleDegrees], ...] about '
-                        'this hole center. Radii must be positive; angles must be '
-                        'distinct.'
-                    ),
-                },
-                'meanRadius': {
-                    'type': 'number',
-                    'description': (
-                        'For type "fourier" only: the mean radius of this hole in '
-                        'microns.'
-                    ),
-                },
-                'harmonics': {
-                    'type': 'array',
-                    'maxItems': 8,
-                    'items': {
-                        'type': 'object',
-                        'properties': {
-                            'n': {
-                                'type': 'integer',
-                                'minimum': 1,
-                                'maximum': 24,
-                                'description': 'Number of lobes.',
-                            },
-                            'amplitude': {
-                                'type': 'number',
-                                'description': (
-                                    'Lobe depth in microns. The sum of the absolute '
-                                    'amplitudes must stay below meanRadius.'
-                                ),
-                            },
-                            'phaseDeg': {
-                                'type': 'number',
-                                'description': 'Phase offset in degrees.',
-                            },
-                        },
-                        'required': ['n', 'amplitude'],
-                    },
-                    'description': (
-                        'For type "fourier" only. An empty list gives a circle.'
-                    ),
-                },
-                'numSamples': {
-                    'type': 'integer',
-                    'minimum': 12,
-                    'maximum': 360,
-                    'description': (
-                        'For type "fourier" only: how many points to sample this '
-                        'curve at. 120 is a good default; use more only for high '
-                        'lobe counts.'
-                    ),
-                },
-                'rotationDeg': {
-                    'type': 'number',
-                    'description': (
-                        'Optional rotation of this outline about its own center, in '
-                        'degrees.'
-                    ),
-                },
-            },
-            'required': ['type', 'offset'],
-        }
         
-        self.shapeTool = {
-            'name': 'propose_hole_shape',
-            'description': (
-                'Propose the next grid hole pattern to simulate. This is your only '
-                'available action. A pattern is a list of holes in one unit cell. '
-                'Each hole is specified independently, so you may mix shapes, sizes '
-                'and types freely within a cell. All lengths are in microns.'
-            ),
-            'input_schema': {
-                'type': 'object',
-                'properties': {
-                    'hypothesis': {
-                        'type': 'string',
-                        'description': (
-                            'What you expect this pattern to do to the IBN relative '
-                            'to the current best, and the mechanism you think is '
-                            'responsible. One or two sentences. Must be falsifiable '
-                            'by the result.'
-                        ),
-                    },
-                    'rationale': {
-                        'type': 'string',
-                        'description': (
-                            'What in the history led you here. Name the specific runs '
-                            'you are reasoning from.'
-                        ),
-                    },
-                    'shape': {
-                        'type': 'object',
-                        'description': 'The hole pattern for one unit cell.',
-                        'properties': {
-                            'holes': {
-                                'type': 'array',
-                                'minItems': 1,
-                                'maxItems': 24,
-                                'items': holeSpec,
-                                'description': (
-                                    'Every hole in the cell. One entry gives a single '
-                                    'hole; several entries give several fully '
-                                    'independent holes, which may overlap.'
-                                ),
-                            },
-                            'numHoles': {
-                                'type': 'integer',
-                                'minimum': 1,
-                                'maximum': 24,
-                                'description': (
-                                    'Optional cross-check: must equal the length of '
-                                    '"holes" if both are given.'
-                                ),
-                            },
-                        },
-                        'required': ['holes'],
-                    },
-                },
-                'required': ['hypothesis', 'rationale', 'shape'],
-            },
-        }
+        with open(self._promptPath, 'r', encoding='utf-8') as promptFile:
+            promptText = promptFile.read()
+
+        sections = re.split(r'^# (.+?)\s*$', promptText, flags=re.MULTILINE)
+        sections = dict(zip(sections[1::2], sections[2::2]))
+
+        def jsonBlock(title):
+            block = re.search(
+                r'```json\s*\n(.*?)\n```', sections[title], flags=re.DOTALL
+            )
+            if block is None:
+                raise ValueError(
+                    f'No ```json block under "# {title}" in {self._promptPath}.'
+                )
+            return json.loads(block.group(1))
+
+        self.aiPrompt = sections['System Prompt'].strip()
+
+        holeSpec = jsonBlock('Hole Spec')
+        self.shapeTool = jsonBlock('Shape Tool')
+
+        holesSchema = self.shapeTool['input_schema']['properties']['shape']['properties']['holes']
+        holesSchema['items'] = holeSpec
         
         return
 
@@ -1214,7 +1011,7 @@ class FIMS_AI_Agent:
             f'Best so far: iteration {self.bestEntry["iteration"]} at '
             f'IBN = {self.bestEntry["ibn"]:.5g} +/- {self.bestEntry["ibnError"]:.3g}, '
             f"collection efficiency = {self.bestEntry['collectionEff']:.4g} "
-            f"+{self.bestEntry['collectionErrHigh']:.2g}/-{self.bestEntry['collectionErrLow']:.2g})"    
+            f"+{self.bestEntry['collectionErrHigh']:.2g}/-{self.bestEntry['collectionErrLow']:.2g}"    
             if self.bestEntry else 'No successful run yet.'
         )
         
