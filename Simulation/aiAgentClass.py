@@ -65,7 +65,7 @@ class FIMS_AI_Agent:
         if resume:
             self._loadHistory()
             completed = [e for e in self.history if e.get('status') == 'ok']
-            self.bestEntry = min(completed, key=lambda e: e['ibn']) if completed else None
+            self.bestEntry = min(completed, key=self._rankKey) if completed else None
             print(f'Resuming from {len(self.history)} recorded trials.')
         
         elif os.path.exists(self.historyJSONL):
@@ -441,7 +441,7 @@ class FIMS_AI_Agent:
         if not completed:
             return None
         
-        newBestEntry = min(completed, key=lambda e: e['ibn'])
+        newBestEntry = min(completed, key=self._rankKey)
         
         if newBestEntry != self.bestEntry:
             self.bestEntry = newBestEntry
@@ -473,7 +473,8 @@ class FIMS_AI_Agent:
             )
 
         header = (
-            f"{'it':>3}  {'status':<8} {'IBN':>10} {'+/-':>8} {'N':>2} "
+            f"{'it':>3}  {'status':<8} {'IBN':>10} {'+/-':>8} "
+            f"{'CollEff':>7} {'CollEff +/-':>15} {'N':>2} "
             f"{'maxR':>6} {'minR':>6} {'area':>8} {'perim':>7} {'open':>6}  types"
         )
         allRows = [header, '-'*len(header)]
@@ -485,17 +486,20 @@ class FIMS_AI_Agent:
             if entry.get('status') == 'ok':
                 ibnText = f"{entry['ibn']:.5g}"
                 errText = f"{entry['ibnError']:.3g}"
-                ceText = f"{entry['collectionEff']:.5g}"
-                ceErrLowText = f"{entry['collectionErrLow']:.3g}"
-                ceErrHighText = f"{entry['collectionErrHigh']:.3g}"
+                ceText = f"{entry['collectionEff']:.4g}"
+                ceErrText = (
+                    f"+{entry['collectionErrHigh']:.2g}"
+                    f"/-{entry['collectionErrLow']:.2g}"
+                )
                 
             else:
                 ibnText, errText = '-', '-'
+                ceText, ceErrText = '-', '-'
 
             allRows.append(
                 f"{entry.get('iteration', -1):>3}  "
                 f"{entry.get('status', '?'):<8} {ibnText:>10} {errText:>8} "
-                f"{ceText:>10} {ceErrHighText} / {ceErrLowText:>8} "
+                f"{ceText:>7} {ceErrText:>15} "
                 f"{summary.get('numHoles', 0):>2d} "
                 f"{summary.get('maxRadius', nan):>6.2f} "
                 f"{summary.get('minRadius', nan):>6.2f} "
@@ -512,7 +516,7 @@ class FIMS_AI_Agent:
         completed = [e for e in self.history if e.get('status') == 'ok']
         detailIds = [
             e['iteration']
-            for e in sorted(completed, key=lambda e: e['ibn'])[:numDetailed]
+            for e in sorted(completed, key=self._rankKey)[:numDetailed]
         ]
         for entry in self.history[-2:]:
             if entry.get('status') == 'ok' and entry['iteration'] not in detailIds:
@@ -525,10 +529,10 @@ class FIMS_AI_Agent:
                 if entry['iteration'] not in detailIds:
                     continue
                 allRows.append(
-                    f"\n  iteration {entry['iteration']}\n"
-                    f"IBN = {entry['ibn']:.5g} +/- {entry['ibnError']:.3g}\n"
-                    f"Collection Efficiency = {entry['collectionEff']:.5g} "
-                    f"+/- ({entry['collectionErrHigh']:.3g}/{entry['collectionErrLow']:.3g})"
+                    f"\n  iteration {entry['iteration']}  "
+                    f"IBN = {entry['ibn']:.5g} +/- {entry['ibnError']:.3g}"
+                    f"  collection efficiency = {entry['collectionEff']:.4g} "
+                    f"+{entry['collectionErrHigh']:.2g}/-{entry['collectionErrLow']:.2g}"
                 )
                 allRows.append(f"  spec: {json.dumps(entry['spec'])}")
                 if entry.get('hypothesis'):
@@ -968,7 +972,20 @@ class FIMS_AI_Agent:
         return edges
 
     #**********************************************************************#
-
+    
+    @staticmethod
+    def _rankKey(entry, minCollection=0.95):
+        """
+        Sort key for completed entries: viable designs (collection
+        efficiency >= minCollection) first, then lowest IBN. Entries
+        without a recorded collection efficiency are treated as viable.
+        """
+        collectionEff = entry.get('collectionEff')
+        viable = collectionEff is None or collectionEff >= minCollection
+        return (not viable, entry['ibn'])
+    
+    #**********************************************************************#
+    
     @staticmethod
     def _holesOverlap(firstHole, secondHole):
         """
@@ -1195,9 +1212,9 @@ class FIMS_AI_Agent:
         """
         bestText = (
             f'Best so far: iteration {self.bestEntry["iteration"]} at '
-            f'IBN = {self.bestEntry["ibn"]:.5g} +/- {self.bestEntry["ibnError"]:.3g}.'
-            f"Collection Efficiency = {entry['collectionEff']:.5g} "
-            f"+/- ({entry['collectionErrHigh']:.3g}/{entry['collectionErrLow']:.3g})"    
+            f'IBN = {self.bestEntry["ibn"]:.5g} +/- {self.bestEntry["ibnError"]:.3g}, '
+            f"collection efficiency = {self.bestEntry['collectionEff']:.4g} "
+            f"+{self.bestEntry['collectionErrHigh']:.2g}/-{self.bestEntry['collectionErrLow']:.2g})"    
             if self.bestEntry else 'No successful run yet.'
         )
         
