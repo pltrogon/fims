@@ -397,13 +397,12 @@ class FIMS_Simulation:
     def runAIShapeOptimizer(self, numIterations, resume=True):
         """
         Runs an ai-agent that searches for a hole shape that minimizes IBN.
-
         
-        args:
+        Args:
             numIterations (int): the number of iterations to run.
-            resume (bool): whether to allow the ai agent to see previous trials.
+            resume (bool): Allow access to results from previous trials.
         
-        returns:
+        Returns:
             idealNum (int): the run number for the best shape trial.
         
         """
@@ -421,17 +420,14 @@ class FIMS_Simulation:
         aiAgent = FIMS_AI_Agent(geoConfig, self._param, resume)
         
         # Begin AI Agent loop
-        startIteration = 1 + max(
-            (elem.get('iteration', 0) for elem in aiAgent.history), 
-            default=0
-        )
+        prevIter = max((elem.get('iteration', 0) for elem in aiAgent.history), default=0)
+        startIteration = prevIter + 1
         finalIteration = startIteration + numIterations - 1
 
+        print(f'Optimizing {numIterations} iterations ({startIteration} to {finalIteration})...')
         for iteration in range(startIteration, finalIteration + 1):
             iterationStart = time.perf_counter()
-            print(f'\n{"*"*72}')
-            print(f'Starting Iteration {iteration} of {finalIteration}')
-            print(f'{"*"*72}')
+            print(f'\tRunning iteration {iteration}')
             
             # Get a custom shape
             proposal, shapeSummary = aiAgent.getCustomShape(iteration, finalIteration)
@@ -448,7 +444,7 @@ class FIMS_Simulation:
                     'summary': None,
                 }
                 aiAgent.updateHistory(record)
-                print('Giving up on this iteration.')
+                print(f'WARNING: proposal is None. Iteration {iteration} failed.')
                 continue
             
             record = {
@@ -485,7 +481,7 @@ class FIMS_Simulation:
                 })
                 print(
                     f'  Result: IBN = {ibn:.5g} +/- {ibnError:.3g}\n'
-                    f'  Collection Efficiency = {collectEff.4g}'
+                    f'  Collection Efficiency = {collectEff:.4g}'
                     f' +{collectErrHigh:.2g}/-{collectErrLow:.2g}\n'
                     f'  (run {runNumber}, field ratio {fieldRatio:g})'
                 )
@@ -495,7 +491,7 @@ class FIMS_Simulation:
                     'status': 'failed',
                     'message': f'{type(error).__name__}: {error}',
                 })
-                print(f'\t Simulation failed: {record["message"]}')
+                print(f'\tSimulation failed: {record["message"]}')
 
             record['duration'] = round(time.perf_counter() - iterationStart, 1)
             print(f'\t Duration: {record["duration"]:.1f} s')
