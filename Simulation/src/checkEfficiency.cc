@@ -149,7 +149,6 @@ int main(int argc, char * argv[]) {
 
     //Default initial electron parameters
     double x0 = 0., y0 = 0., z0 = simParams->initialZFraction*simParams->driftLength;
-    double minHeight = 25.0; // Minimum initial height in case of large diffusion.
     double t0 = 0.;//ns
     double e0 = 0.1;//eV (Garfield is weird when this is 0.)
     double dx0 = 0., dy0 = 0., dz0 = 0.;//No velocity
