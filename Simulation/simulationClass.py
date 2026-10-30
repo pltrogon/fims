@@ -491,18 +491,25 @@ class FIMS_Simulation:
                 simData = runData(runNumber)
                 ibn = float(simData.getCalcParameter('Average IBN'))
                 ibnError = float(simData.getCalcParameter('IBN Error'))
+                collectEff = float(simData.getCalcParameter('Charge Collection Eff'))
+                collectEffLow = float(simData.getCalcParameter('Charge Collection Eff Err (Low)'))
+                collectEffHigh = float(simData.getCalcParameter('Charge Collection Eff Err (High)'))
                 fieldRatio = float(simData.getRunParameter('Electric Field Ratio'))
                 
                 record.update({
                     'status': 'ok',
                     'ibn': ibn,
                     'ibnError': ibnError,
+                    'collectionEff': collectEff,
+                    'collectionErrLow': collectErrLow,
+                    'collectionErrHigh': collectErrHigh,
                     'runNumber': runNumber,
                     'fieldRatio': fieldRatio,
                 })
                 print(
-                    f'  Result: IBN = {ibn:.5g} +/- {ibnError:.3g} '
-                    f'(run {runNumber}, field ratio {fieldRatio:g})'
+                    f'  Result: IBN = {ibn:.5g} +/- {ibnError:.3g}\n'
+                    f'  Collection Efficiency = {collectEff} +/- ({collectErrHigh} / {collectErrLow}\n'
+                    f'  (run {runNumber}, field ratio {fieldRatio:g})'
                 )
 
             except Exception as error:

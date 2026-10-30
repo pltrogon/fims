@@ -414,6 +414,9 @@ class FIMS_AI_Agent:
                 'runNumber': entry.get('runNumber'),
                 'IBN': entry.get('ibn'),
                 'IBN Error': entry.get('ibnError'),
+                'Collection Efficiency': entry.get('collectionEff'),
+                'Collection Efficiency Error (Low)': entry.get('collectionErrLow'),
+                'Collection Efficiency Error (High)': entry.get('collectionErrHigh'),
                 'shapeType': entry.get('shapeType'),
                 'shapeHash': entry.get('shapeHash'),
                 'numVertices': summary.get('numVertices'),
@@ -482,12 +485,17 @@ class FIMS_AI_Agent:
             if entry.get('status') == 'ok':
                 ibnText = f"{entry['ibn']:.5g}"
                 errText = f"{entry['ibnError']:.3g}"
+                ceText = f"{entry['collectionEff']:.5g}"
+                ceErrLowText = f"{entry['collectionErrLow']:.3g}"
+                ceErrHighText = f"{entry['collectionErrHigh']:.3g}"
+                
             else:
                 ibnText, errText = '-', '-'
 
             allRows.append(
                 f"{entry.get('iteration', -1):>3}  "
                 f"{entry.get('status', '?'):<8} {ibnText:>10} {errText:>8} "
+                f"{ceText:>10} {ceErrHighText} / {ceErrLowText:>8} "
                 f"{summary.get('numHoles', 0):>2d} "
                 f"{summary.get('maxRadius', nan):>6.2f} "
                 f"{summary.get('minRadius', nan):>6.2f} "
@@ -517,8 +525,10 @@ class FIMS_AI_Agent:
                 if entry['iteration'] not in detailIds:
                     continue
                 allRows.append(
-                    f"\n  iteration {entry['iteration']}  "
-                    f"IBN = {entry['ibn']:.5g} +/- {entry['ibnError']:.3g}"
+                    f"\n  iteration {entry['iteration']}\n"
+                    f"IBN = {entry['ibn']:.5g} +/- {entry['ibnError']:.3g}\n"
+                    f"Collection Efficiency = {entry['collectionEff']:.5g} "
+                    f"+/- ({entry['collectionErrHigh']:.3g}/{entry['collectionErrLow']:.3g})"
                 )
                 allRows.append(f"  spec: {json.dumps(entry['spec'])}")
                 if entry.get('hypothesis'):
@@ -1186,6 +1196,8 @@ class FIMS_AI_Agent:
         bestText = (
             f'Best so far: iteration {self.bestEntry["iteration"]} at '
             f'IBN = {self.bestEntry["ibn"]:.5g} +/- {self.bestEntry["ibnError"]:.3g}.'
+            f"Collection Efficiency = {entry['collectionEff']:.5g} "
+            f"+/- ({entry['collectionErrHigh']:.3g}/{entry['collectionErrLow']:.3g})"    
             if self.bestEntry else 'No successful run yet.'
         )
         
