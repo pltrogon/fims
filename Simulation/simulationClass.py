@@ -6,6 +6,7 @@ from __future__ import annotations
 import time
 import awkward_pandas
 import os
+import shutil
 import sys
 import math
 import json
@@ -283,8 +284,6 @@ class FIMS_Simulation:
         Initializes Garfield++ and creates project executables. Automatically 
         handles cross-platform dynamic linking environments safely.
         """
-        import shutil
-        
         # Check for necessary pathways and create if not present
         paths = [
             'log', 
@@ -299,43 +298,22 @@ class FIMS_Simulation:
         newEnv = self._getGarfieldEnvironment()
         os.environ.update(newEnv)
         
-        # TODO: why are we deleting all the files every time we initialize?
-        # Clean up local project build directory if the Garfield install changed
-        originalCWD = os.getcwd()
-        os.chdir('build')
-
-        stampFile = 'GARFIELDPATH.stamp'
-        lastPath = None
-        if os.path.exists(stampFile):
-            with open(stampFile, 'r') as f:
-                lastPath = f.read().strip()
-
-        if lastPath != self._GARFIELDPATH:
-            for item in ['CMakeCache.txt', 'CMakeFiles']:
-                if os.path.exists(item):
-                    if os.path.isdir(item):
-                        shutil.rmtree(item)
-                    else:
-                        os.remove(item)
-            with open(stampFile, 'w') as f:
-                f.write(self._GARFIELDPATH)
-        
-        """
-        for item in ['CMakeCache.txt', 'CMakeFiles']:
-            if os.path.exists(item):
-                if os.path.isdir(item):
-                    shutil.rmtree(item)
-                else:
-                    os.remove(item)
-        """
-        
-        # Use CMake to configure and build the executables
-        makeBuild = f'cmake .. && make -j{os.cpu_count() or 1}'
+        buildPath = os.path.abspath('build')
+        jobs = min(os.cpu_count() or 1, 4)
         
         try:
             subprocess.run(
-                makeBuild,
-                shell=True,
+                ['cmake', '..'],
+                cwd=buildPath,
+                check=True,
+                env=os.environ,
+                capture_output=True,
+                text=True
+            )
+
+            subprocess.run(
+                ['cmake', '--build', '.', '--parallel', str(jobs)],
+                cwd=buildPath,
                 check=True,
                 env=os.environ,
                 capture_output=True,
@@ -343,8 +321,9 @@ class FIMS_Simulation:
             )
             
             # Extract the exact ROOT path found by CMake for the runtime linker
-            if os.path.exists('ROOT_LIB_PATH.txt'):
-                with open('ROOT_LIB_PATH.txt', 'r') as f:
+            rootPathFile = os.path.join(buildPath, 'ROOT_LIB_PATH.txt')
+            if os.path.exists(rootPathFile):
+                with open(rootPathFile, 'r') as f:
                     discovered_root_lib = f.read().strip()
                 
                 for var in ["DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"]:
@@ -353,10 +332,8 @@ class FIMS_Simulation:
                         os.environ[var] = f"{discovered_root_lib}:{current_path}".strip(":")
 
         except subprocess.CalledProcessError as e:
-            # If our CMake FATAL_ERROR trips, it will bubble up here 
-            raise RuntimeError(f'Error: Failed to build project:\n{e.stderr}')
-        finally:
-            os.chdir(originalCWD)
+            output = e.stderr or e.stdout or str(e)
+            raise RuntimeError(f'Error: Failed to build project:\n{output}') from e
 
         # Check for run number file and create if not present
         if not os.path.exists('runNo'):
