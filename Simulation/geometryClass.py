@@ -364,9 +364,10 @@ class gmshClass:
                 block = self._createPolygon(length, height, thickness, 6)
                 
                 # Create all holes:
+                dist = 0.5*pitch/math.sqrt(3)
                 for angle, (dx, dy) in zip(angles, offsets):
                     inHole = self._createPolygon(
-                        17, height, thickness, # TODO: replace 17 with pitch/math.sqrt(3)/2
+                        dist, height, thickness,
                         numPoints=3, offset=angle
                     )
                     curShape = (3, inHole)
@@ -669,7 +670,9 @@ class gmshClass:
 #**********************************************************************#
     def _buildCellParts(self):
         """
-        TODO: add description
+        Generaters all components, including:
+            Gas, Dielectric, Grid, Pads
+        Assigns pads base on geometry and scale.
         """
         # Common volumes
         dielectricVolume, padVolumes = self._buildDielectric()
