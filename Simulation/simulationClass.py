@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import time
 import awkward_pandas
-import hashlib
 import os
+import shutil
 import sys
 import math
 import json
@@ -284,8 +284,6 @@ class FIMS_Simulation:
         Initializes Garfield++ and creates project executables. Automatically 
         handles cross-platform dynamic linking environments safely.
         """
-        import shutil
-        
         # Check for necessary pathways and create if not present
         paths = [
             'log', 
@@ -301,60 +299,6 @@ class FIMS_Simulation:
         os.environ.update(newEnv)
         
         buildPath = os.path.abspath('build')
-        stampPath = os.path.join(buildPath, 'FIMS_BUILD_CONFIG.stamp')
-        configVariables = (
-            'CMAKE_PREFIX_PATH',
-            'CMAKE_MODULE_PATH',
-            'Garfield_DIR',
-            'ROOTSYS',
-            'ROOT_DIR',
-            'GSL_DIR',
-            'GSL_ROOT_DIR',
-            'OpenMP_ROOT',
-            'nlohmann_json_DIR',
-            'CMAKE_GENERATOR',
-            'CMAKE_TOOLCHAIN_FILE',
-            'CMAKE_OSX_SYSROOT',
-            'SDKROOT',
-            'PKG_CONFIG_PATH',
-            'CC',
-            'CXX',
-            'CFLAGS',
-            'CXXFLAGS',
-            'CPPFLAGS',
-            'LDFLAGS',
-            'PATH',
-            'DYLD_LIBRARY_PATH',
-            'LD_LIBRARY_PATH',
-        )
-        with open(self._GARFIELDPATH, 'rb') as setupFile:
-            setupDigest = hashlib.sha256(setupFile.read()).hexdigest()
-        buildConfig = {
-                'setupPath': os.path.realpath(self._GARFIELDPATH),
-                'setupDigest': setupDigest,
-            'environment': {
-                name: os.environ.get(name, '')
-                for name in configVariables
-            },
-        }
-        configStamp = hashlib.sha256(
-            json.dumps(buildConfig, sort_keys=True).encode()
-        ).hexdigest()
-        try:
-            with open(stampPath, 'r') as stampFile:
-                previousStamp = stampFile.read().strip()
-        except FileNotFoundError:
-            previousStamp = None
-
-        if previousStamp != configStamp:
-            for item in ('CMakeCache.txt', 'CMakeFiles'):
-                itemPath = os.path.join(buildPath, item)
-                if os.path.isdir(itemPath):
-                    shutil.rmtree(itemPath)
-                elif os.path.exists(itemPath):
-                    os.remove(itemPath)
-
-        # Keep CMake's cache and object files for incremental builds.
         jobs = min(os.cpu_count() or 1, 4)
         
         try:
@@ -366,9 +310,6 @@ class FIMS_Simulation:
                 capture_output=True,
                 text=True
             )
-
-            with open(stampPath, 'w') as stampFile:
-                stampFile.write(configStamp)
 
             subprocess.run(
                 ['cmake', '--build', '.', '--parallel', str(jobs)],
