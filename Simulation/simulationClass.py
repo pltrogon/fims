@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import time
 import awkward_pandas
+import hashlib
 import os
 import sys
 import math
@@ -299,43 +300,79 @@ class FIMS_Simulation:
         newEnv = self._getGarfieldEnvironment()
         os.environ.update(newEnv)
         
-        # TODO: why are we deleting all the files every time we initialize?
-        # Clean up local project build directory if the Garfield install changed
-        originalCWD = os.getcwd()
-        os.chdir('build')
+        buildPath = os.path.abspath('build')
+        stampPath = os.path.join(buildPath, 'FIMS_BUILD_CONFIG.stamp')
+        configVariables = (
+            'CMAKE_PREFIX_PATH',
+            'CMAKE_MODULE_PATH',
+            'Garfield_DIR',
+            'ROOTSYS',
+            'ROOT_DIR',
+            'GSL_DIR',
+            'GSL_ROOT_DIR',
+            'OpenMP_ROOT',
+            'nlohmann_json_DIR',
+            'CMAKE_GENERATOR',
+            'CMAKE_TOOLCHAIN_FILE',
+            'CMAKE_OSX_SYSROOT',
+            'SDKROOT',
+            'PKG_CONFIG_PATH',
+            'CC',
+            'CXX',
+            'CFLAGS',
+            'CXXFLAGS',
+            'CPPFLAGS',
+            'LDFLAGS',
+            'PATH',
+            'DYLD_LIBRARY_PATH',
+            'LD_LIBRARY_PATH',
+        )
+        with open(self._GARFIELDPATH, 'rb') as setupFile:
+            setupDigest = hashlib.sha256(setupFile.read()).hexdigest()
+        buildConfig = {
+                'setupPath': os.path.realpath(self._GARFIELDPATH),
+                'setupDigest': setupDigest,
+            'environment': {
+                name: os.environ.get(name, '')
+                for name in configVariables
+            },
+        }
+        configStamp = hashlib.sha256(
+            json.dumps(buildConfig, sort_keys=True).encode()
+        ).hexdigest()
+        try:
+            with open(stampPath, 'r') as stampFile:
+                previousStamp = stampFile.read().strip()
+        except FileNotFoundError:
+            previousStamp = None
 
-        stampFile = 'GARFIELDPATH.stamp'
-        lastPath = None
-        if os.path.exists(stampFile):
-            with open(stampFile, 'r') as f:
-                lastPath = f.read().strip()
+        if previousStamp != configStamp:
+            for item in ('CMakeCache.txt', 'CMakeFiles'):
+                itemPath = os.path.join(buildPath, item)
+                if os.path.isdir(itemPath):
+                    shutil.rmtree(itemPath)
+                elif os.path.exists(itemPath):
+                    os.remove(itemPath)
 
-        if lastPath != self._GARFIELDPATH:
-            for item in ['CMakeCache.txt', 'CMakeFiles']:
-                if os.path.exists(item):
-                    if os.path.isdir(item):
-                        shutil.rmtree(item)
-                    else:
-                        os.remove(item)
-            with open(stampFile, 'w') as f:
-                f.write(self._GARFIELDPATH)
-        
-        """
-        for item in ['CMakeCache.txt', 'CMakeFiles']:
-            if os.path.exists(item):
-                if os.path.isdir(item):
-                    shutil.rmtree(item)
-                else:
-                    os.remove(item)
-        """
-        
-        # Use CMake to configure and build the executables
-        makeBuild = f'cmake .. && make -j{os.cpu_count() or 1}'
+        # Keep CMake's cache and object files for incremental builds.
+        jobs = min(os.cpu_count() or 1, 4)
         
         try:
             subprocess.run(
-                makeBuild,
-                shell=True,
+                ['cmake', '..'],
+                cwd=buildPath,
+                check=True,
+                env=os.environ,
+                capture_output=True,
+                text=True
+            )
+
+            with open(stampPath, 'w') as stampFile:
+                stampFile.write(configStamp)
+
+            subprocess.run(
+                ['cmake', '--build', '.', '--parallel', str(jobs)],
+                cwd=buildPath,
                 check=True,
                 env=os.environ,
                 capture_output=True,
@@ -343,8 +380,9 @@ class FIMS_Simulation:
             )
             
             # Extract the exact ROOT path found by CMake for the runtime linker
-            if os.path.exists('ROOT_LIB_PATH.txt'):
-                with open('ROOT_LIB_PATH.txt', 'r') as f:
+            rootPathFile = os.path.join(buildPath, 'ROOT_LIB_PATH.txt')
+            if os.path.exists(rootPathFile):
+                with open(rootPathFile, 'r') as f:
                     discovered_root_lib = f.read().strip()
                 
                 for var in ["DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"]:
@@ -353,10 +391,8 @@ class FIMS_Simulation:
                         os.environ[var] = f"{discovered_root_lib}:{current_path}".strip(":")
 
         except subprocess.CalledProcessError as e:
-            # If our CMake FATAL_ERROR trips, it will bubble up here 
-            raise RuntimeError(f'Error: Failed to build project:\n{e.stderr}')
-        finally:
-            os.chdir(originalCWD)
+            output = e.stderr or e.stdout or str(e)
+            raise RuntimeError(f'Error: Failed to build project:\n{output}') from e
 
         # Check for run number file and create if not present
         if not os.path.exists('runNo'):
