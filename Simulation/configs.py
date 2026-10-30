@@ -1,8 +1,34 @@
+import json
+import numpy as np
+
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict
 
+# Class to handle numpy data types in JSON serialization
+class NumPyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super(NumPyEncoder, self).default(obj)
+
 ######################################################################
+
+class aiModel:
+    @staticmethod
+    def getAIModel():
+        """Returns the name of the ai model in use as a string."""
+        
+        aiModelFIMS = 'claude-opus-5-5' # TODO: make this a data class like geometry configuration?
+        
+        return aiModelFIMS
+
+######################################################################
+
 class UnitCell(str, Enum):
   SQUARE = 'square'
   HEXAGON = 'hexagon'
@@ -15,6 +41,8 @@ class HoleShape(str, Enum):
   KIKI = 'kiki'
   NESTEGGS = 'nesteggs'
   TRIVIALPURSUIT = 'trivialpursuit'
+  CIS = 'cis'
+  CUSTOM = 'custom'
 
 class PadShape(str, Enum):
   SQUARE = 'square'

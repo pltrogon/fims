@@ -11,6 +11,7 @@ import numpy as np
 import os
 import math
 import gmsh
+import json
 
 from configs import GeometryConfiguration, UnitCell, HoleShape, PadShape, ScaleOption
 
@@ -74,13 +75,13 @@ class geometryClass:
         ]
 
         if self._param is None:
-            raise ValueError('Error - Invalid parameters.')
+            raise ValueError('Error: Invalid parameters.')
 
         for key in neededParameters:
             if key not in self._param:
-                raise ValueError(f"Error - Missing '{key}'")
+                raise ValueError(f"Error: Missing '{key}'")
             if self._param[key] <= 0:
-                raise ValueError(f"Error - '{key}' must be positive.")
+                raise ValueError(f"Error: '{key}' must be positive.")
 
         # Find bounds of the unit cell
         inRadius = self._param['pitch'] / 2
@@ -99,10 +100,16 @@ class geometryClass:
                 holeScale = math.sqrt(3) / 2 if hexCell else 1.0
             
             case HoleShape.TRIVIALPURSUIT:
-                holeScale = 2.2
+                holeScale = 1.5 if hexCell else 1.0
+            
+            case HoleShape.CIS:
+                holeScale = math.sqrt(3) / 2 if hexCell else 1.0
 
             case HoleShape.NESTEGGS:
                 holeScale = 3.55
+            
+            case HoleShape.CUSTOM:
+                holeScale = 0.0  # Custom shape has prior self check.
 
             case _:
                 holeScale = 1.0
@@ -127,10 +134,10 @@ class geometryClass:
 
         # Grid hole must be smaller than the pitch
         if self._param['holeRadius'] * holeScale >= inRadius:
-            raise ValueError('Error - Hole size too large relative to cell.')
+            raise ValueError('Error: Hole size too large relative to cell.')
 
         if self._param['padLength'] * padScale >= inRadius:
-            raise ValueError('Error - Pad larger than cell.')
+            raise ValueError('Error: Pad larger than cell.')
 
         return
 
@@ -241,6 +248,7 @@ class gmshClass:
     """
 
 #**********************************************************************#
+
     def __init__(self, inputParams=None, geoConfig=None):
         """
         Initializes the gmshClass instance with the given parameters.
@@ -253,24 +261,36 @@ class gmshClass:
         self._occ = gmsh.model.occ
         self._param = inputParams
         self._geoConfig = geoConfig
-
+        self._customPath = os.path.join('Geometry', 'customShape.json')
+        
         return
+
 #**********************************************************************#
 
     def _getShape(self, shape, length, height, thickness):
         """
-        TODO:
+        Creates a specified shape object.
+        
+        args:
+            shape (str): the shape of the object.
+            length (float): the primary length measurement of the object (usually radius).
+            height (float): the z-coordinate for the base of the shape.
+            thickness (float): the thickness of the shape.
+        
+        returns:
+            shapeList (list): a list of all the hole shapes.
         """
         pitch = self._param['pitch']
+        
         #convert shape enum to string
         inShape = (shape.value if isinstance(shape, Enum) else str(shape)).lower()
 
         singleShape = {
             'circle': lambda: self._occ.addCylinder(0, 0, height, 0, 0, thickness, length),
             'square': lambda: self._occ.addBox(-length/2, -length/2, height, length, length, thickness),
-            'hexagon': lambda: self._createHexagon(length, height, thickness),
-            'octagon': lambda: self._createOctagon(length, height, thickness),
-            'triangle': lambda: self._createTriangle(length, height, thickness),
+            'hexagon': lambda: self._createPolygon(length, height, thickness, 6),
+            'octagon': lambda: self._createPolygon(length, height, thickness, 8, 22.5),
+            'triangle': lambda: self._createPolygon(length, height, thickness, 3, 30),
             'kiki': lambda: self._createStar(length, length/2., height, thickness),
         }
 
@@ -279,9 +299,12 @@ class gmshClass:
             return [(3, singleShape[inShape]())]
             
         match inShape:
+            case 'custom':
+                shapeList = self._customGeometry(height, thickness)
+            
             case 'nesteggs':
-                xCenter = pitch/math.sqrt(3)/4
-                yCenter = pitch/4
+                xCenter = pitch*0.315/math.sqrt(3)
+                yCenter = pitch*0.315
                 offsets = [
                     (-2, 0), (2, 0), 
                     (-1, -1), (-1, 1), 
@@ -302,8 +325,8 @@ class gmshClass:
                 self._occ.remove([baseShape], recursive=True)
         
             case 'trivialpursuit':
-                xCenter = pitch*math.sqrt(3)/8
-                yCenter = pitch/4
+                xCenter = pitch*math.sqrt(3)/6
+                yCenter = pitch/3
                 angles = [30, 210, 30, 210, 30, 210]
                 offsets = [
                     (xCenter, yCenter/2),
@@ -316,25 +339,76 @@ class gmshClass:
                 
                 # Create all holes:
                 for angle, (dx, dy) in zip(angles, offsets):
-                    inHole = self._createTriangle(
+                    inHole = self._createPolygon(
                         length, height, thickness,
-                        angle=angle
+                        numPoints=3, offset=angle
+                    )
+                    curShape = (3, inHole)
+                    self._occ.translate([curShape], dx, dy, 0)
+                    shapeList.append(curShape)
+                            
+            case 'cis':
+                xCenter = pitch*math.sqrt(3)/6
+                yCenter = pitch/3
+                angles = [30, 210, 30, 210, 30, 210]
+                offsets = [
+                    (xCenter, yCenter/2),
+                    (0, yCenter),
+                    (-xCenter, yCenter/2),
+                    (-xCenter, -yCenter/2),
+                    (0, -yCenter),
+                    (xCenter, -yCenter/2)
+                ]
+                
+                # Add center block
+                block = self._createPolygon(length, height, thickness, 6)
+                
+                # Create all holes:
+                dist = 0.5*pitch/math.sqrt(3)
+                for angle, (dx, dy) in zip(angles, offsets):
+                    inHole = self._createPolygon(
+                        dist, height, thickness,
+                        numPoints=3, offset=angle
                     )
                     curShape = (3, inHole)
                     self._occ.translate([curShape], dx, dy, 0)
                     shapeList.append(curShape)
                 
+                    self._occ.cut(
+                        [curShape],
+                        [(3, block)],
+                        removeObject=True,
+                        removeTool=False
+                    )
+                self._occ.remove([(3, block)], recursive=True)
+            
             case _:
                 raise ValueError(f"Unsupported shape: '{inShape}'")
         
         return shapeList
+
 #**********************************************************************#
+
     def _createBaseShape(self, xLength, yLength, height, thickness):
-        """TODO"""
+        """
+        Creates a basic shape based on the unit cell.
+        
+        args:
+            xLength (float): distance in x-direction
+            yLength (float): distance in y-direction
+            height (float): height of the base of the shape
+            thickness (float): thickness of the shape
+        
+        returns:
+            shape object
+        """
+        
         if self._geoConfig.unitCell == UnitCell.HEXAGON:
-            return self._createHexagon(xLength/3, height, thickness)
+            return self._createPolygon(xLength/3, height, thickness, 6)
+        
         if thickness:
             return self._occ.addBox(-xLength/2, -yLength/2, height, xLength, yLength, thickness)
+        
         return self._occ.addRectangle(-xLength/2, -yLength/2, height, xLength, yLength)
 
 #**********************************************************************#
@@ -596,7 +670,9 @@ class gmshClass:
 #**********************************************************************#
     def _buildCellParts(self):
         """
-        TODO: add description
+        Generaters all components, including:
+            Gas, Dielectric, Grid, Pads
+        Assigns pads base on geometry and scale.
         """
         # Common volumes
         dielectricVolume, padVolumes = self._buildDielectric()
@@ -615,7 +691,7 @@ class gmshClass:
 
         unitCell = self._geoConfig.unitCell
         scale = self._geoConfig.scale
-
+        
         # Dynamic pad assignment based on unit cell geometry and scale
         if scale == ScaleOption.SURROUNDING or scale == ScaleOption.HALF:
             if unitCell == UnitCell.SQUARE:
@@ -638,7 +714,7 @@ class gmshClass:
 
         elif unitCell == UnitCell.HEXAGON and scale == ScaleOption.CORNER:
             cellParts['RightTopPad'] = padVolumes[1]
-
+        
         # Cathode must be listed last for Elmer FEM unpacking order
         cellParts['Cathode'] = cathodeSurface[0]
 
@@ -663,71 +739,36 @@ class gmshClass:
         
 #**********************************************************************#
 
-    def _createHexagon(self, outRadius, z, zDist=None):
+    def _createPolygon(self, radius, z, zDist=None, numPoints=6, offset=0.0):
         """
-        Makes a hexagon in the xy-plane with the center at the origin.
-        Extrudes it in the z-direction if zDist is provided.
+        Makes a polygon with a given number of points in the xy-plane with 
+        the center at the origin. Extrudes it in the z-direction if zDist
+        is provided.
 
         Args:
-            outRadius: The distance from the hexagon center to each vertex.
-            z: The z-coordinate of the hexagon.
-            zDist: The distance to extrude the hexagon in the z-direction. 
-                   If None, the hexagon will remain a 2D surface.
-        """
-        
-        points = []
-        for i in range(6):
-            angle = math.radians(i*60)
-            x = outRadius*math.cos(angle)
-            y = outRadius*math.sin(angle)
-
-            inPoint = self._occ.addPoint(x, y, z)
-            points.append(inPoint)
-
-        lines = []
-        for i in range(6):
-            inLine = self._occ.addLine(points[i], points[(i+1)%6])
-            lines.append(inLine)
-
-        loop = self._occ.addCurveLoop(lines)
-        surface = self._occ.addPlaneSurface([loop])
-        if zDist is not None:
-            hexagon = self._occ.extrude(
-                [(2, surface)],
-                0, 0, zDist
-            )
-            return hexagon[1][1]
-        else:
-            return surface
-#**********************************************************************#
-
-    def _createTriangle(self, outRadius, z, zDist=None, angle=30):
-        """
-        Makes an equilateral triangle in the xy-plane with the center at the origin.
-        Extrudes it in the z-direction if zDist is provided.
-
-        Args:
-            outRadius (float): The side length of the triangle.
-            z (float): The z-coordinate of the triangle.
-            zDist (float): The distance to extrude the triangle in the z-direction. 
-        If None, the triangle will remain a 2D surface.
-            angle (float): Rotation angle of the triangle. Defaults to point in the positive z-direction.
+            radius (float): The distance from the center to each point.
+            z (float): The z-coordinate of the polygon.
+            zDist (float): The distance to extrude the polygon in the z-direction. 
+        If None, the polygon will remain a 2D surface.
+            numPoints (int): Number of points the polygon has.
+            offset (float): the angular offset of the first point, in degrees.
         
         returns:
             surface: geometry object
         """
         points = []
-        for i in range(3):
-            netAngle = math.radians(i*120 - angle)
-            x = outRadius*math.cos(netAngle)
-            y = outRadius*math.sin(netAngle)
-            
+        angleBetween = 360/numPoints
+        for i in range(numPoints):
+            netAngle = math.radians(i*angleBetween-offset)
+            x = radius*math.cos(netAngle)
+            y = radius*math.sin(netAngle)
+
             inPoint = self._occ.addPoint(x, y, z)
             points.append(inPoint)
 
         lines = []
-        for i in range(3):
-            inLine = self._occ.addLine(points[i], points[(i+1)%3])
+        for i in range(numPoints):
+            inLine = self._occ.addLine(points[i], points[(i+1)%numPoints])
             lines.append(inLine)
 
         loop = self._occ.addCurveLoop(lines)
@@ -742,6 +783,7 @@ class gmshClass:
             return surface
         
 #**********************************************************************#
+
     def _createStar(self, outRadius, inRadius, z, zDist=None, numPoints=6):
         """
         Makes an equilateral triangle in the xy-plane with the center at the origin.
@@ -788,46 +830,71 @@ class gmshClass:
             return hexagon[1][1]
         else:
             return surface
-        
+
 #**********************************************************************#
 
-    def _createOctagon(self, outRadius, z, zDist=None):
+    def _customGeometry(self, z, zDist=None):
         """
-        Makes an octagon in the xy-plane with the center at the origin.
-        Extrudes it in the z-direction if zDist is provided.
+        Imports a custom geometry hole pattern.
 
-        Args:
-            outRadius: The distance from the octagon center to each vertex.
-            z: The z-coordinate of the octagon.
-            zDist: The distance to extrude the octagon in the z-direction. 
-                   If None, the octagon will remain a 2D surface.
+        Note: intended to be used by ai agent for hole optimization.
+
+        args:
+            z (float): z-coordinate for the grid.
+            zDist (float): the thickness of the grid.
+
+        returns:
+            shapeList (list): (dim, tag) for every hole in the pattern.
         """
-        
-        points = []
-        for i in range(8):
-            angle = math.radians(i*45+22.5) # Rotate by 15 degrees to align flat sides with axes
-            x = outRadius*math.cos(angle)
-            y = outRadius*math.sin(angle)
+        # Get custom shape file
+        shapePath = self._customPath
+        try:
+            with open(shapePath, 'r') as file:
+                shapeFile = json.load(file)
 
-            inPoint = self._occ.addPoint(x, y, z)
-            points.append(inPoint)
-
-        lines = []
-        for i in range(8):
-            inLine = self._occ.addLine(points[i], points[(i+1)%8])
-            lines.append(inLine)
-
-        loop = self._occ.addCurveLoop(lines)
-        surface = self._occ.addPlaneSurface([loop])
-        if zDist is not None:
-            octagon = self._occ.extrude(
-                [(2, surface)],
-                0, 0, zDist
+        except FileNotFoundError:
+            raise RuntimeError(
+                f"Error: Custom hole file '{shapePath}' not found. Call "
+                'FIMS_Simulation.createCustomShape() before building.'
             )
-            return octagon[1][1]
-        else:
-            return surface
-            
+
+        # Unpack pattern. Fall back to the single-hole format if needed.
+        allHoles = shapeFile.get('holes')
+        if not allHoles:
+            allHoles = [{'vertices': shapeFile.get('vertices', [])}]
+
+        shapeList = []
+        for index, hole in enumerate(allHoles):
+
+            vertices = hole.get('vertices', [])
+            if len(vertices) < 3:
+                raise RuntimeError(
+                    f'Error: Custom hole {index} outline is degenerate.'
+                )
+
+            points = [
+                self._occ.addPoint(float(x), float(y), z) for x, y in vertices
+            ]
+            numPoints = len(points)
+
+            # Connect points and create surface
+            lines = [
+                self._occ.addLine(points[i], points[(i + 1) % numPoints])
+                for i in range(numPoints)
+            ]
+
+            loop = self._occ.addCurveLoop(lines)
+            surface = self._occ.addPlaneSurface([loop])
+
+            if zDist is None:
+                shapeList.append((2, surface))
+                continue
+
+            customShape = self._occ.extrude([(2, surface)], 0, 0, zDist)
+            shapeList.append((3, customShape[1][1]))
+
+        return shapeList
+
 #**********************************************************************#
 
     def _assignPhysicalGroups(self, entityMap):

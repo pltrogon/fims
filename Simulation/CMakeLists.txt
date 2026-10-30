@@ -41,18 +41,18 @@ set(EXECUTABLES
     runAnimation                animation.cc
 )
 
+# --- Build function library ---
+add_library(myFunctions STATIC "${CMAKE_CURRENT_SOURCE_DIR}/myFunctions.cc")
+target_include_directories(myFunctions PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(myFunctions PUBLIC ${COMMON_LIBS})
+
 # --- Loop to create and link everything ---
 while(EXECUTABLES)
     list(POP_FRONT EXECUTABLES EXE_NAME EXE_SRC)
-    
-    add_executable(${EXE_NAME} 
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/${EXE_SRC}"
-        "${CMAKE_CURRENT_SOURCE_DIR}/myFunctions.cc"
-    )
-    
-    target_include_directories(${EXE_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-    
-    target_link_libraries(${EXE_NAME} PRIVATE ${COMMON_LIBS})
+
+    add_executable(${EXE_NAME} "${CMAKE_CURRENT_SOURCE_DIR}/src/${EXE_SRC}")
+
+    target_link_libraries(${EXE_NAME} PRIVATE myFunctions)
 endwhile()
 
 # --- Verify Garfield and ROOT ABI Compatibility ---

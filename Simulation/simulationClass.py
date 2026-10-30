@@ -3,42 +3,27 @@
 ###################################
 from __future__ import annotations
 
-import numpy as np
-import pandas as pd
-import uproot
+import time
 import awkward_pandas
-import matplotlib.pyplot as plt
 import os
+import shutil
 import sys
 import math
 import json
 import subprocess
-import time
-import itertools
-import re
 import copy
+import numpy as np
+import pandas as pd
 
 from scipy.optimize import curve_fit
-from scipy.special import expit, logit
+from scipy.special import expit
+from configs import GeometryConfiguration, UnitCell, HoleShape, PadShape, ScaleOption, NumPyEncoder
+from geometryClass import geometryClass
+from aiAgentClass import FIMS_AI_Agent
 
-from configs import GeometryConfiguration, UnitCell, HoleShape, PadShape, ScaleOption
-
-#Include the analysis object        
+# Include the analysis object        
 sys.path.insert(1, '../Analysis')
 from runDataClass import runData
-
-# Class to handle numpy data types in JSON serialization
-class NumPyEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, np.integer):
-            return int(obj)
-        if isinstance(obj, np.floating):
-            return float(obj)
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        return super(NumPyEncoder, self).default(obj)
-
-from geometryClass import geometryClass
 
 class FIMS_Simulation:
     """
@@ -90,12 +75,11 @@ class FIMS_Simulation:
         """
         Initializes a FIMS_Simulation object.
         """
-        
         self._GARFIELDPATH = self._getGarfieldPath()
         if self._GARFIELDPATH is None:
             raise RuntimeError('Error getting Garfield++ path.')
+        
         self._setupSimulation()
-
         try:
             self._param = self._defaultParam()
             self._param['runNumber'] = self._getRunNumber()
@@ -118,7 +102,7 @@ class FIMS_Simulation:
         return
 
 #**********************************************************************#
-    #String definition
+
     def __str__(self):
         """
         Returns a formatted string containing all of the simulation parameters.
@@ -197,9 +181,9 @@ class FIMS_Simulation:
 
         for inParam, inValue in paramDict.items():
             if inParam not in self._param:
-                raise KeyError(f"Error - Invalid parameter: {inParam}.")
+                raise KeyError(f"Error: Invalid parameter: {inParam}.")
             if inValue < 0:
-                raise ValueError(f'Error - {inParam} cannot be negative.')
+                raise ValueError(f'Error: {inParam} cannot be negative.')
             
             self._param[inParam] = inValue
 
@@ -232,9 +216,9 @@ class FIMS_Simulation:
         runNumber = self._getRunNumber()
 
         if runNumber != self.getParam('runNumber'):
-            raise RuntimeError('Error - Run number mismatch.')
+            raise RuntimeError('Error: Run number mismatch.')
         if runNumber < 1:
-            raise ValueError(f'Error - Invalid run number: {runNumber}.')
+            raise ValueError(f'Error: Invalid run number: {runNumber}.')
         
         return
     
@@ -250,7 +234,7 @@ class FIMS_Simulation:
             A copy of the requested parameter.
         """
         if parameter not in self._param:
-            raise KeyError(f'Error - Invalid parameter: {parameter}.')
+            raise KeyError(f'Error: Invalid parameter: {parameter}.')
             
         return copy.copy(self._param[parameter])
     
@@ -300,8 +284,6 @@ class FIMS_Simulation:
         Initializes Garfield++ and creates project executables. Automatically 
         handles cross-platform dynamic linking environments safely.
         """
-        import shutil
-
         # Check for necessary pathways and create if not present
         paths = [
             'log', 
@@ -315,34 +297,33 @@ class FIMS_Simulation:
         # Get garfield path variables directly into active environment
         newEnv = self._getGarfieldEnvironment()
         os.environ.update(newEnv)
-
-        # Clean up local project build directory to force fresh discovery
-        originalCWD = os.getcwd()
-        os.chdir('build')
-
-        for item in ['CMakeCache.txt', 'CMakeFiles']:
-            if os.path.exists(item):
-                if os.path.isdir(item):
-                    shutil.rmtree(item)
-                else:
-                    os.remove(item)
         
-        # Use CMake to configure and build the executables
-        makeBuild = 'cmake .. && make'
+        buildPath = os.path.abspath('build')
+        jobs = min(os.cpu_count() or 1, 4)
         
         try:
             subprocess.run(
-                makeBuild,
-                shell=True,
+                ['cmake', '..'],
+                cwd=buildPath,
                 check=True,
                 env=os.environ,
                 capture_output=True,
                 text=True
             )
 
+            subprocess.run(
+                ['cmake', '--build', '.', '--parallel', str(jobs)],
+                cwd=buildPath,
+                check=True,
+                env=os.environ,
+                capture_output=True,
+                text=True
+            )
+            
             # Extract the exact ROOT path found by CMake for the runtime linker
-            if os.path.exists('ROOT_LIB_PATH.txt'):
-                with open('ROOT_LIB_PATH.txt', 'r') as f:
+            rootPathFile = os.path.join(buildPath, 'ROOT_LIB_PATH.txt')
+            if os.path.exists(rootPathFile):
+                with open(rootPathFile, 'r') as f:
                     discovered_root_lib = f.read().strip()
                 
                 for var in ["DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"]:
@@ -351,10 +332,8 @@ class FIMS_Simulation:
                         os.environ[var] = f"{discovered_root_lib}:{current_path}".strip(":")
 
         except subprocess.CalledProcessError as e:
-            # If our CMake FATAL_ERROR trips, it will bubble up here 
-            raise RuntimeError(f'ERROR - Failed to build project:\n{e.stderr}')
-        finally:
-            os.chdir(originalCWD)
+            output = e.stderr or e.stdout or str(e)
+            raise RuntimeError(f'Error: Failed to build project:\n{output}') from e
 
         # Check for run number file and create if not present
         if not os.path.exists('runNo'):
@@ -388,7 +367,7 @@ class FIMS_Simulation:
         
         except subprocess.CalledProcessError as e:
             raise RuntimeError(
-                f'ERROR - Failed to source Garfield++: {e.output}'
+                f'Error: Failed to source Garfield++: {e.output}'
             )
 
         return garfieldEnv
@@ -414,6 +393,134 @@ class FIMS_Simulation:
         return
 
 #**********************************************************************#
+
+    def runAIShapeOptimizer(self, numIterations, resume=True):
+        """
+        Runs an ai-agent that searches for a hole shape that minimizes IBN.
+        
+        Args:
+            numIterations (int): the number of iterations to run.
+            resume (bool): Allow access to results from previous trials.
+        
+        Returns:
+            idealNum (int): the run number for the best shape trial.
+        
+        """
+        startTime = time.perf_counter()
+        
+        # Configure geometry
+        geoConfig = GeometryConfiguration(
+            unitCell=UnitCell.HEXAGON,
+            holeShape=HoleShape.CUSTOM,
+            padShape=PadShape.HEXAGON,
+            scale=ScaleOption.HALF # Pattern can be arbitrary, so full cell needed to properly tile
+        )
+        self.setGeometry(geoConfig)
+        
+        aiAgent = FIMS_AI_Agent(geoConfig, self._param, resume)
+        
+        # Begin AI Agent loop
+        prevIter = max((elem.get('iteration', 0) for elem in aiAgent.history), default=0)
+        startIteration = prevIter + 1
+        finalIteration = startIteration + numIterations - 1
+
+        print(f'Optimizing {numIterations} iterations ({startIteration} to {finalIteration})...')
+        for iteration in range(startIteration, finalIteration + 1):
+            iterationStart = time.perf_counter()
+            print(f'\tRunning iteration {iteration}')
+            
+            # Get a custom shape
+            proposal, shapeSummary = aiAgent.getCustomShape(iteration, finalIteration)
+            
+            # Record shape details
+            if proposal is None:
+                record = {
+                    'iteration': iteration,
+                    'status': 'rejected',
+                    'message': (
+                        f'No valid proposal after {aiAgent.maxProposals} attempts.'
+                    ),
+                    'spec': None,
+                    'summary': None,
+                }
+                aiAgent.updateHistory(record)
+                print(f'WARNING: proposal is None. Iteration {iteration} failed.')
+                continue
+            
+            record = {
+                'iteration': iteration,
+                'shapeType': '+'.join(sorted({hole['type'] for hole in shapeSummary['holes']})),
+                'shapeHash': shapeSummary['shapeHash'],
+                'summary': shapeSummary,
+                'spec': proposal['shape'],
+                'hypothesis': proposal['hypothesis'],
+                'rationale': proposal['rationale'],
+            }
+            print(f'\tHypothesis: {proposal["hypothesis"]}')
+
+            try:
+                runNumber = self.runForEfficiency()
+                
+                simData = runData(runNumber)
+                ibn = float(simData.getCalcParameter('Average IBN'))
+                ibnError = float(simData.getCalcParameter('IBN Error'))
+                collectEff = float(simData.getCalcParameter('Charge Collection Eff'))
+                collectErrLow = float(simData.getCalcParameter('Charge Collection Eff Err (Low)'))
+                collectErrHigh = float(simData.getCalcParameter('Charge Collection Eff Err (High)'))
+                fieldRatio = float(simData.getRunParameter('Electric Field Ratio'))
+                
+                record.update({
+                    'status': 'ok',
+                    'ibn': ibn,
+                    'ibnError': ibnError,
+                    'collectionEff': collectEff,
+                    'collectionErrLow': collectErrLow,
+                    'collectionErrHigh': collectErrHigh,
+                    'runNumber': runNumber,
+                    'fieldRatio': fieldRatio,
+                })
+                print(
+                    f'  Result: IBN = {ibn:.5g} +/- {ibnError:.3g}\n'
+                    f'  Collection Efficiency = {collectEff:.4g}'
+                    f' +{collectErrHigh:.2g}/-{collectErrLow:.2g}\n'
+                    f'  (run {runNumber}, field ratio {fieldRatio:g})'
+                )
+
+            except Exception as error:
+                record.update({
+                    'status': 'failed',
+                    'message': f'{type(error).__name__}: {error}',
+                })
+                print(f'\tSimulation failed: {record["message"]}')
+
+            record['duration'] = round(time.perf_counter() - iterationStart, 1)
+            print(f'\t Duration: {record["duration"]:.1f} s')
+            
+            # Update history files
+            aiAgent.updateHistory(record)
+        
+        # Print a summary of all iterations
+        print(f'\n{"*"*72}')
+        print(f'Total agent run time: {(time.perf_counter() - startTime)/3600.:.2f} h')
+        
+        idealNum = None
+        bestEntry = aiAgent.bestEntry
+        if bestEntry is not None:
+            print(
+                f'Lowest IBN: {bestEntry["ibn"]:.5g} +/- ',
+                f'{bestEntry["ibnError"]:.3g} at iteration ',
+                f'{bestEntry["iteration"]} ',
+                f'(run {bestEntry.get("runNumber")})'
+            )
+            print(f'Best outline written to {aiAgent.idealShapePath}')
+            idealNum = bestEntry.get('runNumber')
+        
+        print(f'History written to: {aiAgent.historyCSV}')
+        
+        return idealNum
+
+#**********************************************************************#
+
     def resetParam(self, verbose=True):
         """
         Resets the simulation to the default parameters and removes any geometry links.
@@ -1143,7 +1250,7 @@ class FIMS_Simulation:
             'collection'
         ]
         if targetEfficiency not in efficiencyOptions:
-            raise ValueError('Error - Invalid target efficiency.')
+            raise ValueError('Error: Invalid target efficiency.')
         
         #Ensure all parameters exist
         self._checkParam()
@@ -1706,5 +1813,4 @@ class FIMS_Simulation:
             self.setGeometry(saveGeo)
             self.setParameters(saveParam)
         
-        return 
-    
+        return
