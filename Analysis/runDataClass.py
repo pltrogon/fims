@@ -2598,8 +2598,9 @@ class runData:
                 ls='-' if isPrimary else '--',
                 lw=2.5 if isPrimary else 1
             )
+            dt = singleSignal['Signal Time'][1]-singleSignal['Signal Time'][0]
             axs[1].plot(
-                singleSignal['Signal Time'], singleSignal[pad].cumsum(),
+                singleSignal['Signal Time'], singleSignal[pad].cumsum()*dt,
                 label=f'{pad} (Max)' if isPrimary else pad,
                 ls='-' if isPrimary else '--',
                 lw=2.5 if isPrimary else 1
@@ -2664,8 +2665,9 @@ class runData:
                 time, signal,
                 c='r', alpha=.01
             )
+            dt = time[1]-time[0]
             axs[1].plot(
-                time, signal.cumsum(),
+                time, signal.cumsum()*dt,
                 c='r', alpha=.01
             )
 
@@ -2699,7 +2701,8 @@ class runData:
         timeOffset = alignedAverage['timeOffset']
 
         #Get integrations
-        alignedCharges = np.cumsum(alignedCurrents, axis=1)
+        dt = commonTime[1]-commonTime[0]
+        alignedCharges = np.cumsum(alignedCurrents, axis=1)*dt
         meanCharge = np.mean(alignedCharges, axis=0)
         #stdCharge = np.std(alignedCharges, axis=0)
 
@@ -2812,7 +2815,7 @@ class runData:
             if col not in ['Avalanche ID', 'Signal Time']
         ]
 
-        netCharge = allSignals.groupby('Avalanche ID')[padNames].sum()
+        netCharge = allSignals.groupby('Avalanche ID')[padNames].sum()#TODO - this might need scaling by dt
 
         return netCharge
 
