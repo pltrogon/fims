@@ -528,7 +528,7 @@ class FIMS_Simulation:
             print(f'Best outline written to {aiAgent.idealShapePath}')
             idealNum = bestEntry.get('runNumber')
         
-        print(f'History written to: {aiAgent.historyCSV}')
+        print(f'History written to: {aiAgent.historyMD}')
         
         return idealNum
 

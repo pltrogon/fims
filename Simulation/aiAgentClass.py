@@ -8,7 +8,6 @@ import time
 import hashlib
 import asyncio
 
-import pandas as pd
 import numpy as np
 from configs import UnitCell, NumPyEncoder, aiModel
 from claude_agent_sdk import (
@@ -24,35 +23,38 @@ class FIMS_AI_Agent:
     """
     AI-agent driven optimization of the FIMS amplification-grid hole shape.
 
-    History is appended to ../Data/AI/holeShapeHistory.jsonl and mirrored to
-    ../Data/AI/holeShapeHistory.csv for human review.
+    History is kept in ../Data/AI/holeShapeHistory.md with an image
+    of each hole pattern in
+    ../Data/AI/holeShapeImages/.
     
     methods:
         _setupAiInfo
         _describeConstraints
         _loadHistory
+        _writeHistory
+        _drawShape
         _renderHistory
         _createShape
         _proposeShape
         updateHistory
         getCustomShape
-        
     """
     
-#**********************************************************************#
+    #**********************************************************************#
 
     def __init__(self, geoConfig, geoParams, resume=True):
         """Initializes a FIMS AI Agent."""
         self.bestEntry = None        
         self.maxProposals = 5
         self.history = []
+        self._priorHistory = []
         
         # Setup files
         aiPath = os.path.join('..', 'Data', 'AI')
         os.makedirs(aiPath, exist_ok=True)
     
-        self.historyJSONL = os.path.join(aiPath, 'holeShapeHistory.jsonl')
-        self.historyCSV = os.path.join(aiPath, 'holeShapeHistory.csv')
+        self.historyMD = os.path.join(aiPath, 'holeShapeHistory.md')
+        self._imagePath = os.path.join(aiPath, 'holeShapeImages')
         self.idealShapePath = os.path.join(aiPath, 'bestHoleShape.json')
         self._customShapePath = os.path.join('Geometry', 'customShape.json')
         self._promptPath = os.path.join(
@@ -68,20 +70,21 @@ class FIMS_AI_Agent:
         self._setupAiInfo()
         
         if resume:
-            self._loadHistory()
+            self.history = self._loadHistory()
             completed = [e for e in self.history if e.get('status') == 'ok']
             self.bestEntry = min(completed, key=self._rankKey) if completed else None
             print(f'Resuming from {len(self.history)} recorded trials.')
-        
-        elif os.path.exists(self.historyJSONL):
+
+        elif os.path.exists(self.historyMD):
+            self._priorHistory = self._loadHistory()
             print(
-                f'Warning: {self.historyJSONL} exists and will be appended to. '
+                f'Warning: {self.historyMD} exists and will be appended to. '
                 'Initialize with "resume = True" to let the agent see those trials.'
             )
         
         return
 
-#**********************************************************************#
+    #**********************************************************************#
 
     def _setupAiInfo(self):
         """
@@ -118,7 +121,7 @@ class FIMS_AI_Agent:
         
         return
 
-#**********************************************************************#
+    #**********************************************************************#
 
     def _describeConstraints(self):
         """
@@ -166,85 +169,246 @@ class FIMS_AI_Agent:
         return constraints
 
     #**********************## History handling ##**************************#
-
+    
     def _loadHistory(self):
         """
-        Reads an existing JSONL history file.
+        Reads the trial records from an existing markdown history file.
 
         Returns:
-            history (list): List of history records, empty if the file does not exist.
+            allRecords (list): History records, empty if the file does not exist.
         """
-        if not os.path.exists(self.historyJSONL):
-            return
+        if not os.path.exists(self.historyMD):
+            return []
 
-        with open(self.historyJSONL, 'r') as inFile:
-            for line in inFile:
-                line = line.strip()
-                if line:
-                    self.history.append(json.loads(line))
-        
-        return
+        with open(self.historyMD, 'r', encoding='utf-8') as inFile:
+            historyText = inFile.read()
 
+        allBlocks = re.findall(
+            r'<!-- record -->\s*```json\s*\n(.*?)\n```', historyText, flags=re.DOTALL
+        )
+
+        return [json.loads(block) for block in allBlocks]
+    
     #**********************************************************************#
 
     def updateHistory(self, record):
         """
-        Updates history file and mirrors the history to a CSV file.
+        Updates the history and rewrites the markdown file.
 
         Args:
-            record (dict): The record to append to JSON file.
+            record (dict): The record to add to the history.
         """
         self.history.append(record)
-        
-        # Update JSON file
-        with open(self.historyJSONL, 'a') as outFile:
-            outFile.write(json.dumps(record) + '\n')
-            outFile.flush()
-            os.fsync(outFile.fileno())
-        
-        # Update CSV file
-        allRows = []
-        for entry in self.history:
-            summary = entry.get('summary') or {}
-            allRows.append({
-                'iteration': entry.get('iteration'),
-                'status': entry.get('status'),
-                'runNumber': entry.get('runNumber'),
-                'IBN': entry.get('ibn'),
-                'IBN Error': entry.get('ibnError'),
-                'Collection Efficiency': entry.get('collectionEff'),
-                'Collection Efficiency Error (Low)': entry.get('collectionErrLow'),
-                'Collection Efficiency Error (High)': entry.get('collectionErrHigh'),
-                'shapeType': entry.get('shapeType'),
-                'shapeHash': entry.get('shapeHash'),
-                'numVertices': summary.get('numVertices'),
-                'area': summary.get('area'),
-                'perimeter': summary.get('perimeter'),
-                'openAreaFraction': summary.get('openAreaFraction'),
-                'numHoles': summary.get('numHoles'),
-                'maxRadius': summary.get('maxRadius'),
-                'minRadius': summary.get('minRadius'),
-                'areaIsExact': summary.get('areaIsExact'),
-                'duration': entry.get('duration'),
-                'hypothesis': entry.get('hypothesis'),
-                'rationale': entry.get('rationale'),
-                'message': entry.get('message'),
-                'spec': json.dumps(entry.get('spec'))
-            })
-
-        pd.DataFrame(allRows).to_csv(self.historyCSV, index=False)
+        self._writeHistory()
         
         # Identify best entry and update path file
         completed = [e for e in self.history if e.get('status') == 'ok']
         if not completed:
             return None
-        
+
         newBestEntry = min(completed, key=self._rankKey)
-        
+
         if newBestEntry != self.bestEntry:
             self.bestEntry = newBestEntry
             with open(self.idealShapePath, 'w') as outFile:
                 json.dump(self.bestEntry, outFile, indent=2)
+
+        return
+
+    #**********************************************************************#
+    
+    def _writeHistory(self):
+        """Rewrites the markdown history file from every record."""
+        allRecords = self._priorHistory + self.history
+        os.makedirs(self._imagePath, exist_ok=True)
+
+        def fmt(value, spec):
+            return '-' if value is None else format(value, spec)
+
+        allLines = [
+            '# FIMS AI Hole Shape History',
+            '',
+            '<!-- Written by FIMS_AI_Agent. The ```json block after each "record"',
+            '     marker is the saved trial; everything else is rebuilt from it. -->',
+            '',
+            '## Summary',
+            '',
+            '| Iteration | Status | Run | IBN | IBN Error | Collection Eff. '
+            '| Coll. Eff. Error | Holes | Open Area | Shape Type |',
+            '|---:|:---|---:|---:|---:|---:|---:|---:|---:|:---|',
+        ]
+        for entry in allRecords:
+            summary = entry.get('summary') or {}
+            ceErrText = (
+                f"+{entry['collectionErrHigh']:.2g}/-{entry['collectionErrLow']:.2g}"
+                if entry.get('collectionErrHigh') is not None else '-'
+            )
+            allLines.append(
+                f"| {entry.get('iteration')} | {entry.get('status')} "
+                f"| {fmt(entry.get('runNumber'), 'd')} "
+                f"| {fmt(entry.get('ibn'), '.5g')} | {fmt(entry.get('ibnError'), '.3g')} "
+                f"| {fmt(entry.get('collectionEff'), '.4g')} | {ceErrText} "
+                f"| {fmt(summary.get('numHoles'), 'd')} "
+                f"| {fmt(summary.get('openAreaFraction'), '.3f')} "
+                f"| {entry.get('shapeType') or '-'} |"
+            )
+
+        for entry in allRecords:
+            iteration = entry.get('iteration')
+            summary = entry.get('summary') or {}
+            allLines += ['', f'## Iteration {iteration}', '']
+
+            # Hole pattern image
+            if entry.get('spec'):
+                imageName = f"iteration_{iteration:03d}_{entry.get('shapeHash')}.png"
+                imageFile = os.path.join(self._imagePath, imageName)
+                try:
+                    if not os.path.exists(imageFile):
+                        self._drawShape(entry, imageFile)
+                    imageLink = os.path.relpath(
+                        imageFile, os.path.dirname(self.historyMD)
+                    ).replace(os.sep, '/')
+                    allLines += [f'![Iteration {iteration} hole shape]({imageLink})', '']
+                except Exception as error:
+                    print(f'\t Warning: could not draw iteration {iteration}: {error}')
+
+            # Results table
+            allRows = [('Status', entry.get('status'))]
+            if entry.get('runNumber') is not None:
+                allRows.append(('Run Number', entry['runNumber']))
+            if entry.get('ibn') is not None:
+                allRows.append(('IBN', f"{entry['ibn']:.5g} +/- {entry['ibnError']:.3g}"))
+            if entry.get('collectionEff') is not None:
+                allRows.append((
+                    'Collection Efficiency',
+                    f"{entry['collectionEff']:.4g} "
+                    f"+{entry['collectionErrHigh']:.2g}/-{entry['collectionErrLow']:.2g}"
+                ))
+            if entry.get('fieldRatio') is not None:
+                allRows.append(('Field Ratio', f"{entry['fieldRatio']:g}"))
+            if entry.get('shapeType'):
+                allRows.append(('Shape Type', entry['shapeType']))
+                allRows.append(('Shape Hash', entry.get('shapeHash')))
+            if summary:
+                allRows += [
+                    ('Holes / Vertices', f"{summary['numHoles']} / {summary['numVertices']}"),
+                    ('Radius (min / max)',
+                     f"{summary['minRadius']:.2f} / {summary['maxRadius']:.2f} um"),
+                    ('Area', f"{summary['area']:.1f} um^2"
+                     + ('' if summary.get('areaIsExact') else ' (estimated)')),
+                    ('Perimeter', f"{summary['perimeter']:.1f} um"),
+                    ('Open Area Fraction', f"{summary['openAreaFraction']:.3f}"),
+                ]
+            if entry.get('duration') is not None:
+                allRows.append(('Duration', f"{entry['duration']/3600.:.2f} h"))
+
+            allLines += ['| Field | Value |', '|:---|:---|']
+            allLines += [f'| {field} | {value} |' for field, value in allRows]
+
+            for label, key in [
+                ('Hypothesis', 'hypothesis'),
+                ('Rationale', 'rationale'),
+                ('Message', 'message'),
+            ]:
+                if entry.get(key):
+                    allLines += ['', f'**{label}:** {entry[key]}']
+
+            # Full record, read back by _loadHistory
+            allLines += [
+                '',
+                '<details><summary>Full record</summary>',
+                '',
+                '<!-- record -->',
+                '```json',
+                json.dumps(entry, indent=2, cls=NumPyEncoder),
+                '```',
+                '',
+                '</details>',
+            ]
+
+        tempPath = self.historyMD + '.tmp'
+        with open(tempPath, 'w', encoding='utf-8') as outFile:
+            outFile.write('\n'.join(allLines) + '\n')
+            outFile.flush()
+            os.fsync(outFile.fileno())
+        os.replace(tempPath, self.historyMD)
+
+        return
+
+    #**********************************************************************#
+
+    def _drawShape(self, entry, imageFile):
+        """
+        Draws a trial's hole pattern inside its unit cell and saves it as a PNG.
+
+        The center cell shows the containment limit (5% wall) as a dashed
+        line. The neighboring cells are drawn lighter to show how the pattern
+        tiles.
+
+        args:
+            entry (dict): History record containing 'spec' and 'iteration'.
+            imageFile (str): Path of the PNG to write.
+        """
+        from matplotlib.figure import Figure
+        from matplotlib.patches import Polygon
+
+        allHoles = self._resolveHolePattern(entry['spec'])
+        pitch = float(self._geoParams['pitch'])
+        allEdges = self._cellEdges()
+
+        # Cell corners sit halfway between the edge normals
+        halfAngle = math.pi/len(allEdges)
+        cornerRadius = (pitch/2.)/math.cos(halfAngle)
+        corners = [
+            (
+                cornerRadius*math.cos(math.radians(angle) + halfAngle),
+                cornerRadius*math.sin(math.radians(angle) + halfAngle)
+            )
+            for _, _, angle in allEdges
+        ]
+
+        figure = Figure(figsize=(5., 5.))
+        axis = figure.add_subplot()
+
+        allCenters = [(0., 0.)] + [
+            (pitch*normalX, pitch*normalY) for normalX, normalY, _ in allEdges
+        ]
+        for index, (centerX, centerY) in enumerate(allCenters):
+            alpha = 1. if index == 0 else 0.35
+            axis.add_patch(Polygon(
+                [(x + centerX, y + centerY) for x, y in corners],
+                closed=True, facecolor='#b0b0b0', edgecolor='#404040',
+                linewidth=1., alpha=alpha, zorder=1
+            ))
+            for hole in allHoles:
+                axis.add_patch(Polygon(
+                    [(x + centerX, y + centerY) for x, y in hole['vertices']],
+                    closed=True, facecolor='#2b6cb0', edgecolor='#1a3e6e',
+                    linewidth=0.6, alpha=alpha, zorder=2
+                ))
+
+        axis.add_patch(Polygon(
+            [(0.95*x, 0.95*y) for x, y in corners],
+            closed=True, fill=False, edgecolor='#c53030',
+            linestyle='--', linewidth=0.8, zorder=3
+        ))
+
+        viewLimit = 0.85*pitch
+        axis.set_xlim(-viewLimit, viewLimit)
+        axis.set_ylim(-viewLimit, viewLimit)
+        axis.set_aspect('equal')
+        axis.set_xlabel('x (um)')
+        axis.set_ylabel('y (um)')
+
+        title = f"Iteration {entry['iteration']}"
+        if entry.get('ibn') is not None:
+            title += f"  |  IBN = {entry['ibn']:.4g}"
+        if entry.get('collectionEff') is not None:
+            title += f"  |  Coll. Eff. = {entry['collectionEff']:.3g}"
+        axis.set_title(title, fontsize=10)
+
+        figure.tight_layout()
+        figure.savefig(imageFile, dpi=120)
 
         return
 
@@ -1098,6 +1262,7 @@ class FIMS_AI_Agent:
             )
         
         return dict(proposal)
+    
     #**********************************************************************#
 
     def getCustomShape(self, iteration, finalIteration):
@@ -1201,4 +1366,4 @@ class FIMS_AI_Agent:
 
         return None, None
 
-#**********************************************************************#
+    #**********************************************************************#
