@@ -2598,7 +2598,7 @@ class runData:
                 ls='-' if isPrimary else '--',
                 lw=2.5 if isPrimary else 1
             )
-            dt = singleSignal['Signal Time'][1]-singleSignal['Signal Time'][0]
+            dt = singleSignal['Signal Time'].iloc[1]-singleSignal['Signal Time'].iloc[0]
             axs[1].plot(
                 singleSignal['Signal Time'], singleSignal[pad].cumsum()*dt,
                 label=f'{pad} (Max)' if isPrimary else pad,
@@ -2665,7 +2665,7 @@ class runData:
                 time, signal,
                 c='r', alpha=.01
             )
-            dt = time[1]-time[0]
+            dt = time.iloc[1]-time.iloc[0]
             axs[1].plot(
                 time, signal.cumsum()*dt,
                 c='r', alpha=.01
