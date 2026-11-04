@@ -430,7 +430,20 @@ class FIMS_Simulation:
             print(f'\tRunning iteration {iteration}')
             
             # Get a custom shape
-            proposal, shapeSummary = aiAgent.getCustomShape(iteration, finalIteration)
+            try:
+                proposal, shapeSummary = aiAgent.getCustomShape(iteration, finalIteration)
+
+            except Exception as error:
+                record = {
+                    'iteration': iteration,
+                    'status': 'error',
+                    'message': f'Agent call failed: {type(error).__name__}: {error}',
+                    'spec': None,
+                    'summary': None,
+                }
+                aiAgent.updateHistory(record)
+                print(f'WARNING: {record["message"]}. Iteration {iteration} skipped.')
+                continue
             
             # Record shape details
             if proposal is None:

@@ -13,6 +13,7 @@ import numpy as np
 from configs import UnitCell, NumPyEncoder, aiModel
 from claude_agent_sdk import (
     ClaudeAgentOptions,
+    ResultError,
     ResultMessage,
     create_sdk_mcp_server,
     query,
@@ -1066,27 +1067,36 @@ class FIMS_AI_Agent:
             model=self.aiModel,
             system_prompt=self.aiPrompt,
             mcp_servers={'fims': shapeServer},
+            strict_mcp_config=True,
+            tools=[],
             allowed_tools=[f'mcp__fims__{self.shapeTool["name"]}'],
-            disallowed_tools=[
-                'Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep',
-                'WebFetch', 'WebSearch', 'Task', 'TodoWrite',
-            ],
             permission_mode='dontAsk',
             setting_sources=[],
-            max_turns=2,
+            env={'ENABLE_TOOL_SEARCH': 'false'},
+            max_turns=4,
         )
 
         lastResult = None
-        async for message in query(prompt=userBlock, options=options):
-            if isinstance(message, ResultMessage):
-                lastResult = message
+        try:
+            async for message in query(prompt=userBlock, options=options):
+                if isinstance(message, ResultMessage):
+                    lastResult = message
+
+        except ResultError as error:
+            # The CLI exits with an error even if a proposal was already recorded. 
+            # Only fail if nothing was proposed.
+            if not proposal:
+                raise RuntimeError(
+                    f'Error: Agent stopped before proposing a shape: {error}'
+                ) from error
+            print(f'\t Note: agent ended with "{error.subtype}" after proposing.')
 
         if not proposal:
             detail = f' ({lastResult.subtype})' if lastResult is not None else ''
             raise RuntimeError(
                 f'Error: Model returned no hole shape proposal{detail}.'
             )
-
+        
         return dict(proposal)
     #**********************************************************************#
 
