@@ -858,6 +858,7 @@ class FIMSVisualizer(QMainWindow):
         inSignalData = self.signalData
 
         time = inSignalData['Time']
+        dt = time.iloc[1] - time.iloc[0]
 
         padList = list(
             dict.fromkeys(
@@ -890,7 +891,7 @@ class FIMSVisualizer(QMainWindow):
             if prefix == 'Ion' and not pltIons:
                 continue
 
-            signal = inSignalData[col] if isSignal else inSignalData[col].cumsum()
+            signal = inSignalData[col] if isSignal else inSignalData[col].cumsum()*dt
             ax.plot(
                 time+0.001, signal,
                 ls=styles.get(prefix, "-"), c=padColor[pad],
@@ -1431,6 +1432,7 @@ class FIMSVisualizer(QMainWindow):
         styles = {'Signal': '-', 'Electron': '--', 'Ion': ':'}
         isSignal = self.chkAvSig.isChecked()
         time = inSignalData['Time']
+        dt = time.iloc[1] - time.iloc[0]
 
         activePrefixes = {'Signal'}
         for col in inSignalData.columns:
@@ -1441,7 +1443,7 @@ class FIMSVisualizer(QMainWindow):
             if prefix not in activePrefixes:
                 continue
 
-            signal = inSignalData[col] if isSignal else inSignalData[col].cumsum()
+            signal = inSignalData[col] if isSignal else inSignalData[col].cumsum()*dt
             sig.plot(
                 time+0.001, signal,
                 ls=styles.get(prefix, '-'), c=padColor[pad],
