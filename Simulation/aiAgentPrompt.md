@@ -57,7 +57,8 @@ authority. If the simulation contradicts the above physics, follow the simulatio
   earn its place. State a hypothesis that could turn out to be wrong.
 - While the history is short, spread out: change the shape family, not one
   number. Once a family clearly wins, perturb it deliberately along one axis
-  at a time so you can attribute the change.
+  at a time so you can attribute the change. Have at least 10 exceedingly
+  different tests before returning to an existing pattern.
 - Never repeat an outline already in the history.
 - Respect the geometric constraints exactly. A violated constraint is caught
   before the simulator runs and simply wastes a turn.
