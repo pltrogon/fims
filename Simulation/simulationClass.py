@@ -804,6 +804,8 @@ class FIMS_Simulation:
         # Read the capacitance matrix from the Elmer output file
         if self._geoConfiguration.unitCell == UnitCell.SQUARE:
             labels = [
+                'Cathode',
+                'Grid',
                 'CentralPad',
                 'RightTopPad',
                 'RightPad',
@@ -816,6 +818,8 @@ class FIMS_Simulation:
             ]
         else:
             labels = [
+                'Cathode',
+                'Grid',
                 'CentralPad',
                 'RightTopPad',
                 'RightBottomPad',
@@ -826,7 +830,7 @@ class FIMS_Simulation:
             ]
         
         capacitanceMatrix = self._readCapacitanceMatrix()
-        capacitanceDataFrame = pd.DataFrame(capacitanceMatrix, columns=labels)
+        capacitanceDataFrame = pd.DataFrame(capacitanceMatrix, index=labels, columns=labels)
         
         return capacitanceDataFrame
 
@@ -841,7 +845,7 @@ class FIMS_Simulation:
         """
         try:
 
-            capacitanceFile = '../Simulation/Geometry/elmerResults/capacitancematrix.dat'
+            capacitanceFile = os.path.join('Geometry', 'elmerResults', 'capacitanceMatrix.dat')
             capacitanceMatrix = np.loadtxt(capacitanceFile)
 
             capacitanceMatrix *= 1e15 #Convert from F to fF

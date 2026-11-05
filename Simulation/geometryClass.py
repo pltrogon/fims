@@ -1187,10 +1187,10 @@ class gmshClass:
         #=========================#
         #=== DEFINE MESH SIZES ===#
         #=========================#
-        fineMesh = gridThickness*(3./4.)*2
-        gridMesh = gridThickness/4.*8
-        refineMesh = gridThickness*(3./2.)*2
-        backgroundMesh = pitch/4./2
+        fineMesh = gridThickness*(3./4.)
+        gridMesh = gridThickness/4.
+        refineMesh = gridThickness*(3./2.)
+        backgroundMesh = pitch/4.
         #=========================#
         
         # Find distance from center line
@@ -1533,7 +1533,7 @@ class elmerClass:
         if self._capacitance:
             self._solver['Solver 1'].update({
                 'Calculate Capacitance Matrix': 'True',
-                'Capacitance Matrix Filename': '"elmerResults/CapacitanceMatrix.dat"'
+                'Capacitance Matrix Filename': 'File "elmerResults/capacitanceMatrix.dat"'
             })
 
         return
