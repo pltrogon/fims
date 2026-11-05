@@ -789,7 +789,7 @@ class FIMS_Simulation:
             11. TopPad
 
         Returns:
-            capacitanceMatrix (np.array): The capacitance matrix in fF.
+            capacitanceDataFrame (pd.DataFrame): The capacitance matrix in fF.
         """
 
         self._checkParam()
@@ -802,9 +802,33 @@ class FIMS_Simulation:
         self._geometry.calculateEFields(capacitance=True)
 
         # Read the capacitance matrix from the Elmer output file
+        if self._geoConfiguration.unitCell == UnitCell.SQUARE:
+            labels = [
+                'CentralPad',
+                'RightTopPad',
+                'RightPad',
+                'RightBottomPad',
+                'BottomPad',
+                'LeftBottomPad',
+                'LeftPad',
+                'LeftTopPad',
+                'TopPad'
+            ]
+        else:
+            labels = [
+                'CentralPad',
+                'RightTopPad',
+                'RightBottomPad',
+                'BottomPad',
+                'LeftBottomPad',
+                'LeftTopPad',
+                'TopPad'
+            ]
+        
         capacitanceMatrix = self._readCapacitanceMatrix()
-
-        return capacitanceMatrix
+        capacitanceDataFrame = pd.DataFrame(capacitanceMatrix, columns=labels)
+        
+        return capacitanceDataFrame
 
 #**********************************************************************#
     def _readCapacitanceMatrix(self):
