@@ -12,7 +12,7 @@ The file is split on top-level headings:
 
 You are designing the hole pattern in the amplification grid of an integrated
 grid type micro-pattern gaseous detector. Your objective is to MINIMIZE the ion
-backflow number (IBN) while maintaining 95% efficiency.
+backflow number (IBN) at the lowest field ratio that gives 95% net efficiency.
 
 ## PHYSICS
 
@@ -26,19 +26,49 @@ avalanche, so lower is better.
 The grid is arranged in a hexagonal pattern, so the full pattern must fit within
 a single hexagon. The thickness of the grid, the size of the anode pad, the pitch
 between unit cells, and the length of the amplification gap are all fixed parameters.
-The only input variable is the hole pattern. The field ratio, collection efficiency,
-and IBN are all determined by the simulation based on the hole pattern.
+The only input variable is the hole pattern. The field ratio is found by a minimization
+algorithm in the simulation. Collection efficiency, gain, and IBN are all determined 
+by the simulation based on the given hole pattern and its minimum field ratio.
 
-Generally speaking, larger holes (that is, hole patterns with a larger total open area)
-have an easier time enabling electrons to transfer from the drift region to the
-amplification region. This is represented by collection efficiency. The hole pattern
-must have at least 0.95 collection efficiency in order to be considered viable.
-HIGHER collection efficiency is better.
+## HOW EACH PATTERN IS SCORED
 
-The electric field is the primary factor that determines the size of the Townsend
-avalanche. Higher fields correspond to larger avalanches. Since every electron
-created also creates an ion, larger fields generally result in higher IBN. SMALLER
-field ratios are generally better.
+Every pattern goes through the same automatic procedure. You do not choose the
+field ratio; the procedure does.
+
+1. The field ratio (FR) is the ratio of two electric fields in the system. A larger 
+   field ratio corresponds to stronger electric fields below the grid.
+2. FR is scanned upward. At each FR, single electrons are released above the
+   grid and two efficiencies are measured:
+   - collection efficiency: the fraction of electrons that pass through the hole
+     and into the region below the grid instead of terminating on the grid.
+   - detection efficiency: the fraction of collected electrons whose avalanche
+     reaches a minimum threshold.
+   - net efficiency = collection efficiency x detection efficiency.
+3. The SMALLEST FR at which net efficiency is at least 0.95 (2 sigma lower bound)
+   is kept. FR is capped at 300; a pattern that cannot reach 0.95 by then is
+   not viable.
+   The final run measures collection efficiency again. The design counts only
+   if that value minus twice its error is at least 0.95; otherwise it is marked
+   * in the history and ranks below every design that passes, whatever its IBN.
+4. Detection efficiency can always be achieved by simply increasing the field ratio,
+   but collection efficiency plateaus at higher field values. This means that the 
+   field finder may dramatically increase the field ratio in a vain attempt to
+   reach the net efficiency requirement even though the collection efficiency plateau
+   has made that impossible.
+5. The full avalanche simulation runs at that FR, and IBN is measured there.
+
+What this means for you:
+- HIGHER FR means bigger avalanches and more ions.
+- IBN is approximately gain x IBF, where gain is the mean avalanche size at
+  the chosen FR and IBF is the fraction of avalanche ions that escape through
+  the grid. The history shows FR, gain and IBF for every trial, so you can tell
+  which factor a change moved.
+- Gain and IBF both increase IBN, but gain increases exponentially with field ratio.
+  This means that minimizing the gain is a stronger lever on the IBN than IBF alone is.
+- Collection efficiency is the binding constraint. Because net efficiency must
+  reach 0.95, the detection needed is about 0.95 / collection; as collection
+  lowers and approaches 0.95 the required gain, and so the IBN, rises steeply.
+  Patterns with collection near 1 need far less gain.
 
 Treat all of the above as a starting intuition only. The simulation is the
 authority. If the simulation contradicts the above physics, follow the simulation.
@@ -53,12 +83,27 @@ authority. If the simulation contradicts the above physics, follow the simulatio
   by less than the quadrature sum of their errors are NOT distinguishable. Do
   not build a conclusion on such a gap; if you need to resolve one, say so in
   your hypothesis.
-- Each simulation costs between 10 minutes and 2 hours. Every proposal must
-  earn its place. State a hypothesis that could turn out to be wrong.
-- While the history is short, spread out: change the shape family, not one
-  number. Once a family clearly wins, perturb it deliberately along one axis
-  at a time so you can attribute the change. Have at least 10 exceedingly
-  different tests before returning to an existing pattern.
+- Each simulation costs between 2 and 14 hours. Every proposal must earn its
+  place. State a hypothesis that could turn out to be wrong, and say whether
+  you expect it to change the gain needed, the IBF, or both.
+- Novelty is measured, not declared. Every pattern is compared with every
+  completed trial by how much of the grid metal sits in the same place
+  (allowing for rotations and reflections of the cell). The "sim" column is
+  that score. Below the threshold shown in the history, the pattern starts a
+  new group; otherwise it joins the group of its closest trial. The script
+  rejects a pattern that breaks the EXPLORATION line in the history, so read
+  that line before proposing.
+- There is no fixed list of shape families. Holes can be mixed in type,
+  number (up to 24), size and position, and may overlap to build compound
+  outlines. Use that freedom: a new group should be a genuinely different idea
+  about where the metal goes, not a minimal change that just clears the
+  threshold.
+- A group that loses once has not been ruled out. Its first trial is one
+  point; check its collection efficiency, FR, gain and IBF to see why it lost,
+  and say what change would fix that.
+- When refining a group, change a feature by an amount large enough to move
+  IBN by more than its error. Patterns that are nearly identical to an earlier
+  trial are rejected before simulation.
 - Never repeat an outline already in the history.
 - Respect the geometric constraints exactly. A violated constraint is caught
   before the simulator runs and simply wastes a turn.
@@ -188,6 +233,10 @@ The `propose_hole_shape` tool the model calls. `name`, `description` and
                 "type": "string",
                 "description": "What in the history led you here. Name the specific runs you are reasoning from."
             },
+            "family": {
+                "type": "string",
+                "description": "A short name you invent for this pattern's topology, a few words long. It is for readability only; novelty is judged from the geometry, not from this name."
+            },
             "shape": {
                 "type": "object",
                 "description": "The hole pattern for one unit cell.",
@@ -214,6 +263,7 @@ The `propose_hole_shape` tool the model calls. `name`, `description` and
         "required": [
             "hypothesis",
             "rationale",
+            "family",
             "shape"
         ]
     }

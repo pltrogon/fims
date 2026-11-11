@@ -44,10 +44,17 @@ class FIMS_AI_Agent:
 
     def __init__(self, geoConfig, geoParams, resume=True):
         """Initializes a FIMS AI Agent."""
-        self.bestEntry = None        
+        self.bestEntry = None
         self.maxProposals = 5
         self.history = []
         self._priorHistory = []
+        self.minCollection = 0.95
+        
+        # Exploration rules
+        self.minGroups = 10
+        self.maxStreak = 3
+        self.exploreSimilarity = 0.70
+        self.maxSimilarity = 0.97
         
         # Setup files
         aiPath = os.path.join('..', 'Data', 'AI')
@@ -115,7 +122,7 @@ class FIMS_AI_Agent:
 
         holeSpec = jsonBlock('Hole Spec')
         self.shapeTool = jsonBlock('Shape Tool')
-
+        
         holesSchema = self.shapeTool['input_schema']['properties']['shape']['properties']['holes']
         holesSchema['items'] = holeSpec
         
@@ -286,6 +293,10 @@ class FIMS_AI_Agent:
                 ))
             if entry.get('fieldRatio') is not None:
                 allRows.append(('Field Ratio', f"{entry['fieldRatio']:g}"))
+            if entry.get('gain') is not None:
+                allRows.append(('Gain', f"{entry['gain']:g}"))
+            if entry.get('ibf') is not None:
+                allRows.append(('IBF', f"{entry['ibf']:g}"))    
             if entry.get('shapeType'):
                 allRows.append(('Shape Type', entry['shapeType']))
                 allRows.append(('Shape Hash', entry.get('shapeHash')))
@@ -414,16 +425,17 @@ class FIMS_AI_Agent:
 
     #**********************************************************************#
 
-    def _renderHistory(self, numDetailed=3):
+    def _renderHistory(self, numDetailed=6, numRecent=2):
         """
         Renders the trial history into a compact block for the agent.
 
         A summary table covers every attempt; the full outline is included only
-        for the best few and the most recent, which keeps the prompt bounded no
-        matter how many iterations have run.
+        for the best trial of each family and the most recent, which keeps the 
+        prompt bounded no matter how many iterations have run.
 
         Args:
-            numDetailed (int): How many of the best shapes to spell out in full.
+            numDetailed (int): How many groups to spell out in full.
+            numRecent (int): How many of the latest trials to spell out in full.
 
         Returns:
             str: The rendered history.
@@ -433,74 +445,204 @@ class FIMS_AI_Agent:
                 'Nothing has been simulated yet. Propose a starting point and say '
                 'what you expect from it.'
             )
-
+        
+        def fmt(value, spec):
+            return '-' if value is None else format(value, spec)
+        
         header = (
-            f"{'it':>3}  {'status':<8} {'IBN':>10} {'+/-':>8} "
-            f"{'CollEff':>7} {'CollEff +/-':>15} {'N':>2} "
-            f"{'maxR':>6} {'minR':>6} {'area':>8} {'perim':>7} {'open':>6}  types"
+            f"{'it':>3}  {'status':<8} {'grp':>3} {'sim':>4} {'family':<20} "
+            f"{'IBN':>7} {'+/-':>6} {'FR':>4} {'gain':>6} {'IBF':>7} {'CollEff':>8} {'+/-':>6} "
+            f"{'N':>2} {'maxR':>6} {'minR':>6} {'perim':>7} {'open':>6}"
         )
         allRows = [header, '-'*len(header)]
-
+        
         for entry in self.history:
             summary = entry.get('summary') or {}
-            nan = float('nan')
-
-            if entry.get('status') == 'ok':
-                ibnText = f"{entry['ibn']:.5g}"
-                errText = f"{entry['ibnError']:.3g}"
-                ceText = f"{entry['collectionEff']:.4g}"
-                ceErrText = (
-                    f"+{entry['collectionErrHigh']:.2g}"
-                    f"/-{entry['collectionErrLow']:.2g}"
-                )
-                
-            else:
-                ibnText, errText = '-', '-'
-                ceText, ceErrText = '-', '-'
+            isOk = entry.get('status') == 'ok'
 
             allRows.append(
                 f"{entry.get('iteration', -1):>3}  "
-                f"{entry.get('status', '?'):<8} {ibnText:>10} {errText:>8} "
-                f"{ceText:>7} {ceErrText:>15} "
-                f"{summary.get('numHoles', 0):>2d} "
-                f"{summary.get('maxRadius', nan):>6.2f} "
-                f"{summary.get('minRadius', nan):>6.2f} "
-                f"{summary.get('area', nan):>8.1f} "
-                f"{summary.get('perimeter', nan):>7.1f} "
-                f"{summary.get('openAreaFraction', nan):>6.3f}  "
-                f"{entry.get('shapeType', '?')}"
+                f"{entry.get('status', '?'):<8} "
+                f"{fmt(summary.get('group'), 'd'):>3} "
+                f"{fmt(summary.get('similarity'), '.2f'):>4} "
+                f"{(entry.get('family') or '-')[:20]:<20} "
+                f"{fmt(entry.get('ibn') if isOk else None, '.4g'):>7} "
+                f"{fmt(entry.get('ibnError') if isOk else None, '.2g'):>6} "
+                f"{fmt(entry.get('fieldRatio') if isOk else None, '.0f'):>4} "
+                f"{fmt(entry.get('gain') if isOk else None, '.0f'):>6} "
+                f"{fmt(entry.get('ibf') if isOk else None, '.4f'):>7} "
+                f"{fmt(entry.get('collectionEff') if isOk else None, '.3f'):>7}"
+                f"{' ' if not isOk or self._isViable(entry) else '*'} "
+                f"{fmt(entry.get('collectionErrLow') if isOk else None, '.3f'):>6} "
+                f"{fmt(summary.get('numHoles'), 'd'):>2} "
+                f"{fmt(summary.get('maxRadius'), '.2f'):>6} "
+                f"{fmt(summary.get('minRadius'), '.2f'):>6} "
+                f"{fmt(summary.get('perimeter'), '.1f'):>7} "
+                f"{fmt(summary.get('openAreaFraction'), '.3f'):>6}"
             )
 
-            if entry.get('status') != 'ok' and entry.get('message'):
+            if not isOk and entry.get('message'):
                 allRows.append(f"       -> {entry['message']}")
+        
+        allRows.append(
+            f'* = not viable: CollEff - 2*err is below '
+            f'{self.minCollection:g}. These rank below every viable trial.'
+        )
+        
+        # Groups of similar grid metal and the current exploration limit
+        allGroups = self._groupSummary()
+        bestOfGroups = sorted(
+            (min(members, key=self._rankKey) for members in allGroups.values()),
+            key=self._rankKey
+        )
 
-        # Spell out the outlines worth perturbing
-        completed = [e for e in self.history if e.get('status') == 'ok']
-        detailIds = [
-            e['iteration']
-            for e in sorted(completed, key=self._rankKey)[:numDetailed]
-        ]
-        for entry in self.history[-2:]:
+        allRows.append('')
+        allRows.append(
+            f'GROUPS (grp = first trial of the group; sim = grid metal similarity '
+            f'to the closest earlier trial; below {self.exploreSimilarity:.2f} '
+            'starts a new group)'
+        )
+        for best in bestOfGroups:
+            group = (best.get('summary') or {}).get('group', best['iteration'])
+            allRows.append(
+                f'  group {group}: {len(allGroups[group])} trial(s), best is '
+                f'iteration {best["iteration"]} at IBN = {best["ibn"]:.4g}'
+            )
+
+        _, reason = self._explorationLimits()
+        allRows.append(
+            'EXPLORATION: ' + (reason or 'You may refine a group or start a new one.')
+        )
+
+        # Spell out the best of the leading groups, then the most recent
+        detailIds = [entry['iteration'] for entry in bestOfGroups[:numDetailed]]
+        for entry in self.history[-numRecent:]:
             if entry.get('status') == 'ok' and entry['iteration'] not in detailIds:
                 detailIds.append(entry['iteration'])
 
         if detailIds:
             allRows.append('')
-            allRows.append('FULL OUTLINES (best first, then most recent)')
+            allRows.append('FULL OUTLINES (best of each leading group, then most recent)')
             for entry in self.history:
                 if entry['iteration'] not in detailIds:
                     continue
                 allRows.append(
-                    f"\n  iteration {entry['iteration']}  "
-                    f"IBN = {entry['ibn']:.5g} +/- {entry['ibnError']:.3g}"
-                    f"  collection efficiency = {entry['collectionEff']:.4g} "
-                    f"+{entry['collectionErrHigh']:.2g}/-{entry['collectionErrLow']:.2g}"
+                    f"\n  iteration {entry['iteration']} "
+                    f"(group {(entry.get('summary') or {}).get('group', '-')})  "
+                    f"IBN = {entry['ibn']:.5g} +/- {entry['ibnError']:.3g}  "
+                    f"field ratio = {fmt(entry.get('fieldRatio'), 'g')}"
                 )
+                if entry.get('fieldScan'):
+                    allRows.append(
+                        '  field scan (FR: collection efficiency +/- error): '
+                        + ', '.join(
+                            f'{point[0]:g}: {point[1]:.3f}'
+                            + (f' +/- {point[2]:.3f}' if len(point) > 3 else '')
+                            for point in entry['fieldScan']
+                        )
+                    )
                 allRows.append(f"  spec: {json.dumps(entry['spec'])}")
                 if entry.get('hypothesis'):
                     allRows.append(f"  you predicted: {entry['hypothesis']}")
 
         return '\n'.join(allRows)
+
+    #**********************************************************************#
+
+    def _assignGroup(self, iteration, similarity, closestIteration):
+        """
+        Assigns a given pattern to a group based on similarity and recency.
+
+        args:
+            iteration (int): The iteration being proposed.
+            similarity (float): Similarity to the closest completed trial.
+            closestIteration (int): That trial's iteration, or None.
+
+        returns:
+            group (int): The iteration that started this pattern's group.
+        """
+        if closestIteration is None or similarity < self.exploreSimilarity:
+            return iteration
+
+        closest = next(e for e in self.history if e['iteration'] == closestIteration)
+        group = (closest.get('summary') or {}).get('group', closestIteration)
+
+        return group
+
+    #**********************************************************************#
+
+    def _groupSummary(self):
+        """
+        Collects completed trials by group, in order of first use.
+
+        returns:
+            allGroups (dict): group -> list of 'ok' entries.
+        """
+        allGroups = {}
+        for entry in self.history:
+            if entry.get('status') == 'ok':
+                group = (entry.get('summary') or {}).get('group', entry['iteration'])
+                allGroups.setdefault(group, []).append(entry)
+
+        return allGroups
+
+    #**********************************************************************#
+
+    def _explorationLimits(self):
+        """
+        Restricts the agent from over-exploring a single group.
+        
+        returns:
+            tuple: (closedGroups, reason) - a set of groups and the text to
+                show the agent, or (set(), None) if any pattern is allowed.
+        """
+        allGroups = self._groupSummary()
+        if len(allGroups) < self.minGroups:
+            reason = (
+                f'Exploration phase: {len(allGroups)} of {self.minGroups} groups '
+                'tried. The next pattern must start a new group.'
+            )
+            return set(allGroups), reason
+
+        recentGroups = [
+            (e.get('summary') or {}).get('group', e['iteration'])
+            for e in self.history if e.get('status') == 'ok'
+        ][-self.maxStreak:]
+        if len(set(recentGroups)) == 1 and len(recentGroups) == self.maxStreak:
+            reason = (
+                f'The last {self.maxStreak} trials were all group {recentGroups[0]}. '
+                'The next pattern must be outside that group.'
+            )
+            return {recentGroups[0]}, reason
+
+        return set(), None
+
+    #**********************************************************************#
+
+    def _explorationRule(self, group, similarity, closestIteration):
+        """
+        Checks a proposal's group against the exploration limits.
+
+        args:
+            group (int): The group from _assignGroup.
+            similarity (float): Similarity to the closest completed trial.
+            closestIteration (int): That trial's iteration, or None.
+
+        returns:
+            message (str): Why the proposal breaks a rule, or None.
+        """
+        closedGroups, reason = self._explorationLimits()
+        if group not in closedGroups:
+            return None
+
+        message = (
+            f'{reason} This pattern has {similarity:.0%} the same grid metal as '
+            f'iteration {closestIteration}, so it belongs to group {group}. A new '
+            f'group needs less than {self.exploreSimilarity:.0%} similarity to '
+            'every completed trial.'
+        )
+
+        return message
 
     #**********************************************************************#
 
@@ -544,13 +686,7 @@ class FIMS_AI_Agent:
         validSummary = self._validateHolePattern(allHoles)
 
         # Create hash of every x,y point in the pattern
-        canonicalForm = json.dumps([
-            [[round(x, 6), round(y, 6)] for x, y in hole['vertices']]
-            for hole in allHoles
-        ])
-        validSummary['shapeHash'] = hashlib.sha1(
-            canonicalForm.encode()
-        ).hexdigest()[:12]
+        validSummary['shapeHash'] = self._shapeHash(allHoles)
 
         payload = {
             'spec': shapeSummary,
@@ -935,19 +1071,133 @@ class FIMS_AI_Agent:
 
     #**********************************************************************#
     
-    @staticmethod
-    def _rankKey(entry, minCollection=0.95):
+    def _isViable(self, entry):
         """
-        Sort key for completed entries: viable designs (collection
-        efficiency >= minCollection) first, then lowest IBN. Entries
-        without a recorded collection efficiency are treated as viable.
+        Checks whether a trial meets the collection efficiency requirement.
+
+        args:
+            entry (dict): History record.
+
+        returns:
+            viable (bool): Whether the trial meets the requirement.
         """
         collectionEff = entry.get('collectionEff')
-        viable = collectionEff is None or collectionEff >= minCollection
-        return (not viable, entry['ibn'])
+        if collectionEff is None:
+            return True
+        errLow = entry.get('collectionErrLow') or 0.
+
+        return collectionEff - 2*errLow >= self.minCollection
+
+    #**********************************************************************#
+
+    def _rankKey(self, entry):
+        """
+        Sort key for completed entries: viable designs (see _isViable)
+        first, then lowest IBN.
+        """
+        return (not self._isViable(entry), entry['ibn'])
     
     #**********************************************************************#
     
+    @staticmethod
+    def _shapeHash(allHoles):
+        """
+        Hashes every x,y point of a resolved pattern.
+
+        args:
+            allHoles (list): Placed holes from _resolveHolePattern().
+
+        returns:
+            shapeHash (str): First 12 characters of the SHA-1 digest.
+        """
+        canonicalForm = json.dumps([
+            [[round(x, 6), round(y, 6)] for x, y in hole['vertices']]
+            for hole in allHoles
+        ])
+        shapeHash = hashlib.sha1(canonicalForm.encode()).hexdigest()[:12]
+
+        return shapeHash
+
+    #**********************************************************************#
+
+    def _metalMask(self, shapeSpec, samplePoints):
+        """
+        Marks which sample points are grid metal inside the unit cell.
+
+        args:
+            shapeSpec (dict): Hole pattern specification.
+            samplePoints (np.ndarray): (N, 2) points in microns.
+
+        returns:
+            isMetal (np.ndarray): True where the point is metal.
+        """
+        from matplotlib.path import Path
+
+        allEdges = self._cellEdges()
+        halfAngle = math.pi/len(allEdges)
+        cornerRadius = (float(self._geoParams['pitch'])/2.)/math.cos(halfAngle)
+        corners = [
+            (
+                cornerRadius*math.cos(math.radians(angle) + halfAngle),
+                cornerRadius*math.sin(math.radians(angle) + halfAngle)
+            )
+            for _, _, angle in allEdges
+        ]
+
+        isMetal = Path(corners).contains_points(samplePoints)
+        for hole in self._resolveHolePattern(shapeSpec):
+            isMetal &= ~Path(hole['vertices']).contains_points(samplePoints)
+
+        return isMetal
+
+    #**********************************************************************#
+
+    def _maxSimilarity(self, shapeSpec, numSamples=200):
+        """
+        Compares a pattern's grid metal to every completed trial.
+
+        Similarity is the intersection over union of the metal regions,
+        maximized over the rotations and mirror images of the unit cell.
+        1.0 means the same metal layout.
+
+        args:
+            shapeSpec (dict): Hole pattern specification.
+            numSamples (int): Grid resolution per axis.
+
+        returns:
+            tuple: (similarity, iteration) of the closest trial, or (0., None).
+        """
+        limit = float(self._geoParams['pitch'])/math.sqrt(3.)
+        axisPoints = np.linspace(-limit, limit, numSamples)
+        meshX, meshY = np.meshgrid(axisPoints, axisPoints)
+        samplePoints = np.column_stack([meshX.ravel(), meshY.ravel()])
+
+        newMetal = self._metalMask(shapeSpec, samplePoints)
+        numEdges = len(self._cellEdges())
+
+        closest = (0., None)
+        for entry in self.history:
+            if entry.get('status') != 'ok' or not entry.get('spec'):
+                continue
+
+            for index in range(numEdges):
+                angle = 2.*math.pi*index/numEdges
+                rotatedX = meshX.ravel()*math.cos(angle) - meshY.ravel()*math.sin(angle)
+                rotatedY = meshX.ravel()*math.sin(angle) + meshY.ravel()*math.cos(angle)
+
+                for mirror in (1., -1.):
+                    priorMetal = self._metalMask(
+                        entry['spec'], np.column_stack([rotatedX, mirror*rotatedY])
+                    )
+                    union = (newMetal | priorMetal).sum()
+                    similarity = (newMetal & priorMetal).sum()/union if union else 1.
+                    if similarity > closest[0]:
+                        closest = (float(similarity), entry['iteration'])
+
+        return closest
+
+    #**********************************************************************#
+
     @staticmethod
     def _holesOverlap(firstHole, secondHole):
         """
@@ -1326,17 +1576,13 @@ class FIMS_AI_Agent:
                         'holes': allHoles,
                         'numHoles': 6,
                     },
-                    'hypothesis': (
-                        'Six triangles tiled into a hexagon hold roughly the '
-                        'same open area as the circle but add six thin grid '
-                        'spokes running from the cell center outward. If ion '
-                        'collection is driven by grid material sitting above '
-                        'the avalanche, IBN should fall below iteration 1. If '
-                        'it does not, open area rather than grid topology is '
-                        'what sets IBN.'
-                    ),
-                    'rationale': 'Seeded by the script as a second reference point.'
+                    'hypothesis': 'Additional reference point seeded by the script to promote alternate hole patterns.',
+                    'rationale': (
+                        'Adding an additional reference point reduces the probability of the ai agent getting '
+                        'stuck iterating on the same geometry without sufficient exploration of alternative patterns.'
+                    )
                 }
+            
             
             else:
                 proposal = self._proposeShape(iteration, finalIteration, feedback=feedback)
@@ -1344,18 +1590,36 @@ class FIMS_AI_Agent:
             # Create hole shape
             try:
                 shapeSummary = self._createShape(proposal['shape'])
-                
-                # Ensure shape is new
+
+                # Ensure shape is new and allowed by the exploration rules
                 priorHashes = {e.get('shapeHash') for e in self.history if e.get('shapeHash')}
-                if shapeSummary['shapeHash'] not in priorHashes:
-                    return proposal, shapeSummary
-                
-                else:
+                similarity, closestIteration = self._maxSimilarity(proposal['shape'])
+                group = self._assignGroup(iteration, similarity, closestIteration)
+                shapeSummary.update({
+                    'group': group,
+                    'similarity': similarity,
+                    'closestIteration': closestIteration,
+                })
+
+                if shapeSummary['shapeHash'] in priorHashes:
                     message = 'This outline is already in the history.'
-            
+
+                elif similarity >= self.maxSimilarity:
+                    message = (
+                        f'This outline has {similarity:.1%} the same grid metal as '
+                        f'iteration {closestIteration} (limit {self.maxSimilarity:.0%}). '
+                        'A change that small cannot be resolved within the IBN '
+                        'error. Make a larger change or try a new pattern.'
+                    )
+
+                else:
+                    message = self._explorationRule(group, similarity, closestIteration)
+                    if message is None:
+                        return proposal, shapeSummary
+
             except (ValueError, KeyError, TypeError, IndexError, AttributeError) as error:
                 message = str(error)
-
+            
             print(f'\t Rejected proposal: {message}')
             rejected.append(f'\t - {json.dumps(proposal["shape"])}\n \t{message}')
             feedback = (

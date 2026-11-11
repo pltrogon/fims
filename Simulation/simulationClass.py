@@ -168,8 +168,7 @@ class FIMS_Simulation:
         self._checkRunNumber()
                 
         return
-
-    #******************************************************************#    
+ #******************************************************************# 
     
     def setParameters(self, paramDict):
         """
@@ -191,7 +190,8 @@ class FIMS_Simulation:
 
         return
     
-#**********************************************************************#    
+#**********************************************************************#
+
     def _checkGasComp(self):
         """
         Ensures that the gas composition percentages sum to 1.0.
@@ -208,7 +208,8 @@ class FIMS_Simulation:
         
         return
     
-#**********************************************************************#    
+#**********************************************************************#
+
     def _checkRunNumber(self):
         """
         Ensures that the run number is valid.
@@ -223,6 +224,7 @@ class FIMS_Simulation:
         return
     
 #**********************************************************************#
+
     def getParam(self, parameter):
         """
         Gets a copy of the desired parameter.
@@ -239,13 +241,15 @@ class FIMS_Simulation:
         return copy.copy(self._param[parameter])
     
 #**********************************************************************#
+
     def getAllParam(self):
         """
         Gets a copy of the entire parameter dictionary.
         """
         return copy.deepcopy(self._param)
 
-#**********************************************************************#       
+#**********************************************************************#
+
     def _getGarfieldPath(self):
         """
         Reads and returns the filepath to the Garfield++ source script.
@@ -279,6 +283,7 @@ class FIMS_Simulation:
         return garfieldPath
 
 #**********************************************************************#
+
     def _setupSimulation(self):
         """
         Initializes Garfield++ and creates project executables. Automatically 
@@ -342,6 +347,7 @@ class FIMS_Simulation:
         return
     
 #**********************************************************************#
+
     def _getGarfieldEnvironment(self):
         """
         Sourced the Garfield++ environment via bash.
@@ -373,6 +379,7 @@ class FIMS_Simulation:
         return garfieldEnv
 
 #**********************************************************************#
+
     def setGeometry(self, geoConfig):
         """
         Sets the geometry for the simulation.
@@ -391,6 +398,25 @@ class FIMS_Simulation:
         )
 
         return
+
+#**********************************************************************#
+
+    def _getFieldScan(self):
+        """
+        Reads the scan details of the field finder.
+        
+        returns:
+            fieldScan (data frame): data points of the field scan
+            isEfficient (bool): whether the geometry reached the
+                efficiency threshold.
+        """
+        fieldScan = pd.read_csv('../Data/allEfficiencyResults.csv')
+        fieldScan = fieldScan.sort_values('fieldRatio')
+        isEfficient = (
+            (fieldScan['stopCondition'] == 'CONVERGED')
+            & (fieldScan['netEff'] - 2*fieldScan['netErrLow'] >= 0.95)
+        )
+        return isEfficient, fieldScan
 
 #**********************************************************************#
 
@@ -462,6 +488,7 @@ class FIMS_Simulation:
             
             record = {
                 'iteration': iteration,
+                'family': proposal.get('family'),
                 'shapeType': '+'.join(sorted({hole['type'] for hole in shapeSummary['holes']})),
                 'shapeHash': shapeSummary['shapeHash'],
                 'summary': shapeSummary,
@@ -474,24 +501,67 @@ class FIMS_Simulation:
             try:
                 runNumber = self.runForEfficiency()
                 
+                # Get field scan data
+                isEfficient, fieldScan = self._getFieldScan()
+                fieldScanResult = [[
+                    float(field),
+                    round(float(collection), 3),
+                    round(float(errLow), 4),
+                    round(float(errHigh), 4),
+                    round(float(detection), 3)
+                    ]
+                    for field, collection, errLow, errHigh, detection in zip(
+                        fieldScan['fieldRatio'],
+                        fieldScan['collectionEff'],
+                        fieldScan['collectionErrLow'],
+                        fieldScan['collectionErrHigh'],
+                        fieldScan['detectionEff'],
+                    )
+                ]
+
+                # Get simulation data
                 simData = runData(runNumber)
-                ibn = float(simData.getCalcParameter('Average IBN'))
-                ibnError = float(simData.getCalcParameter('IBN Error'))
-                collectEff = float(simData.getCalcParameter('Charge Collection Eff'))
-                collectErrLow = float(simData.getCalcParameter('Charge Collection Eff Err (Low)'))
-                collectErrHigh = float(simData.getCalcParameter('Charge Collection Eff Err (High)'))
-                fieldRatio = float(simData.getRunParameter('Electric Field Ratio'))
                 
+                ibn = float(simData.getCalcParameter(
+                    'Average IBN'
+                ))
+                ibnError = float(simData.getCalcParameter(
+                    'IBN Error'
+                ))
+                ibf = float(simData.getCalcParameter(
+                    'Average IBF'
+                ))
+                collectEff = float(simData.getCalcParameter(
+                    'Charge Collection Eff'
+                ))
+                collectErrLow = float(simData.getCalcParameter(
+                    'Charge Collection Eff Err (Low)'
+                ))
+                collectErrHigh = float(simData.getCalcParameter(
+                    'Charge Collection Eff Err (High)'
+                ))
+                gain = float(simData.getCalcParameter(
+                    'Trimmed Gain'
+                ))
+                fieldRatio = float(simData.getRunParameter(
+                    'Electric Field Ratio'
+                ))
+                
+                # Record full results
                 record.update({
                     'status': 'ok',
                     'ibn': ibn,
                     'ibnError': ibnError,
+                    'ibf': ibf,
                     'collectionEff': collectEff,
                     'collectionErrLow': collectErrLow,
                     'collectionErrHigh': collectErrHigh,
                     'runNumber': runNumber,
                     'fieldRatio': fieldRatio,
+                    'gain': gain,
+                    'fieldScan': fieldScanResult
                 })
+                
                 print(
                     f'  Result: IBN = {ibn:.5g} +/- {ibnError:.3g}\n'
                     f'  Collection Efficiency = {collectEff:.4g}'
