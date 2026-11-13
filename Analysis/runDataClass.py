@@ -473,7 +473,7 @@ class runData:
             self._calculatedData['Bundle z'] = nominalBundleZ
             
             #TODO: nest eggs and trivial pursuit don't play well with this
-            #self._calculatedData['Field Bundle Radius'] = self.calcBundleRadius(nominalBundleZ)
+            #self._calculatedData['Field Bundle Radius'] = self.calcBundleRadius(nominalBundleZ) 
             self._calculatedData['Field Bundle Radius'] = self.getRunParameter('Hole Radius')
 
         if numAvalanche > 0:
@@ -2286,15 +2286,17 @@ class runData:
     def _getEfficiencyThreshold(self, targetEfficiency=0.95):
         """TODO"""
 
-        threshold = 0
+        threshold = 1
         isEfficient = True
-
-        while isEfficient:
-            threshold += 1
+        avalancheLimit = self.getRunParameter('Avalanche Limit')
+        
+        while isEfficient and threshold < avalancheLimit:
             efficiency = self._getEfficiency(threshold=threshold)
-
+            
             if efficiency['efficiency'] < targetEfficiency: #TODO - add error margins
                 isEfficient = False
+            
+            threshold += 1
 
         #Subtract 1.5 to get the threshold where efficiency is just above target
         targetThreshold = threshold - 1.5
