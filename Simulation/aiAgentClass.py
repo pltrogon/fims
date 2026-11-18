@@ -57,16 +57,18 @@ class FIMS_AI_Agent:
         self.maxSimilarity = 0.97
         
         # Setup files
-        aiPath = os.path.join('..', 'Data', 'AI')
-        os.makedirs(aiPath, exist_ok=True)
-    
-        self.historyMD = os.path.join(aiPath, 'holeShapeHistory.md')
-        self._imagePath = os.path.join(aiPath, 'holeShapeImages')
-        self.idealShapePath = os.path.join(aiPath, 'bestHoleShape.json')
+        _cwd = os.path.dirname(os.path.abspath(__file__))
+        aiDir = os.path.join('..', 'Data', 'AI')
+        os.makedirs(aiDir, exist_ok=True)
+        
+        self._promptPath = os.path.join(_cwd, 'aiAgentPrompt.md')
+        self.badgePath = os.path.join(_cwd, 'src', 'AI_Badge.png')
+        self.smallBadgePath = os.path.join(_cwd, 'src', 'AI_Badge_Small.png')
+        
+        self.historyMD = os.path.join(aiDir, 'holeShapeHistory.md')
+        self._imagePath = os.path.join(aiDir, 'holeShapeImages')
+        self.idealShapePath = os.path.join(aiDir, 'bestHoleShape.json')
         self._customShapePath = os.path.join('Geometry', 'customShape.json')
-        self._promptPath = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), 'aiAgentPrompt.md'
-        )
         
         # Setup geometry
         self._geoConfig = geoConfig
@@ -232,7 +234,13 @@ class FIMS_AI_Agent:
         def fmt(value, spec):
             return '-' if value is None else format(value, spec)
 
+        badgeLink = os.path.relpath(
+            self.badgePath, os.path.dirname(self.historyMD)
+        ).replace(os.sep, '/')
+
         allLines = [
+            f'<img src="{badgeLink}" alt="AI-generated content" width="260">',
+            '',
             '# FIMS AI Hole Shape History',
             '',
             '<!-- Written by FIMS_AI_Agent. The ```json block after each "record"',
@@ -417,9 +425,33 @@ class FIMS_AI_Agent:
         if entry.get('collectionEff') is not None:
             title += f"  |  Coll. Eff. = {entry['collectionEff']:.3g}"
         axis.set_title(title, fontsize=10)
-
+        self.addSmallAIBadge(axis)
+        
         figure.tight_layout()
         figure.savefig(imageFile, dpi=120)
+
+        return
+
+    #**********************************************************************#
+
+    def addSmallAIBadge(self, target, size=0.11, margin=0.015):
+        """
+        Adds a small badge to plots to mark them as AI generated.
+
+        args:
+            target (matplotlib Axes): Target plot.
+            size (float): Badge size as a fraction of the axis.
+            margin (float): Gap from the axis corner as a fraction of the axis.
+        """
+        import matplotlib.image as mpimg
+
+        badge = mpimg.imread(self.smallBadgePath)
+        badgeAxis = target.inset_axes(
+            [1. - size - margin, margin, size, size],
+            zorder=10
+        )
+        badgeAxis.imshow(badge, alpha=0.85)
+        badgeAxis.axis('off')
 
         return
 
