@@ -91,6 +91,10 @@ class FIMS_AI_Agent:
                 'Initialize with "resume = True" to let the agent see those trials.'
             )
         
+        # Record ai agent usage costs
+        self.apiUsage = self._loadAPIUsage()
+        self._savedUsage = dict(self.apiUsage)
+        
         return
 
     #**********************************************************************#
@@ -197,6 +201,36 @@ class FIMS_AI_Agent:
         )
 
         return [json.loads(block) for block in allBlocks]
+        
+    #**********************************************************************#
+
+    def _loadAPIUsage(self):
+        """
+        Reads the total API usage from the history file.
+
+        Returns:
+            usage (dict): Running totals (zeroes if none are recorded).
+        """
+        usage = {
+            'iterations': 0,
+            'apiCalls': 0,
+            'inputTokens': 0,
+            'outputTokens': 0,
+            'costUSD': 0.,
+        }
+        if not os.path.exists(self.historyMD):
+            return usage
+
+        with open(self.historyMD, 'r', encoding='utf-8') as inFile:
+            historyText = inFile.read()
+
+        block = re.search(
+            r'<!-- usage -->\s*```json\s*\n(.*?)\n```', historyText, flags=re.DOTALL
+        )
+        if block is not None:
+            usage.update(json.loads(block.group(1)))
+
+        return usage
     
     #**********************************************************************#
 
@@ -223,7 +257,22 @@ class FIMS_AI_Agent:
                 json.dump(self.bestEntry, outFile, indent=2)
 
         return
+    
+    #**********************************************************************#
+    
+    def saveUsage(self, numIterations):
+        """
+        Adds the current run's API usage to the total.
 
+        Args:
+            numIterations (int): Number of iterations run this cycle.
+        """
+        self.apiUsage['iterations'] += numIterations
+        self._savedUsage = dict(self.apiUsage)
+        self._writeHistory()
+
+        return
+    
     #**********************************************************************#
     
     def _writeHistory(self):
@@ -340,6 +389,31 @@ class FIMS_AI_Agent:
                 '<!-- record -->',
                 '```json',
                 json.dumps(entry, indent=2, cls=NumPyEncoder),
+                '```',
+                '',
+                '</details>',
+            ]
+        
+        # Record the total API usage.
+        usage = self._savedUsage
+        if usage['apiCalls']:
+            perIteration = usage['costUSD']/usage['iterations'] if usage['iterations'] else 0.
+            allLines += [
+                '',
+                '## API Usage (running total)',
+                '',
+                '| Iterations | API Calls | Input Tokens | Output Tokens '
+                '| Cost (USD) | Cost per Iteration (USD) |',
+                '|---:|---:|---:|---:|---:|---:|',
+                f"| {usage['iterations']} | {usage['apiCalls']} "
+                f"| {usage['inputTokens']:,} | {usage['outputTokens']:,} "
+                f"| {usage['costUSD']:.2f} | {perIteration:.3f} |",
+                '',
+                '<details><summary>Usage record</summary>',
+                '',
+                '<!-- usage -->',
+                '```json',
+                json.dumps(usage, indent=2),
                 '```',
                 '',
                 '</details>',
@@ -1536,6 +1610,23 @@ class FIMS_AI_Agent:
                     f'Error: Agent stopped before proposing a shape: {error}'
                 ) from error
             print(f'\t Note: agent ended with "{error.subtype}" after proposing.')
+        
+        finally:
+            # Count API usage
+            if lastResult is not None:
+                usage = lastResult.usage or {}
+                self.apiUsage['apiCalls'] += lastResult.num_turns or 1
+                self.apiUsage['inputTokens'] += sum(
+                    usage.get(key) or 0 for key in (
+                        'input_tokens',
+                        'cache_creation_input_tokens',
+                        'cache_read_input_tokens',
+                    )
+                )
+                self.apiUsage['outputTokens'] += usage.get('output_tokens') or 0
+                self.apiUsage['costUSD'] += lastResult.total_cost_usd or 0.
+            else:
+                self.apiUsage['apiCalls'] += 1
 
         if not proposal:
             detail = f' ({lastResult.subtype})' if lastResult is not None else ''

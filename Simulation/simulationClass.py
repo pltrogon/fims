@@ -583,11 +583,17 @@ class FIMS_Simulation:
             aiAgent.updateHistory(record)
         
         # Print a summary of all iterations
-        print(f'\n{"*"*72}')
-        print(f'Total agent run time: {(time.perf_counter() - startTime)/3600.:.2f} h')
-        
+        aiAgent.saveUsage(numIterations)
         idealNum = None
         bestEntry = aiAgent.bestEntry
+        
+        print(f'\n{"*"*72}')
+        print(f'Total agent run time: {(time.perf_counter() - startTime)/3600.:.2f} h')
+        print(
+            f"API usage (running total): {aiAgent.apiUsage['apiCalls']} calls, "
+            f"${aiAgent.apiUsage['costUSD']:.2f}"
+        )
+        
         if bestEntry is not None:
             print(
                 f'Lowest IBN: {bestEntry["ibn"]:.5g} +/- ',
