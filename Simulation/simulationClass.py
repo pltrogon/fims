@@ -588,9 +588,9 @@ class FIMS_Simulation:
         bestEntry = aiAgent.bestEntry
         
         print(f'\n{"*"*72}')
-        print(f'Total agent run time: {(time.perf_counter() - startTime)/3600.:.2f} h')
+        print(f'Run time: {(time.perf_counter() - startTime)/3600.:.2f} h')
         print(
-            f"API usage (running total): {aiAgent.apiUsage['apiCalls']} calls, "
+            f"Total API usage: {aiAgent.apiUsage['apiCalls']} calls, "
             f"${aiAgent.apiUsage['costUSD']:.2f}"
         )
         
