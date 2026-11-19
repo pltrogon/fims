@@ -71,8 +71,8 @@ int main(int argc, char * argv[]) {
   bool distOnPlane = true;
 
   // Handle geometry mode from input
-  if(argc != 2){
-    std::cerr << "Format: " << argv[0] << " <GeometryMode>" << std::endl;
+  if(argc != 3){
+    std::cerr << "Format: " << argv[0] << " <GeometryMode> <DiffusionScale>" << std::endl;
     return -1;
   }
 
@@ -82,6 +82,8 @@ int main(int argc, char * argv[]) {
     std::cerr << "Error: Invalid geometryMode: " << argv[1] << std::endl;
     return -1;
   }
+
+  double diffusionScale = std::stod(argv[2]);
   
   std::vector<std::string> sensorList = getSensorList(geometryMode);
   double cellXScale = 1. / sqrt(3.);
@@ -176,7 +178,7 @@ int main(int argc, char * argv[]) {
   
   //*************** SIMULATION ***************//
   // Define and initialize the gas mixture
-  MediumMagboltz* gasFIMS = buildGas(*simParams);
+  MediumMagboltz* gasFIMS = buildGas(*simParams, diffusionScale);
   if(!gasFIMS){
     return -1;
   }
@@ -870,7 +872,7 @@ int main(int argc, char * argv[]) {
   metaDataTree->Branch("Gas Comp: CF4", &simParams->gasCompCF4, "gasCompCF4/D");
   metaDataTree->Branch("Gas Comp: Isobutane", &simParams->gasCompIsobutane, "gasCompIsobutane/D");
   metaDataTree->Branch("Gas Penning", &simParams->gasPenning, "gasPenning/D");
-  metaDataTree->Branch("Diffusion Scale", &simParams->diffusionScale, "diffusionScale/D");
+  metaDataTree->Branch("Diffusion Scale", &diffusionScale, "diffusionScale/D");
 
   metaDataTree->Branch("Drift Velocity (Drift)", &driftVelocity, "driftVelocity/D");
   metaDataTree->Branch("Diffusion L (Drift)", &driftDiffusionL, "driftDiffusionL/D");

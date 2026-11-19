@@ -159,7 +159,6 @@ class FIMS_Simulation:
             'gasCompCF4': 0.03,
             'gasCompIsobutane': 0.02,
             'gasPenning': 0.385,
-            'diffusionScale': 1.0,
         }
         return defaultParameters
 
@@ -562,6 +561,10 @@ class FIMS_Simulation:
                 targetValue = kwargs.get('targetValue', 0.95)
                 threshold = kwargs.get('threshold', 10)
                 args = f'{targetEfficiency} {targetValue} {threshold}'
+            
+            case 'runScanDiffusion':
+                diffusionScale = kwargs.get('diffusionScale', 1.0)
+                args = f'{diffusionScale}'
 
             case _:
                 args=''
@@ -683,20 +686,16 @@ class FIMS_Simulation:
         self._solveEFields()
         
         for scale in scales:
-            print(f'{"*"*23} Diffusion scale: {scale:<6} {"*"*23}')
+            print(f'{"*"*24} Diffusion scale: {scale:>5} {"*"*24}')
             
             # Get the run number for this simulation
             runNum = self._param['runNumber']
             print(f'Running simulation - Run number: {runNum}')
             
             # Set diffusion scale and run garfield
-            self.setParameters({'diffusionScale': scale})
-            self._runGarfield('runScanDiffusion')
+            self._runGarfield('runScanDiffusion', diffusionScale=scale)
             
             allRuns.append(runNum)
-        
-        self.resetParam()
-        self._param['runNumber'] = self._getRunNumber()
         
         return allRuns
     

@@ -236,7 +236,7 @@ Garfield::MediumMagboltz* initializeGas(const SimulationParameters& params) {
  * @param params SimulationParameters struct containing gas composition and settings
  * @return Pointer to initialized MediumMagboltz object (caller responsible for deletion)
  */
-Garfield::MediumMagboltz* buildGas(const SimulationParameters& params) {
+Garfield::MediumMagboltz* buildGas(const SimulationParameters& params, double diffusionScale) {
 
     std::cout << "Building gas mixture..." << std::endl;
 
@@ -320,16 +320,16 @@ Garfield::MediumMagboltz* buildGas(const SimulationParameters& params) {
             for(size_t ia = 0; ia < angles.size(); ia++) {
                 double diffusionL, diffusionT;
                 if(gas->GetElectronLongitudinalDiffusion(ie, ib, ia, diffusionL)) {
-                    gas->SetElectronLongitudinalDiffusion(ie, ib, ia, params.diffusionScale*diffusionL);
+                    gas->SetElectronLongitudinalDiffusion(ie, ib, ia, diffusionScale*diffusionL);
                 }
                 if(gas->GetElectronTransverseDiffusion(ie, ib, ia, diffusionT)) {
-                    gas->SetElectronTransverseDiffusion(ie, ib, ia, params.diffusionScale*diffusionT);
+                    gas->SetElectronTransverseDiffusion(ie, ib, ia, diffusionScale*diffusionT);
                 }
             }
         }
     }
 
-    std::cout << "Gas mixture loaded. Diffusion scale = " << params.diffusionScale << std::endl;
+    std::cout << "Gas mixture loaded. Diffusion scale = " << diffusionScale << std::endl;
 
     return gas;
 }
@@ -385,9 +385,8 @@ std::optional<SimulationParameters> readSimulationParameters() {
         params.gasCompCF4 = params_json["gasCompCF4"].get<double>() * 100.0;
         params.gasCompIsobutane = params_json["gasCompIsobutane"].get<double>() * 100.0;
         params.gasPenning = params_json["gasPenning"].get<double>();
-        params.diffusionScale = params_json.value("diffusionScale", 1.0);
         
-        params.numInputs = 20;  // Number of parameters
+        params.numInputs = 19;  // Number of parameters
 
         return params;
     } catch(const std::exception& e) {
