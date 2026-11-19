@@ -35,10 +35,11 @@ set(EXECUTABLES
     runAvalanche            	avalanche.cc
     runMagboltz             	magboltz.cc
     runEfficiency               checkEfficiency.cc
-    runFullField		        plotFullField.cc
+    runFullField		plotFullField.cc
     runBreakdown                gasBreakdown.cc
     runGainEfficiency           checkGainAndEfficiency.cc
     runAnimation                animation.cc
+    runScanDiffusion		scanDiffusion.cc
 )
 
 # --- Loop to create and link everything ---

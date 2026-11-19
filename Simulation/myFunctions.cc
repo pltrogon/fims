@@ -8,6 +8,9 @@
 #include <random>
 #include <utility>
 #include <cmath>
+#include <filesystem>
+#include <iomanip>
+#include <sstream>
 
 namespace {
     // Internal helper for uniform [-1.0, 1.0] random values
@@ -228,6 +231,110 @@ Garfield::MediumMagboltz* initializeGas(const SimulationParameters& params) {
 }
 
 /**
+ * Builds a Garfield++ gas table with the provided parameters.
+ *
+ * @param params SimulationParameters struct containing gas composition and settings
+ * @return Pointer to initialized MediumMagboltz object (caller responsible for deletion)
+ */
+Garfield::MediumMagboltz* buildGas(const SimulationParameters& params) {
+
+    std::cout << "Building gas mixture..." << std::endl;
+
+    // Electric field parameters
+    const double tableFieldMin = 10.; // (V/cm)
+    const double tableFieldMax = 100000.; // (V/cm)
+    const int tableNumFields = 20;
+    const int tableNumCollisions = 5;   // x1e7 collisions per field point
+
+    // Set STP gas parameters
+    double gasTemperature = 293.15;  // K
+    double gasPressure = 760.0;       // torr
+    int maxElectronE = 200;           // eV
+
+    // Generate gas table filename
+    std::ostringstream tableName;
+    tableName << std::fixed << std::setprecision(2)
+              << "../../Data/Magboltz/gasTable"
+              << ".Ar" << params.gasCompAr
+              << "-CO2" << params.gasCompCO2
+              << "-CF4" << params.gasCompCF4
+              << "-iC4H10" << params.gasCompIsobutane
+              << std::setprecision(0)
+              << ".E" << tableFieldMin << "-" << tableFieldMax
+              << ".n" << tableNumFields
+              << ".c" << tableNumCollisions
+              << ".gas";
+    const std::string tablePath = tableName.str();
+
+    // Check if gas table exists. Build one if it does not
+    if(!std::filesystem::exists(tablePath)) {
+        std::cout << "Warning: No gas table found. Building gas table (this may take some time)..." << tablePath << std::endl;
+        
+        Garfield::MediumMagboltz tableGas;
+        tableGas.SetComposition(
+            "ar", params.gasCompAr / 100.0,
+            "co2", params.gasCompCO2 / 100.0,
+            "cf4", params.gasCompCF4 / 100.0,
+            "iC4H10", params.gasCompIsobutane / 100.0
+        );
+        tableGas.SetTemperature(gasTemperature);
+        tableGas.SetPressure(gasPressure);
+        tableGas.SetMaxElectronEnergy(maxElectronE);
+        tableGas.SetFieldGrid(tableFieldMin, tableFieldMax, tableNumFields, true);
+        tableGas.GenerateGasTable(tableNumCollisions, false);
+
+        if(!tableGas.WriteGasFile(tablePath)) {
+            std::cerr << "Error: Could not write gas table " << tablePath << std::endl;
+            return nullptr;
+        }
+        std::cout << "Gas table successfully built. Loading gas..." << std::endl;
+    }
+
+    // Load gas table
+    Garfield::MediumMagboltz* gas = new Garfield::MediumMagboltz();
+    if(!gas->LoadGasFile(tablePath)) {
+        std::cerr << "Error: Could not load gas table " << tablePath << std::endl;
+        delete gas;
+        return nullptr;
+    }
+
+    // Enable Penning transfer
+    // (Adjusts the tabulated Townsend coefficient using the stored excitation rates)
+    {
+        SilenceCerr guard;
+        gas->EnablePenningTransfer(params.gasPenning, 0.0, "ar");
+    }
+
+    // Load ion mobilities
+    const std::string path = std::getenv("GARFIELD_INSTALL");
+    const std::string posIonPath = path + "/share/Garfield/Data/IonMobility_Ar+_Ar.txt";
+    const std::string negIonPath = path + "/share/Garfield/Data/IonMobility_CF4+_CF4.txt";
+    gas->LoadIonMobility(posIonPath);
+    gas->LoadNegativeIonMobility(negIonPath);
+
+    // Scale diffusion values
+    std::vector<double> eFields, bFields, angles;
+    gas->GetFieldGrid(eFields, bFields, angles);
+    for(size_t ie = 0; ie < eFields.size(); ie++) {
+        for(size_t ib = 0; ib < bFields.size(); ib++) {
+            for(size_t ia = 0; ia < angles.size(); ia++) {
+                double diffusionL, diffusionT;
+                if(gas->GetElectronLongitudinalDiffusion(ie, ib, ia, diffusionL)) {
+                    gas->SetElectronLongitudinalDiffusion(ie, ib, ia, params.diffusionScale*diffusionL);
+                }
+                if(gas->GetElectronTransverseDiffusion(ie, ib, ia, diffusionT)) {
+                    gas->SetElectronTransverseDiffusion(ie, ib, ia, params.diffusionScale*diffusionT);
+                }
+            }
+        }
+    }
+
+    std::cout << "Gas mixture loaded. Diffusion scale = " << params.diffusionScale << std::endl;
+
+    return gas;
+}
+
+/**
  * Reads and parses simulation parameters from stdin as JSON.
  * 
  * @return SimulationParameters if successful, empty optional if failed
@@ -278,8 +385,9 @@ std::optional<SimulationParameters> readSimulationParameters() {
         params.gasCompCF4 = params_json["gasCompCF4"].get<double>() * 100.0;
         params.gasCompIsobutane = params_json["gasCompIsobutane"].get<double>() * 100.0;
         params.gasPenning = params_json["gasPenning"].get<double>();
+        params.diffusionScale = params_json.value("diffusionScale", 1.0);
         
-        params.numInputs = 19;  // Number of parameters
+        params.numInputs = 20;  // Number of parameters
 
         return params;
     } catch(const std::exception& e) {

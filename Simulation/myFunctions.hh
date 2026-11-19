@@ -61,6 +61,7 @@ struct SimulationParameters {
     double gasCompCF4;
     double gasCompIsobutane;
     double gasPenning;
+    double diffusionScale;
 };
 
 // Struct to hold efficiency parameters
@@ -139,6 +140,14 @@ std::pair<double, double> randomXYInSquare(double sideLength);
  * @return Pointer to initialized MediumMagboltz object (caller responsible for deletion)
  */
 Garfield::MediumMagboltz* initializeGas(const SimulationParameters& params);
+
+/**
+ * Builds and loads a Garfield++ gas table with the provided parameters.
+ * 
+ * @param params SimulationParameters struct containing gas composition and settings
+ * @return Pointer to initialized MediumMagboltz object (caller responsible for deletion)
+ */
+Garfield::MediumMagboltz* buildGas(const SimulationParameters& params);
 
 /**
  * Reads and parses simulation parameters from stdin as JSON.

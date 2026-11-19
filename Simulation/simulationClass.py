@@ -158,7 +158,8 @@ class FIMS_Simulation:
             'gasCompCO2': 0.00,
             'gasCompCF4': 0.03,
             'gasCompIsobutane': 0.02,
-            'gasPenning': 0.385
+            'gasPenning': 0.385,
+            'diffusionScale': 1.0,
         }
         return defaultParameters
 
@@ -439,6 +440,7 @@ class FIMS_Simulation:
         Return:
             int: The simulation run number.
         """
+        # TODO: instead of reading from a dedicated runNum file, why not read the file names of existing data?
         filename = 'runNo'
     
         try:
@@ -540,12 +542,13 @@ class FIMS_Simulation:
         """
 
         executables = [
-            'runAvalanche', #The full-avalanche simulation
-            'runEfficiency', #Expidited simulation that only measures efficiencies
-            'runFullField', #Populate the geometry with many field lines. (TODO - Is this correct?)
-            'runBreakdown', #Calculates breakdown fields
-            'runGainEfficiency', #Expidited simulation that efficiencies and gains
-            'runAnimation' #Frame-by-frame simulation for animation purposes.
+            'runAvalanche', # The full-avalanche simulation
+            'runEfficiency', # Expidited simulation that only measures efficiencies
+            'runFullField', # Populate the geometry with many field lines. (TODO - Is this correct?)
+            'runBreakdown', # Calculates breakdown fields
+            'runGainEfficiency', # Expidited simulation that efficiencies and gains
+            'runAnimation', # Frame-by-frame simulation for animation purposes.
+            'runScanDiffusion' # Full avalanche simulation with scaled diffusion values
         ]
 
         if executable not in executables:
@@ -601,12 +604,13 @@ class FIMS_Simulation:
         
         finally:
             os.chdir(originalCWD)
-            if 'runAvalanche' in executable:
+            if 'runAvalanche' in executable or 'runScanDiffusion' in executable:
                 self._incrementRunNumber()
 
         return  
     
 #**********************************************************************#
+    
     def runSimulation(self, changeGeometry=True):
         """
         Executes a full simulation run with the current parameters.
@@ -648,6 +652,53 @@ class FIMS_Simulation:
         self._runGarfield()
         
         return runNo
+    
+#**********************************************************************#
+    
+    def scanDiffusion(self, scales):
+        """
+        Runs a series of simulations with different diffusion values.
+
+        This process is as follows:
+            1. Check that all required parameters are present and defined.
+            2. Read the simulation run number.
+            3. Write the simulation parameters to the control files.
+            4. Execute Gmsh to generate a finite-element mesh of the geometry.
+            5. Execute Elmer to solve the E field for the mesh.
+            6. Execute Elmer to solve the weighting field for the electrode.
+            7. Execute Garfield++ to simulate electron multiplication effects.
+            8. Reset parameters to defaults.
+        
+        Args:
+            scales (list): list of numbers to scale the diffusion by.
+        
+        Returns:
+            allRuns (list): The run numbers for this scan.
+        """
+        allRuns = []
+        self._checkParam()
+        
+        # Generate geometry and solve e-fields
+        self._generateGeometry()
+        self._solveEFields()
+        
+        for scale in scales:
+            print(f'{"*"*23} Diffusion scale: {scale:<6} {"*"*23}')
+            
+            # Get the run number for this simulation
+            runNum = self._param['runNumber']
+            print(f'Running simulation - Run number: {runNum}')
+            
+            # Set diffusion scale and run garfield
+            self.setParameters({'diffusionScale': scale})
+            self._runGarfield('runScanDiffusion')
+            
+            allRuns.append(runNum)
+        
+        self.resetParam()
+        self._param['runNumber'] = self._getRunNumber()
+        
+        return allRuns
     
 #**********************************************************************#
     def runCapacitance(self):
