@@ -417,7 +417,35 @@ class FIMS_Simulation:
             & (fieldScan['netEff'] - 2*fieldScan['netErrLow'] >= 0.95)
         )
         return isEfficient, fieldScan
+#**********************************************************************#
+    def _buildRecord(self, iteration, status=None, message=None, proposal=None, summary=None):
+        #Base record
+        record = {
+            'iteration': iteration,
+            'spec': None,
+            'summary': None,
+        }
 
+        # Add error/rejection details
+        if status:
+            record['status'] = status
+        if message:
+            record['message'] = message
+
+        # Populate rich data if a valid proposal exists
+        if proposal and summary:
+            record.update({
+                'family': proposal.get('family'),
+                'shapeType': '+'.join(sorted({h['type'] for h in summary['holes']})),
+                'shapeHash': summary['shapeHash'],
+                'summary': summary,
+                'spec': proposal['shape'],
+                'hypothesis': proposal['hypothesis'],
+                'rationale': proposal['rationale'],
+            })
+            
+        return record
+    
 #**********************************************************************#
 
     def runAIShapeOptimizer(self, numIterations, resume=True):
@@ -460,42 +488,21 @@ class FIMS_Simulation:
                 proposal, shapeSummary = aiAgent.getCustomShape(iteration, finalIteration)
 
             except Exception as error:
-                record = {
-                    'iteration': iteration,
-                    'status': 'error',
-                    'message': f'Agent call failed: {type(error).__name__}: {error}',
-                    'spec': None,
-                    'summary': None,
-                }
+                msg = f'Agent call failed: {type(error).__name__}: {error}'
+                record = self._buildRecord(iteration, status='error', message=msg)
                 aiAgent.updateHistory(record)
-                print(f'WARNING: {record["message"]}. Iteration {iteration} skipped.')
+                print(f'WARNING: {msg}. Iteration {iteration} skipped.')
                 continue
             
             # Record shape details
             if proposal is None:
-                record = {
-                    'iteration': iteration,
-                    'status': 'rejected',
-                    'message': (
-                        f'No valid proposal after {aiAgent.maxProposals} attempts.'
-                    ),
-                    'spec': None,
-                    'summary': None,
-                }
+                msg = f'No valid proposal after {aiAgent.maxProposals} attempts.'
+                record = self._buildRecord(iteration, status='rejected', message=msg)
                 aiAgent.updateHistory(record)
                 print(f'WARNING: proposal is None. Iteration {iteration} failed.')
                 continue
             
-            record = {
-                'iteration': iteration,
-                'family': proposal.get('family'),
-                'shapeType': '+'.join(sorted({hole['type'] for hole in shapeSummary['holes']})),
-                'shapeHash': shapeSummary['shapeHash'],
-                'summary': shapeSummary,
-                'spec': proposal['shape'],
-                'hypothesis': proposal['hypothesis'],
-                'rationale': proposal['rationale'],
-            }
+            record = self._buildRecord(iteration, proposal=proposal, summary=shapeSummary)
             print(f'\tHypothesis: {proposal["hypothesis"]}')
 
             try:
@@ -503,49 +510,25 @@ class FIMS_Simulation:
                 
                 # Get field scan data
                 isEfficient, fieldScan = self._getFieldScan()
-                fieldScanResult = [[
-                    float(field),
-                    round(float(collection), 3),
-                    round(float(errLow), 4),
-                    round(float(errHigh), 4),
-                    round(float(detection), 3)
-                    ]
-                    for field, collection, errLow, errHigh, detection in zip(
-                        fieldScan['fieldRatio'],
-                        fieldScan['collectionEff'],
-                        fieldScan['collectionErrLow'],
-                        fieldScan['collectionErrHigh'],
-                        fieldScan['detectionEff'],
-                    )
-                ]
+                fieldScanDF = pd.DataFrame(fieldScan)
+                fieldScanDF = fieldScanDF.round({
+                    'collectionEff': 3, 
+                    'collectionErrLow': 4, 
+                    'collectionErrHigh': 4, 
+                    'detectionEff': 3
+                })
+                fieldScanResult = fieldScanDF.values.tolist() #TODO - make sure this still works
 
                 # Get simulation data
                 simData = runData(runNumber)
-                
-                ibn = float(simData.getCalcParameter(
-                    'Average IBN'
-                ))
-                ibnError = float(simData.getCalcParameter(
-                    'IBN Error'
-                ))
-                ibf = float(simData.getCalcParameter(
-                    'Average IBF'
-                ))
-                collectEff = float(simData.getCalcParameter(
-                    'Charge Collection Eff'
-                ))
-                collectErrLow = float(simData.getCalcParameter(
-                    'Charge Collection Eff Err (Low)'
-                ))
-                collectErrHigh = float(simData.getCalcParameter(
-                    'Charge Collection Eff Err (High)'
-                ))
-                gain = float(simData.getCalcParameter(
-                    'Trimmed Gain'
-                ))
-                fieldRatio = float(simData.getRunParameter(
-                    'Electric Field Ratio'
-                ))
+                ibn = float(simData.getCalcParameter('Average IBN'))
+                ibnError = float(simData.getCalcParameter('IBN Error'))
+                ibf = float(simData.getCalcParameter('Average IBF'))
+                collectEff = float(simData.getCalcParameter('Charge Collection Eff'))
+                collectErrLow = float(simData.getCalcParameter('Charge Collection Eff Err (Low)'))
+                collectErrHigh = float(simData.getCalcParameter('Charge Collection Eff Err (High)'))
+                gain = float(simData.getCalcParameter('Trimmed Gain'))
+                fieldRatio = float(simData.getRunParameter('Electric Field Ratio'))
                 
                 # Record full results
                 record.update({
