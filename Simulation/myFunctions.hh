@@ -149,6 +149,21 @@ Garfield::MediumMagboltz* initializeGas(const SimulationParameters& params);
 Garfield::MediumMagboltz* buildGas(const SimulationParameters& params, double diffusionScale);
 
 /**
+ * @brief Sets the region where avalancheStepSize uses fine steps.
+ * 
+ * @param params SimulationParameters struct containing geometry dimensions
+ */
+void setAvalancheStepZone(const SimulationParameters& params);
+
+/**
+ * @brief AvalancheMC step size as a function of position.
+ * 
+ * @param x, y, z Position (cm)
+ * @return Step size (cm)
+ */
+double avalancheStepSize(double x, double y, double z);
+
+/**
  * Reads and parses simulation parameters from stdin as JSON.
  * 
  * @return SimulationParameters if successful, empty optional if failed

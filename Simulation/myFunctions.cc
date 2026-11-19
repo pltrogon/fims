@@ -19,6 +19,12 @@ namespace {
         thread_local static std::uniform_real_distribution<double> dist(-1.0, 1.0);
         return dist(engine);
     }
+    // AvalancheMC step sizes (cm)
+    const double coarseStepSize = 3.0 * MICRONTOCM;
+    const double fineStepSize = 0.25 * MICRONTOCM;
+
+    // Height below which fine steps are used (cm). Set by setAvalancheStepZone.
+    double fineStepHeight = 0.;
 }
 
 /**
@@ -332,6 +338,28 @@ Garfield::MediumMagboltz* buildGas(const SimulationParameters& params, double di
     std::cout << "Gas mixture loaded. Diffusion scale = " << diffusionScale << std::endl;
 
     return gas;
+}
+
+/**
+ * @brief Sets the region where avalancheStepSize uses fine steps: from 1 micron
+ * above the SiO2 surface down to the pad.
+ * 
+ * @param params SimulationParameters struct containing geometry dimensions
+ */
+void setAvalancheStepZone(const SimulationParameters& params) {
+    const double heightSiO2 = -(params.amplificationGap + params.gridThickness/2.) + params.thicknessSiO2;
+    fineStepHeight = heightSiO2 + MICRONTOCM;
+}
+
+/**
+ * @brief AvalancheMC step size as a function of position.
+ * Fine steps near the SiO2 surface, coarse steps above
+ * 
+ * @param x, y, z Position (cm)
+ * @return Step size (cm)
+ */
+double avalancheStepSize(double x, double y, double z) {
+    return (z < fineStepHeight) ? fineStepSize : coarseStepSize;
 }
 
 /**

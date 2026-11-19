@@ -470,7 +470,7 @@ int main(int argc, char * argv[]) {
   // ***** Prepare Avalanche Electron ***** //
   //Set the Initial electron parameters
   double z0 = simParams->initialZFraction * simParams->driftLength;
-
+  setAvalancheStepZone(*simParams);
   double t0 = 0.;//ns
   
   double timeFinal = 250.;//ns
@@ -548,7 +548,7 @@ int main(int argc, char * argv[]) {
 
       avalancheE->SetSensor(parallelSensorFIMS);
       avalancheE->EnableAvalancheSizeLimit(simParams->avalancheLimit);
-      avalancheE->SetDistanceSteps(MICRONTOCM);
+      avalancheE->SetStepDistanceFunction(avalancheStepSize);
       
       driftIon->SetSensor(parallelSensorFIMS);
       driftIon->SetDistanceSteps(MICRONTOCM);
@@ -676,7 +676,11 @@ int main(int argc, char * argv[]) {
         : std::pair{0.0, 0.0};
 
       //Begin single-electron avalanche
-      avalancheE->AvalancheElectron(x0, y0, z0, 0.);
+      {
+          SilenceCerr guard;
+          avalancheE->AvalancheElectron(x0, y0, z0, 0.);
+      }
+      
 
       //Electron count - use endpoints to include attached electrons
       int avalancheElectrons = avalancheE->GetNumberOfElectronEndpoints();
