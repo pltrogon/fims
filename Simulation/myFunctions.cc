@@ -20,11 +20,12 @@ namespace {
         return dist(engine);
     }
     // AvalancheMC step sizes (cm)
-    const double coarseStepSize = 3.0 * MICRONTOCM;
+    const double coarseStepSize = 1.0 * MICRONTOCM;
     const double fineStepSize = 0.25 * MICRONTOCM;
 
     // Height below which fine steps are used (cm). Set by setAvalancheStepZone.
     double fineStepHeight = 0.;
+    thread_local long threadMatchCount = 0;
 }
 
 /**
@@ -187,6 +188,57 @@ SilenceCerr::~SilenceCerr() {
     if (m_oldBuffer) {
         std::cerr.rdbuf(m_oldBuffer);
     }
+}
+
+/**
+ * @brief Hides std::cerr output while counting the messages that contain matchText.
+ */
+CerrCounter::CerrCounter(const std::string& matchText) : m_buffer(matchText) {
+    // Save the old buffer and redirect cerr
+    m_oldBuffer = std::cerr.rdbuf(&m_buffer);
+}
+
+CerrCounter::~CerrCounter() {
+    restore();
+}
+
+void CerrCounter::restore() {
+    if (m_oldBuffer) {
+        std::cerr.rdbuf(m_oldBuffer);
+        m_oldBuffer = nullptr;
+    }
+}
+
+long CerrCounter::getMatchCount() const {
+    return m_buffer.m_matchCount;
+}
+
+long CerrCounter::getLineCount() const {
+    return m_buffer.m_lineCount;
+}
+
+long CerrCounter::getThreadMatchCount() {
+    return threadMatchCount;
+}
+
+int CerrCounter::CountingBuffer::overflow(int c) {
+    // Single characters, e.g. a '\n' written on its own
+    if (c == '\n') {
+        m_lineCount++;
+    }
+    return traits_type::not_eof(c);
+}
+
+std::streamsize CerrCounter::CountingBuffer::xsputn(const char* s, std::streamsize n) {
+    // Each piece of a message arrives in a single call,
+    // so a match cannot be split by output from other threads
+    std::string_view text(s, n);
+    if (text.find(m_matchText) != std::string_view::npos) {
+        m_matchCount++;
+        threadMatchCount++;
+    }
+    m_lineCount += std::count(text.begin(), text.end(), '\n');
+    return n;
 }
 
 /**

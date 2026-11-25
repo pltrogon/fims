@@ -477,6 +477,9 @@ int main(int argc, char * argv[]) {
   double timeStep = 0.01;//ns
   int nSignalBins = timeFinal/timeStep;
   
+  // Electrons are drifted without multiplication
+  bool driftOnly = true;
+  
   //Start timing the sim
   startSim = clock();
 
@@ -492,6 +495,10 @@ int main(int argc, char * argv[]) {
 
   //*** Set up parallel avalanche loops ***//
   std::vector<std::string> parallelFileNames;
+  
+  // Hide and count Garfield++ "ComputeAlphaEta" warning message.
+  CerrCounter alphaEtaWarnings("ComputeAlphaEta: Got status");
+  
   #pragma omp parallel
   {
     //thread-local pointers
@@ -547,7 +554,6 @@ int main(int argc, char * argv[]) {
       parallelSensorFIMS->SetTimeWindow(0., timeStep, nSignalBins);
 
       avalancheE->SetSensor(parallelSensorFIMS);
-      avalancheE->EnableAvalancheSizeLimit(simParams->avalancheLimit);
       avalancheE->SetStepDistanceFunction(avalancheStepSize);
       
       driftIon->SetSensor(parallelSensorFIMS);
@@ -675,13 +681,9 @@ int main(int argc, char * argv[]) {
         ? randomXYinGeometry(geometryMode, cellLength)
         : std::pair{0.0, 0.0};
 
-      //Begin single-electron avalanche
-      {
-          SilenceCerr guard;
-          avalancheE->AvalancheElectron(x0, y0, z0, 0.);
-      }
+      //Drift electron without amplification
+      avalancheE->DriftElectron(x0, y0, z0, 0.);
       
-
       //Electron count - use endpoints to include attached electrons
       int avalancheElectrons = avalancheE->GetNumberOfElectronEndpoints();
 
@@ -811,8 +813,17 @@ int main(int argc, char * argv[]) {
     delete viewIonDrift;
     delete parallelDataFile;
 
-  }//End parallization
-
+  }//End parallelization
+  
+  // Restore std::cerr and report the hidden warnings
+  alphaEtaWarnings.restore();
+  int numAlphaEtaWarnings = alphaEtaWarnings.getMatchCount();
+  int numOtherHiddenLines = alphaEtaWarnings.getLineCount() - numAlphaEtaWarnings;
+  
+  std::cerr << "Number of suppressed Garfield ComputeAlphaEta warnings: " << numAlphaEtaWarnings << std::endl;
+  if(numOtherHiddenLines > 0){
+    std::cerr << "\tOther suppressed error messages: " << numOtherHiddenLines << std::endl;
+  }
 
   std::cout << "****************************************\n";
   std::cout << "Done avalanches for run: " << runNo << "\n";
@@ -877,7 +888,8 @@ int main(int argc, char * argv[]) {
   metaDataTree->Branch("Gas Comp: Isobutane", &simParams->gasCompIsobutane, "gasCompIsobutane/D");
   metaDataTree->Branch("Gas Penning", &simParams->gasPenning, "gasPenning/D");
   metaDataTree->Branch("Diffusion Scale", &diffusionScale, "diffusionScale/D");
-
+  metaDataTree->Branch("Drift Only", &driftOnly, "driftOnly/O");
+  
   metaDataTree->Branch("Drift Velocity (Drift)", &driftVelocity, "driftVelocity/D");
   metaDataTree->Branch("Diffusion L (Drift)", &driftDiffusionL, "driftDiffusionL/D");
   metaDataTree->Branch("Diffusion T (Drift)", &driftDiffusionT, "driftDiffusionT/D");

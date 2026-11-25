@@ -475,8 +475,12 @@ class runData:
             #TODO: nest eggs and trivial pursuit don't play well with this
             #self._calculatedData['Field Bundle Radius'] = self.calcBundleRadius(nominalBundleZ)
             self._calculatedData['Field Bundle Radius'] = self.getRunParameter('Hole Radius')
+        
+        # ensure data has avalanches to analyze
+        metaColumns = self.getDataFrame('metaData').columns
+        isDriftOnly = ('Drift Only' in metaColumns) and bool(self.getRunParameter('Drift Only'))
 
-        if numAvalanche > 0:
+        if numAvalanche > 0 and not isDriftOnly:
             # Gains
             rawGain, trimmedGain, gainErr, gainStdDev = self._getGains()
             self._calculatedData['Raw Gain'] = rawGain
@@ -539,6 +543,7 @@ class runData:
                 self._calculatedData[key] = val if val is not None else np.nan
             
 
+        if numAvalanche > 0:
             # Single-Electron avalanche info
             singleInfo = self._getSingleElectronAvalancheData()
             self._calculatedData['Num Avalanche'] = singleInfo['numTotal']
@@ -2295,6 +2300,8 @@ class runData:
 
             if efficiency['efficiency'] < targetEfficiency: #TODO - add error margins
                 isEfficient = False
+            if threshold > self.getRunParameter('Avalanche Limit'):
+                return threshold
 
         #Subtract 1.5 to get the threshold where efficiency is just above target
         targetThreshold = threshold - 1.5

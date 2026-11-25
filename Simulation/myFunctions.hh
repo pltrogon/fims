@@ -11,6 +11,7 @@
 #include <cmath>
 #include <utility>
 #include <functional>
+#include <atomic>
 
 #include "Garfield/ComponentElmer.hh"
 #include "Garfield/AvalancheMicroscopic.hh"
@@ -205,6 +206,46 @@ public:
 private:
     std::streambuf* m_oldBuffer;
     std::ofstream m_nullStream;
+};
+
+/**
+ * @brief Hides std::cerr output while counting the messages that contain matchText.
+ * Ok to write to from several threads at once, but must be called outside of the parallel block.
+ * matchText must lie within a single string literal of the message being counted.
+ */
+class CerrCounter {
+public:
+    CerrCounter(const std::string& matchText);
+    ~CerrCounter();
+
+    // Disable copying to prevent multiple objects using the same buffer.
+    CerrCounter(const CerrCounter&) = delete;
+    CerrCounter& operator=(const CerrCounter&) = delete;
+
+    // Restores std::cerr.
+    void restore();
+
+    // Number of suppressed messages.
+    long getMatchCount() const;
+    long getLineCount() const;
+    static long getThreadMatchCount();
+
+private:
+    // Discards all output
+    class CountingBuffer : public std::streambuf {
+    public:
+        explicit CountingBuffer(const std::string& matchText) : m_matchText(matchText) {}
+        std::atomic<long> m_matchCount{0};
+        std::atomic<long> m_lineCount{0};
+    protected:
+        int overflow(int c) override;
+        std::streamsize xsputn(const char* s, std::streamsize n) override;
+    private:
+        const std::string m_matchText;
+    };
+
+    CountingBuffer m_buffer;
+    std::streambuf* m_oldBuffer;
 };
 
 #endif // MY_FUNCTIONS_H
