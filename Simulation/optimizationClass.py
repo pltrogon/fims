@@ -13,6 +13,7 @@ import copy
 import traceback
 
 from botorch.models import SingleTaskGP
+from botorch.models.transforms.input import Normalize
 from botorch.fit import fit_gpytorch_mll
 from gpytorch.mlls import ExactMarginalLogLikelihood
 from botorch.acquisition import qLogNoisyExpectedImprovement
@@ -489,7 +490,12 @@ class FIMS_Optimizer:
         try:
             # Optimization steps
             for inIter in range(self._iterationLimit):
-                gp = SingleTaskGP(inValues, inResults, train_Yvar=inResultsVar)
+                gp = SingleTaskGP(
+                    inValues, 
+                    inResults, 
+                    train_Yvar=inResultsVar,
+                    input_transform=Normalize(d=len(inputList), bounds=boundsTensor),
+                )
                 mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
                 fit_gpytorch_mll(mll)
 
@@ -540,7 +546,7 @@ class FIMS_Optimizer:
                     continue
 
                 # Append grid tensor back into dataset
-                candidateTensor = torch.tensor([validCandidate], dtype=dtype)
+                candidateTensor = torch.tensor(validCandidate, dtype=dtype).unsqueeze(0)
                 inValues = torch.cat([inValues, candidateTensor], dim=0)
                 inResults = torch.cat([inResults, torch.tensor([[-newIBN]], dtype=dtype)], dim=0) #BoTorch tries to maximize, so invert
                 inResultsVar = torch.cat([inResultsVar, torch.tensor([[newIBNErr**2]], dtype=dtype)], dim=0)
