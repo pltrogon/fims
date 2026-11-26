@@ -10,6 +10,7 @@ import numpy as np
 import math
 import torch
 import copy
+import traceback
 
 from botorch.models import SingleTaskGP
 from botorch.fit import fit_gpytorch_mll
@@ -324,9 +325,11 @@ class FIMS_Optimizer:
 
         try:
             resultIBN, resultIBNError = self._getIBN()
+            resultIBN, resultIBNError = float(resultIBN), float(resultIBNError)
+            if not (math.isfinite(resultIBN) and math.isfinite(resultIBNError)):
+                raise ValueError(f'non-finite result {resultIBN} +/- {resultIBNError}')
         except Exception as e:
             print(f'Simulation failed for params {paramDict}: {e}')
-            # Failure penalty: high mean IBN, large variance
             resultIBN, resultIBNError = None, None
         
         # Get time stamps
@@ -351,7 +354,10 @@ class FIMS_Optimizer:
                 file.write(f'Total Time: {totalTime}')
                 
         # Print the current IBN value for this iteration
-        print(f'\tIteration {len(self._optimizerLog)}: IBN = {resultIBN:.6f} +/- {resultIBNError:.6f}\n')
+        if resultIBN is None:
+            print(f'\tIteration {len(self._optimizerLog)}: simulation FAILED\n')
+        else:
+            print(f'\tIteration {len(self._optimizerLog)}: IBN = {resultIBN:.6f} +/- {resultIBNError:.6f}\n')
         
         return resultIBN, resultIBNError
 
@@ -428,24 +434,53 @@ class FIMS_Optimizer:
 
         print('Beginning BoTorch optimization...')
 
-        #Initial Design
+        # Initial Design
         numInit = max(5, len(inputList)*3)
-        rawValues = lower + (upper - lower) * torch.rand(numInit, len(inputList), dtype=dtype)
-        snapValues = self._snapToPrecision(rawValues)
+        initPoints = []
 
-        #TODO - Can implement lookinng up previous state in 'log/optimizerState.pt' as initial
+        # Validate and evaluate the initial guess
+        guess = self._snapToPrecision(np.array([float(self.initialGeometry[n]) for n in inputList]))
+        if (np.all(guess >= np.array(minBounds)) and np.all(guess <= np.array(maxBounds))
+                and self._checkConstraintsMet(guess, inequalityConstraints)):
+            initPoints.append(guess)
+        else:
+            print(f'Warning: initial guess {dict(zip(inputList, guess))} is infeasible. Skipping it.')
         
-        inValues = snapValues.detach().clone()
+        # Get new points after initial guess
+        attempts = 0
+        while len(initPoints) < numInit and attempts < 100000:
+            attempts += 1
+            raw = lower + (upper - lower) * torch.rand(len(inputList), dtype=dtype)
+            cand = self._snapToPrecision(raw.numpy())
+            if not self._checkConstraintsMet(cand, inequalityConstraints):
+                continue
+            if any(np.allclose(cand, p) for p in initPoints):
+                continue
+            initPoints.append(cand)
 
-        IBNList, IBNVarList = [], []
-        for i in range(inValues.shape[0]):
-            valueIBN, errorIBN = self._IBNObjective(inValues[i].numpy(), inputList)
+        #TODO - Can implement looking up previous state in 'log/optimizerState.pt' as initial
+        
+        failedPoints = []
+        goodPoints, IBNList, IBNVarList = [], [], []
+        for point in initPoints:
+            valueIBN, errorIBN = self._IBNObjective(point, inputList)
+            if valueIBN is None:
+                failedPoints.append(point)
+                continue
+            goodPoints.append(point)
             IBNList.append([-valueIBN]) #BoTorch tries to maximize, so invert
             IBNVarList.append([errorIBN**2])
 
+        if len(goodPoints) < 2:
+            raise RuntimeError(
+                f'Only {len(goodPoints)} of {len(initPoints)} initial simulations succeeded; '
+                'cannot fit a GP. Check log/logOptimizer.txt and the simulation output.'
+            )
+
+        inValues = torch.tensor(np.array(goodPoints), dtype=dtype)
         inResults = torch.tensor(IBNList, dtype=dtype)
         inResultsVar = torch.tensor(IBNVarList, dtype=dtype)
-
+        
         finalParams = self.initialGeometry
         finalIBN = None
         finalIBNErr = None
@@ -480,6 +515,8 @@ class FIMS_Optimizer:
                     
                     # Check if already evaluated this exact point
                     isDuplicate = any(np.allclose(snapCand, v.numpy()) for v in inValues)
+                    isDuplicate = isDuplicate or any(np.allclose(snapCand, f) for f in failedPoints)
+                    
                     if isDuplicate:
                         continue  
                     # Check if snapping broke the constraints
@@ -499,6 +536,7 @@ class FIMS_Optimizer:
                 # Only append to dataset if the simulation actually succeeded
                 if newIBN is None or newIBNErr is None:
                     print(f"Skipping failed candidate: {validCandidate}")
+                    failedPoints.append(validCandidate)
                     continue
 
                 # Append grid tensor back into dataset
@@ -514,19 +552,20 @@ class FIMS_Optimizer:
                     'iteration': inIter
                 }, 'log/optimizerState.pt')
 
-            bestIDx = torch.argmax(inResults)
-            finalParams = dict(zip(inputList, inValues[bestIDx].numpy()))
-            finalIBN = -inResults[bestIDx].item()
-            finalIBNErr = math.sqrt(inResultsVar[bestIDx].item())
             finalStatus = True
 
         except Exception as e:
             print(f'BoTorch optimization failed: {e}')
-            lastLog = self._optimizerLog[-1] if self._optimizerLog else {'params': self.initialGeometry, 'fieldRatio': None}
-            finalParams = lastLog['params']
+            traceback.print_exc()
             finalStatus = False
-
-
+        
+        # Report the best point
+        bestIDx = torch.argmax(inResults)
+        finalParams = dict(zip(inputList, inValues[bestIDx].numpy()))
+        finalIBN = -inResults[bestIDx].item()
+        finalIBNErr = math.sqrt(inResultsVar[bestIDx].item())
+        
+        
         print('\n*************** Optimization Complete ***************')
         fullFinalParams = self.initialGeometry.copy()
         fullFinalParams.update(finalParams)
