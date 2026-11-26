@@ -478,9 +478,8 @@ class runData:
         
         # ensure data has avalanches to analyze
         metaColumns = self.getDataFrame('metaData').columns
-        isDriftOnly = ('Drift Only' in metaColumns) and bool(self.getRunParameter('Drift Only'))
 
-        if numAvalanche > 0 and not isDriftOnly:
+        if numAvalanche > 0:
             # Gains
             rawGain, trimmedGain, gainErr, gainStdDev = self._getGains()
             self._calculatedData['Raw Gain'] = rawGain
@@ -542,8 +541,6 @@ class runData:
                 val = polyaFitResults.get(result)
                 self._calculatedData[key] = val if val is not None else np.nan
             
-
-        if numAvalanche > 0:
             # Single-Electron avalanche info
             singleInfo = self._getSingleElectronAvalancheData()
             self._calculatedData['Num Avalanche'] = singleInfo['numTotal']
@@ -557,8 +554,6 @@ class runData:
             self._calculatedData['Charge Collection Eff'] = chargeCollectionEff['efficiency']
             self._calculatedData['Charge Collection Eff Err (Low)'] = chargeCollectionEff['efficiencyErrLow']
             self._calculatedData['Charge Collection Eff Err (High)'] = chargeCollectionEff['efficiencyErrHigh']
-
-
 
             #Other calculated values can be added here as needed.
 

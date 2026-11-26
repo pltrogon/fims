@@ -20,7 +20,7 @@ namespace {
         return dist(engine);
     }
     // AvalancheMC step sizes (cm)
-    const double coarseStepSize = 1.0 * MICRONTOCM;
+    const double coarseStepSize = 2.0 * MICRONTOCM;
     const double fineStepSize = 0.25 * MICRONTOCM;
 
     // Height below which fine steps are used (cm). Set by setAvalancheStepZone.
