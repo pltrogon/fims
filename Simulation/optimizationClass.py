@@ -567,7 +567,7 @@ class FIMS_Optimizer:
         
         # Report the best point
         bestIDx = torch.argmax(inResults)
-        finalParams = dict(zip(inputList, inValues[bestIDx].numpy()))
+        finalParams = dict(zip(inputList, inValues[bestIDx].tolist()))
         finalIBN = -inResults[bestIDx].item()
         finalIBNErr = math.sqrt(inResultsVar[bestIDx].item())
         
@@ -587,6 +587,18 @@ class FIMS_Optimizer:
         print(f"Optimal IBN value = {resultVals['IBNValue']} +/- {resultVals['IBNError']}")
         print('Optimal Parameter Values:')
         print(self.simFIMS)
+        
+        # Final log statement to verify optimizer ran to completion
+        totalTime = time.perf_counter() - self._startTime
+        with open('log/logOptimizer.txt', 'a') as file:
+            file.write('\n\n## OPTIMIZATION COMPLETE ##\n')
+            file.write(f'\tFinished: {time.strftime("%Y-%m-%d %H:%M:%S")}\n')
+            file.write(f'\tSimulations run: {len(self._optimizerLog)}\n')
+            file.write(f'\tSuccess Status: {finalStatus}\n')
+            for param, value in finalParams.items():
+                file.write(f'\t{param}: {value}\n')
+            file.write(f'\tBest IBN: {finalIBN} +/- {finalIBNErr}\n')
+            file.write(f'Total Time: {totalTime}\n')
         
         return resultVals
     

@@ -2308,6 +2308,8 @@ class runData:
 
             if efficiency['efficiency'] < targetEfficiency: #TODO - add error margins
                 isEfficient = False
+            if threshold > self.getRunParameter('Avalanche Limit'):
+                return threshold
 
         #Subtract 1.5 to get the threshold where efficiency is just above target
         targetThreshold = threshold - 1.5
